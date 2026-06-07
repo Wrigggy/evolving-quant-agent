@@ -12,8 +12,23 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
 
 from qea.loop import Config, acceptance_signals, run_ablation
+
+
+def _load_dotenv(path: str = ".env") -> None:
+    """Minimal .env loader (no dependency). Does not override already-set vars."""
+    p = Path(path)
+    if not p.exists():
+        return
+    for line in p.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key, val = key.strip(), val.strip().strip('"').strip("'")
+        os.environ.setdefault(key, val)
 
 
 def _print_arm(arm) -> None:
@@ -42,6 +57,7 @@ def main() -> int:
     ap.add_argument("--results-dir", default="results/latest")
     args = ap.parse_args()
 
+    _load_dotenv()
     mock = not args.real  # mock is the default
     if mock:
         os.environ["MOCK_LLM"] = "1"

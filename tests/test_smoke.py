@@ -149,6 +149,17 @@ def test_unattributed_regression_downgrades_verdict():
     assert ev["unattributed_regressions"] == ["C"]
 
 
+def test_sandbox_allows_safe_imports_blocks_others():
+    from qea.verifier import safe_exec_solve
+    # models naturally write `import math` — must work
+    ok = "def solve(inputs):\n    import math\n    return {'x': math.sqrt(inputs['v'])}\n"
+    assert safe_exec_solve(ok, {"v": 16.0})["x"] == 4.0
+    # disallowed imports stay blocked
+    bad = "def solve(inputs):\n    import os\n    return {'x': 1}\n"
+    with pytest.raises(Exception):
+        safe_exec_solve(bad, {})
+
+
 def test_signature_no_collision_past_120_chars():
     from qea.harness import Edit
     base = "x" * 130

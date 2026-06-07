@@ -18,6 +18,7 @@ scores are repeated k times and we take the median + record the variance, so the
 from __future__ import annotations
 
 import hashlib
+import importlib
 import math
 import re
 import signal
@@ -58,13 +59,30 @@ class _Timeout(Exception):
     pass
 
 
+# Modules a candidate solution may import (models naturally write `import math`).
+_ALLOWED_MODULES = {"math", "cmath", "statistics", "decimal", "fractions", "numbers"}
+
+
+def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
+    root = name.split(".")[0]
+    if root not in _ALLOWED_MODULES:
+        raise ImportError(f"import of {name!r} is not allowed in the v0 sandbox")
+    return importlib.import_module(name)
+
+
 def safe_exec_solve(src: str, inputs: dict, timeout: float = 5.0) -> dict:
     safe_builtins = {
         "abs": abs, "min": min, "max": max, "sum": sum, "len": len, "range": range,
         "round": round, "float": float, "int": int, "pow": pow, "enumerate": enumerate,
         "list": list, "dict": dict, "tuple": tuple, "zip": zip, "map": map, "sorted": sorted,
+        "str": str, "bool": bool, "any": any, "all": all, "reversed": reversed,
+        "isinstance": isinstance, "type": type, "divmod": divmod, "filter": filter,
+        "__import__": _safe_import,  # whitelist-gated; allows `import math` etc.
     }
-    g: dict = {"__builtins__": safe_builtins, "math": math}
+    # Pre-inject the allowed modules so bare references work too (math is the common one).
+    g: dict = {"__builtins__": safe_builtins}
+    for _m in _ALLOWED_MODULES:
+        g[_m] = importlib.import_module(_m)
     def _handler(signum, frame):  # noqa: ARG001
         raise _Timeout()
     had_alarm = hasattr(signal, "SIGALRM")
