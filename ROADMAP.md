@@ -13,6 +13,32 @@ optimization direction is framed as a hypothesis whose **core experiment is a
 A direction "wins" only if its curve dominates both baselines (higher fitness at
 equal verifier-call budget, or equal fitness at lower budget).
 
+## Findings from the v0 real run (deepseek-v4-pro, real GDPval B-pile)
+
+The first real run surfaced the dominant bottleneck, which is now the #1 next step:
+
+- **Eval non-determinism (THE blocker).** The quant_agent regenerates each
+  solution via a fresh LLM call (temp 0.2) on *every* evaluation. So re-evaluating
+  after an edit regenerates ALL solutions; random per-call codegen variance shows
+  up as "regressions" and falsification mis-attributes them to the edit -> spurious
+  HARMFUL verdicts -> the strict gate keeps nothing -> OOS trajectory is flat even
+  when the harness edit is sensible. k-repeat denoises the verifier/probe, not the
+  solution generation, so it does not catch this.
+  **Fix (do first):** cache the quant_agent solution keyed on (task, harness
+  signature) so re-evaluating the same harness returns identical solutions — only
+  an edit changes solutions, making attribution clean. Then optionally repeat
+  solution generation k times (majority/best) to denoise codegen, and/or drop
+  temperature to 0 for the worker.
+- **Weak evolve/ADB agent.** deepseek-v4-pro's ADB-lite diagnosis hallucinated a
+  "KeyError/TypeError crash / MissingEdgeCase" story that did not match the actual
+  "base wrong" errors; its edits were plausible but never beneficial. Matches the
+  AHE report's open question on evolve-agent model strength — try a stronger
+  evolve agent (mixed tier) once eval is deterministic.
+- **Worker is capability-sufficient on canonical instances, shaky on variants.**
+  It solved the first instance of every subtype probe-robustly (option/amort/
+  audit/valuation) but missed the second instances ("base wrong"), likely codegen
+  variance and possibly a too-tight IRR tolerance (1e-4). Revisit per-metric tols.
+
 ## Stubs carried over from v0 (close these first)
 
 - **Real isolation for `code_exec`.** v0 uses restricted `exec` + SIGALRM in the
