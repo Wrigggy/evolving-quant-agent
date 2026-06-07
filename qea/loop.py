@@ -1,0 +1,263 @@
+"""The evolve -> falsify -> rollback driver + the 2-arm ablation.
+
+Per iteration: evaluate the incumbent harness with the hard verifier (and, in
+Arm 2, the soft judge) -> diagnose (ADB-lite) -> evolve_agent proposes ONE edit
+(L_t = 1) -> if the rejected-edit buffer blocks it, skip; else apply to a clone,
+re-evaluate, falsify (verdict), and keep (strict gate) or rollback (+ buffer).
+Three layers are persisted each iteration.
+
+Arm 1 (iron-law-2 clean): evolve on A only -> freeze -> transfer-eval on B.
+Arm 2 (relaxes iron law 2): evolve on A+B (soft B in the loop). The comparison
+is the ablation: does soft-B in the loop help, or just add falsification noise?
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+
+from .agents import diagnose, evolve_agent_propose, quant_agent_solve
+from .falsify import EvalSummary, RejectedEditBuffer, compute_diff, decide_keep, evaluate_changes
+from .harness import seed_harness
+from .llm import make_llm
+from .manifest import attach_verdict, build_manifest
+from .observability import ExperimentDir, eval_to_dict
+from .tasks import load_gdpval_a_pile, load_gdpval_b_pile
+from .verifier import HardVerifier, SoftJudge
+
+
+@dataclass
+class Config:
+    mock: bool = True
+    n_iters: int = 4          # mock scripted sequence needs 4
+    k: int = 2                # k-repeat denoise
+    b_n: int = 12             # real B-pile sample size
+    results_dir: str = "results/latest"
+
+
+@dataclass
+class IterationRecord:
+    iteration: int
+    blocked: bool
+    verdict: str
+    kept: bool
+    edit_summary: str
+    edit_slot: str
+    edit_component: str
+    root_cause_tag: str
+    diagnosis_overview: str
+    incumbent_oos: int
+    per_subtype: dict
+    cand_oos: int = 0
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class ArmResult:
+    arm: str
+    oos_trajectory: list[int]
+    records: list[IterationRecord]
+    final_harness_summary: dict
+    final_oos: int
+    final_per_subtype: dict
+    b_transfer: dict
+    b_baseline: dict
+    mean_eval_variance: float
+    n_kept: int
+    n_rolled_back: int
+    n_blocked: int
+    wall_unfixed: bool = True
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["records"] = [r.to_dict() if isinstance(r, IterationRecord) else r for r in self.records]
+        return d
+
+
+@dataclass
+class AblationResult:
+    arm1: ArmResult
+    arm2: ArmResult
+    comparison: dict = field(default_factory=dict)
+
+
+def evaluate(harness, tasks, *, mock, llm, hard, soft, k) -> EvalSummary:
+    results = {}
+    for task in tasks:
+        solution = quant_agent_solve(task, harness, mock=mock, llm=llm)
+        if task.pile == "A":
+            res = hard.score(task, solution, harness, mock=mock, k=k)
+        else:
+            res = soft.score(task, solution, harness, mock=mock, k=k)
+        results[task.task_id] = res
+    return EvalSummary(results)
+
+
+def _failure_pattern(evaluation: dict, edit) -> str:
+    if evaluation["verdict"] == "HARMFUL":
+        return "broke previously-passing tasks"
+    if edit.component_name == "overfit_cache":
+        return "memorized base inputs but failed the perturbation probe"
+    return "no OOS improvement on the hard verifier"
+
+
+def run_arm(arm, a_tasks, b_tasks, *, cfg, llm, hard, soft, expdir, b_baseline) -> ArmResult:
+    eval_set = a_tasks if arm == "arm1_A_only" else (a_tasks + b_tasks)
+    buffer = RejectedEditBuffer()
+    incumbent = seed_harness()
+    inc_eval = evaluate(incumbent, eval_set, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k)
+
+    oos_traj = [inc_eval.total_oos()]
+    variances = [inc_eval.mean_variance()]
+    records: list[IterationRecord] = []
+    n_kept = n_rb = n_blocked = 0
+
+    for it in range(1, cfg.n_iters + 1):
+        diag = diagnose(inc_eval, mock=cfg.mock, llm=llm)
+        edit = evolve_agent_propose(it, inc_eval, diag, incumbent, buffer, mock=cfg.mock, llm=llm)
+
+        if edit is None:
+            # real-mode fail-safe: no valid single edit parsed -> no-op iteration
+            records.append(IterationRecord(
+                iteration=it, blocked=True, verdict="NO_EDIT", kept=False,
+                edit_summary="(no valid edit proposed)", edit_slot="", edit_component="",
+                root_cause_tag=diag.get("root_cause_tag", ""), diagnosis_overview=diag.get("overview", ""),
+                incumbent_oos=inc_eval.total_oos(), per_subtype=inc_eval.per_subtype(),
+                cand_oos=inc_eval.total_oos(),
+            ))
+            oos_traj.append(inc_eval.total_oos())
+            expdir.persist_iteration(arm, {
+                "iteration": it, "eval": None, "diagnosis": diag,
+                "manifest": {"blocked": True, "reason": "no valid edit parsed"}, "workspace": incumbent.summary(),
+            })
+            continue
+
+        if buffer.blocks(edit):
+            n_blocked += 1
+            rec = IterationRecord(
+                iteration=it, blocked=True, verdict="BLOCKED", kept=False,
+                edit_summary=edit.summary, edit_slot=edit.slot, edit_component=edit.component_name,
+                root_cause_tag=diag.get("root_cause_tag", ""), diagnosis_overview=diag.get("overview", ""),
+                incumbent_oos=inc_eval.total_oos(), per_subtype=inc_eval.per_subtype(),
+                cand_oos=inc_eval.total_oos(),
+            )
+            records.append(rec)
+            oos_traj.append(inc_eval.total_oos())
+            expdir.persist_iteration(arm, {
+                "iteration": it, "eval": None, "diagnosis": diag,
+                "manifest": {"blocked": True, "reason": "rejected-edit buffer", "edit": edit.signature()},
+                "workspace": incumbent.summary(),
+            })
+            continue
+
+        candidate = incumbent.clone()
+        candidate.apply(edit)
+        cand_eval = evaluate(candidate, eval_set, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k)
+        diff = compute_diff(inc_eval, cand_eval)
+        evaluation = evaluate_changes(edit, diff)
+        kept = decide_keep(evaluation, inc_eval.total_oos(), cand_eval.total_oos())
+
+        manifest = build_manifest(it, "evolve_agent", edit, arm)
+        manifest = attach_verdict(manifest, evaluation, kept)
+
+        if kept:
+            n_kept += 1
+            incumbent, inc_eval = candidate, cand_eval
+        else:
+            n_rb += 1
+            buffer.add(edit, evaluation["verdict"], inc_eval.total_oos(), cand_eval.total_oos(), _failure_pattern(evaluation, edit))
+
+        variances.append(cand_eval.mean_variance())
+        oos_traj.append(inc_eval.total_oos())
+        records.append(IterationRecord(
+            iteration=it, blocked=False, verdict=evaluation["verdict"], kept=kept,
+            edit_summary=edit.summary, edit_slot=edit.slot, edit_component=edit.component_name,
+            root_cause_tag=diag.get("root_cause_tag", ""), diagnosis_overview=diag.get("overview", ""),
+            incumbent_oos=inc_eval.total_oos(), per_subtype=inc_eval.per_subtype(),
+            cand_oos=cand_eval.total_oos(),
+        ))
+        expdir.persist_iteration(arm, {
+            "iteration": it, "eval": eval_to_dict(cand_eval), "diagnosis": diag,
+            "manifest": manifest, "workspace": incumbent.summary(),
+        })
+
+    # freeze + transfer eval on B
+    b_eval = evaluate(incumbent, b_tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k)
+    b_transfer = {"mean_score": _mean_score(b_eval), "n_oos": b_eval.total_oos(), "n": len(b_tasks)}
+
+    # iron law 1: the capability-wall task must remain unfixed by the evolved harness
+    wall_unfixed = not any("wall" in tid for tid in inc_eval.oos_ids())
+
+    result = ArmResult(
+        arm=arm, oos_trajectory=oos_traj, records=records,
+        final_harness_summary=incumbent.summary(), final_oos=inc_eval.total_oos(),
+        final_per_subtype=inc_eval.per_subtype(), b_transfer=b_transfer, b_baseline=b_baseline,
+        mean_eval_variance=sum(variances) / len(variances), n_kept=n_kept, n_rolled_back=n_rb, n_blocked=n_blocked,
+        wall_unfixed=wall_unfixed,
+    )
+    expdir.persist_arm(arm, result.to_dict())
+    return result
+
+
+def _mean_score(eval_summary) -> float:
+    if not eval_summary.results:
+        return 0.0
+    return sum(r.score for r in eval_summary.results.values()) / len(eval_summary.results)
+
+
+def acceptance_signals(arm: ArmResult) -> dict:
+    """The three §5.4 mechanism signals, evaluated on one arm's record."""
+    recs = arm.records
+    # 1. causal connectivity (Case A): iter1 diagnosis -> edit -> workspace -> verdict all align
+    causal = bool(
+        recs and recs[0].root_cause_tag == "Hardcoding" and recs[0].verdict == "EFFECTIVE"
+        and recs[0].kept and "integrity_guard" in arm.final_harness_summary.get("validator", [])
+    )
+    # 2. OOS monotonic rise (headroom) — trajectory updated every iteration,
+    #    non-decreasing (rollbacks prevent regression), and a strict rise occurred
+    traj = arm.oos_trajectory
+    non_decreasing = all(traj[i] <= traj[i + 1] for i in range(len(traj) - 1))
+    monotonic = len(traj) >= 2 and non_decreasing and max(traj) > min(traj)
+    # 3. falsification correctly rolls back harmful / overfit, and buffer blocks repeats
+    harmful_rolled = any(r.verdict == "HARMFUL" and not r.kept for r in recs)
+    ineffective_rolled = any(r.verdict == "INEFFECTIVE" and not r.kept for r in recs)
+    blocked = any(r.verdict == "BLOCKED" for r in recs)
+    correct_rollback = harmful_rolled and ineffective_rolled and blocked
+    return {
+        "causal_loop": causal,
+        "monotonic_oos": monotonic,
+        "correct_rollback": correct_rollback,
+        "capability_wall_unfixed": arm.wall_unfixed,  # iron law 1
+    }
+
+
+def run_ablation(cfg: Config) -> AblationResult:
+    llm = make_llm(cfg.mock)
+    hard, soft = HardVerifier(), SoftJudge(llm)
+    a_tasks = load_gdpval_a_pile()
+    b_tasks = load_gdpval_b_pile(cfg.b_n, allow_download=not cfg.mock)
+    expdir = ExperimentDir(cfg.results_dir)
+
+    b_base_eval = evaluate(seed_harness(), b_tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k)
+    b_baseline = {"mean_score": _mean_score(b_base_eval), "n_oos": b_base_eval.total_oos(), "n": len(b_tasks)}
+
+    arm1 = run_arm("arm1_A_only", a_tasks, b_tasks, cfg=cfg, llm=llm, hard=hard, soft=soft, expdir=expdir, b_baseline=b_baseline)
+    arm2 = run_arm("arm2_A_plus_B", a_tasks, b_tasks, cfg=cfg, llm=llm, hard=hard, soft=soft, expdir=expdir, b_baseline=b_baseline)
+
+    comparison = {
+        "final_A_oos": {"arm1": arm1.final_oos, "arm2": arm2.final_oos},
+        "B_transfer_mean": {"arm1": arm1.b_transfer["mean_score"], "arm2": arm2.b_transfer["mean_score"], "baseline": b_baseline["mean_score"]},
+        "mean_eval_variance": {"arm1": arm1.mean_eval_variance, "arm2": arm2.mean_eval_variance},
+        "kept/rolledback/blocked": {
+            "arm1": [arm1.n_kept, arm1.n_rolled_back, arm1.n_blocked],
+            "arm2": [arm2.n_kept, arm2.n_rolled_back, arm2.n_blocked],
+        },
+        "note": (
+            "Arm2 puts soft-B in the loop (relaxes iron law 2). Compare eval-signal "
+            "variance (cleanliness of falsification) and whether B-in-loop changed "
+            "final A OOS or B transfer. In mock these values are illustrative."
+        ),
+    }
+    expdir.persist_ablation(comparison)
+    return AblationResult(arm1=arm1, arm2=arm2, comparison=comparison)
