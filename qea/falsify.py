@@ -115,6 +115,15 @@ def decide_keep(evaluation: dict, prev_total: int, cur_total: int) -> bool:
     return cur_total > prev_total
 
 
+def decide_keep_soft(inc_mean: float, cand_mean: float, noise_margin: float) -> bool:
+    """Soft-mode gate: keep only if the AGGREGATE mean rubric score improves beyond
+    the estimated eval noise floor. The binary per-task gate (reject on any
+    unattributed regression) is too strict for a noisy soft signal — the judge +
+    deliverable regenerate each eval, so a few spurious per-task regressions appear
+    on every edit. Here we tolerate those and credit a real aggregate gain."""
+    return cand_mean > inc_mean + noise_margin
+
+
 @dataclass
 class RejectedEditBuffer:
     """SkillOpt rejected-edit buffer. No embedding/semantic dedup — signature

@@ -181,6 +181,13 @@ def test_sandbox_allows_safe_imports_blocks_others():
         safe_exec_solve(bad, {})
 
 
+def test_soft_gate_noise_aware():
+    from qea.falsify import decide_keep_soft
+    assert decide_keep_soft(0.618, 0.651, 0.02) is True    # gain 0.033 > noise 0.02 -> keep
+    assert decide_keep_soft(0.618, 0.651, 0.05) is False   # gain within noise -> reject
+    assert decide_keep_soft(0.618, 0.560, 0.02) is False   # regression -> reject
+
+
 def test_signature_no_collision_past_120_chars():
     from qea.harness import Edit
     base = "x" * 130

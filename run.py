@@ -96,6 +96,7 @@ def main() -> int:
 
 def _print_soft(res) -> None:
     print(f"\n=== GDPval-soft evolution ({res.n_tasks} original tasks) ===")
+    print(f"  eval noise floor (margin to beat): {res.noise_margin}")
     print(f"  OOS trajectory (#score>=0.6): {res.oos_trajectory}")
     print(f"  mean rubric score trajectory: {res.mean_score_trajectory}")
     print(f"  {'iter':>4} {'verdict':<18} {'kept':<8} {'oos':>4}")

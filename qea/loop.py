@@ -18,7 +18,7 @@ import os
 from dataclasses import asdict, dataclass, field
 
 from .agents import diagnose, evolve_agent_propose, quant_agent_solve
-from .falsify import EvalSummary, RejectedEditBuffer, compute_diff, decide_keep, evaluate_changes
+from .falsify import EvalSummary, RejectedEditBuffer, compute_diff, decide_keep, decide_keep_soft, evaluate_changes
 from .harness import seed_harness
 from .llm import make_llm
 from .manifest import attach_verdict, build_manifest
@@ -271,6 +271,7 @@ class SoftRunResult:
     n_kept: int
     n_rolled_back: int
     n_blocked: int
+    noise_margin: float = 0.0
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -292,6 +293,13 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
     buffer = RejectedEditBuffer()
     incumbent = seed_harness()
     inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="seed")
+
+    # Estimate the eval noise floor: a 2nd fresh eval of the SAME seed harness. The
+    # gap between two same-harness samples = the regeneration+judge noise scale. An
+    # edit must improve the mean beyond this to be credited (noise-aware gate).
+    noise_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="seed-noise")
+    noise_margin = max(0.01, abs(_mean_score(inc_eval) - _mean_score(noise_eval)))
+    print(f"[soft-gate] eval noise floor estimated at {noise_margin:.4f} (mean-score margin to beat)", flush=True)
 
     oos_traj = [inc_eval.total_oos()]
     ms_traj = [round(_mean_score(inc_eval), 4)]
@@ -324,8 +332,12 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
         candidate = incumbent.clone(); candidate.apply(edit)
         cand_eval = evaluate(candidate, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label=f"iter{it}")
         diff = compute_diff(inc_eval, cand_eval)
-        evaluation = evaluate_changes(edit, diff)
-        kept = decide_keep(evaluation, inc_eval.total_oos(), cand_eval.total_oos())
+        evaluation = evaluate_changes(edit, diff)  # kept for the audit trail (verdict taxonomy)
+        kept = decide_keep_soft(_mean_score(inc_eval), _mean_score(cand_eval), noise_margin)
+        evaluation["soft_gate"] = {
+            "inc_mean": round(_mean_score(inc_eval), 4), "cand_mean": round(_mean_score(cand_eval), 4),
+            "noise_margin": round(noise_margin, 4), "kept": kept,
+        }
         manifest = attach_verdict(build_manifest(it, "evolve_agent", edit, "gdpval_soft"), evaluation, kept)
         if kept:
             n_kept += 1; incumbent, inc_eval = candidate, cand_eval
@@ -346,7 +358,7 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
     result = SoftRunResult(
         n_tasks=len(tasks), oos_trajectory=oos_traj, mean_score_trajectory=ms_traj, records=records,
         final_per_occupation=inc_eval.per_subtype(), final_mean_score=round(_mean_score(inc_eval), 4),
-        n_kept=n_kept, n_rolled_back=n_rb, n_blocked=n_blocked,
+        n_kept=n_kept, n_rolled_back=n_rb, n_blocked=n_blocked, noise_margin=round(noise_margin, 4),
     )
     expdir.persist_arm("gdpval_soft", result.to_dict())
     return result
