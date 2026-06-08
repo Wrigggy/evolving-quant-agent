@@ -44,6 +44,28 @@ A per-task diagnostic against deepseek-v4-pro revealed the real picture:
   report's open question on evolve-agent model strength (try a stronger evolve
   agent once tasks + eval are clean).
 
+## Findings from the GDPval-soft real run (deepseek, 30 original tasks)
+
+End-to-end soft-rubric-driven evolution on the 30 original GDPval finance tasks ran
+clean (timeout+concurrency+retry fixes held). Result: seed mean rubric 0.618 (19/30
+>= 0.6); the evolve_agent proposed sensible edits, two of which IMPROVED the aggregate
+(financial_computation_skill -> 0.651/22; variable_pay_middleware -> 0.645/21) — but
+ALL were rolled back, so the trajectory was flat ("soft headroom NOT observed").
+
+- **The strict gate is too strict for a NOISY soft signal (THE fix).** decide_keep
+  rejects any edit with unattributed regressions. With the soft judge, every candidate
+  eval regenerates both the deliverable and the judge, so 1-2 spurious per-task
+  regressions appear on EVERY edit -> verdict MIXED -> rejected, even when the aggregate
+  improved. The gate (correct for a clean hard signal, added after code review) conflates
+  noise-regressions with real harm. **Fix: a noise-aware gate for soft mode** — keep if
+  the aggregate (mean rubric score / oos count) improves beyond the eval noise floor,
+  tolerating a few per-task regressions; estimate the noise floor by re-evaluating the
+  incumbent k times. Combine with eval denoising (cache deliverables per harness
+  signature; higher k; temperature 0) so the regressions that remain are real. With this,
+  iter2/iter3 would be kept and soft headroom would likely be OBSERVED.
+- **Text-deliverable lower bound confirmed.** 0.618 is depressed by format/layout
+  criteria the text worker can't satisfy (see the .xlsx/.pptx generation item below).
+
 ## Stubs carried over from v0 (close these first)
 
 - **Real isolation for `code_exec`.** v0 uses restricted `exec` + SIGALRM in the
