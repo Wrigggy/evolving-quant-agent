@@ -24,8 +24,18 @@ cp .env.example .env   # then set OPENROUTER_API_KEY
 python3 run.py --real --b-n 12
 ```
 
-The mock run prints, per iteration and per arm: the per-subtype OOS scores, the
-verdict for each edit, the A+B ablation comparison, and a final headroom verdict.
+**Two run modes:**
+- `--mock` — offline **hard-verifier mechanism demo**: a synthetic A-pile (numeric
+  tasks with a deterministic verifier + perturbation probe) and scripted edits
+  exercise the full evolve→falsify→rollback loop with clean attribution. No API
+  key. This is the iron-law-faithful mechanism check.
+- `--real` — evolve **directly on the ~30 original GDPval finance/accounting tasks**
+  (Accountants/Auditors, Financial Managers, Investment Analysts, Financial
+  Advisors, Securities Sales, Real Estate Brokers), graded per-criterion by the
+  `rubric_json` judge. These are open-ended deliverables with **no hard verifier**,
+  so the loop is driven by the **soft rubric signal — which deliberately relaxes
+  iron law 2** (a chosen tradeoff to evolve on real economically-valuable tasks).
+  Treat its "soft headroom" result as indicative, not proof.
 
 ## What it does
 

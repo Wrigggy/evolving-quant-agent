@@ -21,7 +21,7 @@ from .harness import seed_harness
 from .llm import make_llm
 from .manifest import attach_verdict, build_manifest
 from .observability import ExperimentDir, eval_to_dict
-from .tasks import load_gdpval_a_pile, load_gdpval_b_pile
+from .tasks import load_gdpval_a_pile, load_gdpval_b_pile, load_gdpval_finance
 from .verifier import HardVerifier, SoftJudge
 
 
@@ -31,6 +31,7 @@ class Config:
     n_iters: int = 4          # mock scripted sequence needs 4
     k: int = 2                # k-repeat denoise
     b_n: int = 12             # real B-pile sample size
+    gdpval_broad: bool = True  # ~30 broad finance occupations vs ~25 core
     results_dir: str = "results/latest"
 
 
@@ -230,6 +231,98 @@ def acceptance_signals(arm: ArmResult) -> dict:
         "correct_rollback": correct_rollback,
         "capability_wall_unfixed": arm.wall_unfixed,  # iron law 1
     }
+
+
+@dataclass
+class SoftRunResult:
+    n_tasks: int
+    oos_trajectory: list[int]          # # tasks with rubric score >= threshold
+    mean_score_trajectory: list[float]  # mean rubric score (the finer headroom signal)
+    records: list[IterationRecord]
+    final_per_occupation: dict
+    final_mean_score: float
+    n_kept: int
+    n_rolled_back: int
+    n_blocked: int
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["records"] = [r.to_dict() if isinstance(r, IterationRecord) else r for r in self.records]
+        return d
+
+
+def run_gdpval_soft(cfg: Config) -> SoftRunResult:
+    """Evolve a harness DIRECTLY on the original GDPval finance tasks, driven by the
+    soft per-criterion rubric judge. Relaxes iron law 2 (soft signal in the loop) by
+    explicit user choice — there is no hard verifier for original GDPval deliverables.
+
+    OOS metric = # tasks with rubric score >= threshold; mean rubric score is the
+    finer (continuous) headroom signal. Per-occupation deltas honor iron law 4."""
+    llm = make_llm(cfg.mock)
+    hard, soft = HardVerifier(), SoftJudge(llm)
+    tasks = load_gdpval_finance(broad=cfg.gdpval_broad, allow_download=not cfg.mock)
+    expdir = ExperimentDir(cfg.results_dir)
+    buffer = RejectedEditBuffer()
+    incumbent = seed_harness()
+    inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k)
+
+    oos_traj = [inc_eval.total_oos()]
+    ms_traj = [round(_mean_score(inc_eval), 4)]
+    records: list[IterationRecord] = []
+    n_kept = n_rb = n_blocked = 0
+
+    for it in range(1, cfg.n_iters + 1):
+        diag = diagnose(inc_eval, mock=cfg.mock, llm=llm)
+        edit = evolve_agent_propose(it, inc_eval, diag, incumbent, buffer, mock=cfg.mock, llm=llm)
+
+        def _norec(verdict, manifest_extra):
+            records.append(IterationRecord(
+                iteration=it, blocked=True, verdict=verdict, kept=False,
+                edit_summary=(edit.summary if edit else "(none)"),
+                edit_slot=(edit.slot if edit else ""), edit_component=(edit.component_name if edit else ""),
+                root_cause_tag=diag.get("root_cause_tag", ""), diagnosis_overview=diag.get("overview", ""),
+                incumbent_oos=inc_eval.total_oos(), per_subtype=inc_eval.per_subtype(),
+                cand_oos=inc_eval.total_oos(),
+            ))
+            oos_traj.append(inc_eval.total_oos()); ms_traj.append(round(_mean_score(inc_eval), 4))
+            expdir.persist_iteration("gdpval_soft", {
+                "iteration": it, "eval": None, "diagnosis": diag,
+                "manifest": manifest_extra, "workspace": incumbent.summary()})
+
+        if edit is None:
+            n_blocked += 1; _norec("NO_EDIT", {"blocked": True, "reason": "no valid edit parsed"}); continue
+        if buffer.blocks(edit):
+            n_blocked += 1; _norec("BLOCKED", {"blocked": True, "reason": "rejected-edit buffer", "edit": edit.signature()}); continue
+
+        candidate = incumbent.clone(); candidate.apply(edit)
+        cand_eval = evaluate(candidate, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k)
+        diff = compute_diff(inc_eval, cand_eval)
+        evaluation = evaluate_changes(edit, diff)
+        kept = decide_keep(evaluation, inc_eval.total_oos(), cand_eval.total_oos())
+        manifest = attach_verdict(build_manifest(it, "evolve_agent", edit, "gdpval_soft"), evaluation, kept)
+        if kept:
+            n_kept += 1; incumbent, inc_eval = candidate, cand_eval
+        else:
+            n_rb += 1
+            buffer.add(edit, evaluation["verdict"], inc_eval.total_oos(), cand_eval.total_oos(), _failure_pattern(evaluation, edit))
+        oos_traj.append(inc_eval.total_oos()); ms_traj.append(round(_mean_score(inc_eval), 4))
+        records.append(IterationRecord(
+            iteration=it, blocked=False, verdict=evaluation["verdict"], kept=kept,
+            edit_summary=edit.summary, edit_slot=edit.slot, edit_component=edit.component_name,
+            root_cause_tag=diag.get("root_cause_tag", ""), diagnosis_overview=diag.get("overview", ""),
+            incumbent_oos=inc_eval.total_oos(), per_subtype=inc_eval.per_subtype(), cand_oos=cand_eval.total_oos(),
+        ))
+        expdir.persist_iteration("gdpval_soft", {
+            "iteration": it, "eval": eval_to_dict(cand_eval), "diagnosis": diag,
+            "manifest": manifest, "workspace": incumbent.summary()})
+
+    result = SoftRunResult(
+        n_tasks=len(tasks), oos_trajectory=oos_traj, mean_score_trajectory=ms_traj, records=records,
+        final_per_occupation=inc_eval.per_subtype(), final_mean_score=round(_mean_score(inc_eval), 4),
+        n_kept=n_kept, n_rolled_back=n_rb, n_blocked=n_blocked,
+    )
+    expdir.persist_arm("gdpval_soft", result.to_dict())
+    return result
 
 
 def run_ablation(cfg: Config) -> AblationResult:

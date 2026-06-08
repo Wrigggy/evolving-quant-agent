@@ -387,6 +387,54 @@ _GDPVAL_PARQUET_URL = (
 )
 
 
+# Finance/accounting-relevant GDPval occupations (across all 9 sectors). There is
+# no "Economist" occupation in GDPval; the gold subset caps at 5 tasks/occupation.
+_FIN_OCC_CORE = (
+    "Accountants and Auditors",
+    "Financial Managers",
+    "Financial and Investment Analysts",
+    "Personal Financial Advisors",
+    "Securities",  # "Securities, Commodities, and Financial Services Sales Agents"
+)
+_FIN_OCC_BROAD = _FIN_OCC_CORE + ("Real Estate Brokers",)
+
+
+def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> list[BTask]:
+    """The ORIGINAL GDPval finance/accounting tasks (deliverable + rubric_json),
+    soft-graded per-criterion. ~30 broad / ~25 core, from the open gold subset.
+
+    These are real open-ended deliverables with NO hard verifier — using them to
+    drive the evolve loop relaxes iron law 2 (a deliberate, documented choice)."""
+    stems = _FIN_OCC_BROAD if broad else _FIN_OCC_CORE
+    if allow_download:
+        try:
+            import pandas as pd  # optional dep
+
+            with urllib.request.urlopen(_GDPVAL_PARQUET_URL, timeout=30) as resp:
+                df = pd.read_parquet(io.BytesIO(resp.read()))
+            mask = df["occupation"].apply(lambda o: any(s in str(o) for s in stems))
+            sel = df[mask]
+            out: list[BTask] = []
+            for _, row in sel.iterrows():
+                out.append(
+                    BTask(
+                        task_id=str(row["task_id"]),
+                        subtype=str(row["occupation"]),  # per-occupation deltas (iron law 4)
+                        prompt=str(row["prompt"]),
+                        rubric=str(row.get("rubric_pretty", "")),
+                        rubric_items=_parse_rubric_json(row.get("rubric_json")),
+                        gdpval_lineage=f"gdpval:{row['occupation']} (real, original task)",
+                    )
+                )
+            if out:
+                print(f"[tasks] loaded {len(out)} ORIGINAL GDPval finance tasks "
+                      f"({sel['occupation'].nunique()} occupations)")
+                return out
+        except Exception as exc:  # noqa: BLE001
+            print(f"[tasks] real GDPval finance load failed ({type(exc).__name__}: {exc}); using offline fixtures")
+    return list(_B_FIXTURES)
+
+
 def load_gdpval_b_pile(n: int = 12, *, allow_download: bool = True) -> list[BTask]:
     """Real GDPval 'Finance and Insurance' deliverable tasks (soft-judged).
 

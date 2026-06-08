@@ -14,7 +14,7 @@ import argparse
 import os
 from pathlib import Path
 
-from qea.loop import Config, acceptance_signals, run_ablation
+from qea.loop import Config, acceptance_signals, run_ablation, run_gdpval_soft
 
 
 def _load_dotenv(path: str = ".env") -> None:
@@ -54,6 +54,7 @@ def main() -> int:
     ap.add_argument("--iters", type=int, default=4)
     ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--b-n", type=int, default=12)
+    ap.add_argument("--core", action="store_true", help="real mode: ~25 core finance occupations instead of ~30 broad")
     ap.add_argument("--results-dir", default="results/latest")
     args = ap.parse_args()
 
@@ -61,29 +62,51 @@ def main() -> int:
     mock = not args.real  # mock is the default
     if mock:
         os.environ["MOCK_LLM"] = "1"
+    cfg = Config(mock=mock, n_iters=args.iters, k=args.k, b_n=args.b_n,
+                 gdpval_broad=not args.core, results_dir=args.results_dir)
 
-    cfg = Config(mock=mock, n_iters=args.iters, k=args.k, b_n=args.b_n, results_dir=args.results_dir)
-    print(f"[run] mode={'MOCK' if mock else 'REAL'} iters={cfg.n_iters} k={cfg.k} -> {cfg.results_dir}")
-    abl = run_ablation(cfg)
+    # MOCK = offline hard-verifier mechanism demo (synthetic A-pile + scripted edits).
+    # REAL = evolve directly on the ORIGINAL GDPval finance tasks, soft-rubric-driven.
+    if mock:
+        print(f"[run] mode=MOCK (hard-verifier mechanism demo) iters={cfg.n_iters} k={cfg.k} -> {cfg.results_dir}")
+        abl = run_ablation(cfg)
+        _print_arm(abl.arm1)
+        _print_arm(abl.arm2)
+        print("\n=== ABLATION (Arm1 A-only vs Arm2 A+B) ===")
+        for key, val in abl.comparison.items():
+            print(f"  {key}: {val}")
+        print("\n=== HEADROOM VERDICT (the three §5.4 signals, on Arm1) ===")
+        sig = acceptance_signals(abl.arm1)
+        for name, ok in sig.items():
+            print(f"  [{'PASS' if ok else 'FAIL'}] {name}")
+        overall = all(sig.values())
+        print(f"\n  ==> HEADROOM {'CONFIRMED' if overall else 'NOT CONFIRMED'} (MOCK).")
+        return 0 if overall else 1
 
-    _print_arm(abl.arm1)
-    _print_arm(abl.arm2)
+    print(f"[run] mode=REAL (soft-rubric evolution on ORIGINAL GDPval finance tasks; "
+          f"iron law 2 relaxed by design) iters={cfg.n_iters} k={cfg.k} broad={cfg.gdpval_broad} -> {cfg.results_dir}")
+    res = run_gdpval_soft(cfg)
+    _print_soft(res)
+    rose = res.mean_score_trajectory[-1] > res.mean_score_trajectory[0] + 1e-9
+    print(f"\n  ==> SOFT HEADROOM {'OBSERVED' if rose else 'NOT OBSERVED'} (REAL): "
+          f"mean rubric score {res.mean_score_trajectory[0]:.3f} -> {res.mean_score_trajectory[-1]:.3f}, "
+          f"{res.n_kept} edit(s) kept. NOTE: soft signal (relaxes iron law 2) — treat as indicative, not proof.")
+    return 0 if rose else 1
 
-    print("\n=== ABLATION (Arm1 A-only vs Arm2 A+B) ===")
-    for key, val in abl.comparison.items():
-        print(f"  {key}: {val}")
 
-    print("\n=== HEADROOM VERDICT (the three §5.4 signals, on Arm1) ===")
-    sig = acceptance_signals(abl.arm1)
-    for name, ok in sig.items():
-        print(f"  [{'PASS' if ok else 'FAIL'}] {name}")
-    overall = all(sig.values())
-    tag = "MOCK" if mock else "REAL"
-    print(f"\n  ==> HEADROOM {'CONFIRMED' if overall else 'NOT CONFIRMED'} ({tag}): "
-          f"evolutionary harness has leverage on this quant family."
-          if overall else
-          f"\n  ==> HEADROOM NOT CONFIRMED ({tag}): see failing signals above.")
-    return 0 if overall else 1
+def _print_soft(res) -> None:
+    print(f"\n=== GDPval-soft evolution ({res.n_tasks} original tasks) ===")
+    print(f"  OOS trajectory (#score>=0.6): {res.oos_trajectory}")
+    print(f"  mean rubric score trajectory: {res.mean_score_trajectory}")
+    print(f"  {'iter':>4} {'verdict':<18} {'kept':<8} {'oos':>4}")
+    for r in res.records:
+        flag = "BLOCKED" if r.blocked else ("keep" if r.kept else "rollback")
+        print(f"  {r.iteration:>4} {r.verdict:<18} {flag:<8} {r.incumbent_oos:>4}  | edit: {r.edit_slot}:{r.edit_component}")
+    print(f"  final mean rubric score: {res.final_mean_score}")
+    print("  final per-occupation (oos/total):")
+    for occ, (o, t) in res.final_per_occupation.items():
+        print(f"    {occ[:46]:46} {o}/{t}")
+    print(f"  kept/rolledback/blocked: {res.n_kept}/{res.n_rolled_back}/{res.n_blocked}")
 
 
 if __name__ == "__main__":
