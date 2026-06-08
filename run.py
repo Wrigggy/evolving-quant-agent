@@ -104,9 +104,11 @@ def _print_soft(res) -> None:
         flag = "BLOCKED" if r.blocked else ("keep" if r.kept else "rollback")
         print(f"  {r.iteration:>4} {r.verdict:<18} {flag:<8} {r.incumbent_oos:>4}  | edit: {r.edit_slot}:{r.edit_component}")
     print(f"  final mean rubric score: {res.final_mean_score}")
-    print("  final per-occupation (oos/total):")
-    for occ, (o, t) in res.final_per_occupation.items():
-        print(f"    {occ[:46]:46} {o}/{t}")
+    print("  final per-occupation PASS RATE (score>=0.6) + mean rubric score:")
+    means = res.final_per_occupation_mean or {}
+    for occ, (o, t) in sorted(res.final_per_occupation.items()):
+        pr = (100.0 * o / t) if t else 0.0
+        print(f"    {occ[:46]:46} {o}/{t} = {pr:5.1f}%   mean {means.get(occ, 0.0):.3f}")
     print(f"  kept/rolledback/blocked: {res.n_kept}/{res.n_rolled_back}/{res.n_blocked}")
 
 

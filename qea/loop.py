@@ -266,12 +266,13 @@ class SoftRunResult:
     oos_trajectory: list[int]          # # tasks with rubric score >= threshold
     mean_score_trajectory: list[float]  # mean rubric score (the finer headroom signal)
     records: list[IterationRecord]
-    final_per_occupation: dict
+    final_per_occupation: dict          # {occupation: (n_pass, total)}
     final_mean_score: float
     n_kept: int
     n_rolled_back: int
     n_blocked: int
     noise_margin: float = 0.0
+    final_per_occupation_mean: dict = field(default_factory=dict)  # {occupation: mean rubric score}
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -359,6 +360,7 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
         n_tasks=len(tasks), oos_trajectory=oos_traj, mean_score_trajectory=ms_traj, records=records,
         final_per_occupation=inc_eval.per_subtype(), final_mean_score=round(_mean_score(inc_eval), 4),
         n_kept=n_kept, n_rolled_back=n_rb, n_blocked=n_blocked, noise_margin=round(noise_margin, 4),
+        final_per_occupation_mean={k: round(v, 4) for k, v in inc_eval.per_subtype_mean().items()},
     )
     expdir.persist_arm("gdpval_soft", result.to_dict())
     return result

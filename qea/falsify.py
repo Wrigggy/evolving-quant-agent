@@ -38,6 +38,15 @@ class EvalSummary:
                 a[0] += 1
         return {k: (v[0], v[1]) for k, v in agg.items()}
 
+    def per_subtype_mean(self) -> dict[str, float]:
+        """Mean rubric score per subtype/occupation (finer than the binary pass count)."""
+        agg: dict[str, list[float]] = {}
+        for r in self.results.values():
+            a = agg.setdefault(r.subtype, [0.0, 0])
+            a[0] += r.score
+            a[1] += 1
+        return {k: (v[0] / v[1] if v[1] else 0.0) for k, v in agg.items()}
+
     def mean_variance(self) -> float:
         if not self.results:
             return 0.0
