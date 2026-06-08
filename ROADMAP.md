@@ -59,7 +59,15 @@ A per-task diagnostic against deepseek-v4-pro revealed the real picture:
 - **Real GDPval A-pile verifier.** v0 authors clean A-pile instances. To verify
   *raw* GDPval numeric tasks, add a structured-output contract + an answer-key
   extractor from `rubric_json`, or a deliverable parser (.xlsx/.pdf).
-- **OpenAI GDPval grader as a separate soft-eval track** (never the loop verifier).
+- **GDPval B-pile grading fidelity.** v0 grades against the open `rubric_json`
+  per-criterion (weighted) on the candidate's TEXT. Two gaps to close: (1) the
+  agent emits text, not real .pdf/.pptx/.xlsx, so format/layout criteria fail —
+  have the agent produce real files. (2) Full fidelity = OpenAI's actual method:
+  render each deliverable page to PNG via LibreOffice and grade with a multimodal
+  model, pairwise vs the gold human deliverable (gold ships for 17/25 finance
+  tasks) → win-rate. The official grader itself (GPT-5-high) has no public
+  API/code — its web-form service appears unavailable — so the official win-rate
+  can only ever be a manual, periodic external check, never in-harness.
 - **SkillOpt edit-budget schedule.** v0 fixes `L_t = 1`. Add the cosine schedule
   (start 3-4, decay to 1-2) and the rank-and-keep-top-L clip.
 - **Buffer semantic dedup.** v0 uses signature match only. Add normalized-diff /

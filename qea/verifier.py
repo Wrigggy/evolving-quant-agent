@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import json
 import math
 import re
 import signal
@@ -30,6 +31,31 @@ def _stable_unit(*parts) -> float:
     """Deterministic float in [0,1) from arbitrary parts (process-independent)."""
     h = hashlib.md5(":".join(str(p) for p in parts).encode()).hexdigest()
     return (int(h[:8], 16) % 10_000) / 10_000.0
+
+
+def _parse_json_obj(txt: str) -> dict | None:
+    """First balanced JSON object in txt (handles prose/fences), or None."""
+    dec = json.JSONDecoder()
+    i = txt.find("{")
+    while i >= 0:
+        try:
+            obj, _ = dec.raw_decode(txt[i:])
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+        i = txt.find("{", i + 1)
+    return None
+
+
+def _truthy(v) -> bool:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return v != 0
+    if isinstance(v, str):
+        return v.strip().lower() in ("true", "yes", "1", "y", "satisfied")
+    return False
 
 # Mock soft-judge pass threshold and the jitter amplitude used to model the
 # non-determinism of an LLM judge (iron law 2 / 3 illustration).
@@ -216,6 +242,32 @@ class SoftJudge:
         return max(0.0, min(1.0, base + jitter))
 
     def _real_sample(self, task, deliverable: str) -> float:
+        """GDPval-faithful rubric grading: score the deliverable against each
+        rubric_json criterion (per-criterion satisfied?), weight by points ->
+        normalized [0,1]. Falls back to a holistic score if no rubric_items.
+
+        NOTE: this is a rubric-satisfaction score from the OPEN GDPval rubric, not
+        OpenAI's hidden pairwise-vs-human win-rate. Format criteria (e.g. "two PDFs
+        submitted") will fail for a text-only deliverable -> known v0 lower bound."""
+        items = getattr(task, "rubric_items", None) or []
+        if not items:
+            return self._real_holistic(task, deliverable)
+        lines = [f"{i + 1}. (+{c['points']}) {c['criterion']}" for i, c in enumerate(items)]
+        prompt = (
+            "You are grading a finance deliverable against an itemized GDPval rubric. "
+            "For EACH numbered criterion, decide whether the deliverable satisfies it. "
+            'Return ONLY a JSON object mapping each criterion number (as a string) to '
+            "true or false.\n\n"
+            f"TASK:\n{task.prompt}\n\nRUBRIC:\n" + "\n".join(lines) +
+            f"\n\nDELIVERABLE:\n{deliverable}\n\nJSON:"
+        )
+        txt = self.llm.complete(prompt, role="judge")
+        verdicts = _parse_json_obj(txt) or {}
+        earned = sum(c["points"] for i, c in enumerate(items) if _truthy(verdicts.get(str(i + 1))))
+        total = sum(c["points"] for c in items) or 1.0
+        return max(0.0, min(1.0, earned / total))
+
+    def _real_holistic(self, task, deliverable: str) -> float:
         prompt = (
             "You are grading a finance deliverable against a rubric. Return ONLY a "
             "number in [0,1] = fraction of rubric satisfied.\n\n"

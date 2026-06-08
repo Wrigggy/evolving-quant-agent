@@ -26,6 +26,7 @@ deterministic verifier, so we author clean instances rather than parse them).
 from __future__ import annotations
 
 import io
+import json
 import math
 import urllib.request
 from dataclasses import dataclass, field
@@ -189,12 +190,14 @@ class ATask:
 
 @dataclass
 class BTask:
-    """B-pile soft task. The agent produces a deliverable; an LLM judge scores it."""
+    """B-pile soft task. The agent produces a deliverable; the judge scores it
+    against the GDPval `rubric_json` criteria (weighted by points)."""
 
     task_id: str
     subtype: str
     prompt: str
-    rubric: str
+    rubric: str                              # rubric_pretty (human-readable)
+    rubric_items: list = field(default_factory=list)  # [{points, criterion}] from rubric_json
     gold: str | None = None
     gdpval_lineage: str = ""
     # Mock-only: scores the world model returns with/without the discipline a
@@ -202,6 +205,22 @@ class BTask:
     mock_base_score: float = 0.45
     mock_disciplined_score: float = 0.72
     pile: str = "B"
+
+
+def _parse_rubric_json(rj) -> list[dict]:
+    """rubric_json -> [{points: float, criterion: str}], the open GDPval scoring spec."""
+    try:
+        data = json.loads(rj) if isinstance(rj, str) else rj
+        out = []
+        for c in data:
+            crit = (c.get("criterion") or "").strip()
+            if not crit:
+                continue
+            pts = c.get("score")
+            out.append({"points": float(pts) if pts else 1.0, "criterion": crit})
+        return out
+    except Exception:  # noqa: BLE001
+        return []
 
 
 # --------------------------------------------------------------------------- #
@@ -326,6 +345,13 @@ _B_FIXTURES = [
             "Produce an advisory memo."
         ),
         rubric="Quantifies the glide path; states assumptions; addresses sequence-of-returns risk; cites tax implications; recommendation is actionable.",
+        rubric_items=[
+            {"points": 2, "criterion": "Quantifies a concrete glide path (target equity/fixed-income mix over time)."},
+            {"points": 1, "criterion": "States its assumptions (return, inflation, time horizon) explicitly."},
+            {"points": 2, "criterion": "Addresses sequence-of-returns risk for someone retiring in 7 years."},
+            {"points": 1, "criterion": "Cites tax implications of reallocating."},
+            {"points": 1, "criterion": "Ends with a specific, actionable recommendation."},
+        ],
         gdpval_lineage="gdpval:Personal Financial Advisors (offline fixture)",
     ),
     BTask(
@@ -333,6 +359,12 @@ _B_FIXTURES = [
         subtype="valuation",
         prompt="Write a one-page valuation memo for a SaaS acquisition target given the attached metrics.",
         rubric="Picks a defensible method (DCF/comps); states discount rate and why; sensitivity to key driver; clear recommended range.",
+        rubric_items=[
+            {"points": 2, "criterion": "Selects a defensible valuation method (DCF and/or comparables) and justifies it."},
+            {"points": 2, "criterion": "States the discount rate / multiple used and the reasoning."},
+            {"points": 1, "criterion": "Includes a sensitivity analysis on the key driver."},
+            {"points": 1, "criterion": "Gives a clear recommended valuation range."},
+        ],
         gdpval_lineage="gdpval:Financial and Investment Analysts (offline fixture)",
     ),
     BTask(
@@ -340,6 +372,12 @@ _B_FIXTURES = [
         subtype="audit_metric",
         prompt="Summarize audit findings for a mid-cap retailer's liquidity position into a board-ready note.",
         rubric="Correctly interprets current/quick ratios; flags going-concern triggers; references the underlying figures; recommendation is specific.",
+        rubric_items=[
+            {"points": 2, "criterion": "Correctly interprets the current ratio and quick ratio."},
+            {"points": 2, "criterion": "Flags any going-concern triggers in the liquidity position."},
+            {"points": 1, "criterion": "References the underlying figures (not just qualitative claims)."},
+            {"points": 1, "criterion": "Gives a specific recommendation to the board."},
+        ],
         gdpval_lineage="gdpval:Accountants and Auditors (offline fixture)",
     ),
 ]
@@ -371,6 +409,7 @@ def load_gdpval_b_pile(n: int = 12, *, allow_download: bool = True) -> list[BTas
                         subtype="valuation",  # coarse; real per-occupation mapping is ROADMAP
                         prompt=str(row["prompt"]),
                         rubric=str(row.get("rubric_pretty", "")),
+                        rubric_items=_parse_rubric_json(row.get("rubric_json")),
                         gdpval_lineage=f"gdpval:{row['occupation']} (real)",
                     )
                 )

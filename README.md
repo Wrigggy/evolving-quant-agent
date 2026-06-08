@@ -36,9 +36,18 @@ advisors, securities sales). It is split into:
 - **A-pile (hard verifier, drives evolution):** numeric tasks with an objective
   core — option pricing, loan amortization, audit/liquidity metrics, NPV/IRR.
   Each ships a deterministic `reference(inputs)` and a **perturbation probe**.
-- **B-pile (soft judge, transfer only):** real GDPval deliverable tasks graded by
-  an LLM judge against the rubric. Used to measure whether a harness evolved on
-  hard-A transfers to qualitative finance work.
+- **B-pile (soft judge, transfer only):** real GDPval deliverable tasks graded
+  against the **open `rubric_json`** — the judge decides per-criterion whether the
+  deliverable satisfies it, weighted by the criterion points → normalized score.
+  Used to measure whether a harness evolved on hard-A transfers to qualitative
+  finance work. The grader model is pluggable via `QEA_JUDGE_MODEL`.
+
+  > This is rubric-satisfaction scoring from the **open** GDPval rubric, **not**
+  > OpenAI's headline pairwise-vs-human win-rate: that official grader (GPT-5-high,
+  > multimodal, pairwise vs the gold human deliverable) ships no public API/code —
+  > it was a manual web-form service that does not appear available. Format
+  > criteria (e.g. "two PDFs submitted") will fail for a text-only deliverable, so
+  > the rubric score is a noisy lower bound. See ROADMAP for the full-fidelity path.
 
 GDPval ships **no deterministic verifier** with any task (grading is
 expert/LLM-judge), so the A-pile tasks are authored in code with clean reference

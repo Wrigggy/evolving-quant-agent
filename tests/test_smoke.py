@@ -115,6 +115,27 @@ def test_capability_wall_never_solved(ablation):
     assert n_oos < n_total
 
 
+def test_gdpval_rubric_grader_weighted():
+    # Open GDPval rubric grading: per-criterion satisfied? -> weighted score.
+    from qea.tasks import BTask, _parse_rubric_json
+    from qea.verifier import SoftJudge
+
+    # rubric_json parsing keeps points + criterion
+    items = _parse_rubric_json('[{"score":2,"criterion":"a"},{"score":1,"criterion":"b"}]')
+    assert items == [{"points": 2.0, "criterion": "a"}, {"points": 1.0, "criterion": "b"}]
+
+    class StubLLM:
+        def complete(self, prompt, *, role="judge"):
+            return 'sure: {"1": true, "2": false, "3": true}'
+
+    t = BTask(task_id="b", subtype="x", prompt="p", rubric="",
+              rubric_items=[{"points": 2, "criterion": "a"},
+                            {"points": 1, "criterion": "b"},
+                            {"points": 1, "criterion": "c"}])
+    r = SoftJudge(StubLLM()).score(t, "deliverable", None, mock=False, k=1)
+    assert abs(r.score - 0.75) < 1e-9  # earned 2+1=3 of total 4
+
+
 def test_arm2_softB_adds_variance(ablation):
     # Arm2 puts soft-B in the loop -> noisier falsification signal than Arm1.
     assert ablation.arm2.mean_eval_variance > ablation.arm1.mean_eval_variance
