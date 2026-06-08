@@ -36,7 +36,11 @@ class OpenRouterLLM:
         if not key:
             raise RuntimeError("OPENROUTER_API_KEY not set (real mode)")
         base = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        self.client = OpenAI(api_key=key, base_url=base)
+        # timeout is CRITICAL: without it a hung connection (e.g. via a flaky SOCKS
+        # proxy) blocks forever and silently stalls the whole run. max_retries=0
+        # because we do our own retry/backoff below.
+        self.timeout = float(os.environ.get("QEA_REQUEST_TIMEOUT", "90"))
+        self.client = OpenAI(api_key=key, base_url=base, timeout=self.timeout, max_retries=0)
         self.max_retries = int(os.environ.get("QEA_MAX_RETRIES", "5"))
         self.backoff = float(os.environ.get("QEA_BACKOFF_BASE_SEC", "2.0"))
         order = os.environ.get("QEA_PROVIDER_ORDER", "").strip()

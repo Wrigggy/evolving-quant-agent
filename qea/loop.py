@@ -13,6 +13,8 @@ is the ablation: does soft-B in the loop help, or just add falsification noise?
 
 from __future__ import annotations
 
+import concurrent.futures
+import os
 from dataclasses import asdict, dataclass, field
 
 from .agents import diagnose, evolve_agent_propose, quant_agent_solve
@@ -22,7 +24,7 @@ from .llm import make_llm
 from .manifest import attach_verdict, build_manifest
 from .observability import ExperimentDir, eval_to_dict
 from .tasks import load_gdpval_a_pile, load_gdpval_b_pile, load_gdpval_finance
-from .verifier import HardVerifier, SoftJudge
+from .verifier import HardVerifier, SoftJudge, TaskResult
 
 
 @dataclass
@@ -83,15 +85,40 @@ class AblationResult:
     comparison: dict = field(default_factory=dict)
 
 
-def evaluate(harness, tasks, *, mock, llm, hard, soft, k) -> EvalSummary:
-    results = {}
-    for task in tasks:
-        solution = quant_agent_solve(task, harness, mock=mock, llm=llm)
-        if task.pile == "A":
-            res = hard.score(task, solution, harness, mock=mock, k=k)
-        else:
-            res = soft.score(task, solution, harness, mock=mock, k=k)
-        results[task.task_id] = res
+def _score_one(task, harness, *, mock, llm, hard, soft, k):
+    solution = quant_agent_solve(task, harness, mock=mock, llm=llm)
+    if task.pile == "A":
+        return task.task_id, hard.score(task, solution, harness, mock=mock, k=k)
+    return task.task_id, soft.score(task, solution, harness, mock=mock, k=k)
+
+
+def evaluate(harness, tasks, *, mock, llm, hard, soft, k, label: str = "") -> EvalSummary:
+    """Score every task. Mock runs sequentially (instant, deterministic); real runs
+    concurrently (<= QEA_MAX_CONCURRENCY) so 30 LLM-bound tasks finish in minutes,
+    and a single task's failure/timeout degrades to a 0 rather than killing the eval."""
+    results: dict = {}
+    if mock or len(tasks) <= 1:
+        for t in tasks:
+            tid, res = _score_one(t, harness, mock=mock, llm=llm, hard=hard, soft=soft, k=k)
+            results[tid] = res
+        return EvalSummary(results)
+
+    mw = max(1, min(int(os.environ.get("QEA_MAX_CONCURRENCY", "8")), 16))
+    done, total = 0, len(tasks)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=mw) as ex:
+        futs = {ex.submit(_score_one, t, harness, mock=mock, llm=llm, hard=hard, soft=soft, k=k): t
+                for t in tasks}
+        for fut in concurrent.futures.as_completed(futs):
+            t = futs[fut]
+            try:
+                tid, res = fut.result()
+                results[tid] = res
+            except Exception as exc:  # noqa: BLE001 - one task must not kill the eval
+                results[t.task_id] = TaskResult(t.task_id, t.subtype, t.pile, False, False, False, 0.0, 0.0,
+                                                f"eval error: {type(exc).__name__}: {exc}")
+            done += 1
+            if label and (done % 5 == 0 or done == total):
+                print(f"[eval {label}] {done}/{total} scored", flush=True)
     return EvalSummary(results)
 
 
@@ -264,7 +291,7 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
     expdir = ExperimentDir(cfg.results_dir)
     buffer = RejectedEditBuffer()
     incumbent = seed_harness()
-    inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k)
+    inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="seed")
 
     oos_traj = [inc_eval.total_oos()]
     ms_traj = [round(_mean_score(inc_eval), 4)]
@@ -295,7 +322,7 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
             n_blocked += 1; _norec("BLOCKED", {"blocked": True, "reason": "rejected-edit buffer", "edit": edit.signature()}); continue
 
         candidate = incumbent.clone(); candidate.apply(edit)
-        cand_eval = evaluate(candidate, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k)
+        cand_eval = evaluate(candidate, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label=f"iter{it}")
         diff = compute_diff(inc_eval, cand_eval)
         evaluation = evaluate_changes(edit, diff)
         kept = decide_keep(evaluation, inc_eval.total_oos(), cand_eval.total_oos())
