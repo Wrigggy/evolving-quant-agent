@@ -62,6 +62,20 @@ def _truthy(v) -> bool:
 _SOFT_PASS = 0.60
 _SOFT_JITTER = 0.08
 
+# Real rubric grading is quantized to GDPval's expert-parity scale {0, 0.5, 1}:
+# 0 = below the standard, 0.5 = at parity, 1 = meets/exceeds (≈ as good as or better
+# than the human gold deliverable). Thresholds on the weighted-rubric fraction.
+_PARITY_HIGH = 0.80   # fraction >= this -> 1.0
+_PARITY_LOW = 0.50    # fraction >= this -> 0.5 ; below -> 0.0
+
+
+def _quantize_parity(frac: float) -> float:
+    if frac >= _PARITY_HIGH:
+        return 1.0
+    if frac >= _PARITY_LOW:
+        return 0.5
+    return 0.0
+
 
 @dataclass
 class TaskResult:
@@ -230,7 +244,9 @@ class SoftJudge:
             samples = [self._real_sample(task, deliverable) for _ in range(k)]
         med = statistics.median(samples)
         var = statistics.pvariance(samples) if len(samples) > 1 else 0.0
-        oos = med >= _SOFT_PASS
+        # real scores are quantized to {0,0.5,1}; parity-or-better (>=0.5) is a "pass".
+        thresh = _SOFT_PASS if mock else _PARITY_LOW
+        oos = med >= thresh
         return TaskResult(task.task_id, task.subtype, "B", oos, oos, oos, med, var, None)
 
     def _mock_sample(self, task, harness, repeat: int) -> float:
@@ -265,7 +281,8 @@ class SoftJudge:
         verdicts = _parse_json_obj(txt) or {}
         earned = sum(c["points"] for i, c in enumerate(items) if _truthy(verdicts.get(str(i + 1))))
         total = sum(c["points"] for c in items) or 1.0
-        return max(0.0, min(1.0, earned / total))
+        # quantize the weighted fraction to the expert-parity scale {0, 0.5, 1}
+        return _quantize_parity(earned / total)
 
     def _real_holistic(self, task, deliverable: str) -> float:
         prompt = (
@@ -278,6 +295,6 @@ class SoftJudge:
         if not m:
             return 0.0
         try:
-            return max(0.0, min(1.0, float(m.group())))
+            return _quantize_parity(max(0.0, min(1.0, float(m.group()))))
         except ValueError:
             return 0.0

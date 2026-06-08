@@ -40,8 +40,10 @@
 
 ### 怎么评分 / Scoring（关键，三套要分清）
 - **硬 verifier**（mock + 合成 A 堆）：每题 **0 / 0.5 / 1**。**1**=答案对且**通用**（扰动输入仍对，过 perturbation probe）；**0.5**=base 对但**硬编码**（过不了 probe）；**0**=base 就错。题"通过"= 拿到 1。
-- **软 judge**（真实 GDPval）：把该题的 **rubric_json 逐条**判「满足？是/否」×该条分值，加权归一到 **[0,1]**；本报告里 **mean≥0.6** 记一次 pass。
-- **GDPval 官方评分**（仅作对照，**未采用**）：人工/GPT-5 把"模型交付物 vs 人工标准答案"做 **pairwise 盲评 → 0 / 0.5 / 1**（模型更好 / 平 / 人更好）→ win-rate。**无公开 API**（只有网页表单且实测无法提交），所以我们用上面的自建 rubric 评分代替。
+- **软 judge**（真实 GDPval）：把该题的 **rubric_json 逐条**判「满足？是/否」×该条分值，得到加权完成度，再**量化到与专家标准 parity 的 {0, 0.5, 1}**——**0**=低于标准（完成度 <0.5）/ **0.5**=持平（0.5–0.8）/ **1**=达到或超过（≥0.8，≈与人工 gold 一样好或更好）。per-occupation「pass rate」= 这些 {0,0.5,1} 的均值（即 GDPval 式 **win-rate**，平局算半分）；单题"通过"= ≥0.5（持平或更好）。
+- **GDPval 官方评分**（仅作对照，**未采用**）：人工/GPT-5 把"模型交付物 vs 人工标准答案"做 **pairwise 盲评 → 0 / 0.5 / 1**（模型更好 / 平 / 人更好）→ win-rate。**无公开 API**（只有网页表单且实测无法提交），所以我们用上面**对齐其 0/0.5/1 标准**的自建 rubric 评分代替。
+
+> 注：下方 E1–E4 的软评分数字采于**早期连续 rubric（[0,1] 均值, 阈值 0.6）**；评分逻辑已改为上述 **{0,0.5,1} parity 制**，重跑会以 win-rate 重新表达（结论方向不变）。
 
 ### 任务长什么样 / What the tasks are
 - **合成 A 堆**（有确定数值答案，驱动硬回路）：Black-Scholes 期权定价、贷款摊销表、流动比率(audit metric)、NPV+IRR 估值。每个引用一个真实 GDPval task_id 标血缘。
@@ -72,6 +74,11 @@
 
 **Case B — worker 现在交的是"文本"而非真实文件（real GDPval，限制所在）。** 结论：**worker 不写 .xlsx/.pptx，只产一段文本**，所以一大类 rubric 分结构性拿不到。证据：上面那道审计任务要求"交一个含 'Sample Size Calculation' 工作表的 **Excel workbook**（每条 +2 分）"；实跑 flash worker 返回的是 `type=str` 的 **4864 字 markdown**——它把公式 `n=Z²p(1-p)/e²`、`n≈68`、"A1–A4 放输入、加一列 QoQ Variance"等**用文字描述出来**，但没有任何真实文件。而且代码里只把 `task.prompt` 喂给它、**没喂 reference 附件表**，所以它连真实数据都拿不到、只能自己编个例子(N=500)。→ "是 Excel 文件 / 有名为 X 的 sheet / 用附件数据算出的值"这些条目**必挂**，这正是 **Accountants/Auditors 仅 ~0–13%** 的直接原因（这类职业最依赖真文件+附件数据）。
 
+**Case C — edit 抬了分却被噪声回滚（real GDPval，falsification 的核心两难）。** 结论：**evolve_agent 提的 edit 真把聚合分抬了，却被判成"可能过拟合/副作用"而回滚**——这是软信号下 falsification 最棘手的地方。证据(E3)：`skill:financial_computation_skill` 把均分 0.618→**0.651**、`middleware:variable_pay_middleware`→**0.645**，但都拿到 verdict `MIXED` → 回滚、最终 0 kept。
+- **回滚的判定理由（是不是过拟合？）**：旧 strict gate 看到该 edit 造成了**未预测的 task 掉分**(unattributed regression)，按设计**把任何未预测掉分当作潜在的过拟合/副作用伤害**（edit 偏帮了它声明要修的任务、却伤了别的任务）→ 保守回滚。
+- **但真因多半是噪声、不是过拟合**：软 judge 每轮**重新生成交付物 + 重新打分**，同一 harness 也会有 1–2 个 task 随机掉分。**单样本下"随机掉分"和"真过拟合掉分"无法区分**，于是净正的 edit 被误杀。
+- **怎么解决**：① **noise-aware gate**（已实现）——不再"有掉分就回滚"，改为"聚合分超过**噪声底**才 keep"，容忍少量随机掉分；② **对 worker 交付物 k 次采样取中位**——让 per-task 分稳定，真过拟合（系统性掉分）就能与噪声（随机掉分）区分；③ 引入 **held-out / selection split**（v0 暂未做）——真过拟合会在 held-out 上掉、噪声不会，这是区分"过拟合 vs 噪声"的**正解**。E4 已用 ① 但仍 0/8，说明单靠 noise-aware gate 不够，**② 是下一步头号动作**。
+
 ---
 
 ## 2. 分析 / Analysis（结论先行）
@@ -101,6 +108,5 @@
 2. **真实文件生成 + 喂 reference 附件**：worker 改为写代码产 .xlsx/.pptx；机械/格式条目走确定性硬检查 → 抬升文本下限、部分找回铁律②。
 3. **硬 verifier family 对照**：接 FinRL-Meta(带摩擦回测、防泄漏) 做一个真硬信号闭环，与软 GDPval 对照,直接量出"软信号拖累了多少"。
 4. **judge 升级/校准**：复现版 pairwise-vs-gold judge 指向更强模型;周期性手动提交官方 grader 做 calibration。
-5. **（ROADMAP）四个优化方向**各做 *fitness vs verifier-call-budget* 曲线，对照 Life-Harness 全迭代 + AHE 文件编辑 baseline。
 
 > 依赖：#1–#4 需联网 + OpenRouter 余额；官方 grader 校准被"无 API"阻塞，只能人工网页提交。
