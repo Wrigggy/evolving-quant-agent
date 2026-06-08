@@ -14,12 +14,14 @@ is the ablation: does soft-B in the loop help, or just add falsification noise?
 from __future__ import annotations
 
 import concurrent.futures
+import json
 import os
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 from .agents import diagnose, evolve_agent_propose, quant_agent_solve
 from .falsify import EvalSummary, RejectedEditBuffer, compute_diff, decide_keep, decide_keep_soft, evaluate_changes
-from .harness import seed_harness
+from .harness import Harness, seed_harness
 from .llm import make_llm
 from .manifest import attach_verdict, build_manifest
 from .observability import ExperimentDir, eval_to_dict
@@ -34,6 +36,7 @@ class Config:
     k: int = 2                # k-repeat denoise
     b_n: int = 12             # real B-pile sample size
     gdpval_broad: bool = True  # ~30 broad finance occupations vs ~25 core
+    resume: bool = False       # continue a prior gdpval_soft run from its checkpoint
     results_dir: str = "results/latest"
 
 
@@ -280,6 +283,17 @@ class SoftRunResult:
         return d
 
 
+def _write_resume(path: Path, last_iter, incumbent, noise_margin, buffer, records, oos_traj, ms_traj, n_kept, n_rb, n_blocked) -> None:
+    """Checkpoint the full run state after each iteration so --resume can continue."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "last_iter": last_iter, "incumbent": incumbent.to_state(), "noise_margin": noise_margin,
+        "buffer": buffer.entries, "records": [r.to_dict() for r in records],
+        "oos_traj": oos_traj, "ms_traj": ms_traj,
+        "n_kept": n_kept, "n_rolled_back": n_rb, "n_blocked": n_blocked,
+    }, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+
 def run_gdpval_soft(cfg: Config) -> SoftRunResult:
     """Evolve a harness DIRECTLY on the original GDPval finance tasks, driven by the
     soft per-criterion rubric judge. Relaxes iron law 2 (soft signal in the loop) by
@@ -291,70 +305,101 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
     hard, soft = HardVerifier(), SoftJudge(llm)
     tasks = load_gdpval_finance(broad=cfg.gdpval_broad, allow_download=not cfg.mock)
     expdir = ExperimentDir(cfg.results_dir)
+    arm_dir = Path(cfg.results_dir) / "gdpval_soft"
+    resume_path = arm_dir / "resume.json"
     buffer = RejectedEditBuffer()
-    incumbent = seed_harness()
-    inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="seed")
-
-    # Estimate the eval noise floor: a 2nd fresh eval of the SAME seed harness. The
-    # gap between two same-harness samples = the regeneration+judge noise scale. An
-    # edit must improve the mean beyond this to be credited (noise-aware gate).
-    noise_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="seed-noise")
-    noise_margin = max(0.01, abs(_mean_score(inc_eval) - _mean_score(noise_eval)))
-    print(f"[soft-gate] eval noise floor estimated at {noise_margin:.4f} (mean-score margin to beat)", flush=True)
-
-    oos_traj = [inc_eval.total_oos()]
-    ms_traj = [round(_mean_score(inc_eval), 4)]
     records: list[IterationRecord] = []
     n_kept = n_rb = n_blocked = 0
+    start_iter = 1
 
-    for it in range(1, cfg.n_iters + 1):
+    if cfg.resume and resume_path.exists():
+        st = json.loads(resume_path.read_text())
+        incumbent = Harness.from_state(st["incumbent"])
+        noise_margin = st["noise_margin"]
+        oos_traj, ms_traj = list(st["oos_traj"]), list(st["ms_traj"])
+        n_kept, n_rb, n_blocked = st["n_kept"], st["n_rolled_back"], st["n_blocked"]
+        for e in st.get("buffer", []):
+            buffer._sigs.add(e["signature"]); buffer.entries.append(e)
+        records = [IterationRecord(**r) for r in st["records"]]
+        start_iter = st["last_iter"] + 1
+        inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="resume")
+        print(f"[resume] checkpoint at iter {start_iter}; incumbent slots={incumbent.summary()}; noise={noise_margin}", flush=True)
+    elif cfg.resume and arm_dir.exists():
+        # older run without a checkpoint: only a SEED incumbent is safely
+        # reconstructable (a kept edit would need its full content).
+        done = sorted(int(p.name.split("_")[1]) for p in arm_dir.glob("iteration_*") if (p / "change_manifest.json").exists())
+        kept_iters, noise_margin = [], 0.0
+        for i in done:
+            m = json.loads((arm_dir / f"iteration_{i:03d}" / "change_manifest.json").read_text())
+            if m.get("verification", {}).get("verdict") == "keep":
+                kept_iters.append(i)
+            noise_margin = noise_margin or m.get("verification", {}).get("result", {}).get("soft_gate", {}).get("noise_margin", 0.0)
+        if kept_iters:
+            raise SystemExit(f"[resume] iters {kept_iters} were KEPT; cannot rebuild a non-seed incumbent without a checkpoint — re-run fresh.")
+        incumbent = seed_harness()
+        start_iter = (max(done) + 1) if done else 1
+        noise_margin = noise_margin or 0.0276
+        inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="resume-seed")
+        oos_traj = [inc_eval.total_oos()]
+        ms_traj = [round(_mean_score(inc_eval), 4)]
+        print(f"[resume] no checkpoint; incumbent=SEED (0 edits kept in iters 1-{max(done) if done else 0}); "
+              f"reusing noise floor {noise_margin}; continuing at iter {start_iter} (prior iters in docs/PARTIAL_RUN)", flush=True)
+    else:
+        incumbent = seed_harness()
+        inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="seed")
+        # Noise floor: a 2nd fresh eval of the SAME seed harness; the gap between two
+        # same-harness samples = the regeneration+judge noise an edit must beat.
+        noise_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="seed-noise")
+        noise_margin = max(0.01, abs(_mean_score(inc_eval) - _mean_score(noise_eval)))
+        print(f"[soft-gate] eval noise floor estimated at {noise_margin:.4f} (mean-score margin to beat)", flush=True)
+        oos_traj = [inc_eval.total_oos()]
+        ms_traj = [round(_mean_score(inc_eval), 4)]
+
+    for it in range(start_iter, cfg.n_iters + 1):
         diag = diagnose(inc_eval, mock=cfg.mock, llm=llm)
         edit = evolve_agent_propose(it, inc_eval, diag, incumbent, buffer, mock=cfg.mock, llm=llm)
 
-        def _norec(verdict, manifest_extra):
+        if edit is None or buffer.blocks(edit):
+            n_blocked += 1
+            verdict = "NO_EDIT" if edit is None else "BLOCKED"
+            mext = {"blocked": True, "reason": "no valid edit parsed" if edit is None else "rejected-edit buffer"}
+            if edit is not None:
+                mext["edit"] = edit.signature()
             records.append(IterationRecord(
                 iteration=it, blocked=True, verdict=verdict, kept=False,
                 edit_summary=(edit.summary if edit else "(none)"),
                 edit_slot=(edit.slot if edit else ""), edit_component=(edit.component_name if edit else ""),
                 root_cause_tag=diag.get("root_cause_tag", ""), diagnosis_overview=diag.get("overview", ""),
-                incumbent_oos=inc_eval.total_oos(), per_subtype=inc_eval.per_subtype(),
-                cand_oos=inc_eval.total_oos(),
-            ))
+                incumbent_oos=inc_eval.total_oos(), per_subtype=inc_eval.per_subtype(), cand_oos=inc_eval.total_oos()))
             oos_traj.append(inc_eval.total_oos()); ms_traj.append(round(_mean_score(inc_eval), 4))
-            expdir.persist_iteration("gdpval_soft", {
-                "iteration": it, "eval": None, "diagnosis": diag,
-                "manifest": manifest_extra, "workspace": incumbent.summary()})
-
-        if edit is None:
-            n_blocked += 1; _norec("NO_EDIT", {"blocked": True, "reason": "no valid edit parsed"}); continue
-        if buffer.blocks(edit):
-            n_blocked += 1; _norec("BLOCKED", {"blocked": True, "reason": "rejected-edit buffer", "edit": edit.signature()}); continue
-
-        candidate = incumbent.clone(); candidate.apply(edit)
-        cand_eval = evaluate(candidate, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label=f"iter{it}")
-        diff = compute_diff(inc_eval, cand_eval)
-        evaluation = evaluate_changes(edit, diff)  # kept for the audit trail (verdict taxonomy)
-        kept = decide_keep_soft(_mean_score(inc_eval), _mean_score(cand_eval), noise_margin)
-        evaluation["soft_gate"] = {
-            "inc_mean": round(_mean_score(inc_eval), 4), "cand_mean": round(_mean_score(cand_eval), 4),
-            "noise_margin": round(noise_margin, 4), "kept": kept,
-        }
-        manifest = attach_verdict(build_manifest(it, "evolve_agent", edit, "gdpval_soft"), evaluation, kept)
-        if kept:
-            n_kept += 1; incumbent, inc_eval = candidate, cand_eval
+            expdir.persist_iteration("gdpval_soft", {"iteration": it, "eval": None, "diagnosis": diag,
+                                                     "manifest": mext, "workspace": incumbent.summary()})
         else:
-            n_rb += 1
-            buffer.add(edit, evaluation["verdict"], inc_eval.total_oos(), cand_eval.total_oos(), _failure_pattern(evaluation, edit))
-        oos_traj.append(inc_eval.total_oos()); ms_traj.append(round(_mean_score(inc_eval), 4))
-        records.append(IterationRecord(
-            iteration=it, blocked=False, verdict=evaluation["verdict"], kept=kept,
-            edit_summary=edit.summary, edit_slot=edit.slot, edit_component=edit.component_name,
-            root_cause_tag=diag.get("root_cause_tag", ""), diagnosis_overview=diag.get("overview", ""),
-            incumbent_oos=inc_eval.total_oos(), per_subtype=inc_eval.per_subtype(), cand_oos=cand_eval.total_oos(),
-        ))
-        expdir.persist_iteration("gdpval_soft", {
-            "iteration": it, "eval": eval_to_dict(cand_eval), "diagnosis": diag,
-            "manifest": manifest, "workspace": incumbent.summary()})
+            candidate = incumbent.clone(); candidate.apply(edit)
+            cand_eval = evaluate(candidate, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label=f"iter{it}")
+            diff = compute_diff(inc_eval, cand_eval)
+            evaluation = evaluate_changes(edit, diff)  # kept for the audit trail (verdict taxonomy)
+            kept = decide_keep_soft(_mean_score(inc_eval), _mean_score(cand_eval), noise_margin)
+            evaluation["soft_gate"] = {
+                "inc_mean": round(_mean_score(inc_eval), 4), "cand_mean": round(_mean_score(cand_eval), 4),
+                "noise_margin": round(noise_margin, 4), "kept": kept,
+            }
+            manifest = attach_verdict(build_manifest(it, "evolve_agent", edit, "gdpval_soft"), evaluation, kept)
+            if kept:
+                n_kept += 1; incumbent, inc_eval = candidate, cand_eval
+            else:
+                n_rb += 1
+                buffer.add(edit, evaluation["verdict"], inc_eval.total_oos(), cand_eval.total_oos(), _failure_pattern(evaluation, edit))
+            oos_traj.append(inc_eval.total_oos()); ms_traj.append(round(_mean_score(inc_eval), 4))
+            records.append(IterationRecord(
+                iteration=it, blocked=False, verdict=evaluation["verdict"], kept=kept,
+                edit_summary=edit.summary, edit_slot=edit.slot, edit_component=edit.component_name,
+                root_cause_tag=diag.get("root_cause_tag", ""), diagnosis_overview=diag.get("overview", ""),
+                incumbent_oos=inc_eval.total_oos(), per_subtype=inc_eval.per_subtype(), cand_oos=cand_eval.total_oos()))
+            expdir.persist_iteration("gdpval_soft", {"iteration": it, "eval": eval_to_dict(cand_eval),
+                                                     "diagnosis": diag, "manifest": manifest, "workspace": incumbent.summary()})
+
+        _write_resume(resume_path, it, incumbent, noise_margin, buffer, records, oos_traj, ms_traj, n_kept, n_rb, n_blocked)
 
     result = SoftRunResult(
         n_tasks=len(tasks), oos_trajectory=oos_traj, mean_score_trajectory=ms_traj, records=records,

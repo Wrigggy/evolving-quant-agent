@@ -112,6 +112,21 @@ class Harness:
     def summary(self) -> dict[str, list[str]]:
         return {s: list(self.slots[s].keys()) for s in SLOTS if self.slots[s]}
 
+    # -- (de)serialization for checkpoint/resume --------------------------- #
+    def to_state(self) -> dict:
+        return {s: [{"name": c.name, "content": c.content, "effect": c.effect, "origin": c.origin}
+                    for c in self.slots[s].values()] for s in SLOTS}
+
+    @staticmethod
+    def from_state(state: dict) -> "Harness":
+        h = Harness()
+        for slot, comps in state.items():
+            for c in comps:
+                h.slots[slot][c["name"]] = Component(
+                    name=c["name"], slot=slot, content=c.get("content", ""),
+                    effect=c.get("effect", ""), origin=c.get("origin", "evolved"))
+        return h
+
 
 def seed_harness() -> Harness:
     """Minimal seed: one tool (deterministic code-execution sandbox), six empty slots."""
