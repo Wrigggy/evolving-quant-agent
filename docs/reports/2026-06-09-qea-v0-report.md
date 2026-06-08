@@ -15,26 +15,33 @@
 - **harness（外挂）**：模型外面那套可改的东西；这里拆成 **7 个 slot**：`tool / middleware / skill / prompt / validator / memory / router`。
 - **quant_agent（worker，执行器）**：在当前 harness 下真正去做题、产出"交付物"的 agent。
 - **evolve_agent（演化器）**：读失败诊断，每轮**只改 harness 的一个 slot**，试图让 worker 做得更好。
-- **verifier（验证器）**：给交付物打分。**硬 verifier** = 确定性数值核对；**软 judge** = LLM 按 rubric 打分。
+- **verifier（验证器）**：只负责**给交付物打分**。**硬 verifier** = 确定性数值核对；**软 judge** = LLM 按 rubric 打分。
+- **falsify / gate（判定 + 去留）**：`falsify.py` 里的一步——把"改前 vs 改后"的分数变化判成 **verdict**(EFFECTIVE/.../HARMFUL)，再由 **gate** 决定这个 edit **留下还是回滚**。注意 **gate 不属于 verifier**（verifier 只打分）；它是 falsify 的**决策规则**：硬模式 = 严格(任何未预测掉分就回滚)，软模式 = **noise-aware**(聚合分超过噪声底才留)。
 - **OOS pass**：一道题"算通过"。
 
 ### 整体流程 / How it runs (end-to-end)
+HARNESS = 7 个可演化 slot（模型外面那套可改的"外挂"）:
 ```
-            ┌──────────── HARNESS = 7 个可演化 slot ────────────┐
-            │ tool*  middleware  skill  prompt  validator  memory  router │   *seed 只填 tool=code_exec,其余空
-            └────────────────────────────────────────────────────────────┘
-                         ▲ evolve_agent 每轮只改其中"一个"slot
-  一道任务 ──▶ quant_agent (在当前 harness 下产出交付物)
-                  │ 交付物
-                  ▼
-              router ──A 堆──▶ HardVerifier(数值重算 + perturbation probe) ─┐  每任务打分
-                     └─B 堆──▶ SoftJudge(逐条 rubric_json 加权)            ─┘  → 0 / 0.5 / 1 或 [0,1]
-
-  每一轮 iteration（闭环的一圈）:
-    ① evaluate 所有任务→分数   ② diagnose 把失败蒸馏成 root cause
-    ③ evolve_agent 读①②+rejected-edit buffer → 提 1 个 edit(改某 slot)
-    ④ 套到 harness 副本→重新 evaluate   ⑤ falsify: 出 verdict + 过 gate → keep 或 rollback(入 buffer)
-    ⑥ 三层 trace 落盘 + resume.json(可断点续跑)
+  +------------------------------------------+
+  | tool*   middleware   skill   prompt       |
+  | validator   memory   router               |
+  +------------------------------------------+
+   *seed 只填 tool = code_exec, 其余 6 个 slot 空着
+        ^  evolve_agent 每轮只改其中 1 个 slot
+        |
+  task ---> quant_agent ---> 交付物 ---> router
+                              |-- A 堆 --> HardVerifier (数值重算 + probe)
+                              +-- B 堆 --> SoftJudge (rubric -> 0/0.5/1)
+                                              \--> 每题分数
+```
+一轮 iteration（闭环的一圈）:
+```
+  (1) evaluate 全部任务 -> 分数
+  (2) diagnose (ADB-lite) -> root cause
+  (3) evolve_agent 读 (1)(2) + rejected-edit buffer -> 提 1 个 edit (改某 slot)
+  (4) 套到 harness 副本 -> 重新 evaluate
+  (5) falsify: 出 verdict + 过 gate -> keep / rollback(回滚, 入 buffer)
+  (6) 落盘 3 层 trace + resume.json (可断点续跑)
 ```
 > 设计受 4 条"铁律"约束：①只打 harness 是真瓶颈的任务；②硬 verifier 入回路(软信号只做迁移评测)；③多次评估去噪;④按子类/职业分别记分、不要单一聚合。**复用** AHE 的 verdict 引擎/manifest/三层 observability；**移植** SkillOpt 的 rejected-edit buffer + strict gate + edit budget；**quant 新增** integrity guard = perturbation probe（防硬编码）。代码 ~1956 行 / 13 commits / 17 单测全过。
 
@@ -67,6 +74,8 @@
 | Financial Managers | 56.7% | 40% | ~0.52 |
 | Securities/Commodities Sales | 43.3% | 60% | ~0.51 |
 | **Accountants and Auditors** | **13.3%** | **0%** | **~0.28** |
+
+> **mean** = 该职业 5 道题（×多次评估）的**平均 rubric 完成度**（早期连续制 [0,1]，1 = 满足全部 rubric 条目）；**pass rate** = 完成度过阈值的题占比。按职业分开记（铁律④）。改成 {0,0.5,1} 制后，per-occupation 指标即「该职业的 win-rate」。
 
 ### 案例研究 / Case Study
 
