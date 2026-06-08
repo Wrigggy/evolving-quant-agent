@@ -52,6 +52,25 @@ HARNESS = 7 个可演化 slot（模型外面那套可改的"外挂"）:
 
 > 注：下方 E1–E4 的软评分数字采于**早期连续 rubric（[0,1] 均值, 阈值 0.6）**；评分逻辑已改为上述 **{0,0.5,1} parity 制**，重跑会以 win-rate 重新表达（结论方向不变）。
 
+### falsification 引擎（核心，原样复用 AHE 逻辑）/ The falsify engine
+**一句话：每个 edit 都是一个"可证伪的假设"——先预言、后对账、再判去留。** 这套逻辑直接搬自 AHE 的 `evaluate_changes`（`qea/falsify.py`），是 v0 最核心的复用件，也是判断"evolve 到底有没有在工作"的依据。
+
+- **① 预言（写进 change-manifest）**：evolve_agent 提 edit 时**必须预先声明**——「预计修好哪些任务(`predicted_fixes`) / 可能弄坏哪些(`risk_tasks`)」。这一步把每个改动变成**可检验的假设**，而不是拍脑袋改。
+- **② 对账（下一轮 eval）**：比较改前/改后得到 `flipped`(fail→pass) 与 `regressed`(pass→fail)，再和①的预言对照——预言的修好了几个、声明的风险中了几个、有没有**没预测到的掉分**(unattributed regression)。
+- **③ 判 verdict（5 档，纯由对账结果决定）**：
+
+| verdict | 条件 |
+|---|---|
+| **EFFECTIVE** | 预言要修的**全修好**了，且无未预测掉分 |
+| **PARTIALLY_EFFECTIVE** | 只修好了**一部分** |
+| **MIXED** | 既修好了一些、又弄坏了一些（风险兑现 或 未预测掉分）|
+| **INEFFECTIVE** | 啥也没修、也没弄坏 |
+| **HARMFUL** | 没修好、却弄坏了东西 |
+
+- **④ gate 决定去留（在 verdict 之上，见 glossary）**：硬模式 = 严格（只留 EFFECTIVE/PARTIALLY、且总通过数严格上升、且无未预测掉分）；软模式 = noise-aware（聚合分超过噪声底才留）。
+- **⑤ 后果**：keep → edit 并入 incumbent harness；rollback → 还原，且 edit 进 **rejected-edit buffer**（下轮不许再提同款，治"反复 add→回滚→再 add"的空转）；每轮 **edit budget = 1**。
+- **为什么值钱**：①→⑤ 全程落在三层 trace（eval / manifest / workspace）里，所以能像 Case A 那样**审计"同一 root cause 是否贯穿四层"**——这就是 evolve 可信度的来源，原样继承自 AHE。
+
 ### 任务长什么样 / What the tasks are
 - **合成 A 堆**（有确定数值答案，驱动硬回路）：Black-Scholes 期权定价、贷款摊销表、流动比率(audit metric)、NPV+IRR 估值。每个引用一个真实 GDPval task_id 标血缘。
 - **真实 GDPval finance**（30 题 = 6 类职业 ×5）：真实职业交付物。例：*审计员*对一张 Anti-Financial-Crime 指标表做抽样测试、要求**交一个含 'Sample Size Calculation' 工作表的 Excel 文件*\*；*理财顾问*写配置调整建议备忘录；*投资分析师*写估值备忘。
