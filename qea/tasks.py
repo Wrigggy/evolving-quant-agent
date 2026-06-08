@@ -270,7 +270,11 @@ def load_gdpval_a_pile() -> list[ATask]:
         ATask(
             task_id="A_opt_02",
             subtype="option_pricing",
-            prompt="Same contract as A_opt_01, different inputs.",
+            prompt=(
+                "Write `def solve(inputs):` returning {'call_price': <float>}, the "
+                "Black-Scholes price of a European call for inputs S,K,r,sigma,T. "
+                "Do not hardcode; your function will be run on other inputs too."
+            ),
             inputs={"S": 42.0, "K": 40.0, "r": 0.03, "sigma": 0.35, "T": 0.5},
             reference=bs_call_reference,
             perturb=perturb_bs,
@@ -280,7 +284,11 @@ def load_gdpval_a_pile() -> list[ATask]:
         ATask(
             task_id="A_val_02",
             subtype="valuation",
-            prompt="Same contract as A_val_01, different inputs.",
+            prompt=(
+                "Write `def solve(inputs):` returning {'npv','irr'} for a cashflow "
+                "stream `cashflows` (index 0 = initial outlay, negative) discounted "
+                "at `rate`."
+            ),
             inputs={"rate": 0.12, "cashflows": [-5_000_000.0, 1_200_000.0, 1_500_000.0, 1_800_000.0, 2_400_000.0]},
             reference=npv_reference,
             perturb=perturb_npv,
@@ -291,7 +299,11 @@ def load_gdpval_a_pile() -> list[ATask]:
         ATask(
             task_id="A_amort_wall",
             subtype="amortization",
-            prompt="A negative-amortization / balloon edge case the base model gets wrong.",
+            prompt=(
+                "Write `def solve(inputs):` returning {'payment','final_balance',"
+                "'total_interest'} for a fixed-rate loan (principal, annual_rate, "
+                "years, payments_per_year). final_balance must amortize to ~0."
+            ),
             inputs={"principal": 750_000.0, "annual_rate": 0.085, "years": 7, "payments_per_year": 12},
             reference=loan_amort_reference,
             perturb=perturb_amort,

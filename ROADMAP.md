@@ -15,29 +15,34 @@ equal verifier-call budget, or equal fitness at lower budget).
 
 ## Findings from the v0 real run (deepseek-v4-pro, real GDPval B-pile)
 
-The first real run surfaced the dominant bottleneck, which is now the #1 next step:
+A per-task diagnostic against deepseek-v4-pro revealed the real picture:
 
-- **Eval non-determinism (THE blocker).** The quant_agent regenerates each
-  solution via a fresh LLM call (temp 0.2) on *every* evaluation. So re-evaluating
-  after an edit regenerates ALL solutions; random per-call codegen variance shows
-  up as "regressions" and falsification mis-attributes them to the edit -> spurious
-  HARMFUL verdicts -> the strict gate keeps nothing -> OOS trajectory is flat even
-  when the harness edit is sensible. k-repeat denoises the verifier/probe, not the
-  solution generation, so it does not catch this.
-  **Fix (do first):** cache the quant_agent solution keyed on (task, harness
-  signature) so re-evaluating the same harness returns identical solutions — only
-  an edit changes solutions, making attribution clean. Then optionally repeat
-  solution generation k times (majority/best) to denoise codegen, and/or drop
-  temperature to 0 for the worker.
+- **Task-authoring bug (DOMINANT, now fixed).** The 3 supplement A-tasks
+  (A_opt_02, A_val_02, A_amort_wall) had non-self-contained prompts ("Same
+  contract as A_opt_01, different inputs"). Each solve is an independent LLM call
+  that never sees A_opt_01, so the model hallucinated unrelated problems
+  (demand-curve optimizer, descriptive statistics, future-value) -> KeyError/
+  TypeError -> deterministic fail. Fixed: every A-task prompt is now self-contained.
+  Lesson: any task whose prompt references another task is broken under
+  independent-call evaluation.
+- **The worker is strongly capability-sufficient here.** On the 4 well-specified
+  tasks it wrote textbook solutions (math.erf Black-Scholes = exact, correct
+  amortization to 0, NPV + Newton IRR to 1e-13). So once prompts are fixed the
+  A-pile is likely ~7/7 -> the open question becomes whether these numeric tasks
+  have ANY process-headroom for a strong model, or are simply capability-sufficient
+  (iron law 1). If the latter, swap in genuinely process-limited tasks.
+- **Eval non-determinism (real, secondary).** The quant_agent regenerates each
+  solution via a fresh LLM call (temp 0.2) every evaluation, so re-evaluating the
+  same harness gives slightly different scores; k-repeat denoises the
+  verifier/probe, not solution generation. Fix: cache the solution per (task,
+  harness signature) for reproducible/cheaper re-eval, optionally k-sample the
+  worker (majority/best) or set temperature 0. (Earlier this was mis-diagnosed as
+  THE blocker; the per-iteration wobble was actually confounded by different
+  candidate harnesses per iter, not same-harness noise.)
 - **Weak evolve/ADB agent.** deepseek-v4-pro's ADB-lite diagnosis hallucinated a
-  "KeyError/TypeError crash / MissingEdgeCase" story that did not match the actual
-  "base wrong" errors; its edits were plausible but never beneficial. Matches the
-  AHE report's open question on evolve-agent model strength — try a stronger
-  evolve agent (mixed tier) once eval is deterministic.
-- **Worker is capability-sufficient on canonical instances, shaky on variants.**
-  It solved the first instance of every subtype probe-robustly (option/amort/
-  audit/valuation) but missed the second instances ("base wrong"), likely codegen
-  variance and possibly a too-tight IRR tolerance (1e-4). Revisit per-metric tols.
+  crash story and its edits were plausible but never beneficial — matches the AHE
+  report's open question on evolve-agent model strength (try a stronger evolve
+  agent once tasks + eval are clean).
 
 ## Stubs carried over from v0 (close these first)
 
