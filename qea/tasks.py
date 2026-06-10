@@ -30,6 +30,7 @@ import json
 import math
 import urllib.request
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable
 
 SUBTYPES = ("option_pricing", "amortization", "audit_metric", "valuation")
@@ -385,6 +386,19 @@ _B_FIXTURES = [
 _GDPVAL_PARQUET_URL = (
     "https://huggingface.co/datasets/openai/gdpval/resolve/main/data/train-00000-of-00001.parquet"
 )
+# Local fork of the gold parquet (scripts/fork_gdpval.py); preferred over the
+# network so runs are pinned to the snapshot in data/gdpval/MANIFEST.md.
+_GDPVAL_LOCAL_PARQUET = Path(__file__).resolve().parent.parent / "data" / "gdpval" / "gdpval_gold.parquet"
+
+
+def _load_gdpval_df():
+    """Gold parquet as a DataFrame: local fork first, network fallback."""
+    import pandas as pd  # optional dep
+
+    if _GDPVAL_LOCAL_PARQUET.exists():
+        return pd.read_parquet(_GDPVAL_LOCAL_PARQUET), "local fork"
+    with urllib.request.urlopen(_GDPVAL_PARQUET_URL, timeout=30) as resp:
+        return pd.read_parquet(io.BytesIO(resp.read())), "network"
 
 
 # Finance/accounting-relevant GDPval occupations (across all 9 sectors). There is
@@ -408,10 +422,7 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> l
     stems = _FIN_OCC_BROAD if broad else _FIN_OCC_CORE
     if allow_download:
         try:
-            import pandas as pd  # optional dep
-
-            with urllib.request.urlopen(_GDPVAL_PARQUET_URL, timeout=30) as resp:
-                df = pd.read_parquet(io.BytesIO(resp.read()))
+            df, src = _load_gdpval_df()
             mask = df["occupation"].apply(lambda o: any(s in str(o) for s in stems))
             sel = df[mask]
             out: list[BTask] = []
@@ -428,7 +439,7 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> l
                 )
             if out:
                 print(f"[tasks] loaded {len(out)} ORIGINAL GDPval finance tasks "
-                      f"({sel['occupation'].nunique()} occupations)")
+                      f"({sel['occupation'].nunique()} occupations) from {src}")
                 return out
         except Exception as exc:  # noqa: BLE001
             print(f"[tasks] real GDPval finance load failed ({type(exc).__name__}: {exc}); using offline fixtures")
@@ -438,16 +449,13 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> l
 def load_gdpval_b_pile(n: int = 12, *, allow_download: bool = True) -> list[BTask]:
     """Real GDPval 'Finance and Insurance' deliverable tasks (soft-judged).
 
-    Tries the public HuggingFace parquet; on any failure falls back to bundled
-    offline fixtures so mock + offline runs always work.
+    Reads the local fork in data/gdpval/ (scripts/fork_gdpval.py), falling back
+    to the public HuggingFace parquet, then to bundled offline fixtures so mock
+    + offline runs always work.
     """
     if allow_download:
         try:
-            import pandas as pd  # optional dep
-
-            with urllib.request.urlopen(_GDPVAL_PARQUET_URL, timeout=30) as resp:
-                data = resp.read()
-            df = pd.read_parquet(io.BytesIO(data))
+            df, _src = _load_gdpval_df()
             fin = df[df["sector"] == "Finance and Insurance"].head(n)
             out: list[BTask] = []
             for _, row in fin.iterrows():

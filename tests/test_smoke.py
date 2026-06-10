@@ -195,3 +195,88 @@ def test_signature_no_collision_past_120_chars():
     a = Edit(op="add", slot="prompt", component_name="p", content=base + "AAA")
     b = Edit(op="add", slot="prompt", component_name="p", content=base + "BBB")
     assert a.signature() != b.signature()
+
+
+# --------------------------------------------------------------------------- #
+# GDPval-AA pairwise grader (Artificial Analysis protocol).                    #
+# --------------------------------------------------------------------------- #
+def test_pairwise_judge_deanonymizes_correctly():
+    # The judge sees randomly-ordered "Submission A/B"; the verdict must map back
+    # to the (sub_a, sub_b) the caller passed in, regardless of the shuffle.
+    from qea.tasks import BTask
+    from qea.verifier import PairwiseJudge
+
+    class StubLLM:
+        def __init__(self):
+            self.prompts = []
+
+        def complete(self, prompt, *, role="judge"):
+            self.prompts.append(prompt)
+            # always prefer the submission whose text is "GOOD", wherever it is shown
+            a_block = prompt.split("<submission_a>")[1].split("</submission_a>")[0]
+            return '{"winner": "A"}' if "GOOD" in a_block else '{"winner": "B"}'
+
+    t = BTask(task_id="pw1", subtype="x", prompt="write a memo", rubric="")
+    res = PairwiseJudge(StubLLM()).compare(t, "GOOD deliverable", "weak", mock=False, k=4)
+    assert res["verdict"] == "a"
+    assert all(v == "a" for v in res["votes"])
+    # and the reverse order must invert the verdict
+    res2 = PairwiseJudge(StubLLM()).compare(t, "weak", "GOOD deliverable", mock=False, k=4)
+    assert res2["verdict"] == "b"
+
+
+def test_pairwise_judge_tie_and_garbage_default_to_tie():
+    from qea.tasks import BTask
+    from qea.verifier import PairwiseJudge
+
+    class TieLLM:
+        def complete(self, prompt, *, role="judge"):
+            return '{"winner": "tie"}'
+
+    class GarbageLLM:
+        def complete(self, prompt, *, role="judge"):
+            return "no json here"
+
+    t = BTask(task_id="pw2", subtype="x", prompt="p", rubric="")
+    assert PairwiseJudge(TieLLM()).compare(t, "a", "b", mock=False, k=2)["verdict"] == "tie"
+    assert PairwiseJudge(GarbageLLM()).compare(t, "a", "b", mock=False, k=2)["verdict"] == "tie"
+
+
+def test_bt_elo_anchoring():
+    from qea.verifier import bt_elo
+    assert bt_elo(0, 0) == 1000.0                 # nothing decided -> anchor
+    assert bt_elo(10, 10) == 1000.0               # even record -> anchor
+    assert bt_elo(20, 10) > 1000.0 > bt_elo(10, 20)
+    # symmetric around the anchor
+    assert abs((bt_elo(20, 10) - 1000.0) + (bt_elo(10, 20) - 1000.0)) < 1e-9
+
+
+def test_decide_keep_pairwise_excludes_ties_and_needs_margin():
+    from qea.falsify import decide_keep_pairwise
+    assert decide_keep_pairwise(0, 0, 0.05) is False          # all ties -> reject
+    assert decide_keep_pairwise(16, 10, 0.05) is True         # 0.615 > 0.55
+    assert decide_keep_pairwise(14, 12, 0.05) is False        # 0.538 within margin
+    assert decide_keep_pairwise(10, 16, 0.05) is False        # losing -> reject
+
+
+def test_gdpval_soft_mock_pairwise_gate(tmp_path):
+    # End-to-end mock: iter-1 integrity_guard lifts the mock soft score
+    # (0.45 -> 0.72), so the pairwise gate must keep it and the win rate vs the
+    # frozen seed must end above 0.5 + null margin.
+    from qea.loop import Config, run_gdpval_soft
+    res = run_gdpval_soft(Config(mock=True, n_iters=2, k=2, results_dir=str(tmp_path)))
+    assert res.n_kept >= 1
+    assert res.winrate_trajectory[0] == 0.5
+    assert res.winrate_trajectory[-1] > 0.5 + res.pairwise_margin
+    assert res.final_elo_vs_seed > 1000.0
+
+
+def test_gdpval_local_fork_preferred():
+    # The rubric fork in data/gdpval/ must be used (no network) when present.
+    from qea.tasks import _GDPVAL_LOCAL_PARQUET, _load_gdpval_df
+    if not _GDPVAL_LOCAL_PARQUET.exists():
+        pytest.skip("local GDPval fork not present (run scripts/fork_gdpval.py)")
+    df, src = _load_gdpval_df()
+    assert src == "local fork"
+    assert len(df) == 220
+    assert {"task_id", "rubric_json", "rubric_pretty"} <= set(df.columns)

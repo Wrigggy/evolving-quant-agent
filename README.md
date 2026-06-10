@@ -31,11 +31,15 @@ python3 run.py --real --b-n 12
   key. This is the iron-law-faithful mechanism check.
 - `--real` — evolve **directly on the ~30 original GDPval finance/accounting tasks**
   (Accountants/Auditors, Financial Managers, Investment Analysts, Financial
-  Advisors, Securities Sales, Real Estate Brokers), graded per-criterion by the
-  `rubric_json` judge. These are open-ended deliverables with **no hard verifier**,
-  so the loop is driven by the **soft rubric signal — which deliberately relaxes
-  iron law 2** (a chosen tradeoff to evolve on real economically-valuable tasks).
-  Treat its "soft headroom" result as indicative, not proof.
+  Advisors, Securities Sales, Real Estate Brokers), gated by the **GDPval-AA
+  pairwise grader** (see below): each candidate's deliverables are compared blind
+  and pairwise against the incumbent's, ties excluded, and progress is reported as
+  win rate / Bradley-Terry Elo vs the frozen seed (anchor 1000). The per-criterion
+  `rubric_json` score is kept as a diagnostic. These are open-ended deliverables
+  with **no hard verifier**, so the loop is driven by a **soft signal — which
+  deliberately relaxes iron law 2** (a chosen tradeoff to evolve on real
+  economically-valuable tasks). Treat its "soft headroom" result as indicative,
+  not proof.
 
 ## What it does
 
@@ -58,6 +62,39 @@ advisors, securities sales). It is split into:
   > it was a manual web-form service that does not appear available. Format
   > criteria (e.g. "two PDFs submitted") will fail for a text-only deliverable, so
   > the rubric score is a noisy lower bound. See ROADMAP for the full-fidelity path.
+
+### GDPval-AA pairwise grading (the decision signal in `--real`)
+
+The keep/rollback gate follows the **GDPval-AA protocol** published by
+[Artificial Analysis](https://artificialanalysis.ai/methodology/intelligence-benchmarking)
+(their GDPval-AA leaderboard, added to the Intelligence Index v4.0):
+
+- Two submissions to the same task are **randomly anonymized as Submission A / B**
+  ("to mitigate any model or position bias from the grader") and the judge is asked
+  which **better responds to the task** — win / loss / tie (`PairwiseJudge` in
+  `qea/verifier.py`).
+- **Ties are excluded** from scoring; the aggregate is a **Bradley-Terry rating
+  from pairwise win/loss** (AA anchors GPT-5.1 Non-Reasoning at Elo 1000; we anchor
+  the **frozen seed harness** at 1000, the 2-player special case).
+- In the loop: candidate-vs-incumbent matches decide keep/rollback (win share over
+  decided matches must beat 0.5 + a seed-vs-seed null margin); incumbent-vs-seed
+  matches give the trajectory (win rate + Elo).
+
+Documented deviations from AA (kept honest, not invented): AA's exact grader
+prompt is unpublished (ours reconstructs their one-sentence description); AA's
+judge is **Gemini 3.1 Pro Preview** fed reference + submission **files**
+multimodally (set `QEA_JUDGE_MODEL="google/gemini-3.1-pro-preview"` to match the
+judge; our deliverables are text-only); AA runs a fleet-wide Elo tournament with
+balanced + active sampling, while we only ever rate two players per match set.
+
+### The local GDPval fork
+
+`data/gdpval/` is a pinned snapshot of the `openai/gdpval` gold set (v2: prompts +
+`rubric_json`/`rubric_pretty` + human deliverable URLs), created by
+`python scripts/fork_gdpval.py` (SHA256 provenance in `data/gdpval/MANIFEST.md`).
+Loaders read the snapshot first and fall back to the network only when it is
+missing. `scripts/fork_gdpval.py --push <user>/<repo>` mirrors the fork to your
+Hugging Face account (needs `HF_TOKEN`).
 
 GDPval ships **no deterministic verifier** with any task (grading is
 expert/LLM-judge), so the A-pile tasks are authored in code with clean reference

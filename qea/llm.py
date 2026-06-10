@@ -51,14 +51,18 @@ class OpenRouterLLM:
         return os.environ.get(env, "deepseek/deepseek-v4-pro")
 
     def complete(self, prompt: str, *, role: str = "agent") -> str:
+        model = self._model(role)
         extra: dict = {}
-        if self.provider_order:
+        # Pin the native provider only when this role's model is actually served
+        # by one of the pinned providers — e.g. a Gemini judge (the GDPval-AA
+        # grader model) must not be forced through a "deepseek"-only order.
+        if self.provider_order and model.split("/")[0] in self.provider_order:
             extra["provider"] = {"order": self.provider_order, "allow_fallbacks": False}
         last: Exception | None = None
         for attempt in range(self.max_retries):
             try:
                 resp = self.client.chat.completions.create(
-                    model=self._model(role),
+                    model=model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2,
                     extra_body=extra or None,

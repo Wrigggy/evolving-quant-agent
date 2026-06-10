@@ -22,6 +22,9 @@ from dataclasses import dataclass, field
 @dataclass
 class EvalSummary:
     results: dict  # task_id -> TaskResult
+    # task_id -> the produced deliverable text (B-pile); kept so the GDPval-AA
+    # pairwise judge can compare candidate vs incumbent without regenerating.
+    deliverables: dict = field(default_factory=dict)
 
     def oos_ids(self) -> set[str]:
         return {tid for tid, r in self.results.items() if r.oos_pass}
@@ -122,6 +125,18 @@ def decide_keep(evaluation: dict, prev_total: int, cur_total: int) -> bool:
     if evaluation.get("unattributed_regressions"):
         return False
     return cur_total > prev_total
+
+
+def decide_keep_pairwise(wins: int, losses: int, margin: float) -> bool:
+    """GDPval-AA-style gate: the candidate's deliverables are compared blind +
+    pairwise against the incumbent's, task by task (ties excluded, per the AA
+    protocol). Keep only if the candidate's win share over DECIDED matches beats
+    0.5 by more than the estimated null margin (seed-vs-seed win-share deviation:
+    what two evals of the SAME harness produce from regeneration + judge noise)."""
+    decided = wins + losses
+    if decided == 0:
+        return False
+    return (wins / decided) > 0.5 + margin
 
 
 def decide_keep_soft(inc_mean: float, cand_mean: float, noise_margin: float) -> bool:
