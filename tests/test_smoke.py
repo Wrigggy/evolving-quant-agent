@@ -271,6 +271,20 @@ def test_gdpval_soft_mock_pairwise_gate(tmp_path):
     assert res.final_elo_vs_seed > 1000.0
 
 
+def test_provider_pin_is_per_model_official(monkeypatch):
+    # Every model must pin ITS OWN official provider; no cross-pinning.
+    from qea.llm import provider_for, resolve_provider_map
+    monkeypatch.setenv("QEA_PROVIDER_ORDER", "deepseek")
+    pmap = resolve_provider_map()
+    assert provider_for("deepseek/deepseek-v4-pro", pmap) == "deepseek"
+    assert provider_for("qwen/qwen3.7-max", pmap) == "alibaba"      # built-in official map
+    assert provider_for("google/gemini-3.1-pro-preview", pmap) is None  # unpinned -> free routing
+    monkeypatch.setenv("QEA_PROVIDER_MAP", "google=google-ai-studio,qwen=other")
+    pmap = resolve_provider_map()
+    assert provider_for("google/gemini-3.1-pro-preview", pmap) == "google-ai-studio"
+    assert provider_for("qwen/qwen3.7-max", pmap) == "other"        # env overrides built-in
+
+
 def test_gdpval_local_fork_preferred():
     # The rubric fork in data/gdpval/ must be used (no network) when present.
     from qea.tasks import _GDPVAL_LOCAL_PARQUET, _load_gdpval_df

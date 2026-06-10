@@ -20,6 +20,31 @@ class MockLLM:
         return ""
 
 
+# Official (native) OpenRouter provider per model prefix — the AHE lesson: routed
+# third-party providers return empty/mis-parsed completions, so every model is
+# pinned to its official provider with allow_fallbacks=False. Extend/override via
+# QEA_PROVIDER_MAP="prefix=provider,..." (e.g. "qwen=alibaba,deepseek=deepseek");
+# legacy QEA_PROVIDER_ORDER="p1,p2" entries become identity pins (p=p).
+_OFFICIAL_PROVIDERS = {"deepseek": "deepseek", "qwen": "alibaba"}
+
+
+def resolve_provider_map() -> dict:
+    pmap = dict(_OFFICIAL_PROVIDERS)
+    for p in os.environ.get("QEA_PROVIDER_ORDER", "").split(","):
+        p = p.strip()
+        if p:
+            pmap.setdefault(p, p)
+    for pair in os.environ.get("QEA_PROVIDER_MAP", "").split(","):
+        k, _, v = pair.partition("=")
+        if k.strip() and v.strip():
+            pmap[k.strip()] = v.strip()
+    return pmap
+
+
+def provider_for(model: str, pmap: dict) -> str | None:
+    return pmap.get(model.split("/")[0])
+
+
 class OpenRouterLLM:
     ROLE_MODEL_ENV = {
         "quant_agent": "QEA_QUANT_AGENT_MODEL",
@@ -43,8 +68,7 @@ class OpenRouterLLM:
         self.client = OpenAI(api_key=key, base_url=base, timeout=self.timeout, max_retries=0)
         self.max_retries = int(os.environ.get("QEA_MAX_RETRIES", "5"))
         self.backoff = float(os.environ.get("QEA_BACKOFF_BASE_SEC", "2.0"))
-        order = os.environ.get("QEA_PROVIDER_ORDER", "").strip()
-        self.provider_order = [p.strip() for p in order.split(",") if p.strip()]
+        self.provider_map = resolve_provider_map()
 
     def _model(self, role: str) -> str:
         env = self.ROLE_MODEL_ENV.get(role, "QEA_QUANT_AGENT_MODEL")
@@ -53,11 +77,11 @@ class OpenRouterLLM:
     def complete(self, prompt: str, *, role: str = "agent") -> str:
         model = self._model(role)
         extra: dict = {}
-        # Pin the native provider only when this role's model is actually served
-        # by one of the pinned providers — e.g. a Gemini judge (the GDPval-AA
-        # grader model) must not be forced through a "deepseek"-only order.
-        if self.provider_order and model.split("/")[0] in self.provider_order:
-            extra["provider"] = {"order": self.provider_order, "allow_fallbacks": False}
+        # Every model is pinned to ITS OWN official provider (no cross-pinning:
+        # a qwen judge must not be forced through deepseek's provider order).
+        prov = provider_for(model, self.provider_map)
+        if prov:
+            extra["provider"] = {"order": [prov], "allow_fallbacks": False}
         last: Exception | None = None
         for attempt in range(self.max_retries):
             try:
