@@ -475,6 +475,21 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
                 # rubric means retained as diagnostics (no longer the decision signal)
                 "inc_mean": round(_mean_score(inc_eval), 4), "cand_mean": round(_mean_score(cand_eval), 4),
             }
+            if kept and not cfg.mock:
+                # Replication gate: a single-sample pairwise win at n~30/k=2 is not
+                # statistically stable (measured: the first-ever kept edit, 0.609
+                # win share, failed to replicate on fresh samples — judge A/B,
+                # docs/RESULTS_ab_judge.md). Regenerate the candidate's deliverables
+                # and re-match; keep only if the win replicates.
+                c2 = _gen_deliverables(candidate, tasks, mock=cfg.mock, llm=llm)
+                confirm = pairwise.match_set(tasks, c2, inc_eval.deliverables,
+                                             mock=cfg.mock, k=cfg.k, label=f"iter{it} confirm")
+                kept = decide_keep_pairwise(confirm["wins"], confirm["losses"], pw_margin)
+                evaluation["aa_gate"]["confirm"] = {
+                    "wins": confirm["wins"], "losses": confirm["losses"], "ties": confirm["ties"],
+                    "win_share": confirm["win_share"], "kept": kept,
+                }
+                evaluation["aa_gate"]["kept"] = kept
             manifest = attach_verdict(build_manifest(it, "evolve_agent", edit, "gdpval_soft"), evaluation, kept)
             if kept:
                 n_kept += 1; incumbent, inc_eval = candidate, cand_eval

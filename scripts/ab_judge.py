@@ -70,11 +70,37 @@ def main() -> int:
     llm = OpenRouterLLM()
     pj = PairwiseJudge(llm)
 
-    print("[ab] generating S1 (fresh seed sample) and C1 (incumbent sample) ...", flush=True)
-    s1 = _gen_deliverables(seed_harness(), tasks, mock=False, llm=llm)
-    c1 = _gen_deliverables(incumbent, tasks, mock=False, llm=llm)
+    def _gen_complete(harness, name: str) -> dict:
+        """Generate deliverables, retrying empty ones (failed generations come
+        back as "" and would lose every match, poisoning the A/B)."""
+        subs = _gen_deliverables(harness, tasks, mock=False, llm=llm)
+        for rnd in range(1, 4):
+            empty = [t for t in tasks if not subs.get(t.task_id, "").strip()]
+            if not empty:
+                break
+            print(f"[ab] {name}: {len(empty)} empty deliverables; regen round {rnd}", flush=True)
+            subs.update(_gen_deliverables(harness, empty, mock=False, llm=llm))
+        return subs
 
-    results: dict = {"k": args.k, "n_tasks": len(tasks), "judges": {}}
+    print("[ab] generating S1 (fresh seed sample) and C1 (incumbent sample) ...", flush=True)
+    s1 = _gen_complete(seed_harness(), "S1")
+    c1 = _gen_complete(incumbent, "C1")
+
+    # Tasks with any still-empty submission are EXCLUDED (a blank entrant measures
+    # the network, not the judge).
+    bad = sorted(t.task_id for t in tasks
+                 if not s0.get(t.task_id, "").strip() or not s1.get(t.task_id, "").strip()
+                 or not c1.get(t.task_id, "").strip())
+    if bad:
+        print(f"[ab] EXCLUDING {len(bad)} tasks with empty submissions: {bad}", flush=True)
+        tasks = [t for t in tasks if t.task_id not in bad]
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "submissions.json").write_text(json.dumps(
+        {"S0": s0, "S1": s1, "C1": c1, "excluded": bad}, ensure_ascii=False, indent=2))
+
+    results: dict = {"k": args.k, "n_tasks": len(tasks), "excluded": bad, "judges": {}}
     for judge in judges:
         os.environ["QEA_JUDGE_MODEL"] = judge  # _model() reads env per call
         tag = judge.split("/")[-1]
@@ -113,8 +139,6 @@ def main() -> int:
             }
         results["agreement"] = agree
 
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
     (out / "ab_judge.json").write_text(json.dumps(results, ensure_ascii=False, indent=2))
     print(f"[ab] written -> {out / 'ab_judge.json'}")
 
