@@ -271,6 +271,29 @@ def test_gdpval_soft_mock_pairwise_gate(tmp_path):
     assert res.final_elo_vs_seed > 1000.0
 
 
+def test_match_set_parallel_real_path():
+    # Real-mode match_set fans out across a thread pool; verdicts must still map
+    # back per task, and a throwing judge call degrades to a tie, not a crash.
+    from qea.tasks import BTask
+    from qea.verifier import PairwiseJudge
+
+    class StubLLM:
+        def complete(self, prompt, *, role="judge"):
+            a_block = prompt.split("<submission_a>")[1].split("</submission_a>")[0]
+            if "BOOM" in prompt:
+                raise RuntimeError("judge exploded")
+            return '{"winner": "A"}' if "GOOD" in a_block else '{"winner": "B"}'
+
+    tasks = [BTask(task_id=f"t{i}", subtype="x", prompt=f"task {i}", rubric="") for i in range(8)]
+    subs_a = {t.task_id: "GOOD deliverable" for t in tasks}
+    subs_b = {t.task_id: "weak" for t in tasks}
+    subs_b["t3"] = "BOOM"  # poison one match -> tie, not crash
+    res = PairwiseJudge(StubLLM()).match_set(tasks, subs_a, subs_b, mock=False, k=2)
+    assert res["wins"] == 7 and res["losses"] == 0 and res["ties"] == 1
+    assert res["per_task"]["t3"] == "tie"
+    assert all(res["per_task"][f"t{i}"] == "a" for i in range(8) if i != 3)
+
+
 def test_provider_pin_is_per_model_official(monkeypatch):
     # Every model must pin ITS OWN official provider; no cross-pinning.
     from qea.llm import provider_for, resolve_provider_map

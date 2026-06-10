@@ -390,12 +390,36 @@ class PairwiseJudge:
     def match_set(self, tasks, subs_a: dict, subs_b: dict, *, mock: bool, k: int = 2,
                   harness_a=None, harness_b=None, label: str = "") -> dict:
         """Compare deliverables task-by-task. Returns wins/losses/ties from A's
-        perspective plus per-task verdicts. Ties excluded from win_share."""
+        perspective plus per-task verdicts. Ties excluded from win_share.
+
+        Real mode grades matches concurrently (<= QEA_MAX_CONCURRENCY, same cap
+        as evaluate()) with interim progress prints; a failed match degrades to
+        a tie (excluded from scoring) rather than killing the set. Mock stays
+        sequential (instant, deterministic)."""
         per_task: dict[str, str] = {}
-        for t in tasks:
-            res = self.compare(t, subs_a.get(t.task_id, ""), subs_b.get(t.task_id, ""),
-                               mock=mock, k=k, harness_a=harness_a, harness_b=harness_b)
-            per_task[t.task_id] = res["verdict"]
+        if mock:
+            for t in tasks:
+                res = self.compare(t, subs_a.get(t.task_id, ""), subs_b.get(t.task_id, ""),
+                                   mock=mock, k=k, harness_a=harness_a, harness_b=harness_b)
+                per_task[t.task_id] = res["verdict"]
+        else:
+            import concurrent.futures
+            import os
+            mw = max(1, min(int(os.environ.get("QEA_MAX_CONCURRENCY", "8")), 16))
+            done, total = 0, len(tasks)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=mw) as ex:
+                futs = {ex.submit(self.compare, t, subs_a.get(t.task_id, ""), subs_b.get(t.task_id, ""),
+                                  mock=mock, k=k): t for t in tasks}
+                for fut in concurrent.futures.as_completed(futs):
+                    t = futs[fut]
+                    try:
+                        per_task[t.task_id] = fut.result()["verdict"]
+                    except Exception as exc:  # noqa: BLE001 - one match must not kill the set
+                        print(f"[pairwise {label}] {t.task_id} failed ({type(exc).__name__}); counted as tie", flush=True)
+                        per_task[t.task_id] = "tie"
+                    done += 1
+                    if label and (done % 5 == 0 or done == total):
+                        print(f"[pairwise {label}] {done}/{total} matches graded", flush=True)
         wins = sum(1 for v in per_task.values() if v == "a")
         losses = sum(1 for v in per_task.values() if v == "b")
         ties = sum(1 for v in per_task.values() if v == "tie")
