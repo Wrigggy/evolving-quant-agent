@@ -66,6 +66,66 @@ ALL were rolled back, so the trajectory was flat ("soft headroom NOT observed").
 - **Text-deliverable lower bound confirmed.** 0.618 is depressed by format/layout
   criteria the text worker can't satisfy (see the .xlsx/.pptx generation item below).
 
+## Findings from the GDPval-AA pairwise runs (2026-06-11)
+
+Full report: `docs/reports/2026-06-11-gdpval-aa-grader-report.md`. The grader was
+migrated to the Artificial Analysis GDPval-AA protocol (blind pairwise, ties
+excluded, BT-Elo vs frozen seed anchor, measured null margin, replication gate).
+This SUPERSEDES the "noise-aware mean-score gate" fix above as the soft decision
+signal (the mean rubric score remains as a diagnostic only).
+
+- **The grader line is closed: the pairwise gate is trustworthy.** Clean null
+  (seed-vs-seed exactly 0.500), decisive discrimination (candidate win shares
+  spanning 0.000–0.522), 7/7 directional agreement with the rubric diagnostic,
+  judge A/B (deepseek self-judge vs qwen cross-family) shows ~90% agreement on
+  decided matches and identical keep decisions, and a replication gate that
+  killed the one sampling-noise keep (financial_calculator, 0.609 first pass,
+  0.40–0.46 on fresh samples under both judges).
+- **THE finding — the proposer's OBSERVATION SPACE is wrong for B-pile, and it,
+  not evolve-model strength, is the current bottleneck.** `_diagnose_real` and
+  `_propose_real` (qea/agents.py) render every failing task in A-pile
+  hard-verifier semantics — `base={bool} probe={bool} err=None`, tag set
+  {Hardcoding, BadFormat, ToolBroken, ...}, "quant harness / code_exec" framing.
+  For B-pile soft tasks these fields are degenerate (base/probe are copies of
+  "rubric score >= 0.5", err is always None), so the Agent Debugger structurally
+  CANNOT see "the memo lacks a sensitivity analysis" and instead hallucinates
+  "unparseable output" / "needs code_exec". The proposer then prescribes
+  format/code middleware that damages free-form writing — 8/8 edits in the
+  aa_run8 experiment, 4 decisively refuted (iter1: a force-JSON prompt lost
+  0/28); proposer predicted-fix hit rate 3/63. Lesson (transferable): the AHE
+  diagnose->propose->falsify MECHANISM ports across domains; the observation
+  INSTANTIATION does not. Do not upgrade the evolve model before fixing what it
+  observes — a stronger model reading the same wrong dashboard fails the same way.
+- **The discarded signals already exist.** SoftJudge elicits PER-CRITERION
+  true/false verdicts and keeps only the quantized score; PairwiseJudge asks for
+  {"winner"} only and discards any loss reason. The fix needs no new scoring
+  calls — route existing signals to the proposer.
+
+## Next experiments (priority order)
+
+1. **B-pile-specific diagnosis + proposer reframing (do this first; low cost,
+   high certainty).**
+   - Render per failing task: occupation + the verbatim rubric criteria judged
+     unmet + (when available) a one-line pairwise loss reason (extend the
+     PairwiseJudge JSON to {"winner", "reason"}).
+   - Replace the A-pile tag set with a writing-domain taxonomy:
+     {MissingCriteria, MissingArtifact (.xlsx/.pdf required), WrongRegister,
+     ShallowAnalysis, FormatMismatch, IgnoredContext}.
+   - Reframe `_propose_real`: the worker WRITES DELIVERABLES (memos, emails,
+     analyses), not code; slot pharmacopoeia becomes writing-oriented (style
+     guides, occupation personas, checklists, exemplar memories).
+   - Acceptance: rerun 8 iterations under the unchanged AA gate; success = keep
+     rate departs 0 with replicated wins (budget ~$15 / ~3h).
+2. **File-producing worker for the Accountants/Auditors wall** (rubric mean
+   0.100; capability gap, untouched by all 8 middleware edits) — .xlsx/.pdf
+   output via openpyxl/LibreOffice in the sandbox; overlaps with the
+   "GDPval B-pile grading fidelity" stub below.
+3. **Judge options (settled, act when relevant):** switch `QEA_JUDGE_MODEL` to
+   `google/gemini-3.1-pro-preview` for full AA fidelity once accessible; or use
+   the ~3x-cheaper deepseek judge for long runs (A/B-validated as agreeing with
+   qwen ~90% on decided matches; qwen stays default for its smaller null
+   deviation, 0.05 vs 0.119).
+
 ## Stubs carried over from v0 (close these first)
 
 - **Real isolation for `code_exec`.** v0 uses restricted `exec` + SIGALRM in the
