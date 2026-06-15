@@ -81,7 +81,11 @@ def diagnose_b_pile(eval_summary, tasks, *, llm, mode: str = "hybrid") -> Saniti
         if task is None:
             continue
         failed = _failed_criteria_texts(task, r.criterion_verdicts or {})
-        notes.append(critic.note(task, eval_summary.deliverables.get(tid, ""), failed))
+        try:
+            note = critic.note(task, eval_summary.deliverables.get(tid, ""), failed)
+        except Exception:  # noqa: BLE001 - a critic outage must not kill the run (mirror evaluate())
+            note = f"deliverable left {len(failed)} rubric criterion(s) unmet (critic unavailable)"
+        notes.append(note)
         failing_ids.append(tid)
         occ_counts[r.subtype] = occ_counts.get(r.subtype, 0) + 1
 
@@ -96,7 +100,10 @@ def diagnose_b_pile(eval_summary, tasks, *, llm, mode: str = "hybrid") -> Saniti
         + '. Return JSON {"root_cause_tag":..., "target_slot":...}.\n\nNOTES:\n'
         + "\n".join(f"- {n}" for n in notes)
     )
-    obj = _parse_first_json(llm.complete(classify, role="evolve_agent")) or {}
+    try:
+        obj = _parse_first_json(llm.complete(classify, role="evolve_agent")) or {}
+    except Exception:  # noqa: BLE001 - classifier outage -> default tag, don't crash the run
+        obj = {}
     tag = obj.get("root_cause_tag", "WrongStructure")
     slot = obj.get("target_slot") if mode == "free" else B_TAG_SLOT.get(tag, "prompt")
     return SanitizedDiagnosis(
