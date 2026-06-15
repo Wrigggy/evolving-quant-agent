@@ -330,3 +330,13 @@ def test_rubric_corpus_collects_criteria():
     corpus = rubric_corpus(tasks)
     assert "states ratios" in corpus and "flags going-concern" in corpus
     assert "overall rubric text" in corpus
+
+
+def test_benchmark_owns_grader_and_corpus():
+    from qea.benchmark import gdpval_benchmark
+    bm = gdpval_benchmark(broad=False, allow_download=False)  # offline fixtures
+    assert bm.name == "gdpval_finance"
+    assert bm.tasks and all(t.pile == "B" for t in bm.tasks)
+    assert bm.grader is not None
+    assert isinstance(bm.answer_corpus, list) and len(bm.answer_corpus) > 0
+    assert bm.debugger_kind == "b_pile"

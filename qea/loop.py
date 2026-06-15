@@ -33,6 +33,7 @@ from .harness import Harness, seed_harness
 from .llm import make_llm
 from .manifest import attach_verdict, build_manifest
 from .observability import ExperimentDir, eval_to_dict
+from .benchmark import gdpval_benchmark
 from .tasks import load_gdpval_a_pile, load_gdpval_b_pile, load_gdpval_finance, rubric_corpus
 from .verifier import HardVerifier, LeakageGuard, SoftJudge, TaskResult
 
@@ -338,10 +339,12 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
     judge noise an edit must clear). The verdict taxonomy (evaluate_changes) is
     retained as an audit trail. Per-occupation deltas honor iron law 4."""
     llm = make_llm(cfg.mock)
-    hard, soft = HardVerifier(), SoftJudge(llm)
-    tasks = load_gdpval_finance(broad=cfg.gdpval_broad, allow_download=not cfg.mock)
+    hard = HardVerifier()
+    bm = gdpval_benchmark(broad=cfg.gdpval_broad, allow_download=not cfg.mock, llm=llm)
+    tasks = bm.tasks
+    soft = bm.grader
+    guard = LeakageGuard(bm.answer_corpus)
     cache = _DeliverableCache()
-    guard = LeakageGuard(rubric_corpus(tasks))
     expdir = ExperimentDir(cfg.results_dir)
     arm_dir = Path(cfg.results_dir) / "gdpval_soft"
     resume_path = arm_dir / "resume.json"
