@@ -67,7 +67,7 @@ def main() -> int:
     cfg = Config(mock=mock, n_iters=args.iters, k=args.k, b_n=args.b_n,
                  gdpval_broad=not args.core, resume=args.resume, results_dir=args.results_dir)
 
-    # MOCK = offline hard-verifier mechanism demo (synthetic A-pile + scripted edits).
+    # MOCK = offline synthetic plumbing fixture (deterministic, no API key).
     # REAL = evolve directly on the ORIGINAL GDPval finance tasks, soft-rubric-driven.
     if mock:
         print(f"[run] mode=MOCK (synthetic plumbing fixture; no headroom claim) iters={cfg.n_iters} k={cfg.k} -> {cfg.results_dir}")

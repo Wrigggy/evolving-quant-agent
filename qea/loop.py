@@ -161,7 +161,7 @@ def _failure_pattern(evaluation: dict, edit) -> str:
 
 
 def run_arm(arm, a_tasks, b_tasks, *, cfg, llm, hard, soft, expdir, b_baseline) -> ArmResult:
-    eval_set = a_tasks if arm == "arm1_A_only" else (a_tasks + b_tasks)
+    eval_set = a_tasks + b_tasks
     buffer = RejectedEditBuffer()
     incumbent = seed_harness()
     inc_eval = evaluate(incumbent, eval_set, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k)

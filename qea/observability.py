@@ -10,7 +10,6 @@ Layout (mirrors the AHE iteration_NNN layout, trimmed for v0):
         change_manifest.json  # DECISION layer: edit + verdict (or "blocked")
         workspace.json        # WORKSPACE layer: incumbent harness after decision
     <results>/<run>/<arm>/scores.json   # per-iteration OOS trajectory + per-subtype
-    <results>/<run>/ablation.json       # Arm1 vs Arm2 comparison
 """
 
 from __future__ import annotations
@@ -38,9 +37,6 @@ class ExperimentDir:
 
     def persist_arm(self, arm: str, scores: dict) -> None:
         _write(self.root / arm / "scores.json", scores)
-
-    def persist_ablation(self, comparison: dict) -> None:
-        _write(self.root / "ablation.json", comparison)
 
 
 def _write(path: Path, obj) -> None:
