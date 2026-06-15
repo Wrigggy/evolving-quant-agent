@@ -224,6 +224,18 @@ def _parse_rubric_json(rj) -> list[dict]:
         return []
 
 
+def rubric_corpus(tasks: list) -> list[str]:
+    """v1 leakage answer_corpus = rubric-criteria text across the benchmark's tasks.
+    (Gold deliverable text is deferred: GDPval gold is binary xlsx/pptx URLs.)"""
+    out: list[str] = []
+    for t in tasks:
+        for c in getattr(t, "rubric_items", None) or []:
+            out.append(c["criterion"])
+        if getattr(t, "rubric", ""):
+            out.append(t.rubric)
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Loaders.                                                                     #
 # --------------------------------------------------------------------------- #

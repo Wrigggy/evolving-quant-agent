@@ -307,3 +307,26 @@ def test_propose_real_prompt_has_no_answers():
     _propose_real(1, evalsum, diag, seed_harness(), RejectedEditBuffer(), LLM())
     assert "SECRET" not in captured["p"]   # no ground truth from eval_summary leaked
     assert "MissingDomainKnowledge" in captured["p"]  # sanitized signal present
+
+
+def test_leakage_guard_blocks_copied_answer():
+    from qea.verifier import LeakageGuard
+    from qea.harness import Edit
+    corpus = ["flags any going-concern triggers in the liquidity position"]
+    guard = LeakageGuard(corpus, threshold=0.6)
+    leak = Edit(op="add", slot="memory", component_name="kb",
+                content="Always flags any going-concern triggers in the liquidity position.")
+    assert guard.is_leak(leak) is True
+    ok = Edit(op="add", slot="prompt", component_name="p",
+              content="Structure the memo with a clear recommendation section.")
+    assert guard.is_leak(ok) is False
+
+
+def test_rubric_corpus_collects_criteria():
+    from qea.tasks import BTask, rubric_corpus
+    tasks = [BTask(task_id="t", subtype="x", prompt="p", rubric="overall rubric text",
+                   rubric_items=[{"points": 1, "criterion": "states ratios"},
+                                 {"points": 2, "criterion": "flags going-concern"}])]
+    corpus = rubric_corpus(tasks)
+    assert "states ratios" in corpus and "flags going-concern" in corpus
+    assert "overall rubric text" in corpus

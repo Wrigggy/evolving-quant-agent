@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+LEAKAGE_BLOCKED = "LEAKAGE_BLOCKED"
+
 
 @dataclass
 class EvalSummary:

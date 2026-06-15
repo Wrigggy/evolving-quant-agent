@@ -285,3 +285,37 @@ class SoftJudge:
             return max(0.0, min(1.0, float(m.group())))
         except ValueError:
             return 0.0
+
+
+# --------------------------------------------------------------------------- #
+# LeakageGuard.                                                                #
+# --------------------------------------------------------------------------- #
+class LeakageGuard:
+    """Universal evaluator-layer anti-cheat: rejects an edit whose component content
+    overlaps the benchmark's answer_corpus (rubric/answer material) above a
+    threshold. n-gram (token-shingle) containment; no embeddings (v1)."""
+
+    def __init__(self, answer_corpus: list[str], threshold: float = 0.6, n: int = 5) -> None:
+        self.n = n
+        self.threshold = threshold
+        self._corpus_ngrams = [self._ngrams(c) for c in answer_corpus if c]
+
+    @staticmethod
+    def _norm(text: str) -> list[str]:
+        return "".join(ch.lower() if ch.isalnum() else " " for ch in text).split()
+
+    def _ngrams(self, text: str) -> set:
+        toks = self._norm(text)
+        return {" ".join(toks[i:i + self.n]) for i in range(len(toks) - self.n + 1)}
+
+    def is_leak(self, edit) -> bool:
+        cand = self._ngrams(edit.content)
+        if not cand:
+            return False
+        for corp in self._corpus_ngrams:
+            if not corp:
+                continue
+            overlap = len(cand & corp) / len(cand)   # containment of edit in corpus
+            if overlap >= self.threshold:
+                return True
+        return False

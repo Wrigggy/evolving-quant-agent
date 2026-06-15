@@ -22,6 +22,7 @@ from pathlib import Path
 from .agents import diagnose, evolve_agent_propose, quant_agent_solve
 from .falsify import (
     EvalSummary,
+    LEAKAGE_BLOCKED,
     RejectedEditBuffer,
     compute_diff,
     decide_keep,
@@ -32,8 +33,8 @@ from .harness import Harness, seed_harness
 from .llm import make_llm
 from .manifest import attach_verdict, build_manifest
 from .observability import ExperimentDir, eval_to_dict
-from .tasks import load_gdpval_a_pile, load_gdpval_b_pile, load_gdpval_finance
-from .verifier import HardVerifier, SoftJudge, TaskResult
+from .tasks import load_gdpval_a_pile, load_gdpval_b_pile, load_gdpval_finance, rubric_corpus
+from .verifier import HardVerifier, LeakageGuard, SoftJudge, TaskResult
 
 
 @dataclass
@@ -340,6 +341,7 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
     hard, soft = HardVerifier(), SoftJudge(llm)
     tasks = load_gdpval_finance(broad=cfg.gdpval_broad, allow_download=not cfg.mock)
     cache = _DeliverableCache()
+    guard = LeakageGuard(rubric_corpus(tasks))
     expdir = ExperimentDir(cfg.results_dir)
     arm_dir = Path(cfg.results_dir) / "gdpval_soft"
     resume_path = arm_dir / "resume.json"
@@ -397,7 +399,18 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
         diag = diagnose(inc_eval, tasks, mock=cfg.mock, llm=llm)
         edit = evolve_agent_propose(it, inc_eval, diag, incumbent, buffer, mock=cfg.mock, llm=llm)
 
-        if edit is None or buffer.blocks(edit):
+        if edit is not None and guard.is_leak(edit):
+            n_blocked += 1
+            records.append(IterationRecord(
+                iteration=it, blocked=True, verdict=LEAKAGE_BLOCKED, kept=False,
+                edit_summary=edit.summary, edit_slot=edit.slot, edit_component=edit.component_name,
+                root_cause_tag=diag.get("root_cause_tag", ""), diagnosis_overview=diag.get("overview", ""),
+                incumbent_oos=inc_eval.total_oos(), per_subtype=inc_eval.per_subtype(), cand_oos=inc_eval.total_oos()))
+            buffer.add(edit, LEAKAGE_BLOCKED, inc_eval.total_oos(), inc_eval.total_oos(), "leaked answer material into a component")
+            oos_traj.append(inc_eval.total_oos()); ms_traj.append(round(_mean_score(inc_eval), 4))
+            expdir.persist_iteration("gdpval_soft", {"iteration": it, "eval": None, "diagnosis": diag,
+                "manifest": {"blocked": True, "reason": "leakage guard", "edit": edit.signature()}, "workspace": incumbent.summary()})
+        elif edit is None or buffer.blocks(edit):
             n_blocked += 1
             verdict = "NO_EDIT" if edit is None else "BLOCKED"
             mext = {"blocked": True, "reason": "no valid edit parsed" if edit is None else "rejected-edit buffer"}
