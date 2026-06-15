@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 from dataclasses import dataclass, field
 
 SLOTS = ("tool", "middleware", "skill", "prompt", "validator", "memory", "router")
@@ -113,8 +114,9 @@ class Harness:
         return {s: list(self.slots[s].keys()) for s in SLOTS if self.slots[s]}
 
     def signature(self) -> str:
-        """Stable content hash of the whole harness (for the deliverable cache)."""
-        import json
+        """Content hash of the whole harness (for the deliverable cache). Stable
+        within a run: every candidate is `clone() + one edit`, so component
+        insertion order is deterministic (the hash is insertion-order-sensitive)."""
         return hashlib.md5(json.dumps(self.to_state(), sort_keys=True).encode()).hexdigest()
 
     # -- (de)serialization for checkpoint/resume --------------------------- #
