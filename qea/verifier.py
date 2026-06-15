@@ -66,20 +66,6 @@ def _truthy(v) -> bool:
 _SOFT_PASS = 0.60
 _SOFT_JITTER = 0.08
 
-# Real rubric grading is quantized to GDPval's expert-parity scale {0, 0.5, 1}:
-# 0 = below the standard, 0.5 = at parity, 1 = meets/exceeds (≈ as good as or better
-# than the human gold deliverable). Thresholds on the weighted-rubric fraction.
-_PARITY_HIGH = 0.80   # fraction >= this -> 1.0
-_PARITY_LOW = 0.50    # fraction >= this -> 0.5 ; below -> 0.0
-
-
-def _quantize_parity(frac: float) -> float:
-    if frac >= _PARITY_HIGH:
-        return 1.0
-    if frac >= _PARITY_LOW:
-        return 0.5
-    return 0.0
-
 
 @dataclass
 class TaskResult:
@@ -92,6 +78,7 @@ class TaskResult:
     score: float
     variance: float = 0.0
     error: str | None = None
+    criterion_verdicts: dict | None = None  # B-pile: {criterion_number: bool}, for the debugger
 
 
 # --------------------------------------------------------------------------- #
@@ -242,16 +229,19 @@ class SoftJudge:
         self.llm = llm
 
     def score(self, task, deliverable, harness, *, mock: bool, k: int = 2) -> TaskResult:
+        verdicts: dict = {}
         if mock:
             samples = [self._mock_sample(task, harness, r) for r in range(k)]
         else:
-            samples = [self._real_sample(task, deliverable) for _ in range(k)]
+            pairs = [self._real_sample(task, deliverable) for _ in range(k)]
+            samples = [p[0] for p in pairs]
+            verdicts = pairs[-1][1]  # last sample's per-criterion verdicts (for the debugger)
         med = statistics.median(samples)
         var = statistics.pvariance(samples) if len(samples) > 1 else 0.0
-        # real scores are quantized to {0,0.5,1}; parity-or-better (>=0.5) is a "pass".
-        thresh = _SOFT_PASS if mock else _PARITY_LOW
+        thresh = _SOFT_PASS if mock else 0.6  # reporting-only pass threshold (matches docs)
         oos = med >= thresh
-        return TaskResult(task.task_id, task.subtype, "B", oos, oos, oos, med, var, None)
+        return TaskResult(task.task_id, task.subtype, "B", oos, oos, oos, med, var, None,
+                          criterion_verdicts=verdicts)
 
     def _mock_sample(self, task, harness, repeat: int) -> float:
         disciplined = harness.has("validator", "integrity_guard")
@@ -261,17 +251,12 @@ class SoftJudge:
         jitter = _SOFT_JITTER * math.sin(_stable_unit(task.task_id, repeat) * math.tau)
         return max(0.0, min(1.0, base + jitter))
 
-    def _real_sample(self, task, deliverable: str) -> float:
-        """GDPval-faithful rubric grading: score the deliverable against each
-        rubric_json criterion (per-criterion satisfied?), weight by points ->
-        normalized [0,1]. Falls back to a holistic score if no rubric_items.
-
-        NOTE: this is a rubric-satisfaction score from the OPEN GDPval rubric, not
-        OpenAI's hidden pairwise-vs-human win-rate. Format criteria (e.g. "two PDFs
-        submitted") will fail for a text-only deliverable -> known v0 lower bound."""
+    def _real_sample(self, task, deliverable: str) -> tuple[float, dict]:
+        """GDPval rubric grading: per-criterion satisfied? -> points-weighted CONTINUOUS
+        fraction in [0,1] (no parity quantization). Returns (fraction, verdicts)."""
         items = getattr(task, "rubric_items", None) or []
         if not items:
-            return self._real_holistic(task, deliverable)
+            return self._real_holistic(task, deliverable), {}
         lines = [f"{i + 1}. (+{c['points']}) {c['criterion']}" for i, c in enumerate(items)]
         prompt = (
             "You are grading a finance deliverable against an itemized GDPval rubric. "
@@ -285,8 +270,7 @@ class SoftJudge:
         verdicts = _parse_json_obj(txt) or {}
         earned = sum(c["points"] for i, c in enumerate(items) if _truthy(verdicts.get(str(i + 1))))
         total = sum(c["points"] for c in items) or 1.0
-        # quantize the weighted fraction to the expert-parity scale {0, 0.5, 1}
-        return _quantize_parity(earned / total)
+        return earned / total, verdicts
 
     def _real_holistic(self, task, deliverable: str) -> float:
         prompt = (
@@ -299,7 +283,7 @@ class SoftJudge:
         if not m:
             return 0.0
         try:
-            return _quantize_parity(max(0.0, min(1.0, float(m.group()))))
+            return max(0.0, min(1.0, float(m.group())))
         except ValueError:
             return 0.0
 

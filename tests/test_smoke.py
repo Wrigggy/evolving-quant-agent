@@ -115,12 +115,10 @@ def test_capability_wall_never_solved(ablation):
     assert n_oos < n_total
 
 
-def test_gdpval_rubric_grader_weighted():
-    # Open GDPval rubric grading: per-criterion satisfied? -> weighted score.
+def test_gdpval_rubric_grader_continuous():
     from qea.tasks import BTask, _parse_rubric_json
     from qea.verifier import SoftJudge
 
-    # rubric_json parsing keeps points + criterion
     items = _parse_rubric_json('[{"score":2,"criterion":"a"},{"score":1,"criterion":"b"}]')
     assert items == [{"points": 2.0, "criterion": "a"}, {"points": 1.0, "criterion": "b"}]
 
@@ -133,8 +131,10 @@ def test_gdpval_rubric_grader_weighted():
                             {"points": 1, "criterion": "b"},
                             {"points": 1, "criterion": "c"}])
     r = SoftJudge(StubLLM()).score(t, "deliverable", None, mock=False, k=1)
-    # earned 2+1=3 of total 4 -> frac 0.75 -> quantized to GDPval parity scale {0,0.5,1} -> 0.5
-    assert r.score == 0.5
+    # earned 2+1=3 of total 4 -> 0.75 (NO quantize to {0,0.5,1})
+    assert abs(r.score - 0.75) < 1e-9
+    # per-criterion verdicts are exposed on the result
+    assert r.criterion_verdicts == {"1": True, "2": False, "3": True}
 
 
 def test_arm2_softB_adds_variance(ablation):
