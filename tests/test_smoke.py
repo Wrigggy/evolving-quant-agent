@@ -279,6 +279,30 @@ def test_b_debugger_attributes_and_firewalls():
     assert "t1" in payload["predicted_fix_task_ids"]
 
 
+def test_b_debugger_survives_llm_outage():
+    # A sustained judge/critic outage (llm.complete raises after retries) must NOT
+    # crash the run — diagnose_b_pile degrades to a fallback note + default tag,
+    # mirroring evaluate()'s per-task fault tolerance. (Regression: a real 10-iter
+    # run died here when the critic call propagated an uncaught RuntimeError.)
+    from qea.tasks import BTask
+    from qea.verifier import TaskResult
+    from qea.falsify import EvalSummary
+    from qea.debugger import diagnose_b_pile
+
+    class BoomLLM:
+        def complete(self, prompt, *, role="judge"):
+            raise RuntimeError("LLM failed after 5 retries: Connection error.")
+
+    res = {"t1": TaskResult("t1", "Accountants and Auditors", "B", False, False, False, 0.3, 0.0,
+                            None, criterion_verdicts={"1": False})}
+    tasks = [BTask(task_id="t1", subtype="Accountants and Auditors", prompt="memo", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "x"}], gold="SECRET")]
+    diag = diagnose_b_pile(EvalSummary(res, {"t1": "weak"}), tasks, llm=BoomLLM(), mode="hybrid")
+    assert diag.root_cause_tag == "WrongStructure"           # default tag, no crash
+    assert "t1" in diag.predicted_fix_task_ids
+    assert "SECRET" not in repr(diag.proposer_payload())     # firewall holds on the fallback path
+
+
 def test_propose_real_prompt_has_no_answers():
     from qea.agents import _propose_real
     from qea.harness import seed_harness
