@@ -6,13 +6,10 @@ integrity guard). A hardcoded constant matches the base inputs but fails the
 probe, so ``oos_pass`` (probe-robust correctness) is the OOS signal that stands
 in for a held-out split (we deliberately do not use a selection split in v0).
 
-SoftJudge (B-pile, transfer only): an LLM judge scoring a deliverable 0-1
-against the rubric. Used post-freeze in Arm 1, and inside the loop in Arm 2
-(which knowingly relaxes iron law 2).
-
-PairwiseJudge (B-pile, the gdpval_soft decision signal): blind anonymized
-pairwise comparison per the GDPval-AA protocol (Artificial Analysis) — ties
-excluded, aggregated as a Bradley-Terry rating vs the seed anchor (``bt_elo``).
+SoftJudge (B-pile grader): an LLM judge scoring a deliverable as a continuous
+rubric percentage (earned/total points, per-criterion verdicts exposed). This is
+the grader the GDPval benchmark drives the loop with; there is no hard verifier
+for open-ended deliverables.
 
 k-repeat denoising (iron law 3): hard scores are clean (variance ~0); soft
 scores are repeated k times and we take the median + record the variance, so the
@@ -66,20 +63,6 @@ def _truthy(v) -> bool:
 _SOFT_PASS = 0.60
 _SOFT_JITTER = 0.08
 
-# Real rubric grading is quantized to GDPval's expert-parity scale {0, 0.5, 1}:
-# 0 = below the standard, 0.5 = at parity, 1 = meets/exceeds (≈ as good as or better
-# than the human gold deliverable). Thresholds on the weighted-rubric fraction.
-_PARITY_HIGH = 0.80   # fraction >= this -> 1.0
-_PARITY_LOW = 0.50    # fraction >= this -> 0.5 ; below -> 0.0
-
-
-def _quantize_parity(frac: float) -> float:
-    if frac >= _PARITY_HIGH:
-        return 1.0
-    if frac >= _PARITY_LOW:
-        return 0.5
-    return 0.0
-
 
 @dataclass
 class TaskResult:
@@ -92,6 +75,7 @@ class TaskResult:
     score: float
     variance: float = 0.0
     error: str | None = None
+    criterion_verdicts: dict | None = None  # B-pile: {criterion_number: bool}, for the debugger
 
 
 # --------------------------------------------------------------------------- #
@@ -242,16 +226,22 @@ class SoftJudge:
         self.llm = llm
 
     def score(self, task, deliverable, harness, *, mock: bool, k: int = 2) -> TaskResult:
+        verdicts: dict = {}
         if mock:
             samples = [self._mock_sample(task, harness, r) for r in range(k)]
         else:
-            samples = [self._real_sample(task, deliverable) for _ in range(k)]
+            pairs = [self._real_sample(task, deliverable) for _ in range(k)]
+            samples = [p[0] for p in pairs]
+            # Single-sample snapshot: per-call verdicts may disagree across k and
+            # are not merged; a snapshot is sufficient for the debugger's
+            # observation (the SCORE is the median; verdicts are diagnostic only).
+            verdicts = pairs[-1][1]
         med = statistics.median(samples)
         var = statistics.pvariance(samples) if len(samples) > 1 else 0.0
-        # real scores are quantized to {0,0.5,1}; parity-or-better (>=0.5) is a "pass".
-        thresh = _SOFT_PASS if mock else _PARITY_LOW
+        thresh = _SOFT_PASS  # reporting-only pass threshold (same 0.60 for mock + real)
         oos = med >= thresh
-        return TaskResult(task.task_id, task.subtype, "B", oos, oos, oos, med, var, None)
+        return TaskResult(task.task_id, task.subtype, "B", oos, oos, oos, med, var, None,
+                          criterion_verdicts=verdicts)
 
     def _mock_sample(self, task, harness, repeat: int) -> float:
         disciplined = harness.has("validator", "integrity_guard")
@@ -261,17 +251,12 @@ class SoftJudge:
         jitter = _SOFT_JITTER * math.sin(_stable_unit(task.task_id, repeat) * math.tau)
         return max(0.0, min(1.0, base + jitter))
 
-    def _real_sample(self, task, deliverable: str) -> float:
-        """GDPval-faithful rubric grading: score the deliverable against each
-        rubric_json criterion (per-criterion satisfied?), weight by points ->
-        normalized [0,1]. Falls back to a holistic score if no rubric_items.
-
-        NOTE: this is a rubric-satisfaction score from the OPEN GDPval rubric, not
-        OpenAI's hidden pairwise-vs-human win-rate. Format criteria (e.g. "two PDFs
-        submitted") will fail for a text-only deliverable -> known v0 lower bound."""
+    def _real_sample(self, task, deliverable: str) -> tuple[float, dict]:
+        """GDPval rubric grading: per-criterion satisfied? -> points-weighted CONTINUOUS
+        fraction in [0,1] (no parity quantization). Returns (fraction, verdicts)."""
         items = getattr(task, "rubric_items", None) or []
         if not items:
-            return self._real_holistic(task, deliverable)
+            return self._real_holistic(task, deliverable), {}
         lines = [f"{i + 1}. (+{c['points']}) {c['criterion']}" for i, c in enumerate(items)]
         prompt = (
             "You are grading a finance deliverable against an itemized GDPval rubric. "
@@ -285,8 +270,7 @@ class SoftJudge:
         verdicts = _parse_json_obj(txt) or {}
         earned = sum(c["points"] for i, c in enumerate(items) if _truthy(verdicts.get(str(i + 1))))
         total = sum(c["points"] for c in items) or 1.0
-        # quantize the weighted fraction to the expert-parity scale {0, 0.5, 1}
-        return _quantize_parity(earned / total)
+        return earned / total, verdicts
 
     def _real_holistic(self, task, deliverable: str) -> float:
         prompt = (
@@ -299,141 +283,45 @@ class SoftJudge:
         if not m:
             return 0.0
         try:
-            return _quantize_parity(max(0.0, min(1.0, float(m.group()))))
+            return max(0.0, min(1.0, float(m.group())))
         except ValueError:
             return 0.0
 
 
 # --------------------------------------------------------------------------- #
-# PairwiseJudge — GDPval-AA-style grading (Artificial Analysis protocol).       #
+# LeakageGuard.                                                                #
 # --------------------------------------------------------------------------- #
-class PairwiseJudge:
-    """Blind pairwise grading per the published GDPval-AA protocol
-    (artificialanalysis.ai/methodology/intelligence-benchmarking):
+class LeakageGuard:
+    """Universal evaluator-layer anti-cheat: rejects an edit whose component content
+    overlaps the benchmark's answer_corpus (rubric/answer material) above a
+    threshold. n-gram (token-shingle) containment; no embeddings (v1).
 
-    - Two submissions to the same task are randomly anonymized as Submission A
-      and Submission B "to mitigate any model or position bias from the grader".
-    - The grader is asked "to determine which of Submission A and B better
-      responds to the task"; win / loss / tie.
-    - Ties are EXCLUDED from scoring; the aggregate is a Bradley-Terry rating
-      from pairwise win/loss, anchored (AA anchors GPT-5.1 at 1000; we anchor
-      the seed harness at 1000 — see ``bt_elo``).
+    v1 LIMITATIONS (revisit when tuning `threshold`, currently an untuned
+    placeholder): an edit shorter than `n` tokens has no shingles and is never
+    flagged (a <5-word verbatim fragment slips through); detection is lexical
+    only (paraphrase evades it)."""
 
-    Documented deviations from AA (their exact grader prompt is NOT public, and
-    parts of their pipeline don't apply here):
-    - The judge prompt below is a reconstruction of their one-sentence
-      description, not AA's verbatim prompt.
-    - AA feeds reference + submission FILES multimodally to Gemini 3.1 Pro
-      Preview; we have text-only deliverables and pass the task prompt only.
-    - AA grades model-vs-model across a fleet (Elo tournament with active
-      sampling); here each match is candidate-vs-incumbent (or vs the frozen
-      seed anchor) on the same task — the two-player special case, where the
-      Bradley-Terry MLE reduces to the win/loss ratio.
-    """
+    def __init__(self, answer_corpus: list[str], threshold: float = 0.6, n: int = 5) -> None:
+        self.n = n
+        self.threshold = threshold
+        self._corpus_ngrams = [self._ngrams(c) for c in answer_corpus if c]
 
-    def __init__(self, llm=None) -> None:
-        self.llm = llm
+    @staticmethod
+    def _norm(text: str) -> list[str]:
+        return "".join(ch.lower() if ch.isalnum() else " " for ch in text).split()
 
-    # ---- one task, two submissions -> "a" | "b" | "tie" ---------------------
-    def compare(self, task, sub_a: str, sub_b: str, *, mock: bool, k: int = 2,
-                harness_a=None, harness_b=None) -> dict:
-        """k independent gradings, each with a fresh random A/B anonymization
-        (deterministic per (task, repeat) so runs are reproducible); majority
-        vote, split votes -> tie. Returns {"verdict", "votes"} where verdict is
-        relative to (sub_a, sub_b) as passed in."""
-        votes = []
-        for rep in range(k):
-            if mock:
-                votes.append(self._mock_vote(task, harness_a, harness_b, rep))
-            else:
-                votes.append(self._real_vote(task, sub_a, sub_b, rep))
-        n_a, n_b = votes.count("a"), votes.count("b")
-        verdict = "a" if n_a > n_b else ("b" if n_b > n_a else "tie")
-        return {"verdict": verdict, "votes": votes}
+    def _ngrams(self, text: str) -> set:
+        toks = self._norm(text)
+        return {" ".join(toks[i:i + self.n]) for i in range(len(toks) - self.n + 1)}
 
-    def _mock_vote(self, task, harness_a, harness_b, rep: int) -> str:
-        """Scripted: reuse the mock soft-judge world model (score per harness +
-        judge jitter) and compare; a small band around equality -> tie."""
-        sj = SoftJudge()
-        sa = sj._mock_sample(task, harness_a, rep)
-        sb = sj._mock_sample(task, harness_b, rep + 1000)  # independent jitter draw
-        if abs(sa - sb) < 0.05:
-            return "tie"
-        return "a" if sa > sb else "b"
-
-    def _real_vote(self, task, sub_a: str, sub_b: str, rep: int) -> str:
-        # Random anonymization: which submission is shown as "Submission A".
-        a_first = _stable_unit("pairwise", task.task_id, rep) < 0.5
-        first, second = (sub_a, sub_b) if a_first else (sub_b, sub_a)
-        prompt = (
-            "You are an expert grader. Two anonymized submissions respond to the "
-            "same task. Determine which of Submission A and Submission B better "
-            "responds to the task, judging like an industry professional would "
-            "(correctness, completeness, instruction-following, and usefulness "
-            "of the deliverable). If they are of equal quality, declare a tie.\n\n"
-            f"<task>\n{task.prompt}\n</task>\n\n"
-            f"<submission_a>\n{first}\n</submission_a>\n\n"
-            f"<submission_b>\n{second}\n</submission_b>\n\n"
-            'Return ONLY a JSON object: {"winner": "A" | "B" | "tie"}.'
-        )
-        txt = self.llm.complete(prompt, role="judge")
-        obj = _parse_json_obj(txt) or {}
-        w = str(obj.get("winner", "")).strip().lower()
-        if w not in ("a", "b"):
-            return "tie"
-        shown_a_is_sub_a = a_first
-        if w == "a":
-            return "a" if shown_a_is_sub_a else "b"
-        return "b" if shown_a_is_sub_a else "a"
-
-    # ---- a full match set (one task list, two deliverable maps) -------------
-    def match_set(self, tasks, subs_a: dict, subs_b: dict, *, mock: bool, k: int = 2,
-                  harness_a=None, harness_b=None, label: str = "") -> dict:
-        """Compare deliverables task-by-task. Returns wins/losses/ties from A's
-        perspective plus per-task verdicts. Ties excluded from win_share.
-
-        Real mode grades matches concurrently (<= QEA_MAX_CONCURRENCY, same cap
-        as evaluate()) with interim progress prints; a failed match degrades to
-        a tie (excluded from scoring) rather than killing the set. Mock stays
-        sequential (instant, deterministic)."""
-        per_task: dict[str, str] = {}
-        if mock:
-            for t in tasks:
-                res = self.compare(t, subs_a.get(t.task_id, ""), subs_b.get(t.task_id, ""),
-                                   mock=mock, k=k, harness_a=harness_a, harness_b=harness_b)
-                per_task[t.task_id] = res["verdict"]
-        else:
-            import concurrent.futures
-            import os
-            mw = max(1, min(int(os.environ.get("QEA_MAX_CONCURRENCY", "8")), 16))
-            done, total = 0, len(tasks)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=mw) as ex:
-                futs = {ex.submit(self.compare, t, subs_a.get(t.task_id, ""), subs_b.get(t.task_id, ""),
-                                  mock=mock, k=k): t for t in tasks}
-                for fut in concurrent.futures.as_completed(futs):
-                    t = futs[fut]
-                    try:
-                        per_task[t.task_id] = fut.result()["verdict"]
-                    except Exception as exc:  # noqa: BLE001 - one match must not kill the set
-                        print(f"[pairwise {label}] {t.task_id} failed ({type(exc).__name__}); counted as tie", flush=True)
-                        per_task[t.task_id] = "tie"
-                    done += 1
-                    if label and (done % 5 == 0 or done == total):
-                        print(f"[pairwise {label}] {done}/{total} matches graded", flush=True)
-        wins = sum(1 for v in per_task.values() if v == "a")
-        losses = sum(1 for v in per_task.values() if v == "b")
-        ties = sum(1 for v in per_task.values() if v == "tie")
-        decided = wins + losses
-        win_share = wins / decided if decided else 0.5
-        if label:
-            print(f"[pairwise {label}] W/L/T = {wins}/{losses}/{ties} "
-                  f"(win share over decided: {win_share:.3f})", flush=True)
-        return {"wins": wins, "losses": losses, "ties": ties,
-                "win_share": round(win_share, 4), "per_task": per_task}
-
-
-def bt_elo(wins: int, losses: int, anchor: float = 1000.0) -> float:
-    """Two-player Bradley-Terry rating vs an anchor at `anchor`, ties excluded
-    (the AA aggregation, reduced to the 2-player case where the MLE is the
-    win/loss ratio). Haldane +0.5 smoothing keeps 0-loss/0-win records finite."""
-    return round(anchor + 400.0 * math.log10((wins + 0.5) / (losses + 0.5)), 1)
+    def is_leak(self, edit) -> bool:
+        cand = self._ngrams(edit.content)
+        if not cand:
+            return False
+        for corp in self._corpus_ngrams:
+            if not corp:
+                continue
+            overlap = len(cand & corp) / len(cand)   # containment of edit in corpus
+            if overlap >= self.threshold:
+                return True
+        return False

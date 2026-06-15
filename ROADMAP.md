@@ -1,9 +1,10 @@
 # ROADMAP — explicitly NOT in v0
 
-v0 is a mechanism check: one task family, a hard A-pile verifier, a soft B-pile
-transfer, a scripted-mockable closed loop. Everything below is deferred. Each
-optimization direction is framed as a hypothesis whose **core experiment is a
-`fitness vs verifier-call-budget` curve**, measured against two baselines:
+v0 is a mechanism check: the GDPval finance/accounting task family, a soft rubric-
+percentage gate, a B-pile debugger with an information firewall, a leakage guard,
+and a scriptable closed loop. Everything below is deferred. Each optimization
+direction is framed as a hypothesis whose **core experiment is a `fitness vs
+verifier-call-budget` curve**, measured against two baselines:
 
 - **Life-Harness-style full-iterate baseline** — re-evaluate every candidate on
   the full task set every iteration (no budget discipline).
@@ -25,20 +26,17 @@ A per-task diagnostic against deepseek-v4-pro revealed the real picture:
   TypeError -> deterministic fail. Fixed: every A-task prompt is now self-contained.
   Lesson: any task whose prompt references another task is broken under
   independent-call evaluation.
-- **The worker is strongly capability-sufficient here.** On the 4 well-specified
-  tasks it wrote textbook solutions (math.erf Black-Scholes = exact, correct
-  amortization to 0, NPV + Newton IRR to 1e-13). So once prompts are fixed the
-  A-pile is likely ~7/7 -> the open question becomes whether these numeric tasks
-  have ANY process-headroom for a strong model, or are simply capability-sufficient
-  (iron law 1). If the latter, swap in genuinely process-limited tasks.
+- **The worker is strongly capability-sufficient on numeric tasks.** On the 4
+  well-specified tasks it wrote textbook solutions (math.erf Black-Scholes = exact,
+  correct amortization to 0, NPV + Newton IRR to 1e-13). So once prompts are fixed
+  the A-pile is likely ~7/7 — confirming iron law 1 was violated (capability-
+  sufficient, not process-limited). **The A-pile numeric tasks have been removed as
+  a benchmark** (superseded: no headroom). They survive only inside the offline
+  synthetic fixture for the `--mock` plumbing test.
 - **Eval non-determinism (real, secondary).** The quant_agent regenerates each
   solution via a fresh LLM call (temp 0.2) every evaluation, so re-evaluating the
-  same harness gives slightly different scores; k-repeat denoises the
-  verifier/probe, not solution generation. Fix: cache the solution per (task,
-  harness signature) for reproducible/cheaper re-eval, optionally k-sample the
-  worker (majority/best) or set temperature 0. (Earlier this was mis-diagnosed as
-  THE blocker; the per-iteration wobble was actually confounded by different
-  candidate harnesses per iter, not same-harness noise.)
+  same harness gives slightly different scores. **Fix:** deliverable cache keyed by
+  (task, harness signature) — now implemented in `_DeliverableCache`.
 - **Weak evolve/ADB agent.** deepseek-v4-pro's ADB-lite diagnosis hallucinated a
   crash story and its edits were plausible but never beneficial — matches the AHE
   report's open question on evolve-agent model strength (try a stronger evolve
@@ -48,113 +46,113 @@ A per-task diagnostic against deepseek-v4-pro revealed the real picture:
 
 End-to-end soft-rubric-driven evolution on the 30 original GDPval finance tasks ran
 clean (timeout+concurrency+retry fixes held). Result: seed mean rubric 0.618 (19/30
->= 0.6); the evolve_agent proposed sensible edits, two of which IMPROVED the aggregate
-(financial_computation_skill -> 0.651/22; variable_pay_middleware -> 0.645/21) — but
-ALL were rolled back, so the trajectory was flat ("soft headroom NOT observed").
+>= 0.6); the evolve_agent proposed sensible edits, two of which IMPROVED the
+aggregate (financial_computation_skill -> 0.651/22; variable_pay_middleware ->
+0.645/21) — but ALL were rolled back, so the trajectory was flat ("soft headroom
+NOT observed").
 
-- **The strict gate is too strict for a NOISY soft signal (THE fix).** decide_keep
-  rejects any edit with unattributed regressions. With the soft judge, every candidate
-  eval regenerates both the deliverable and the judge, so 1-2 spurious per-task
-  regressions appear on EVERY edit -> verdict MIXED -> rejected, even when the aggregate
-  improved. The gate (correct for a clean hard signal, added after code review) conflates
-  noise-regressions with real harm. **Fix: a noise-aware gate for soft mode** — keep if
-  the aggregate (mean rubric score / oos count) improves beyond the eval noise floor,
-  tolerating a few per-task regressions; estimate the noise floor by re-evaluating the
-  incumbent k times. Combine with eval denoising (cache deliverables per harness
-  signature; higher k; temperature 0) so the regressions that remain are real. With this,
-  iter2/iter3 would be kept and soft headroom would likely be OBSERVED.
+- **The strict gate was too strict for a noisy soft signal (now fixed).** The old
+  `decide_keep` rejected any edit with unattributed regressions. With a soft judge,
+  every candidate eval regenerates both the deliverable and the judge, so 1-2
+  spurious per-task regressions appear on every edit -> MIXED -> rejected, even
+  when the aggregate improved. **Fix implemented:** `decide_keep_soft` (keep if the
+  aggregate mean rubric % improves beyond the eval noise floor), combined with
+  the deliverable cache to remove regeneration noise.
 - **Text-deliverable lower bound confirmed.** 0.618 is depressed by format/layout
-  criteria the text worker can't satisfy (see the .xlsx/.pptx generation item below).
+  criteria the text worker cannot satisfy (see the xlsx/pptx generation item below).
 
 ## Findings from the GDPval-AA pairwise runs (2026-06-11)
+[SUPERSEDED: pairwise grading replaced by the soft %-gate + grader/evaluator split; see below.]
 
-Full report: `docs/reports/2026-06-11-gdpval-aa-grader-report.md`. The grader was
-migrated to the Artificial Analysis GDPval-AA protocol (blind pairwise, ties
-excluded, BT-Elo vs frozen seed anchor, measured null margin, replication gate).
-This SUPERSEDES the "noise-aware mean-score gate" fix above as the soft decision
-signal (the mean rubric score remains as a diagnostic only).
+Full report: `docs/reports/2026-06-11-gdpval-aa-grader-report.md`. Key findings
+that fed the current design:
 
-- **The grader line is closed: the pairwise gate is trustworthy.** Clean null
+- **Clean null, decisive discrimination.** The pairwise gate showed clean null
   (seed-vs-seed exactly 0.500), decisive discrimination (candidate win shares
   spanning 0.000–0.522), 7/7 directional agreement with the rubric diagnostic,
-  judge A/B (deepseek self-judge vs qwen cross-family) shows ~90% agreement on
-  decided matches and identical keep decisions, and a replication gate that
-  killed the one sampling-noise keep (financial_calculator, 0.609 first pass,
-  0.40–0.46 on fresh samples under both judges).
-- **THE finding — the proposer's OBSERVATION SPACE is wrong for B-pile, and it,
-  not evolve-model strength, is the current bottleneck.** `_diagnose_real` and
-  `_propose_real` (qea/agents.py) render every failing task in A-pile
-  hard-verifier semantics — `base={bool} probe={bool} err=None`, tag set
-  {Hardcoding, BadFormat, ToolBroken, ...}, "quant harness / code_exec" framing.
-  For B-pile soft tasks these fields are degenerate (base/probe are copies of
-  "rubric score >= 0.5", err is always None), so the Agent Debugger structurally
-  CANNOT see "the memo lacks a sensitivity analysis" and instead hallucinates
-  "unparseable output" / "needs code_exec". The proposer then prescribes
-  format/code middleware that damages free-form writing — 8/8 edits in the
-  aa_run8 experiment, 4 decisively refuted (iter1: a force-JSON prompt lost
-  0/28); proposer predicted-fix hit rate 3/63. Lesson (transferable): the AHE
-  diagnose->propose->falsify MECHANISM ports across domains; the observation
-  INSTANTIATION does not. Do not upgrade the evolve model before fixing what it
-  observes — a stronger model reading the same wrong dashboard fails the same way.
-- **The discarded signals already exist.** SoftJudge elicits PER-CRITERION
-  true/false verdicts and keeps only the quantized score; PairwiseJudge asks for
-  {"winner"} only and discards any loss reason. The fix needs no new scoring
-  calls — route existing signals to the proposer.
+  judge A/B (deepseek self-judge vs qwen cross-family) at ~90% agreement on
+  decided matches, and a replication gate that killed the one sampling-noise keep.
+  These validated pairwise judging as a trustworthy signal, and the same judge
+  model was carried forward for the rubric %-grader.
+- **THE finding — the proposer's OBSERVATION SPACE is wrong for B-pile.** The
+  `_diagnose_real` / `_propose_real` path rendered every failing task in A-pile
+  hard-verifier semantics (`base_pass / probe_pass / error`), which is degenerate
+  for B tasks (fields are always false/None). The evolve_agent structurally could
+  NOT see "the memo lacks a sensitivity analysis" and instead hallucinated
+  "unparseable output" / "needs code_exec". Result: 8/8 edits in aa_run8 damaged
+  free-form writing (4 decisively refuted; proposer predicted-fix hit rate 3/63).
+  **Fix implemented:** the B-pile debugger (`qea/debugger.py`) with per-criterion
+  rubric verdicts + Critic + firewall.
+- **The discarded signals already existed.** SoftJudge was eliciting per-criterion
+  verdicts and discarding them. No new scoring calls were needed — only wiring them
+  to the proposer behind the firewall.
+
+The GDPval-AA pairwise grader (`PairwiseJudge`, Bradley-Terry/Elo, win-rate gate)
+has been **deleted**: it fused measurement and decision and could not produce an
+absolute score. The rubric %-gate (`decide_keep_soft`) is the current gate. Pairwise
+/ Elo are not retained even as a diagnostic.
 
 ## Next experiments (priority order)
 
-1. **B-pile-specific diagnosis + proposer reframing (do this first; low cost,
-   high certainty).**
-   - Render per failing task: occupation + the verbatim rubric criteria judged
-     unmet + (when available) a one-line pairwise loss reason (extend the
-     PairwiseJudge JSON to {"winner", "reason"}).
-   - Replace the A-pile tag set with a writing-domain taxonomy:
-     {MissingCriteria, MissingArtifact (.xlsx/.pdf required), WrongRegister,
-     ShallowAnalysis, FormatMismatch, IgnoredContext}.
-   - Reframe `_propose_real`: the worker WRITES DELIVERABLES (memos, emails,
-     analyses), not code; slot pharmacopoeia becomes writing-oriented (style
-     guides, occupation personas, checklists, exemplar memories).
-   - Acceptance: rerun 8 iterations under the unchanged AA gate; success = keep
-     rate departs 0 with replicated wins (budget ~$15 / ~3h).
-2. **File-producing worker for the Accountants/Auditors wall** (rubric mean
-   0.100; capability gap, untouched by all 8 middleware edits) — .xlsx/.pdf
-   output via openpyxl/LibreOffice in the sandbox; overlaps with the
-   "GDPval B-pile grading fidelity" stub below.
+1. **Run the B-pile debugger on the original 30 GDPval tasks** (the first real
+   experiment under the new architecture). Acceptance: run N iterations under the
+   `decide_keep_soft` gate; success = keep rate departs 0 with replicated wins
+   (budget ~$15 / ~3h). The B-debugger + sanitized observations fix the structural
+   reason all prior edits were refused or harmful.
+2. **File-producing worker for the Accountants/Auditors wall** (rubric mean 0.100;
+   capability gap, untouched by all prior middleware edits) — .xlsx/.pdf output via
+   openpyxl/LibreOffice in the sandbox; overlaps with the "GDPval B-pile grading
+   fidelity" stub below.
 3. **Judge options (settled, act when relevant):** switch `QEA_JUDGE_MODEL` to
-   `google/gemini-3.1-pro-preview` for full AA fidelity once accessible; or use
-   the ~3x-cheaper deepseek judge for long runs (A/B-validated as agreeing with
-   qwen ~90% on decided matches; qwen stays default for its smaller null
-   deviation, 0.05 vs 0.119).
+   `google/gemini-3.1-pro-preview` for full rubric fidelity once accessible; or
+   use the ~3x-cheaper deepseek judge for long runs (A/B-validated at ~90%
+   agreement; qwen stays default for its smaller null deviation).
 
 ## Stubs carried over from v0 (close these first)
 
 - **Real isolation for `code_exec`.** v0 uses restricted `exec` + SIGALRM in the
-  main thread. Move to subprocess/container/E2B before running untrusted or
-  large solutions.
-- **Selection split + regime split.** v0 has no selection split; the probe and
-  B-transfer carry the OOS signal. Re-introduce SkillOpt's independent selection
-  split, and generalize from task-k-fold to **cross-time-window / cross-regime**
-  folds for non-stationary (time-series) families.
+  main thread. Move to subprocess/container/E2B before running untrusted or large
+  solutions.
+- **Selection split + regime split.** v0 has no selection split; the leakage guard
+  + observation firewall carry the anti-overfit signal. Re-introduce SkillOpt's
+  independent selection split, and generalize from task-k-fold to **cross-time-
+  window / cross-regime** folds for non-stationary (time-series) families.
 - **Look-ahead data-access middleware.** The slot + stub exist; wire the runtime
   guard (block reads of data at time > backtest clock) when a time-series family
-  lands. Numeric tasks have no time axis, so v0 never exercises it.
-- **Real GDPval A-pile verifier.** v0 authors clean A-pile instances. To verify
-  *raw* GDPval numeric tasks, add a structured-output contract + an answer-key
-  extractor from `rubric_json`, or a deliverable parser (.xlsx/.pdf).
+  lands.
 - **GDPval B-pile grading fidelity.** v0 grades against the open `rubric_json`
-  per-criterion (weighted) on the candidate's TEXT. Two gaps to close: (1) the
-  agent emits text, not real .pdf/.pptx/.xlsx, so format/layout criteria fail —
-  have the agent produce real files. (2) Full fidelity = OpenAI's actual method:
-  render each deliverable page to PNG via LibreOffice and grade with a multimodal
-  model, pairwise vs the gold human deliverable (gold ships for 17/25 finance
-  tasks) → win-rate. The official grader itself (GPT-5-high) has no public
-  API/code — its web-form service appears unavailable — so the official win-rate
-  can only ever be a manual, periodic external check, never in-harness.
+  per-criterion on the candidate's TEXT. Two gaps to close: (1) the agent emits
+  text, not real .pdf/.pptx/.xlsx, so format/layout criteria fail — have the agent
+  produce real files. (2) Full fidelity = OpenAI's actual method: render each
+  deliverable page to PNG via LibreOffice and grade with a multimodal model,
+  pairwise vs the gold human deliverable (gold ships for 17/25 finance tasks) →
+  win-rate. The official grader itself (GPT-5-high) has no public API/code.
 - **SkillOpt edit-budget schedule.** v0 fixes `L_t = 1`. Add the cosine schedule
   (start 3-4, decay to 1-2) and the rank-and-keep-top-L clip.
 - **Buffer semantic dedup.** v0 uses signature match only. Add normalized-diff /
   embedding dedup only if verbatim re-proposals are observed.
-- **Multi-family routing.** v0 has one family, two piles. Generalize the router.
+- **Multi-benchmark routing.** v0 has one real benchmark (GDPval). The `Benchmark`
+  abstraction is built to accommodate more; add them via new `Benchmark` instances
+  as new task families land.
+
+## Deferred items from the grader/evaluator redesign
+
+- **Gold-deliverable-text in the leakage corpus.** GDPval gold is binary xlsx/pptx
+  behind URLs; extracting text needs fetch + Office parsing. v1 corpus is
+  rubric-criteria text only. When gold-deliverable text is available, add it to
+  `answer_corpus` for a stronger leakage signal.
+- **Leakage-guard threshold tuning.** The `threshold` parameter in `LeakageGuard`
+  is currently an untuned placeholder (0.6). Tune via holdout: measure false-
+  positive rate on known-clean edits and false-negative rate on injected leaks.
+  Also: add a short-edit bypass (edits shorter than `n` tokens have no shingles
+  and are currently never flagged — this is a known v1 limitation).
+- **Free-LLM attribution mode for component rewrites.** `diagnose_b_pile` is
+  dual-mode (`mode="hybrid"` default, `mode="free"` for rewrite-level changes
+  where the tag→slot affinity is too coarse). Wire the `free` mode trigger when
+  a proposed edit replaces a component wholesale.
+- **New benchmarks via the Benchmark abstraction.** The `Benchmark` dataclass is
+  forward-looking: plug in a new `(tasks, grader, answer_corpus, debugger_kind)`
+  to add any future benchmark without touching the loop.
 
 ## Optimization directions (hypotheses to test)
 
@@ -168,8 +166,7 @@ fraction of the verifier-call budget vs uniform AHE search.
 Run a cheap proxy check first; escalate to the full expensive verifier only for
 survivors (successive halving). **Load-bearing prerequisite:** first verify the
 cheap proxy is rank-correlated with the full verifier — characterizing which
-proxies are rank-faithful is itself a contribution. (Quant proxies: short-window
-backtest vs full; a few perturbation seeds vs many; coarse vs fine tolerance.)
+proxies are rank-faithful is itself a contribution.
 
 ### 3. Entropic / risk-seeking pruning
 When pruning to save budget, do **not** prune on mean fitness; protect
@@ -182,6 +179,11 @@ v0 is offline (evolve a harness on a train set, freeze, eval held-out). The open
 axis is whether to additionally run a **per-instance online** evolution pass at
 inference. Nobody has done harness-level + hard-verifier on the online side; the
 experiment is offline-only vs offline+online on the same verifier-call budget.
+
+### 5. Worker k-sampling
+The deliverable cache removes regeneration noise per harness; the next step is to
+k-sample the worker (majority vote or best-of-k) so `cand_mean` is further denoised
+before it reaches the evaluator. Confirmed companion to the %-gate.
 
 ## Benchmark expansion (transfer / final validation, not the v0 loop)
 

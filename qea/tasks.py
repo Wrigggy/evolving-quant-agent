@@ -1,20 +1,16 @@
 """Task family: GDPval finance/accounting (Econ/Finance/Accounting).
 
-A-pile (hard verifier, drives evolution): numeric tasks with an objective core.
-Each A-task ships a deterministic ``reference(inputs) -> {metric: value}`` pure
-function plus a ``perturb`` that produces a different-but-valid instance. The
-hard verifier (see ``verifier.py``) recomputes the reference and also runs the
-solution on perturbed inputs (the *perturbation probe* / integrity guard): a
-hardcoded constant passes the base inputs but fails the probe.
+B-pile (the real benchmark): real GDPval "Finance and Insurance" deliverable
+tasks (``load_gdpval_finance``), graded by an LLM judge against the ``rubric_json``
+as a continuous rubric percentage. This is what ``run_gdpval_soft`` evolves on.
 
-B-pile (soft judge, transfer only): real GDPval "Finance and Insurance"
-deliverable tasks, graded by an LLM judge against the rubric. Used to measure
-whether a harness evolved on hard-A transfers to qualitative finance work.
-
-Iron law 2: only the A-pile hard verifier drives the evolve loop. The B-pile
-soft judge is used for frozen-harness transfer eval (Arm 1) and, only in the
-explicitly-flagged Arm 2 ablation, inside the loop (which knowingly relaxes
-iron law 2 — that is the thing the ablation measures).
+A-pile (synthetic fixture only): numeric tasks with an objective core. Each ships
+a deterministic ``reference(inputs) -> {metric: value}`` plus a ``perturb`` that
+produces a different-but-valid instance. The ``HardVerifier`` recomputes the
+reference and re-runs the solution on perturbed inputs (the *perturbation probe* /
+integrity guard): a hardcoded constant passes the base inputs but fails the probe.
+These tasks are NOT a real benchmark (capability-sufficient, no headroom); they
+survive only as the offline ``--mock`` plumbing fixture.
 
 The A-pile inputs are authored in code with clean reference values; each cites a
 real GDPval ``task_id`` for lineage (the real rubric numbers, e.g. the
@@ -224,6 +220,18 @@ def _parse_rubric_json(rj) -> list[dict]:
         return []
 
 
+def rubric_corpus(tasks: list) -> list[str]:
+    """v1 leakage answer_corpus = rubric-criteria text across the benchmark's tasks.
+    (Gold deliverable text is deferred: GDPval gold is binary xlsx/pptx URLs.)"""
+    out: list[str] = []
+    for t in tasks:
+        for c in getattr(t, "rubric_items", None) or []:
+            out.append(c["criterion"])
+        if getattr(t, "rubric", ""):
+            out.append(t.rubric)
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Loaders.                                                                     #
 # --------------------------------------------------------------------------- #
@@ -417,8 +425,9 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> l
     """The ORIGINAL GDPval finance/accounting tasks (deliverable + rubric_json),
     soft-graded per-criterion. ~30 broad / ~25 core, from the open gold subset.
 
-    These are real open-ended deliverables with NO hard verifier — using them to
-    drive the evolve loop relaxes iron law 2 (a deliberate, documented choice)."""
+    These are real open-ended deliverables with NO hard verifier, so the loop is
+    driven by the soft rubric-% grader (the observation firewall, law 2, still
+    holds)."""
     stems = _FIN_OCC_BROAD if broad else _FIN_OCC_CORE
     if allow_download:
         try:
@@ -443,34 +452,4 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> l
                 return out
         except Exception as exc:  # noqa: BLE001
             print(f"[tasks] real GDPval finance load failed ({type(exc).__name__}: {exc}); using offline fixtures")
-    return list(_B_FIXTURES)
-
-
-def load_gdpval_b_pile(n: int = 12, *, allow_download: bool = True) -> list[BTask]:
-    """Real GDPval 'Finance and Insurance' deliverable tasks (soft-judged).
-
-    Reads the local fork in data/gdpval/ (scripts/fork_gdpval.py), falling back
-    to the public HuggingFace parquet, then to bundled offline fixtures so mock
-    + offline runs always work.
-    """
-    if allow_download:
-        try:
-            df, _src = _load_gdpval_df()
-            fin = df[df["sector"] == "Finance and Insurance"].head(n)
-            out: list[BTask] = []
-            for _, row in fin.iterrows():
-                out.append(
-                    BTask(
-                        task_id=str(row["task_id"]),
-                        subtype="valuation",  # coarse; real per-occupation mapping is ROADMAP
-                        prompt=str(row["prompt"]),
-                        rubric=str(row.get("rubric_pretty", "")),
-                        rubric_items=_parse_rubric_json(row.get("rubric_json")),
-                        gdpval_lineage=f"gdpval:{row['occupation']} (real)",
-                    )
-                )
-            if out:
-                return out
-        except Exception as exc:  # noqa: BLE001 - any failure -> fixtures
-            print(f"[tasks] real GDPval B-pile unavailable ({type(exc).__name__}: {exc}); using offline fixtures")
     return list(_B_FIXTURES)

@@ -1,4 +1,5 @@
-"""Smoke test: the mock 2-arm run must exhibit the three §5.4 mechanism signals.
+"""Smoke test: the synthetic plumbing fixture must exhibit the three §5.4
+mechanism signals.
 
 Also checks the reference computations and the perturbation-probe logic directly,
 so the hard verifier itself is trusted (it is what drives evolution).
@@ -8,7 +9,7 @@ import math
 
 import pytest
 
-from qea.loop import Config, acceptance_signals, run_ablation
+from qea.loop import Config, acceptance_signals, run_synthetic_fixture
 from qea.tasks import (
     bs_call_reference,
     current_ratio_reference,
@@ -73,16 +74,16 @@ def test_perturbation_probe_kills_hardcoding():
 
 
 # --------------------------------------------------------------------------- #
-# The three §5.4 mechanism signals (mock 2-arm run).                          #
+# The three §5.4 mechanism signals (synthetic plumbing fixture).              #
 # --------------------------------------------------------------------------- #
 @pytest.fixture(scope="module")
-def ablation(tmp_path_factory):
+def synth_run(tmp_path_factory):
     cfg = Config(mock=True, n_iters=4, k=2, results_dir=str(tmp_path_factory.mktemp("results")))
-    return run_ablation(cfg)
+    return run_synthetic_fixture(cfg)
 
 
-def test_signal_1_causal_loop(ablation):
-    arm = ablation.arm1
+def test_signal_1_causal_loop(synth_run):
+    arm = synth_run
     r1 = arm.records[0]
     # EVAL -> DIAGNOSE -> WORKSPACE -> VERDICT all reference the same root cause
     assert r1.root_cause_tag == "Hardcoding"
@@ -90,37 +91,35 @@ def test_signal_1_causal_loop(ablation):
     assert "integrity_guard" in arm.final_harness_summary.get("validator", [])
 
 
-def test_signal_2_monotonic_oos(ablation):
-    traj = ablation.arm1.oos_trajectory
+def test_signal_2_monotonic_oos(synth_run):
+    traj = synth_run.oos_trajectory
     assert all(traj[i] <= traj[i + 1] for i in range(len(traj) - 1)), traj
     assert max(traj) > min(traj), traj                # strict rise at least once
     assert traj[0] == 0                               # seed hardcodes -> 0 OOS
 
 
-def test_signal_3_correct_rollback(ablation):
-    recs = ablation.arm1.records
+def test_signal_3_correct_rollback(synth_run):
+    recs = synth_run.records
     assert any(r.verdict == "HARMFUL" and not r.kept for r in recs)        # broke code_exec
     assert any(r.verdict == "INEFFECTIVE" and not r.kept for r in recs)    # overfit killed by probe
     assert any(r.blocked for r in recs)                                    # repeat blocked by buffer
 
 
-def test_acceptance_all_signals(ablation):
-    assert all(acceptance_signals(ablation.arm1).values())
+def test_acceptance_all_signals(synth_run):
+    assert all(acceptance_signals(synth_run).values())
 
 
-def test_capability_wall_never_solved(ablation):
+def test_capability_wall_never_solved(synth_run):
     # The amortization subtype includes a capability wall: even the evolved
     # harness cannot lift it (iron law 1), and it stays visible per-subtype.
-    n_oos, n_total = ablation.arm1.final_per_subtype["amortization"]
+    n_oos, n_total = synth_run.final_per_subtype["amortization"]
     assert n_oos < n_total
 
 
-def test_gdpval_rubric_grader_weighted():
-    # Open GDPval rubric grading: per-criterion satisfied? -> weighted score.
+def test_gdpval_rubric_grader_continuous():
     from qea.tasks import BTask, _parse_rubric_json
     from qea.verifier import SoftJudge
 
-    # rubric_json parsing keeps points + criterion
     items = _parse_rubric_json('[{"score":2,"criterion":"a"},{"score":1,"criterion":"b"}]')
     assert items == [{"points": 2.0, "criterion": "a"}, {"points": 1.0, "criterion": "b"}]
 
@@ -133,13 +132,10 @@ def test_gdpval_rubric_grader_weighted():
                             {"points": 1, "criterion": "b"},
                             {"points": 1, "criterion": "c"}])
     r = SoftJudge(StubLLM()).score(t, "deliverable", None, mock=False, k=1)
-    # earned 2+1=3 of total 4 -> frac 0.75 -> quantized to GDPval parity scale {0,0.5,1} -> 0.5
-    assert r.score == 0.5
-
-
-def test_arm2_softB_adds_variance(ablation):
-    # Arm2 puts soft-B in the loop -> noisier falsification signal than Arm1.
-    assert ablation.arm2.mean_eval_variance > ablation.arm1.mean_eval_variance
+    # earned 2+1=3 of total 4 -> 0.75 (NO quantize to {0,0.5,1})
+    assert abs(r.score - 0.75) < 1e-9
+    # per-criterion verdicts are exposed on the result
+    assert r.criterion_verdicts == {"1": True, "2": False, "3": True}
 
 
 # --------------------------------------------------------------------------- #
@@ -197,101 +193,15 @@ def test_signature_no_collision_past_120_chars():
     assert a.signature() != b.signature()
 
 
-# --------------------------------------------------------------------------- #
-# GDPval-AA pairwise grader (Artificial Analysis protocol).                    #
-# --------------------------------------------------------------------------- #
-def test_pairwise_judge_deanonymizes_correctly():
-    # The judge sees randomly-ordered "Submission A/B"; the verdict must map back
-    # to the (sub_a, sub_b) the caller passed in, regardless of the shuffle.
-    from qea.tasks import BTask
-    from qea.verifier import PairwiseJudge
-
-    class StubLLM:
-        def __init__(self):
-            self.prompts = []
-
-        def complete(self, prompt, *, role="judge"):
-            self.prompts.append(prompt)
-            # always prefer the submission whose text is "GOOD", wherever it is shown
-            a_block = prompt.split("<submission_a>")[1].split("</submission_a>")[0]
-            return '{"winner": "A"}' if "GOOD" in a_block else '{"winner": "B"}'
-
-    t = BTask(task_id="pw1", subtype="x", prompt="write a memo", rubric="")
-    res = PairwiseJudge(StubLLM()).compare(t, "GOOD deliverable", "weak", mock=False, k=4)
-    assert res["verdict"] == "a"
-    assert all(v == "a" for v in res["votes"])
-    # and the reverse order must invert the verdict
-    res2 = PairwiseJudge(StubLLM()).compare(t, "weak", "GOOD deliverable", mock=False, k=4)
-    assert res2["verdict"] == "b"
-
-
-def test_pairwise_judge_tie_and_garbage_default_to_tie():
-    from qea.tasks import BTask
-    from qea.verifier import PairwiseJudge
-
-    class TieLLM:
-        def complete(self, prompt, *, role="judge"):
-            return '{"winner": "tie"}'
-
-    class GarbageLLM:
-        def complete(self, prompt, *, role="judge"):
-            return "no json here"
-
-    t = BTask(task_id="pw2", subtype="x", prompt="p", rubric="")
-    assert PairwiseJudge(TieLLM()).compare(t, "a", "b", mock=False, k=2)["verdict"] == "tie"
-    assert PairwiseJudge(GarbageLLM()).compare(t, "a", "b", mock=False, k=2)["verdict"] == "tie"
-
-
-def test_bt_elo_anchoring():
-    from qea.verifier import bt_elo
-    assert bt_elo(0, 0) == 1000.0                 # nothing decided -> anchor
-    assert bt_elo(10, 10) == 1000.0               # even record -> anchor
-    assert bt_elo(20, 10) > 1000.0 > bt_elo(10, 20)
-    # symmetric around the anchor
-    assert abs((bt_elo(20, 10) - 1000.0) + (bt_elo(10, 20) - 1000.0)) < 1e-9
-
-
-def test_decide_keep_pairwise_excludes_ties_and_needs_margin():
-    from qea.falsify import decide_keep_pairwise
-    assert decide_keep_pairwise(0, 0, 0.05) is False          # all ties -> reject
-    assert decide_keep_pairwise(16, 10, 0.05) is True         # 0.615 > 0.55
-    assert decide_keep_pairwise(14, 12, 0.05) is False        # 0.538 within margin
-    assert decide_keep_pairwise(10, 16, 0.05) is False        # losing -> reject
-
-
-def test_gdpval_soft_mock_pairwise_gate(tmp_path):
+def test_gdpval_soft_mock_pct_gate(tmp_path):
     # End-to-end mock: iter-1 integrity_guard lifts the mock soft score
-    # (0.45 -> 0.72), so the pairwise gate must keep it and the win rate vs the
-    # frozen seed must end above 0.5 + null margin.
+    # (0.45 -> 0.72), beating the noise floor, so the % gate keeps it and the
+    # mean-score trajectory rises.
     from qea.loop import Config, run_gdpval_soft
     res = run_gdpval_soft(Config(mock=True, n_iters=2, k=2, results_dir=str(tmp_path)))
     assert res.n_kept >= 1
-    assert res.winrate_trajectory[0] == 0.5
-    assert res.winrate_trajectory[-1] > 0.5 + res.pairwise_margin
-    assert res.final_elo_vs_seed > 1000.0
-
-
-def test_match_set_parallel_real_path():
-    # Real-mode match_set fans out across a thread pool; verdicts must still map
-    # back per task, and a throwing judge call degrades to a tie, not a crash.
-    from qea.tasks import BTask
-    from qea.verifier import PairwiseJudge
-
-    class StubLLM:
-        def complete(self, prompt, *, role="judge"):
-            a_block = prompt.split("<submission_a>")[1].split("</submission_a>")[0]
-            if "BOOM" in prompt:
-                raise RuntimeError("judge exploded")
-            return '{"winner": "A"}' if "GOOD" in a_block else '{"winner": "B"}'
-
-    tasks = [BTask(task_id=f"t{i}", subtype="x", prompt=f"task {i}", rubric="") for i in range(8)]
-    subs_a = {t.task_id: "GOOD deliverable" for t in tasks}
-    subs_b = {t.task_id: "weak" for t in tasks}
-    subs_b["t3"] = "BOOM"  # poison one match -> tie, not crash
-    res = PairwiseJudge(StubLLM()).match_set(tasks, subs_a, subs_b, mock=False, k=2)
-    assert res["wins"] == 7 and res["losses"] == 0 and res["ties"] == 1
-    assert res["per_task"]["t3"] == "tie"
-    assert all(res["per_task"][f"t{i}"] == "a" for i in range(8) if i != 3)
+    assert res.mean_score_trajectory[-1] > res.mean_score_trajectory[0]
+    assert not hasattr(res, "final_elo_vs_seed")  # pairwise fields gone
 
 
 def test_provider_pin_is_per_model_official(monkeypatch):
@@ -317,3 +227,112 @@ def test_gdpval_local_fork_preferred():
     assert src == "local fork"
     assert len(df) == 220
     assert {"task_id", "rubric_json", "rubric_pretty"} <= set(df.columns)
+
+
+def test_deliverable_cache_stable_per_harness():
+    # The same harness must yield the SAME deliverable within a run (cache hit),
+    # so re-evaluating an unchanged harness does not wobble from regeneration.
+    from qea.harness import seed_harness, Edit
+    from qea.loop import _DeliverableCache
+    calls = {"n": 0}
+
+    def gen():
+        calls["n"] += 1
+        return f"deliverable v{calls['n']}"
+
+    cache = _DeliverableCache()
+    h = seed_harness()
+    a = cache.get_or_make("t1", h, gen)
+    b = cache.get_or_make("t1", h, gen)
+    assert a == b and calls["n"] == 1            # second call is a cache hit
+    # a different harness must miss the cache and regenerate
+    h2 = h.clone(); h2.apply(Edit(op="add", slot="memory", component_name="kb", content="x"))
+    c = cache.get_or_make("t1", h2, gen)
+    assert c == "deliverable v2" and calls["n"] == 2
+
+
+def test_b_debugger_attributes_and_firewalls():
+    from qea.tasks import BTask
+    from qea.verifier import TaskResult
+    from qea.falsify import EvalSummary
+    from qea.debugger import diagnose_b_pile
+
+    class CriticLLM:
+        def complete(self, prompt, *, role="judge"):
+            if "Classify" in prompt:
+                return '{"root_cause_tag": "MissingDomainKnowledge", "target_slot": "memory"}'
+            return "The deliverable omits the going-concern analysis the rubric requires."
+
+    res = {"t1": TaskResult("t1", "Accountants and Auditors", "B", False, False, False, 0.3, 0.0,
+                            None, criterion_verdicts={"1": True, "2": False})}
+    tasks = [BTask(task_id="t1", subtype="Accountants and Auditors", prompt="audit memo", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "states ratios"},
+                                 {"points": 2, "criterion": "flags going-concern triggers"}],
+                   gold="SECRET-ANSWER-12345")]
+    diag = diagnose_b_pile(EvalSummary(res, {"t1": "weak memo"}), tasks, llm=CriticLLM(), mode="hybrid")
+    assert diag.root_cause_tag == "MissingDomainKnowledge"
+    assert diag.suggested_target_slot == "memory"
+    payload = diag.proposer_payload()
+    blob = repr(payload)
+    assert "SECRET-ANSWER-12345" not in blob
+    assert "going-concern triggers" not in blob
+    assert "t1" in payload["predicted_fix_task_ids"]
+
+
+def test_propose_real_prompt_has_no_answers():
+    from qea.agents import _propose_real
+    from qea.harness import seed_harness
+    from qea.falsify import RejectedEditBuffer, EvalSummary
+    from qea.verifier import TaskResult
+
+    captured = {}
+    class LLM:
+        def complete(self, prompt, *, role="agent"):
+            captured["p"] = prompt
+            return ('{"slot":"memory","component_name":"kb","content":"general finance knowledge",'
+                    '"summary":"add kb","predicted_fixes":["t1"],"risk_tasks":[]}')
+    diag = {"root_cause_tag": "MissingDomainKnowledge", "deficiency_category": "1 task",
+            "suggested_target_slot": "memory", "predicted_fix_task_ids": ["t1"],
+            "overview": "MissingDomainKnowledge deficiency", "_b_pile": True}
+    # Populate the eval with sentinels in EVERY field the B-branch must NOT read
+    # (result subtype/error + the deliverable text). A firewall regression that
+    # reaches into eval_summary would leak one of these into the prompt.
+    res = {"t1": TaskResult("t1", "SECRET-SUBTYPE", "B", False, False, False, 0.3, 0.0,
+                            "SECRET-ERROR", criterion_verdicts={"1": False})}
+    evalsum = EvalSummary(res, {"t1": "SECRET-DELIVERABLE going-concern analysis"})
+    _propose_real(1, evalsum, diag, seed_harness(), RejectedEditBuffer(), LLM())
+    assert "SECRET" not in captured["p"]   # no ground truth from eval_summary leaked
+    assert "MissingDomainKnowledge" in captured["p"]  # sanitized signal present
+
+
+def test_leakage_guard_blocks_copied_answer():
+    from qea.verifier import LeakageGuard
+    from qea.harness import Edit
+    corpus = ["flags any going-concern triggers in the liquidity position"]
+    guard = LeakageGuard(corpus, threshold=0.6)
+    leak = Edit(op="add", slot="memory", component_name="kb",
+                content="Always flags any going-concern triggers in the liquidity position.")
+    assert guard.is_leak(leak) is True
+    ok = Edit(op="add", slot="prompt", component_name="p",
+              content="Structure the memo with a clear recommendation section.")
+    assert guard.is_leak(ok) is False
+
+
+def test_rubric_corpus_collects_criteria():
+    from qea.tasks import BTask, rubric_corpus
+    tasks = [BTask(task_id="t", subtype="x", prompt="p", rubric="overall rubric text",
+                   rubric_items=[{"points": 1, "criterion": "states ratios"},
+                                 {"points": 2, "criterion": "flags going-concern"}])]
+    corpus = rubric_corpus(tasks)
+    assert "states ratios" in corpus and "flags going-concern" in corpus
+    assert "overall rubric text" in corpus
+
+
+def test_benchmark_owns_grader_and_corpus():
+    from qea.benchmark import gdpval_benchmark
+    bm = gdpval_benchmark(broad=False, allow_download=False)  # offline fixtures
+    assert bm.name == "gdpval_finance"
+    assert bm.tasks and all(t.pile == "B" for t in bm.tasks)
+    assert bm.grader is not None
+    assert isinstance(bm.answer_corpus, list) and len(bm.answer_corpus) > 0
+    assert bm.debugger_kind == "b_pile"

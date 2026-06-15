@@ -69,9 +69,12 @@ def _extract_code(txt: str) -> str:
 # --------------------------------------------------------------------------- #
 # diagnose (ADB-lite).                                                         #
 # --------------------------------------------------------------------------- #
-def diagnose(eval_summary, *, mock: bool, llm):
+def diagnose(eval_summary, tasks=None, *, mock: bool, llm):
     if mock:
         return _diagnose_mock(eval_summary)
+    if tasks is not None and any(r.pile == "B" for r in eval_summary.results.values()):
+        from .debugger import diagnose_b_pile
+        return diagnose_b_pile(eval_summary, tasks, llm=llm, mode="hybrid").proposer_payload()
     return _diagnose_real(eval_summary, llm)
 
 
@@ -180,17 +183,34 @@ def _propose_mock(iteration: int, eval_summary):
 
 
 def _propose_real(iteration, eval_summary, diagnosis, harness, buffer, llm):
-    fails = [
-        f"- {r.task_id} [{r.subtype}] base={r.base_pass} probe={r.probe_pass} err={r.error}"
-        for r in eval_summary.results.values() if not r.oos_pass
-    ]
+    # B-pile firewall branch: the deficiency context is built ONLY from the
+    # sanitized diagnosis (root-cause tag, component-level slot, opaque task ids).
+    # We deliberately do NOT read eval_summary rubric/deliverable/gold text here,
+    # so no ground-truth answer can leak into the proposer prompt — the proposer
+    # physically cannot hardcode an answer it never sees.
+    if diagnosis.get("_b_pile"):
+        failing = ", ".join(diagnosis.get("predicted_fix_task_ids", [])) or "(none)"
+        failing_context = (
+            f"B-PILE DEFICIENCY (sanitized — no rubric answers / deliverable text):\n"
+            f"- root cause: {diagnosis.get('root_cause_tag')}\n"
+            f"- category: {diagnosis.get('deficiency_category')}\n"
+            f"- suggested target slot: {diagnosis.get('suggested_target_slot')}\n"
+            f"- failing task ids: {failing}\n"
+            f"- overview: {diagnosis.get('overview')}"
+        )
+    else:
+        fails = [
+            f"- {r.task_id} [{r.subtype}] base={r.base_pass} probe={r.probe_pass} err={r.error}"
+            for r in eval_summary.results.values() if not r.oos_pass
+        ]
+        failing_context = "FAILING TASKS:\n" + "\n".join(fails)
     prompt = (
         "You evolve a quant agent harness with 7 slots "
         "(tool/middleware/skill/prompt/validator/memory/router). The seed has only "
         "the code_exec tool. Propose EXACTLY ONE edit, justified by evidence.\n\n"
         f"CURRENT HARNESS: {json.dumps(harness.summary())}\n\n"
         f"DIAGNOSIS: {diagnosis.get('root_cause_tag')} — {diagnosis.get('overview')}\n\n"
-        f"FAILING TASKS:\n" + "\n".join(fails) + "\n\n"
+        f"{failing_context}\n\n"
         f"REJECTED-EDIT BUFFER:\n{buffer.render()}\n\n"
         "Return ONLY JSON: {op, slot, component_name, content, summary, "
         "failure_evidence, root_cause, targeted_fix, predicted_fixes (task ids), "
