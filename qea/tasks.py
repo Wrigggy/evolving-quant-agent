@@ -1,20 +1,16 @@
 """Task family: GDPval finance/accounting (Econ/Finance/Accounting).
 
-A-pile (hard verifier, drives evolution): numeric tasks with an objective core.
-Each A-task ships a deterministic ``reference(inputs) -> {metric: value}`` pure
-function plus a ``perturb`` that produces a different-but-valid instance. The
-hard verifier (see ``verifier.py``) recomputes the reference and also runs the
-solution on perturbed inputs (the *perturbation probe* / integrity guard): a
-hardcoded constant passes the base inputs but fails the probe.
+B-pile (the real benchmark): real GDPval "Finance and Insurance" deliverable
+tasks (``load_gdpval_finance``), graded by an LLM judge against the ``rubric_json``
+as a continuous rubric percentage. This is what ``run_gdpval_soft`` evolves on.
 
-B-pile (soft judge, transfer only): real GDPval "Finance and Insurance"
-deliverable tasks, graded by an LLM judge against the rubric. Used to measure
-whether a harness evolved on hard-A transfers to qualitative finance work.
-
-Iron law 2: only the A-pile hard verifier drives the evolve loop. The B-pile
-soft judge is used for frozen-harness transfer eval (Arm 1) and, only in the
-explicitly-flagged Arm 2 ablation, inside the loop (which knowingly relaxes
-iron law 2 — that is the thing the ablation measures).
+A-pile (synthetic fixture only): numeric tasks with an objective core. Each ships
+a deterministic ``reference(inputs) -> {metric: value}`` plus a ``perturb`` that
+produces a different-but-valid instance. The ``HardVerifier`` recomputes the
+reference and re-runs the solution on perturbed inputs (the *perturbation probe* /
+integrity guard): a hardcoded constant passes the base inputs but fails the probe.
+These tasks are NOT a real benchmark (capability-sufficient, no headroom); they
+survive only as the offline ``--mock`` plumbing fixture.
 
 The A-pile inputs are authored in code with clean reference values; each cites a
 real GDPval ``task_id`` for lineage (the real rubric numbers, e.g. the
@@ -429,8 +425,9 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> l
     """The ORIGINAL GDPval finance/accounting tasks (deliverable + rubric_json),
     soft-graded per-criterion. ~30 broad / ~25 core, from the open gold subset.
 
-    These are real open-ended deliverables with NO hard verifier — using them to
-    drive the evolve loop relaxes iron law 2 (a deliberate, documented choice)."""
+    These are real open-ended deliverables with NO hard verifier, so the loop is
+    driven by the soft rubric-% grader (the observation firewall, law 2, still
+    holds)."""
     stems = _FIN_OCC_BROAD if broad else _FIN_OCC_CORE
     if allow_download:
         try:

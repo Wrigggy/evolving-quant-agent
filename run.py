@@ -82,14 +82,14 @@ def main() -> int:
         return 0 if overall else 1
 
     print(f"[run] mode=REAL (soft-rubric-graded evolution on ORIGINAL GDPval finance tasks; "
-          f"iron law 2 relaxed by design) iters={cfg.n_iters} k={cfg.k} broad={cfg.gdpval_broad} -> {cfg.results_dir}")
+          f"no hard verifier — soft signal in the loop) iters={cfg.n_iters} k={cfg.k} broad={cfg.gdpval_broad} -> {cfg.results_dir}")
     res = run_gdpval_soft(cfg)
     _print_soft(res)
     rose = res.mean_score_trajectory[-1] > res.mean_score_trajectory[0] + res.noise_margin
     print(f"\n  ==> SOFT HEADROOM {'OBSERVED' if rose else 'NOT OBSERVED'} (REAL, mean-rubric-score gate): "
           f"mean score {res.mean_score_trajectory[0]:.3f} -> {res.mean_score_trajectory[-1]:.3f} "
           f"(noise floor {res.noise_margin:.3f}), {res.n_kept} edit(s) kept. "
-          f"NOTE: soft signal (relaxes iron law 2) — treat as indicative, not proof.")
+          f"NOTE: soft signal (no hard verifier) — treat as indicative, not proof.")
     return 0 if rose else 1
 
 

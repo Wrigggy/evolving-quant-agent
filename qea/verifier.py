@@ -6,9 +6,10 @@ integrity guard). A hardcoded constant matches the base inputs but fails the
 probe, so ``oos_pass`` (probe-robust correctness) is the OOS signal that stands
 in for a held-out split (we deliberately do not use a selection split in v0).
 
-SoftJudge (B-pile, transfer only): an LLM judge scoring a deliverable 0-1
-against the rubric. Used post-freeze in Arm 1, and inside the loop in Arm 2
-(which knowingly relaxes iron law 2).
+SoftJudge (B-pile grader): an LLM judge scoring a deliverable as a continuous
+rubric percentage (earned/total points, per-criterion verdicts exposed). This is
+the grader the GDPval benchmark drives the loop with; there is no hard verifier
+for open-ended deliverables.
 
 k-repeat denoising (iron law 3): hard scores are clean (variance ~0); soft
 scores are repeated k times and we take the median + record the variance, so the

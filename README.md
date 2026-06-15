@@ -34,8 +34,10 @@ python3 run.py --real --b-n 12
   Advisors, Securities Sales, Real Estate Brokers), gated by the **soft rubric-score
   gate** (`decide_keep_soft`): keep a candidate only if its mean rubric % beats the
   incumbent's by more than the estimated eval noise floor. Progress is tracked as
-  the mean rubric score trajectory. Iron law 2 is explicitly relaxed here (soft
-  signal in the loop, by design — see the four iron laws below).
+  the mean rubric score trajectory. There is no hard verifier for open-ended GDPval
+  deliverables, so the loop is driven by a soft signal (the old "hard-verifier-only"
+  constraint is dropped). The current law 2 — the observation firewall — still holds
+  unconditionally here (see the four iron laws below).
 
 ## What it does
 

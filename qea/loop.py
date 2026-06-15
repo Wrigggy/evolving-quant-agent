@@ -335,9 +335,10 @@ def _write_resume(path: Path, last_iter, incumbent, noise_margin, buffer, record
 
 
 def run_gdpval_soft(cfg: Config) -> SoftRunResult:
-    """Evolve a harness DIRECTLY on the original GDPval finance tasks. Relaxes iron
-    law 2 (soft signal in the loop) by explicit user choice — there is no hard
-    verifier for original GDPval deliverables.
+    """Evolve a harness DIRECTLY on the original GDPval finance tasks. There is no
+    hard verifier for open-ended GDPval deliverables, so the loop is driven by a
+    soft signal; the observation firewall (law 2) is still enforced (B-pile
+    debugger + leakage guard).
 
     DECISION SIGNAL: the aggregate mean rubric score. Keep a candidate only if its
     mean score beats the incumbent's by more than the estimated eval noise floor
