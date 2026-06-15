@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """QEA v0 entrypoint.
 
-    python run.py --mock              # offline smoke test (no API key), both arms
+    python run.py --mock              # offline synthetic plumbing fixture (no API key)
     python run.py --real --b-n 12     # real OpenRouter run (needs .env)
 
-Prints per-arm iteration tables (verdict + per-subtype OOS), the OOS trajectory,
-the A+B ablation comparison, and a final headroom verdict (the three §5.4 signals).
+MOCK prints the synthetic-fixture iteration table (verdict + per-subtype OOS),
+the OOS trajectory, and the mechanism signals (the three §5.4 signals). It makes
+no headroom claim — it deterministically exercises evolve->falsify->rollback.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import argparse
 import os
 from pathlib import Path
 
-from qea.loop import Config, acceptance_signals, run_ablation, run_gdpval_soft
+from qea.loop import Config, acceptance_signals, run_synthetic_fixture, run_gdpval_soft
 
 
 def _load_dotenv(path: str = ".env") -> None:
@@ -69,19 +70,15 @@ def main() -> int:
     # MOCK = offline hard-verifier mechanism demo (synthetic A-pile + scripted edits).
     # REAL = evolve directly on the ORIGINAL GDPval finance tasks, soft-rubric-driven.
     if mock:
-        print(f"[run] mode=MOCK (hard-verifier mechanism demo) iters={cfg.n_iters} k={cfg.k} -> {cfg.results_dir}")
-        abl = run_ablation(cfg)
-        _print_arm(abl.arm1)
-        _print_arm(abl.arm2)
-        print("\n=== ABLATION (Arm1 A-only vs Arm2 A+B) ===")
-        for key, val in abl.comparison.items():
-            print(f"  {key}: {val}")
-        print("\n=== HEADROOM VERDICT (the three §5.4 signals, on Arm1) ===")
-        sig = acceptance_signals(abl.arm1)
+        print(f"[run] mode=MOCK (synthetic plumbing fixture; no headroom claim) iters={cfg.n_iters} k={cfg.k} -> {cfg.results_dir}")
+        fix = run_synthetic_fixture(cfg)
+        _print_arm(fix)
+        print("\n=== MECHANISM SIGNALS (synthetic fixture) ===")
+        sig = acceptance_signals(fix)
         for name, ok in sig.items():
             print(f"  [{'PASS' if ok else 'FAIL'}] {name}")
         overall = all(sig.values())
-        print(f"\n  ==> HEADROOM {'CONFIRMED' if overall else 'NOT CONFIRMED'} (MOCK).")
+        print(f"\n  ==> MECHANISM {'CONFIRMED' if overall else 'NOT CONFIRMED'} (MOCK plumbing).")
         return 0 if overall else 1
 
     print(f"[run] mode=REAL (soft-rubric-graded evolution on ORIGINAL GDPval finance tasks; "

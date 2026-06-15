@@ -1,14 +1,16 @@
-"""The evolve -> falsify -> rollback driver + the 2-arm ablation.
+"""The evolve -> falsify -> rollback driver.
 
-Per iteration: evaluate the incumbent harness with the hard verifier (and, in
-Arm 2, the soft judge) -> diagnose (ADB-lite) -> evolve_agent proposes ONE edit
-(L_t = 1) -> if the rejected-edit buffer blocks it, skip; else apply to a clone,
-re-evaluate, falsify (verdict), and keep (strict gate) or rollback (+ buffer).
-Three layers are persisted each iteration.
+Per iteration: evaluate the incumbent harness with the hard verifier -> diagnose
+(ADB-lite) -> evolve_agent proposes ONE edit (L_t = 1) -> if the rejected-edit
+buffer blocks it, skip; else apply to a clone, re-evaluate, falsify (verdict),
+and keep (strict gate) or rollback (+ buffer). Three layers are persisted each
+iteration.
 
-Arm 1 (iron-law-2 clean): evolve on A only -> freeze -> transfer-eval on B.
-Arm 2 (relaxes iron law 2): evolve on A+B (soft B in the loop). The comparison
-is the ablation: does soft-B in the loop help, or just add falsification noise?
+The offline `--mock` path drives this loop over a synthetic plumbing fixture
+(run_synthetic_fixture): a deterministic, no-API exercise of
+evolve->falsify->rollback->buffer + acceptance_signals. It makes NO headroom
+claim. The real path (run_gdpval_soft) evolves directly on the original GDPval
+finance tasks under a soft-rubric gate.
 """
 
 from __future__ import annotations
@@ -33,8 +35,7 @@ from .harness import Harness, seed_harness
 from .llm import make_llm
 from .manifest import attach_verdict, build_manifest
 from .observability import ExperimentDir, eval_to_dict
-from .benchmark import gdpval_benchmark
-from .tasks import load_gdpval_a_pile, load_gdpval_b_pile
+from .benchmark import gdpval_benchmark, synthetic_fixture_benchmark
 from .verifier import HardVerifier, LeakageGuard, SoftJudge, TaskResult
 
 
@@ -88,13 +89,6 @@ class ArmResult:
         d = asdict(self)
         d["records"] = [r.to_dict() if isinstance(r, IterationRecord) else r for r in self.records]
         return d
-
-
-@dataclass
-class AblationResult:
-    arm1: ArmResult
-    arm2: ArmResult
-    comparison: dict = field(default_factory=dict)
 
 
 class _DeliverableCache:
@@ -296,6 +290,18 @@ def acceptance_signals(arm: ArmResult) -> dict:
     }
 
 
+def run_synthetic_fixture(cfg: Config) -> ArmResult:
+    """Offline plumbing test: the scripted mock loop over the synthetic fixture.
+    Exercises evolve->falsify->rollback->buffer + acceptance_signals. NOT a real
+    benchmark; makes no headroom claim."""
+    llm = make_llm(cfg.mock)
+    bm = synthetic_fixture_benchmark()
+    hard, soft = HardVerifier(), SoftJudge(llm)
+    return run_arm("synthetic_fixture", bm.tasks, [], cfg=cfg, llm=llm,
+                   hard=hard, soft=soft, expdir=ExperimentDir(cfg.results_dir),
+                   b_baseline={"mean_score": 0.0, "n_oos": 0, "n": 0})
+
+
 @dataclass
 class SoftRunResult:
     n_tasks: int
@@ -465,34 +471,3 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
     )
     expdir.persist_arm("gdpval_soft", result.to_dict())
     return result
-
-
-def run_ablation(cfg: Config) -> AblationResult:
-    llm = make_llm(cfg.mock)
-    hard, soft = HardVerifier(), SoftJudge(llm)
-    a_tasks = load_gdpval_a_pile()
-    b_tasks = load_gdpval_b_pile(cfg.b_n, allow_download=not cfg.mock)
-    expdir = ExperimentDir(cfg.results_dir)
-
-    b_base_eval = evaluate(seed_harness(), b_tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k)
-    b_baseline = {"mean_score": _mean_score(b_base_eval), "n_oos": b_base_eval.total_oos(), "n": len(b_tasks)}
-
-    arm1 = run_arm("arm1_A_only", a_tasks, b_tasks, cfg=cfg, llm=llm, hard=hard, soft=soft, expdir=expdir, b_baseline=b_baseline)
-    arm2 = run_arm("arm2_A_plus_B", a_tasks, b_tasks, cfg=cfg, llm=llm, hard=hard, soft=soft, expdir=expdir, b_baseline=b_baseline)
-
-    comparison = {
-        "final_A_oos": {"arm1": arm1.final_oos, "arm2": arm2.final_oos},
-        "B_transfer_mean": {"arm1": arm1.b_transfer["mean_score"], "arm2": arm2.b_transfer["mean_score"], "baseline": b_baseline["mean_score"]},
-        "mean_eval_variance": {"arm1": arm1.mean_eval_variance, "arm2": arm2.mean_eval_variance},
-        "kept/rolledback/blocked": {
-            "arm1": [arm1.n_kept, arm1.n_rolled_back, arm1.n_blocked],
-            "arm2": [arm2.n_kept, arm2.n_rolled_back, arm2.n_blocked],
-        },
-        "note": (
-            "Arm2 puts soft-B in the loop (relaxes iron law 2). Compare eval-signal "
-            "variance (cleanliness of falsification) and whether B-in-loop changed "
-            "final A OOS or B transfer. In mock these values are illustrative."
-        ),
-    }
-    expdir.persist_ablation(comparison)
-    return AblationResult(arm1=arm1, arm2=arm2, comparison=comparison)

@@ -1,4 +1,5 @@
-"""Smoke test: the mock 2-arm run must exhibit the three §5.4 mechanism signals.
+"""Smoke test: the synthetic plumbing fixture must exhibit the three §5.4
+mechanism signals.
 
 Also checks the reference computations and the perturbation-probe logic directly,
 so the hard verifier itself is trusted (it is what drives evolution).
@@ -8,7 +9,7 @@ import math
 
 import pytest
 
-from qea.loop import Config, acceptance_signals, run_ablation
+from qea.loop import Config, acceptance_signals, run_synthetic_fixture
 from qea.tasks import (
     bs_call_reference,
     current_ratio_reference,
@@ -73,16 +74,16 @@ def test_perturbation_probe_kills_hardcoding():
 
 
 # --------------------------------------------------------------------------- #
-# The three §5.4 mechanism signals (mock 2-arm run).                          #
+# The three §5.4 mechanism signals (synthetic plumbing fixture).              #
 # --------------------------------------------------------------------------- #
 @pytest.fixture(scope="module")
-def ablation(tmp_path_factory):
+def synth_run(tmp_path_factory):
     cfg = Config(mock=True, n_iters=4, k=2, results_dir=str(tmp_path_factory.mktemp("results")))
-    return run_ablation(cfg)
+    return run_synthetic_fixture(cfg)
 
 
-def test_signal_1_causal_loop(ablation):
-    arm = ablation.arm1
+def test_signal_1_causal_loop(synth_run):
+    arm = synth_run
     r1 = arm.records[0]
     # EVAL -> DIAGNOSE -> WORKSPACE -> VERDICT all reference the same root cause
     assert r1.root_cause_tag == "Hardcoding"
@@ -90,28 +91,28 @@ def test_signal_1_causal_loop(ablation):
     assert "integrity_guard" in arm.final_harness_summary.get("validator", [])
 
 
-def test_signal_2_monotonic_oos(ablation):
-    traj = ablation.arm1.oos_trajectory
+def test_signal_2_monotonic_oos(synth_run):
+    traj = synth_run.oos_trajectory
     assert all(traj[i] <= traj[i + 1] for i in range(len(traj) - 1)), traj
     assert max(traj) > min(traj), traj                # strict rise at least once
     assert traj[0] == 0                               # seed hardcodes -> 0 OOS
 
 
-def test_signal_3_correct_rollback(ablation):
-    recs = ablation.arm1.records
+def test_signal_3_correct_rollback(synth_run):
+    recs = synth_run.records
     assert any(r.verdict == "HARMFUL" and not r.kept for r in recs)        # broke code_exec
     assert any(r.verdict == "INEFFECTIVE" and not r.kept for r in recs)    # overfit killed by probe
     assert any(r.blocked for r in recs)                                    # repeat blocked by buffer
 
 
-def test_acceptance_all_signals(ablation):
-    assert all(acceptance_signals(ablation.arm1).values())
+def test_acceptance_all_signals(synth_run):
+    assert all(acceptance_signals(synth_run).values())
 
 
-def test_capability_wall_never_solved(ablation):
+def test_capability_wall_never_solved(synth_run):
     # The amortization subtype includes a capability wall: even the evolved
     # harness cannot lift it (iron law 1), and it stays visible per-subtype.
-    n_oos, n_total = ablation.arm1.final_per_subtype["amortization"]
+    n_oos, n_total = synth_run.final_per_subtype["amortization"]
     assert n_oos < n_total
 
 
@@ -135,11 +136,6 @@ def test_gdpval_rubric_grader_continuous():
     assert abs(r.score - 0.75) < 1e-9
     # per-criterion verdicts are exposed on the result
     assert r.criterion_verdicts == {"1": True, "2": False, "3": True}
-
-
-def test_arm2_softB_adds_variance(ablation):
-    # Arm2 puts soft-B in the loop -> noisier falsification signal than Arm1.
-    assert ablation.arm2.mean_eval_variance > ablation.arm1.mean_eval_variance
 
 
 # --------------------------------------------------------------------------- #
