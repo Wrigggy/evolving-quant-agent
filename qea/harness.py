@@ -112,6 +112,11 @@ class Harness:
     def summary(self) -> dict[str, list[str]]:
         return {s: list(self.slots[s].keys()) for s in SLOTS if self.slots[s]}
 
+    def signature(self) -> str:
+        """Stable content hash of the whole harness (for the deliverable cache)."""
+        import json
+        return hashlib.md5(json.dumps(self.to_state(), sort_keys=True).encode()).hexdigest()
+
     # -- (de)serialization for checkpoint/resume --------------------------- #
     def to_state(self) -> dict:
         return {s: [{"name": c.name, "content": c.content, "effect": c.effect, "origin": c.origin}

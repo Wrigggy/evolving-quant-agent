@@ -231,3 +231,25 @@ def test_gdpval_local_fork_preferred():
     assert src == "local fork"
     assert len(df) == 220
     assert {"task_id", "rubric_json", "rubric_pretty"} <= set(df.columns)
+
+
+def test_deliverable_cache_stable_per_harness():
+    # The same harness must yield the SAME deliverable within a run (cache hit),
+    # so re-evaluating an unchanged harness does not wobble from regeneration.
+    from qea.harness import seed_harness, Edit
+    from qea.loop import _DeliverableCache
+    calls = {"n": 0}
+
+    def gen():
+        calls["n"] += 1
+        return f"deliverable v{calls['n']}"
+
+    cache = _DeliverableCache()
+    h = seed_harness()
+    a = cache.get_or_make("t1", h, gen)
+    b = cache.get_or_make("t1", h, gen)
+    assert a == b and calls["n"] == 1            # second call is a cache hit
+    # a different harness must miss the cache and regenerate
+    h2 = h.clone(); h2.apply(Edit(op="add", slot="memory", component_name="kb", content="x"))
+    c = cache.get_or_make("t1", h2, gen)
+    assert c == "deliverable v2" and calls["n"] == 2

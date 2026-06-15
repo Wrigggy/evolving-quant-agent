@@ -95,14 +95,32 @@ class AblationResult:
     comparison: dict = field(default_factory=dict)
 
 
-def _score_one(task, harness, *, mock, llm, hard, soft, k):
-    solution = quant_agent_solve(task, harness, mock=mock, llm=llm)
+class _DeliverableCache:
+    """Caches a worker deliverable by (task_id, harness signature) so the same
+    harness always produces the same text within a run — removes the regeneration
+    noise that caused single-sample regression-to-mean in the % gate."""
+    def __init__(self) -> None:
+        self._d: dict[tuple[str, str], str] = {}
+
+    def get_or_make(self, task_id: str, harness, make) -> str:
+        key = (task_id, harness.signature())
+        if key not in self._d:
+            self._d[key] = make()
+        return self._d[key]
+
+
+def _score_one(task, harness, *, mock, llm, hard, soft, k, cache=None):
+    if task.pile == "B" and cache is not None and not mock:
+        solution = cache.get_or_make(task.task_id, harness,
+                                     lambda: quant_agent_solve(task, harness, mock=mock, llm=llm))
+    else:
+        solution = quant_agent_solve(task, harness, mock=mock, llm=llm)
     if task.pile == "A":
         return task.task_id, hard.score(task, solution, harness, mock=mock, k=k), solution
     return task.task_id, soft.score(task, solution, harness, mock=mock, k=k), solution
 
 
-def evaluate(harness, tasks, *, mock, llm, hard, soft, k, label: str = "") -> EvalSummary:
+def evaluate(harness, tasks, *, mock, llm, hard, soft, k, label: str = "", cache=None) -> EvalSummary:
     """Score every task. Mock runs sequentially (instant, deterministic); real runs
     concurrently (<= QEA_MAX_CONCURRENCY) so 30 LLM-bound tasks finish in minutes,
     and a single task's failure/timeout degrades to a 0 rather than killing the eval.
@@ -111,7 +129,7 @@ def evaluate(harness, tasks, *, mock, llm, hard, soft, k, label: str = "") -> Ev
     deliverables: dict = {}
     if mock or len(tasks) <= 1:
         for t in tasks:
-            tid, res, sol = _score_one(t, harness, mock=mock, llm=llm, hard=hard, soft=soft, k=k)
+            tid, res, sol = _score_one(t, harness, mock=mock, llm=llm, hard=hard, soft=soft, k=k, cache=cache)
             results[tid] = res
             if t.pile == "B":
                 deliverables[tid] = sol if isinstance(sol, str) else ""
@@ -120,7 +138,7 @@ def evaluate(harness, tasks, *, mock, llm, hard, soft, k, label: str = "") -> Ev
     mw = max(1, min(int(os.environ.get("QEA_MAX_CONCURRENCY", "8")), 16))
     done, total = 0, len(tasks)
     with concurrent.futures.ThreadPoolExecutor(max_workers=mw) as ex:
-        futs = {ex.submit(_score_one, t, harness, mock=mock, llm=llm, hard=hard, soft=soft, k=k): t
+        futs = {ex.submit(_score_one, t, harness, mock=mock, llm=llm, hard=hard, soft=soft, k=k, cache=cache): t
                 for t in tasks}
         for fut in concurrent.futures.as_completed(futs):
             t = futs[fut]
@@ -321,6 +339,7 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
     llm = make_llm(cfg.mock)
     hard, soft = HardVerifier(), SoftJudge(llm)
     tasks = load_gdpval_finance(broad=cfg.gdpval_broad, allow_download=not cfg.mock)
+    cache = _DeliverableCache()
     expdir = ExperimentDir(cfg.results_dir)
     arm_dir = Path(cfg.results_dir) / "gdpval_soft"
     resume_path = arm_dir / "resume.json"
@@ -339,7 +358,7 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
             buffer._sigs.add(e["signature"]); buffer.entries.append(e)
         records = [IterationRecord(**r) for r in st["records"]]
         start_iter = st["last_iter"] + 1
-        inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="resume")
+        inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="resume", cache=cache)
         print(f"[resume] checkpoint at iter {start_iter}; incumbent slots={incumbent.summary()}; "
               f"noise={noise_margin}", flush=True)
     elif cfg.resume and arm_dir.exists():
@@ -357,17 +376,17 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
         incumbent = seed_harness()
         start_iter = (max(done) + 1) if done else 1
         noise_margin = noise_margin or 0.0276
-        inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="resume-seed")
+        inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="resume-seed", cache=cache)
         oos_traj = [inc_eval.total_oos()]
         ms_traj = [round(_mean_score(inc_eval), 4)]
         print(f"[resume] no checkpoint; incumbent=SEED (0 edits kept in iters 1-{max(done) if done else 0}); "
               f"reusing noise floor {noise_margin}; continuing at iter {start_iter} (prior iters in docs/PARTIAL_RUN)", flush=True)
     else:
         incumbent = seed_harness()
-        inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="seed")
+        inc_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="seed", cache=cache)
         # Noise floor: a 2nd fresh eval of the SAME seed harness; the gap between two
         # same-harness samples = the regeneration+judge noise an edit must beat.
-        noise_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="seed-noise")
+        noise_eval = evaluate(incumbent, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label="seed-noise", cache=cache)
         noise_margin = max(0.01, abs(_mean_score(inc_eval) - _mean_score(noise_eval)))
         print(f"[soft-gate] rubric-score noise floor {noise_margin:.4f} "
               f"(mean-score gain a candidate must beat)", flush=True)
@@ -395,7 +414,7 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
                                                      "manifest": mext, "workspace": incumbent.summary()})
         else:
             candidate = incumbent.clone(); candidate.apply(edit)
-            cand_eval = evaluate(candidate, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label=f"iter{it}")
+            cand_eval = evaluate(candidate, tasks, mock=cfg.mock, llm=llm, hard=hard, soft=soft, k=cfg.k, label=f"iter{it}", cache=cache)
             diff = compute_diff(inc_eval, cand_eval)
             evaluation = evaluate_changes(edit, diff)  # verdict taxonomy, audit trail
             inc_mean, cand_mean = _mean_score(inc_eval), _mean_score(cand_eval)
