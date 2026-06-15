@@ -287,6 +287,7 @@ def test_propose_real_prompt_has_no_answers():
     from qea.agents import _propose_real
     from qea.harness import seed_harness
     from qea.falsify import RejectedEditBuffer, EvalSummary
+    from qea.verifier import TaskResult
 
     captured = {}
     class LLM:
@@ -297,6 +298,12 @@ def test_propose_real_prompt_has_no_answers():
     diag = {"root_cause_tag": "MissingDomainKnowledge", "deficiency_category": "1 task",
             "suggested_target_slot": "memory", "predicted_fix_task_ids": ["t1"],
             "overview": "MissingDomainKnowledge deficiency", "_b_pile": True}
-    _propose_real(1, EvalSummary({}, {}), diag, seed_harness(), RejectedEditBuffer(), LLM())
-    assert "SECRET" not in captured["p"]
-    assert "MissingDomainKnowledge" in captured["p"]
+    # Populate the eval with sentinels in EVERY field the B-branch must NOT read
+    # (result subtype/error + the deliverable text). A firewall regression that
+    # reaches into eval_summary would leak one of these into the prompt.
+    res = {"t1": TaskResult("t1", "SECRET-SUBTYPE", "B", False, False, False, 0.3, 0.0,
+                            "SECRET-ERROR", criterion_verdicts={"1": False})}
+    evalsum = EvalSummary(res, {"t1": "SECRET-DELIVERABLE going-concern analysis"})
+    _propose_real(1, evalsum, diag, seed_harness(), RejectedEditBuffer(), LLM())
+    assert "SECRET" not in captured["p"]   # no ground truth from eval_summary leaked
+    assert "MissingDomainKnowledge" in captured["p"]  # sanitized signal present

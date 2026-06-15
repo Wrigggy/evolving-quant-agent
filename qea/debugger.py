@@ -68,6 +68,9 @@ def _failed_criteria_texts(task, verdicts: dict) -> list[str]:
 
 
 def diagnose_b_pile(eval_summary, tasks, *, llm, mode: str = "hybrid") -> SanitizedDiagnosis:
+    # COST: one Critic judge-call per FAILING B task + one classify call, per
+    # iteration (up to ~n+1 judge calls when most tasks fail). Keep in mind on
+    # large task sets / long runs.
     by_id = {t.task_id: t for t in tasks}
     critic = Critic(llm)
     notes, failing_ids, occ_counts = [], [], {}
