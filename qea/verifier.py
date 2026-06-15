@@ -293,7 +293,12 @@ class SoftJudge:
 class LeakageGuard:
     """Universal evaluator-layer anti-cheat: rejects an edit whose component content
     overlaps the benchmark's answer_corpus (rubric/answer material) above a
-    threshold. n-gram (token-shingle) containment; no embeddings (v1)."""
+    threshold. n-gram (token-shingle) containment; no embeddings (v1).
+
+    v1 LIMITATIONS (revisit when tuning `threshold`, currently an untuned
+    placeholder): an edit shorter than `n` tokens has no shingles and is never
+    flagged (a <5-word verbatim fragment slips through); detection is lexical
+    only (paraphrase evades it)."""
 
     def __init__(self, answer_corpus: list[str], threshold: float = 0.6, n: int = 5) -> None:
         self.n = n
