@@ -124,7 +124,7 @@ def evaluate(harness, tasks, *, mock, llm, hard, soft, k, label: str = "", cache
     """Score every task. Mock runs sequentially (instant, deterministic); real runs
     concurrently (<= QEA_MAX_CONCURRENCY) so 30 LLM-bound tasks finish in minutes,
     and a single task's failure/timeout degrades to a 0 rather than killing the eval.
-    B-pile deliverable texts are retained for the pairwise (GDPval-AA) grader."""
+    B-pile deliverable texts are retained for the B-pile debugger's critic."""
     results: dict = {}
     deliverables: dict = {}
     if mock or len(tasks) <= 1:
@@ -394,7 +394,7 @@ def run_gdpval_soft(cfg: Config) -> SoftRunResult:
         ms_traj = [round(_mean_score(inc_eval), 4)]
 
     for it in range(start_iter, cfg.n_iters + 1):
-        diag = diagnose(inc_eval, mock=cfg.mock, llm=llm)
+        diag = diagnose(inc_eval, tasks, mock=cfg.mock, llm=llm)
         edit = evolve_agent_propose(it, inc_eval, diag, incumbent, buffer, mock=cfg.mock, llm=llm)
 
         if edit is None or buffer.blocks(edit):

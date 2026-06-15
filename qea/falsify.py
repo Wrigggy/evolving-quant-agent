@@ -22,8 +22,8 @@ from dataclasses import dataclass, field
 @dataclass
 class EvalSummary:
     results: dict  # task_id -> TaskResult
-    # task_id -> the produced deliverable text (B-pile); kept so the GDPval-AA
-    # pairwise judge can compare candidate vs incumbent without regenerating.
+    # task_id -> the produced deliverable text (B-pile); kept so the B-pile
+    # debugger's critic can read each deliverable when attributing failures.
     deliverables: dict = field(default_factory=dict)
 
     def oos_ids(self) -> set[str]:

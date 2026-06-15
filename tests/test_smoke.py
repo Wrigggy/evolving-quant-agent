@@ -253,3 +253,50 @@ def test_deliverable_cache_stable_per_harness():
     h2 = h.clone(); h2.apply(Edit(op="add", slot="memory", component_name="kb", content="x"))
     c = cache.get_or_make("t1", h2, gen)
     assert c == "deliverable v2" and calls["n"] == 2
+
+
+def test_b_debugger_attributes_and_firewalls():
+    from qea.tasks import BTask
+    from qea.verifier import TaskResult
+    from qea.falsify import EvalSummary
+    from qea.debugger import diagnose_b_pile
+
+    class CriticLLM:
+        def complete(self, prompt, *, role="judge"):
+            if "Classify" in prompt:
+                return '{"root_cause_tag": "MissingDomainKnowledge", "target_slot": "memory"}'
+            return "The deliverable omits the going-concern analysis the rubric requires."
+
+    res = {"t1": TaskResult("t1", "Accountants and Auditors", "B", False, False, False, 0.3, 0.0,
+                            None, criterion_verdicts={"1": True, "2": False})}
+    tasks = [BTask(task_id="t1", subtype="Accountants and Auditors", prompt="audit memo", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "states ratios"},
+                                 {"points": 2, "criterion": "flags going-concern triggers"}],
+                   gold="SECRET-ANSWER-12345")]
+    diag = diagnose_b_pile(EvalSummary(res, {"t1": "weak memo"}), tasks, llm=CriticLLM(), mode="hybrid")
+    assert diag.root_cause_tag == "MissingDomainKnowledge"
+    assert diag.suggested_target_slot == "memory"
+    payload = diag.proposer_payload()
+    blob = repr(payload)
+    assert "SECRET-ANSWER-12345" not in blob
+    assert "going-concern triggers" not in blob
+    assert "t1" in payload["predicted_fix_task_ids"]
+
+
+def test_propose_real_prompt_has_no_answers():
+    from qea.agents import _propose_real
+    from qea.harness import seed_harness
+    from qea.falsify import RejectedEditBuffer, EvalSummary
+
+    captured = {}
+    class LLM:
+        def complete(self, prompt, *, role="agent"):
+            captured["p"] = prompt
+            return ('{"slot":"memory","component_name":"kb","content":"general finance knowledge",'
+                    '"summary":"add kb","predicted_fixes":["t1"],"risk_tasks":[]}')
+    diag = {"root_cause_tag": "MissingDomainKnowledge", "deficiency_category": "1 task",
+            "suggested_target_slot": "memory", "predicted_fix_task_ids": ["t1"],
+            "overview": "MissingDomainKnowledge deficiency", "_b_pile": True}
+    _propose_real(1, EvalSummary({}, {}), diag, seed_harness(), RejectedEditBuffer(), LLM())
+    assert "SECRET" not in captured["p"]
+    assert "MissingDomainKnowledge" in captured["p"]
