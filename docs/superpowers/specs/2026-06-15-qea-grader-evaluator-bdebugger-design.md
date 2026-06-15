@@ -62,16 +62,22 @@ Introduce a `Benchmark` that owns:
 Benchmark = { tasks, grader, answer_corpus }
 ```
 
-- **GDPval benchmark**: rubric grader (continuous %, §5), `answer_corpus` =
-  rubric-criteria text + gold human deliverable text.
-- **A-pile benchmark** (retained, demoted to optional hard sanity/transfer
-  probe): deterministic grader with the perturbation probe, `answer_corpus` =
-  reference numeric answers.
+- **GDPval benchmark** (the only *real* benchmark): rubric grader (continuous %,
+  §5), `answer_corpus` = rubric-criteria text + gold human deliverable text.
+- **A-pile is removed.** The original numeric A-pile tasks (option pricing,
+  amortization, NPV/IRR) were found capability-sufficient — no process headroom
+  (ROADMAP findings) — so they are dropped as a benchmark, along with the 2-arm
+  ablation (`run_ablation`) that compared A-only vs A+B (moot once law 2 and the
+  A benchmark are gone).
+- **A minimal synthetic fixture is kept** purely for the offline `--mock`
+  plumbing test — it is *not* a real benchmark and makes no headroom claim; it
+  exists to exercise evolve→falsify→rollback→buffer deterministically with no API.
 
 The **router** routes each task to its benchmark's `(grader, debugger)` pair.
-This is why the router stays important after law 2 is removed: A/B no longer
-decides *whether* a task enters the loop, but *which grader and which debugger*
-handle it.
+With A-pile gone there is one real benchmark today, but the routing abstraction
+is forward-looking: new benchmarks will be added later, and the router selects
+the grader+debugger per benchmark. (The old "A vs B pile" split is the
+single-benchmark special case of this.)
 
 ## 5. Grader (GDPval): rubric percentage
 
@@ -90,8 +96,10 @@ Change `SoftJudge._real_sample` (renamed conceptually to the GDPval grader):
 - The legacy "pass" threshold (`_SOFT_PASS` / parity) survives **only for
   reporting** (the per-occupation pass-rate table), never for the gate.
 
-A-pile grader (`HardVerifier`) is unchanged; the perturbation probe stays
-intrinsic to its score.
+The `HardVerifier` + perturbation probe survive **only inside the synthetic mock
+fixture** (offline plumbing test); there is no real A-pile benchmark. The probe
+remains documented as a grader-intrinsic anti-hardcode capability that future
+*parametric* benchmarks can revive.
 
 ## 6. Evaluator: keep/rollback gate revert
 
@@ -107,8 +115,9 @@ intrinsic to its score.
 **Companion denoising (required, not optional).** A single-sample mean-% gate has
 regression-to-mean noise (confirmed in `PARTIAL_RUN`). To make the reverted gate
 trustworthy, the worker's deliverables are **k-sampled** (per ROADMAP) so
-`cand_mean` is denoised before it reaches the evaluator. (Implementation detail
-in the plan: k-sample + optional cache per (task, harness-signature).)
+`cand_mean` is denoised before it reaches the evaluator. Confirmed companion: a
+**deliverable cache keyed by (task, harness-signature)** so re-evals are cheap
+and reproducible.
 
 ## 7. B-pile debugger (core new mechanism)
 
@@ -152,23 +161,24 @@ component content** (not the deliverable) against the benchmark's `answer_corpus
   and added to the rejected-edit buffer. Runs **pre-apply** (before grading).
 - `answer_corpus` is benchmark-supplied: A → reference numeric answers; B →
   rubric-criteria text + gold deliverable text.
-- Threshold: start conservative (concrete value + config key in the plan); catch
-  blatant copying first.
+- Threshold: **TBD (待定)** — deferred to a later decision. The implementation
+  exposes it as a config key with a conservative placeholder, but the actual
+  value is not fixed in this design.
 
-### Two-line anti-hardcode defense (the corrected, symmetric picture)
+### Two-line anti-hardcode defense
 
-| Defense | Layer | Catches | A-pile | B-pile |
+| Defense | Layer | Catches | Parametric benchmark (synthetic / future) | GDPval (B) |
 |---|---|---|---|---|
 | perturbation probe | grader (score-intrinsic) | hardcode → probe score drops | ✅ | ✘ (no params to perturb; a leaked answer scores *high*) |
 | leakage guard | evaluator (audits edit content) | component contains answer material | ✅ | ✅ (B's **only** content-level defense) |
 
-Key asymmetry that makes the guard necessary: **A-pile cheating shows up in the
-score (grader catches it); B-pile cheating shows up in the component content
-(only the guard catches it)** — because a leaked B answer *satisfies* the rubric
-and scores higher, so the grader cannot see it. The guard is uniform; only the
-`answer_corpus` differs per benchmark. For A-pile it is largely redundant with
-the probe, kept for uniformity and to future-proof benchmarks whose grader
-cannot perturb.
+Key asymmetry that makes the guard necessary on B: **parametric-task cheating
+shows up in the score (grader catches it); B-pile cheating shows up in the
+component content (only the guard catches it)** — because a leaked B answer
+*satisfies* the rubric and scores higher, so the grader cannot see it. The guard
+is uniform; only the `answer_corpus` differs per benchmark. Today it is active on
+GDPval and on the synthetic fixture; it future-proofs any later benchmark whose
+grader cannot perturb.
 
 ## 9. Information flow
 
@@ -200,27 +210,33 @@ iron-law-4; three-layer manifest persistence; checkpoint/resume.
 
 - **`qea/verifier.py`** → conceptually `grader.py`: drop `_quantize_parity`;
   expose per-criterion verdicts on `TaskResult`; add the **Critic**; add the
-  **LeakageGuard**; **delete `PairwiseJudge`** + `bt_elo`.
+  **LeakageGuard**; **delete `PairwiseJudge`** + `bt_elo`. Keep `HardVerifier` +
+  the probe only as the synthetic mock fixture's grader.
 - **`qea/agents.py`**: new B-pile branch in `diagnose` (rubric verdicts + critic
   → tags/attribution, dual-mode); firewall in `_propose_real` (sanitized input
   only).
 - **`qea/falsify.py`**: GDPval gate → `decide_keep_soft`; add `LEAKAGE_BLOCKED`
   handling; remove `decide_keep_pairwise`.
 - **`qea/loop.py`**: rewire `run_gdpval_soft` to the % gate + B-debugger + leakage
-  guard; remove the pairwise anchor/Elo/replication machinery; introduce the
-  `Benchmark` abstraction (tasks + grader + answer_corpus); add worker
-  k-sampling/caching.
+  guard; remove the pairwise anchor/Elo/replication machinery; **remove the 2-arm
+  ablation** (`run_ablation` / A-only-vs-A+B `run_arm`); introduce the `Benchmark`
+  abstraction (tasks + grader + answer_corpus); add worker k-sampling + a
+  per-(task, harness-signature) deliverable cache.
 - **`qea/tasks.py`**: load gold deliverable text into the GDPval benchmark's
-  `answer_corpus`.
+  `answer_corpus`; **drop the real A-pile task loaders**, keeping only the
+  synthetic fixture used by `--mock`.
 - **`qea/harness.py`**: no structural change expected (the leakage guard is
   evaluator-side, not a harness slot).
+- **`run.py` / tests**: `--mock` now drives the synthetic plumbing fixture; the
+  ablation entry points are removed.
 
 ## 12. Acceptance criteria for this change
 
 1. **Firewall holds**: in a unit test, the proposer's input dict provably
    contains no rubric-answer / gold substring (assert sanitization).
-2. **Leakage guard fires**: an edit whose content embeds a gold-deliverable
-   n-gram is `LEAKAGE_BLOCKED` and buffered, on both an A and a B fixture.
+2. **Leakage guard fires**: an edit whose content embeds an answer-corpus n-gram
+   is `LEAKAGE_BLOCKED` and buffered — tested on the GDPval (B) corpus and on the
+   synthetic fixture corpus.
 3. **Grader is absolute**: GDPval grader returns a continuous % in [0,1] (no
    `{0,0.5,1}` collapse) and the per-criterion verdicts are present on the result.
 4. **Evaluator decides on %**: keep/rollback goes through `decide_keep_soft`;
@@ -228,14 +244,17 @@ iron-law-4; three-layer manifest persistence; checkpoint/resume.
 5. **B-debugger attributes**: on a seeded failing B fixture, `diagnose` produces a
    non-empty root-cause tag + target-slot suggestion derived from the critic note
    (not from A-pile `base_pass/probe_pass`).
-6. The mock acceptance signals (causal connectivity, monotonic OOS, correct
-   rollback) still pass for the A-pile path.
+6. The synthetic mock fixture's plumbing signals (causal connectivity, monotonic
+   progress, correct rollback, buffer block) still pass offline with no API.
 
-## 13. Deferred (not in this change)
+## 13. Deferred / out of scope
 
+- **New benchmarks** — the `Benchmark` abstraction is built so more can be added
+  later; only GDPval ships now. A-pile is removed (no headroom), not deferred.
+- **Leakage-guard threshold value** — TBD (§8); only the mechanism + config key
+  land now.
 - Held-out task split / regime split (still deferred per ROADMAP).
 - Multi-task aggregation rule for attribution (considered, not adopted — single-
   task failures remain actionable).
-- Pairwise / Elo as a *reporting-only* trajectory (dropped entirely, not retained
-  as a diagnostic).
+- Pairwise / Elo (dropped entirely, not retained even as a diagnostic).
 - Semantic (embedding) leakage detection — v1 guard is n-gram/substring only.
