@@ -34,7 +34,7 @@ from .llm import make_llm
 from .manifest import attach_verdict, build_manifest
 from .observability import ExperimentDir, eval_to_dict
 from .benchmark import gdpval_benchmark
-from .tasks import load_gdpval_a_pile, load_gdpval_b_pile, load_gdpval_finance, rubric_corpus
+from .tasks import load_gdpval_a_pile, load_gdpval_b_pile
 from .verifier import HardVerifier, LeakageGuard, SoftJudge, TaskResult
 
 
