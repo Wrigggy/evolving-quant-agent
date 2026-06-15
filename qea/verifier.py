@@ -235,10 +235,13 @@ class SoftJudge:
         else:
             pairs = [self._real_sample(task, deliverable) for _ in range(k)]
             samples = [p[0] for p in pairs]
-            verdicts = pairs[-1][1]  # last sample's per-criterion verdicts (for the debugger)
+            # Single-sample snapshot: per-call verdicts may disagree across k and
+            # are not merged; a snapshot is sufficient for the debugger's
+            # observation (the SCORE is the median; verdicts are diagnostic only).
+            verdicts = pairs[-1][1]
         med = statistics.median(samples)
         var = statistics.pvariance(samples) if len(samples) > 1 else 0.0
-        thresh = _SOFT_PASS if mock else 0.6  # reporting-only pass threshold (matches docs)
+        thresh = _SOFT_PASS  # reporting-only pass threshold (same 0.60 for mock + real)
         oos = med >= thresh
         return TaskResult(task.task_id, task.subtype, "B", oos, oos, oos, med, var, None,
                           criterion_verdicts=verdicts)
