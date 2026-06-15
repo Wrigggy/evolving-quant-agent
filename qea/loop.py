@@ -44,7 +44,6 @@ class Config:
     mock: bool = True
     n_iters: int = 4          # mock scripted sequence needs 4
     k: int = 2                # k-repeat denoise
-    b_n: int = 12             # real B-pile sample size
     gdpval_broad: bool = True  # ~30 broad finance occupations vs ~25 core
     resume: bool = False       # continue a prior gdpval_soft run from its checkpoint
     results_dir: str = "results/latest"

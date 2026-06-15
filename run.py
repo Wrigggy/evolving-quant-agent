@@ -2,7 +2,7 @@
 """QEA v0 entrypoint.
 
     python run.py --mock              # offline synthetic plumbing fixture (no API key)
-    python run.py --real --b-n 12     # real OpenRouter run (needs .env)
+    python run.py --real              # real OpenRouter run (needs .env)
 
 MOCK prints the synthetic-fixture iteration table (verdict + per-subtype OOS),
 the OOS trajectory, and the mechanism signals (the three §5.4 signals). It makes
@@ -54,7 +54,6 @@ def main() -> int:
     mode.add_argument("--real", action="store_true", help="real OpenRouter run (needs .env)")
     ap.add_argument("--iters", type=int, default=4)
     ap.add_argument("--k", type=int, default=2)
-    ap.add_argument("--b-n", type=int, default=12)
     ap.add_argument("--core", action="store_true", help="real mode: ~25 core finance occupations instead of ~30 broad")
     ap.add_argument("--resume", action="store_true", help="real mode: continue a prior gdpval_soft run from its checkpoint")
     ap.add_argument("--results-dir", default="results/latest")
@@ -64,7 +63,7 @@ def main() -> int:
     mock = not args.real  # mock is the default
     if mock:
         os.environ["MOCK_LLM"] = "1"
-    cfg = Config(mock=mock, n_iters=args.iters, k=args.k, b_n=args.b_n,
+    cfg = Config(mock=mock, n_iters=args.iters, k=args.k,
                  gdpval_broad=not args.core, resume=args.resume, results_dir=args.results_dir)
 
     # MOCK = offline synthetic plumbing fixture (deterministic, no API key).

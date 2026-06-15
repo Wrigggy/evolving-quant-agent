@@ -453,33 +453,3 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> l
         except Exception as exc:  # noqa: BLE001
             print(f"[tasks] real GDPval finance load failed ({type(exc).__name__}: {exc}); using offline fixtures")
     return list(_B_FIXTURES)
-
-
-def load_gdpval_b_pile(n: int = 12, *, allow_download: bool = True) -> list[BTask]:
-    """Real GDPval 'Finance and Insurance' deliverable tasks (soft-judged).
-
-    Reads the local fork in data/gdpval/ (scripts/fork_gdpval.py), falling back
-    to the public HuggingFace parquet, then to bundled offline fixtures so mock
-    + offline runs always work.
-    """
-    if allow_download:
-        try:
-            df, _src = _load_gdpval_df()
-            fin = df[df["sector"] == "Finance and Insurance"].head(n)
-            out: list[BTask] = []
-            for _, row in fin.iterrows():
-                out.append(
-                    BTask(
-                        task_id=str(row["task_id"]),
-                        subtype="valuation",  # coarse; real per-occupation mapping is ROADMAP
-                        prompt=str(row["prompt"]),
-                        rubric=str(row.get("rubric_pretty", "")),
-                        rubric_items=_parse_rubric_json(row.get("rubric_json")),
-                        gdpval_lineage=f"gdpval:{row['occupation']} (real)",
-                    )
-                )
-            if out:
-                return out
-        except Exception as exc:  # noqa: BLE001 - any failure -> fixtures
-            print(f"[tasks] real GDPval B-pile unavailable ({type(exc).__name__}: {exc}); using offline fixtures")
-    return list(_B_FIXTURES)

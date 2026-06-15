@@ -21,7 +21,7 @@ python3 -m pytest
 # Real run on OpenRouter (deepseek-v4-pro). Needs .env (see .env.example).
 pip install -e ".[real,gdpval]"
 cp .env.example .env   # then set OPENROUTER_API_KEY
-python3 run.py --real --b-n 12
+python3 run.py --real
 ```
 
 **Two run modes:**
