@@ -84,27 +84,23 @@ def main() -> int:
         print(f"\n  ==> HEADROOM {'CONFIRMED' if overall else 'NOT CONFIRMED'} (MOCK).")
         return 0 if overall else 1
 
-    print(f"[run] mode=REAL (GDPval-AA pairwise-graded evolution on ORIGINAL GDPval finance tasks; "
+    print(f"[run] mode=REAL (soft-rubric-graded evolution on ORIGINAL GDPval finance tasks; "
           f"iron law 2 relaxed by design) iters={cfg.n_iters} k={cfg.k} broad={cfg.gdpval_broad} -> {cfg.results_dir}")
     res = run_gdpval_soft(cfg)
     _print_soft(res)
-    final_wr = res.winrate_trajectory[-1] if res.winrate_trajectory else 0.5
-    rose = final_wr > 0.5 + res.pairwise_margin
-    print(f"\n  ==> SOFT HEADROOM {'OBSERVED' if rose else 'NOT OBSERVED'} (REAL, GDPval-AA pairwise): "
-          f"win rate vs frozen seed {final_wr:.3f} (null margin {res.pairwise_margin:.3f}), "
-          f"Elo vs seed {res.final_elo_vs_seed:.0f} (anchor 1000), {res.n_kept} edit(s) kept. "
+    rose = res.mean_score_trajectory[-1] > res.mean_score_trajectory[0] + res.noise_margin
+    print(f"\n  ==> SOFT HEADROOM {'OBSERVED' if rose else 'NOT OBSERVED'} (REAL, mean-rubric-score gate): "
+          f"mean score {res.mean_score_trajectory[0]:.3f} -> {res.mean_score_trajectory[-1]:.3f} "
+          f"(noise floor {res.noise_margin:.3f}), {res.n_kept} edit(s) kept. "
           f"NOTE: soft signal (relaxes iron law 2) — treat as indicative, not proof.")
     return 0 if rose else 1
 
 
 def _print_soft(res) -> None:
-    print(f"\n=== GDPval-soft evolution ({res.n_tasks} original tasks, GDPval-AA pairwise gate) ===")
-    print(f"  pairwise null margin (win share to beat 0.5 by): {res.pairwise_margin}")
-    print(f"  win rate vs frozen seed trajectory: {res.winrate_trajectory}")
-    print(f"  Elo vs seed (Bradley-Terry, seed=1000, ties excluded): {res.final_elo_vs_seed}")
-    print(f"  rubric-score noise floor (diagnostic): {res.noise_margin}")
+    print(f"\n=== GDPval-soft evolution ({res.n_tasks} original tasks, mean-rubric-score gate) ===")
+    print(f"  rubric-score noise floor (gain a candidate must beat): {res.noise_margin}")
     print(f"  OOS trajectory (#score>=0.6): {res.oos_trajectory}")
-    print(f"  mean rubric score trajectory (diagnostic): {res.mean_score_trajectory}")
+    print(f"  mean rubric score trajectory (the gate signal): {res.mean_score_trajectory}")
     print(f"  {'iter':>4} {'verdict':<18} {'kept':<8} {'oos':>4}")
     for r in res.records:
         flag = "BLOCKED" if r.blocked else ("keep" if r.kept else "rollback")
