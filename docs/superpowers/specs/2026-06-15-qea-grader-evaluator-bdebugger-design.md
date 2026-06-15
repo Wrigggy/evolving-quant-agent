@@ -63,7 +63,9 @@ Benchmark = { tasks, grader, answer_corpus }
 ```
 
 - **GDPval benchmark** (the only *real* benchmark): rubric grader (continuous %,
-  §5), `answer_corpus` = rubric-criteria text + gold human deliverable text.
+  §5), `answer_corpus` = **rubric-criteria text** (v1). Gold human deliverables
+  are binary xlsx/pptx behind URLs (`BTask.gold` is never populated), so
+  gold-deliverable-*text* extraction is deferred (§13), not part of the corpus now.
 - **A-pile is removed.** The original numeric A-pile tasks (option pricing,
   amortization, NPV/IRR) were found capability-sufficient — no process headroom
   (ROADMAP findings) — so they are dropped as a benchmark, along with the 2-arm
@@ -159,8 +161,9 @@ component content** (not the deliverable) against the benchmark's `answer_corpus
 - Normalized n-gram / substring overlap above a configurable threshold →
   **reject the edit** with a new verdict `LEAKAGE_BLOCKED`, recorded distinctly
   and added to the rejected-edit buffer. Runs **pre-apply** (before grading).
-- `answer_corpus` is benchmark-supplied: A → reference numeric answers; B →
-  rubric-criteria text + gold deliverable text.
+- `answer_corpus` is benchmark-supplied: synthetic fixture → reference numeric
+  answers; GDPval (B) → **rubric-criteria text** (v1; gold-deliverable text
+  deferred per §13).
 - Threshold: **TBD (待定)** — deferred to a later decision. The implementation
   exposes it as a config key with a conservative placeholder, but the actual
   value is not fixed in this design.
@@ -252,7 +255,10 @@ iron-law-4; three-layer manifest persistence; checkpoint/resume.
 - **New benchmarks** — the `Benchmark` abstraction is built so more can be added
   later; only GDPval ships now. A-pile is removed (no headroom), not deferred.
 - **Leakage-guard threshold value** — TBD (§8); only the mechanism + config key
-  land now.
+  land now (a placeholder default ships, untuned).
+- **Gold-deliverable-text in the leakage corpus** — deferred. GDPval gold is
+  binary xlsx/pptx behind URLs; extracting text needs fetch + Office parsing. v1
+  corpus is rubric-criteria text only.
 - Held-out task split / regime split (still deferred per ROADMAP).
 - Multi-task aggregation rule for attribution (considered, not adopted — single-
   task failures remain actionable).
