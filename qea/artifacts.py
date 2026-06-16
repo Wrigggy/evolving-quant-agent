@@ -7,6 +7,7 @@ openpyxl-written formulas carry no computed value, so we render the formula STRI
 literal values, not formula results — value computation is sub-project 3."""
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 
@@ -52,3 +53,29 @@ def render_xlsx(path, max_rows: int = 100, max_cols: int = 30) -> str:
         if ws.max_row > max_rows or ws.max_column > max_cols:
             lines.append(f"  ...(truncated to {max_rows}x{max_cols})")
     return "\n".join(lines)
+
+
+def assemble_artifact_deliverable(llm_text: str, task, artifact_dir) -> str:
+    """If the worker emitted openpyxl code, run it in the subprocess sandbox; on
+    success persist the .xlsx under <artifact_dir>/<task_id>/ and return
+    narrative + rendered artifact. Otherwise (text task or failed exec) return the
+    text unchanged — never raises, so a bad workbook just degrades to its narrative."""
+    code = extract_openpyxl_code(llm_text)
+    if code is None:
+        return llm_text
+    from .sandbox import exec_artifact          # local import: sandbox is stdlib-only
+    res = exec_artifact(code)
+    if res.status != "success" or not res.paths:
+        if res.work_dir:
+            shutil.rmtree(res.work_dir, ignore_errors=True)
+        return llm_text
+    renderings = []
+    for p in res.paths:
+        renderings.append(render_xlsx(p))
+        if artifact_dir is not None:
+            dest = Path(artifact_dir) / task.task_id
+            dest.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(p, dest / p.name)
+    shutil.rmtree(res.work_dir, ignore_errors=True)
+    narrative = _strip_code_blocks(llm_text)
+    return (narrative + "\n\n" + "\n\n".join(renderings)).strip()

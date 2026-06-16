@@ -412,3 +412,30 @@ def test_extract_openpyxl_code():
     # robust to fence-tag variation (```py / ```Python) and whitespace in .save(
     assert extract_openpyxl_code("```py\nimport openpyxl\nopenpyxl.Workbook().save( 'x.xlsx' )\n```") is not None
     assert extract_openpyxl_code("```Python\nimport openpyxl\nopenpyxl.Workbook().save('x.xlsx')\n```") is not None
+
+
+def _BTaskStub(tid="b1"):
+    from qea.tasks import BTask
+    return BTask(task_id=tid, subtype="Accountants and Auditors", prompt="produce report.xlsx", rubric="")
+
+def test_assemble_artifact_deliverable_produces_and_persists(tmp_path):
+    import pytest
+    pytest.importorskip("openpyxl")
+    from qea.artifacts import assemble_artifact_deliverable
+    llm_text = ("Here is the workbook.\n```python\nimport openpyxl\n"
+                "wb=openpyxl.Workbook(); ws=wb.active; ws.title='Summary'; ws['A1']='Total'; ws['B1']=42\n"
+                "wb.save('report.xlsx')\n```")
+    artifact_dir = tmp_path / "artifacts"
+    out = assemble_artifact_deliverable(llm_text, _BTaskStub(), artifact_dir)
+    assert "[ARTIFACT FILE: report.xlsx]" in out and "'Total'" in out
+    assert "import openpyxl" not in out            # raw code stripped from the narrative
+    assert (artifact_dir / "b1" / "report.xlsx").exists()   # persisted under <dir>/<task_id>/
+
+def test_assemble_artifact_deliverable_text_and_error_paths(tmp_path):
+    from qea.artifacts import assemble_artifact_deliverable
+    # plain text task -> unchanged
+    assert assemble_artifact_deliverable("just a memo", _BTaskStub(), tmp_path) == "just a memo"
+    # erroring artifact code -> graceful: keep the narrative, no crash
+    bad = "```python\nimport openpyxl\nraise RuntimeError('x')\nwb=1\n.save('y.xlsx')\n```narrative"
+    out = assemble_artifact_deliverable(bad, _BTaskStub(), tmp_path)
+    assert "[ARTIFACT FILE" not in out             # nothing produced
