@@ -194,3 +194,37 @@ before it reaches the evaluator. Confirmed companion to the %-gate.
 - **Soft-verifier transfer eval (frozen harness only):** GDPval B-pile (current),
   EconAgent (ACL 2024), FinanceBench.
 - **Live final validation (not in the loop):** Agent Market Arena (WWW 2026).
+
+## GDPval file-grading sub-projects (v0.1 onward)
+
+Sub-project 1 (file-producing worker) shipped in v0.1. Two remain:
+
+- **Sub-project 2 — gold human-deliverable file acquisition.** Fetch and cache the
+  binary files behind `deliverable_file_urls` in the GDPval fork (`data/gdpval/`).
+  Files ship for 17/25 finance tasks (xlsx / pptx). Needed to: (a) add gold-
+  deliverable text to the leakage corpus for a stronger leakage signal, and (b)
+  enable pairwise-vs-gold multimodal grading in sub-project 3.
+- **Sub-project 3 — faithful file-aware / multimodal grader.** xlsx/pptx →
+  LibreOffice-headless render → page images → multimodal judge, pairwise vs the
+  gold human deliverable. AHE's `read_visual_file` is the reference pattern.
+  Also: formula-value computation deferred from v0.1 (LibreOffice recalc on the
+  produced file, or a `formulas`/`pycel` pip engine) so rendered cell values are
+  numeric rather than formula strings.
+
+## Future directions (post sub-project 3)
+
+- **Tool synthesis.** Let evolved `tool` components carry executable code run by an
+  agentic worker — not just inert descriptors. AHE (`nexau.archs.sandbox` + the
+  `run_code_tool` / file / web / session toolset) is the reference substrate;
+  `exec_artifact` is the minimal stdlib slice of it. The trajectory is: seed
+  `tool:xlsx_writer` (v0.1, static effect tag) → evolved tools carry real code →
+  agentic worker dispatches them dynamically.
+- **Container / cloud exec isolation.** `exec_artifact` v0.1 uses a subprocess
+  posture (temp `work_dir`, scrubbed env, kill-on-timeout). Harden to docker
+  container or nexau `E2BSandbox` before running adversarially generated or
+  user-supplied code at scale.
+- **Couple to AHE / evolve a real agentic harness (Track 2).** The broader
+  direction — coupling QEA to the full AHE substrate and evolving a real agentic
+  harness (tool dispatch, multi-step reasoning, web/file/session tools) — is being
+  tracked as a parallel branch. `exec_artifact` is a stepping stone; the full
+  harness is the destination.

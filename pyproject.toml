@@ -1,6 +1,6 @@
 [project]
 name = "evolving-quant-agent"
-version = "0.0.1"
+version = "0.1.0"
 description = "QEA v0 — a task-family-aware evolutionary harness for quant/finance numeric tasks. Reuses the AHE evolve->falsify->rollback loop with quant semantics."
 requires-python = ">=3.10"
 # Core is PURE STDLIB on purpose (v0 is a mechanism check): `python run.py --mock`
