@@ -7,7 +7,6 @@ openpyxl-written formulas carry no computed value, so we render the formula STRI
 literal values, not formula results — value computation is sub-project 3."""
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 
