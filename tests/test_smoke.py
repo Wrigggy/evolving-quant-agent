@@ -439,3 +439,14 @@ def test_assemble_artifact_deliverable_text_and_error_paths(tmp_path):
     bad = "```python\nimport openpyxl\nraise RuntimeError('x')\nwb=1\n.save('y.xlsx')\n```narrative"
     out = assemble_artifact_deliverable(bad, _BTaskStub(), tmp_path)
     assert "[ARTIFACT FILE" not in out             # nothing produced
+
+def test_assemble_artifact_deliverable_survives_corrupt_xlsx(tmp_path):
+    import pytest
+    pytest.importorskip("openpyxl")
+    from qea.artifacts import assemble_artifact_deliverable
+    # child exits 0 but writes a NON-xlsx file named report.xlsx -> exec "success" but
+    # render_xlsx would raise BadZipFile. Must degrade to a placeholder, not crash.
+    bad = ("```python\nimport openpyxl\n# not a real .save( call:\n"
+           "open('report.xlsx','w').write('not a zip')\n```done")
+    out = assemble_artifact_deliverable(bad, _BTaskStub(), tmp_path)
+    assert "report.xlsx" in out and "unreadable workbook" in out   # placeholder, no raise

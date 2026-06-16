@@ -59,7 +59,9 @@ def assemble_artifact_deliverable(llm_text: str, task, artifact_dir) -> str:
     """If the worker emitted openpyxl code, run it in the subprocess sandbox; on
     success persist the .xlsx under <artifact_dir>/<task_id>/ and return
     narrative + rendered artifact. Otherwise (text task or failed exec) return the
-    text unchanged — never raises, so a bad workbook just degrades to its narrative."""
+    text unchanged. NEVER raises: a failed exec degrades to the narrative; a corrupt
+    or unreadable produced file degrades to a placeholder line; the temp work_dir is
+    always scrubbed."""
     code = extract_openpyxl_code(llm_text)
     if code is None:
         return llm_text
@@ -70,12 +72,20 @@ def assemble_artifact_deliverable(llm_text: str, task, artifact_dir) -> str:
             shutil.rmtree(res.work_dir, ignore_errors=True)
         return llm_text
     renderings = []
-    for p in res.paths:
-        renderings.append(render_xlsx(p))
-        if artifact_dir is not None:
-            dest = Path(artifact_dir) / task.task_id
-            dest.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(p, dest / p.name)
-    shutil.rmtree(res.work_dir, ignore_errors=True)
+    try:
+        for p in res.paths:
+            try:
+                renderings.append(render_xlsx(p))
+            except Exception:  # noqa: BLE001 - a corrupt/non-openpyxl .xlsx must not lose the deliverable
+                renderings.append(f"[ARTIFACT FILE: {p.name}] (unreadable workbook)")
+            if artifact_dir is not None:
+                try:
+                    dest = Path(artifact_dir) / task.task_id
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(p, dest / p.name)
+                except Exception:  # noqa: BLE001 - persistence is best-effort; the rendering is what's graded
+                    pass
+    finally:
+        shutil.rmtree(res.work_dir, ignore_errors=True)   # always scrub the temp dir
     narrative = _strip_code_blocks(llm_text)
     return (narrative + "\n\n" + "\n\n".join(renderings)).strip()
