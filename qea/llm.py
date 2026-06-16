@@ -106,5 +106,69 @@ class OpenRouterLLM:
         raise RuntimeError(f"LLM failed after {self.max_retries} retries: {last}")
 
 
+class AnthropicLLM:
+    """Anthropic-Messages-protocol backend (e.g. DashScope's Anthropic-compatible
+    gateway at https://dashscope.aliyuncs.com/apps/anthropic). Same per-role model
+    resolution + retry/backoff as OpenRouterLLM, but speaks `messages.create`. Auth
+    via a Bearer token (ANTHROPIC_AUTH_TOKEN-style), matching the Claude Code config.
+    Selected by make_llm when QEA_ANTHROPIC_AUTH_TOKEN (or ANTHROPIC_AUTH_TOKEN) is set."""
+
+    ROLE_MODEL_ENV = {
+        "quant_agent": "QEA_QUANT_AGENT_MODEL",
+        "evolve_agent": "QEA_EVOLVE_AGENT_MODEL",
+        "judge": "QEA_JUDGE_MODEL",
+    }
+
+    def __init__(self) -> None:
+        try:
+            from anthropic import Anthropic  # optional dep
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError("anthropic backend needs `pip install anthropic`") from exc
+        token = os.environ.get("QEA_ANTHROPIC_AUTH_TOKEN") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+        if not token:
+            raise RuntimeError("QEA_ANTHROPIC_AUTH_TOKEN not set (anthropic backend)")
+        base = (os.environ.get("QEA_ANTHROPIC_BASE_URL")
+                or os.environ.get("ANTHROPIC_BASE_URL")
+                or "https://api.anthropic.com")
+        self.timeout = float(os.environ.get("QEA_REQUEST_TIMEOUT", "90"))
+        # max_retries=0: we own the retry/backoff loop (parity with OpenRouterLLM).
+        self.client = Anthropic(base_url=base, auth_token=token, timeout=self.timeout, max_retries=0)
+        self.max_retries = int(os.environ.get("QEA_MAX_RETRIES", "5"))
+        self.backoff = float(os.environ.get("QEA_BACKOFF_BASE_SEC", "2.0"))
+        self.max_tokens = int(os.environ.get("QEA_ANTHROPIC_MAX_TOKENS", "8192"))
+
+    def _model(self, role: str) -> str:
+        env = self.ROLE_MODEL_ENV.get(role, "QEA_QUANT_AGENT_MODEL")
+        return os.environ.get(env, "deepseek-v4-pro[1m]")
+
+    def complete(self, prompt: str, *, role: str = "agent") -> str:
+        model = self._model(role)
+        last: Exception | None = None
+        for attempt in range(self.max_retries):
+            try:
+                resp = self.client.messages.create(
+                    model=model,
+                    max_tokens=self.max_tokens,
+                    temperature=0.2,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                parts = [b.text for b in getattr(resp, "content", []) if getattr(b, "type", None) == "text"]
+                content = "".join(parts).strip()
+                if not content:
+                    raise RuntimeError("empty content (anthropic endpoint returned no text)")
+                return content
+            except Exception as exc:  # noqa: BLE001 - retry transient errors
+                last = exc
+                wait = self.backoff * (2 ** attempt)
+                print(f"[llm] {role} attempt {attempt + 1} failed ({type(exc).__name__}); retry in {wait:.1f}s")
+                time.sleep(wait)
+        raise RuntimeError(f"LLM failed after {self.max_retries} retries: {last}")
+
+
 def make_llm(mock: bool):
-    return MockLLM() if mock else OpenRouterLLM()
+    if mock:
+        return MockLLM()
+    # Prefer the Anthropic/DashScope backend when its token is configured; else OpenRouter.
+    if os.environ.get("QEA_ANTHROPIC_AUTH_TOKEN") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+        return AnthropicLLM()
+    return OpenRouterLLM()

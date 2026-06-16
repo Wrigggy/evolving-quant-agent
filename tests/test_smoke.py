@@ -218,6 +218,46 @@ def test_provider_pin_is_per_model_official(monkeypatch):
     assert provider_for("qwen/qwen3.7-max", pmap) == "other"        # env overrides built-in
 
 
+def test_anthropic_llm_routes_role_to_model_and_parses(monkeypatch):
+    # AnthropicLLM resolves per-role model, calls messages.create, parses text blocks.
+    anthropic = pytest.importorskip("anthropic")
+    from qea.llm import AnthropicLLM
+    seen = {}
+
+    class FakeBlock:
+        type = "text"
+        def __init__(self, text): self.text = text
+
+    class FakeResp:
+        def __init__(self, text): self.content = [FakeBlock(text)]
+
+    class FakeClient:
+        def __init__(self, **kw):
+            seen["init"] = kw
+            self.messages = self
+        def create(self, *, model, max_tokens, temperature, messages):
+            seen["model"] = model
+            return FakeResp(f"hello from {model}")
+
+    monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
+    monkeypatch.setenv("QEA_ANTHROPIC_AUTH_TOKEN", "tok")
+    monkeypatch.setenv("QEA_ANTHROPIC_BASE_URL", "https://example/apps/anthropic")
+    monkeypatch.setenv("QEA_JUDGE_MODEL", "deepseek-v4-pro[1m]")
+    out = AnthropicLLM().complete("hi", role="judge")
+    assert out == "hello from deepseek-v4-pro[1m]"
+    assert seen["model"] == "deepseek-v4-pro[1m]"            # role -> model resolution
+    assert seen["init"]["base_url"] == "https://example/apps/anthropic"
+    assert seen["init"]["auth_token"] == "tok"               # Bearer-token auth
+
+
+def test_make_llm_selects_anthropic_backend_when_token_set(monkeypatch):
+    anthropic = pytest.importorskip("anthropic")
+    import qea.llm as llmmod
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **kw: type("C", (), {"messages": None})())
+    monkeypatch.setenv("QEA_ANTHROPIC_AUTH_TOKEN", "tok")
+    assert type(llmmod.make_llm(False)).__name__ == "AnthropicLLM"
+
+
 def test_gdpval_local_fork_preferred():
     # The rubric fork in data/gdpval/ must be used (no network) when present.
     from qea.tasks import _GDPVAL_LOCAL_PARQUET, _load_gdpval_df

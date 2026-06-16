@@ -9,8 +9,9 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
-# Real OpenRouter run (quant_agent / evolve_agent / judge).
-real = ["openai>=1.40"]
+# Real run. openai = OpenRouter backend; anthropic = DashScope/Anthropic-compatible
+# backend (auto-selected when QEA_ANTHROPIC_AUTH_TOKEN is set).
+real = ["openai>=1.40", "anthropic>=0.40"]
 # Real GDPval B-pile loader (HuggingFace parquet). Without these, the loader
 # falls back to bundled offline fixtures so mock + offline still work.
 gdpval = ["pandas>=2.0", "pyarrow>=14.0"]
