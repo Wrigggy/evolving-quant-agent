@@ -219,8 +219,8 @@ def _propose_real(iteration, eval_summary, diagnosis, harness, buffer, llm):
         failing_context = "FAILING TASKS:\n" + "\n".join(fails)
     prompt = (
         "You evolve a quant agent harness with 7 slots "
-        "(tool/middleware/skill/prompt/validator/memory/router). The seed has only "
-        "the code_exec tool. Propose EXACTLY ONE edit, justified by evidence.\n\n"
+        "(tool/middleware/skill/prompt/validator/memory/router). The seed has the "
+        "code_exec and xlsx_writer tools. Propose EXACTLY ONE edit, justified by evidence.\n\n"
         f"CURRENT HARNESS: {json.dumps(harness.summary())}\n\n"
         f"DIAGNOSIS: {diagnosis.get('root_cause_tag')} — {diagnosis.get('overview')}\n\n"
         f"{failing_context}\n\n"
