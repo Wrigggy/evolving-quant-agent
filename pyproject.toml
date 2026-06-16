@@ -14,6 +14,8 @@ real = ["openai>=1.40"]
 # Real GDPval B-pile loader (HuggingFace parquet). Without these, the loader
 # falls back to bundled offline fixtures so mock + offline still work.
 gdpval = ["pandas>=2.0", "pyarrow>=14.0"]
+# Real .xlsx artifact production by the B-pile worker (subprocess exec + render).
+artifacts = ["openpyxl>=3.1"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -21,3 +23,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["qea"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.0",
+]

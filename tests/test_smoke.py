@@ -360,3 +360,28 @@ def test_benchmark_owns_grader_and_corpus():
     assert bm.grader is not None
     assert isinstance(bm.answer_corpus, list) and len(bm.answer_corpus) > 0
     assert bm.debugger_kind == "b_pile"
+
+
+def test_exec_artifact_produces_xlsx_and_scrubs_env(tmp_path, monkeypatch):
+    import pytest
+    pytest.importorskip("openpyxl")
+    from qea.sandbox import exec_artifact
+    monkeypatch.setenv("OPENROUTER_API_KEY", "SECRET_KEY_DO_NOT_LEAK")
+    code = (
+        "import openpyxl, os\n"
+        "assert 'OPENROUTER_API_KEY' not in os.environ, 'secret leaked into child'\n"
+        "wb = openpyxl.Workbook(); ws = wb.active; ws['A1'] = 'hello'\n"
+        "wb.save('report.xlsx')\n"
+    )
+    res = exec_artifact(code, timeout=10.0)
+    assert res.status == "success"
+    assert len(res.paths) == 1 and res.paths[0].name == "report.xlsx"
+
+
+def test_exec_artifact_error_and_timeout_dont_crash_parent():
+    import pytest
+    from qea.sandbox import exec_artifact
+    err = exec_artifact("raise RuntimeError('boom')\n", timeout=10.0)
+    assert err.status == "error" and "boom" in err.stderr
+    slow = exec_artifact("while True:\n    pass\n", timeout=1.0)
+    assert slow.status == "timeout"   # parent process is still alive to assert this
