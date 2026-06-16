@@ -20,14 +20,23 @@ from pathlib import Path
 @dataclass
 class ArtifactResult:
     status: str                         # "success" | "error" | "timeout"
-    paths: list = field(default_factory=list)   # produced *.xlsx Paths (in work_dir)
+    paths: list[Path] = field(default_factory=list)   # produced *.xlsx Paths (in work_dir)
     stdout: str = ""
     stderr: str = ""
     work_dir: str = ""                  # temp dir holding artifacts (caller copies, then removes)
 
 
+def _to_str(s) -> str:
+    """TimeoutExpired carries raw bytes on POSIX even with text=True — normalize."""
+    if s is None:
+        return ""
+    return s.decode(errors="replace") if isinstance(s, bytes) else s
+
+
 def _scrubbed_env() -> dict:
-    """Child env minus secrets so model-written code cannot exfiltrate credentials."""
+    """Child env minus secrets so model-written code cannot exfiltrate credentials.
+    Covers this project's credential families (*_API_KEY, *_TOKEN, OPENROUTER*);
+    generic secret names (e.g. AWS_SECRET_ACCESS_KEY) are NOT scrubbed."""
     out = {}
     for k, v in os.environ.items():
         ku = k.upper()
@@ -49,8 +58,8 @@ def exec_artifact(code: str, timeout: float = 10.0) -> ArtifactResult:
             env=_scrubbed_env(),
         )
     except subprocess.TimeoutExpired as exc:
-        return ArtifactResult(status="timeout", stdout=(exc.stdout or ""),
-                              stderr=(exc.stderr or ""), work_dir=work_dir)
+        return ArtifactResult(status="timeout", stdout=_to_str(exc.stdout),
+                              stderr=_to_str(exc.stderr), work_dir=work_dir)
     paths = sorted(Path(work_dir).glob("*.xlsx"))
     status = "success" if (proc.returncode == 0 and paths) else "error"
     return ArtifactResult(status=status, paths=paths,
