@@ -136,7 +136,8 @@ class Harness:
 
 
 def seed_harness() -> Harness:
-    """Minimal seed: one tool (deterministic code-execution sandbox), six empty slots."""
+    """Minimal seed: two tools (the deterministic code-execution sandbox `code_exec`
+    and the `xlsx_writer` artifact capability), the other six slots empty."""
     h = Harness()
     h.slots["tool"]["code_exec"] = Component(
         name="code_exec",
