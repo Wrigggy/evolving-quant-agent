@@ -385,3 +385,27 @@ def test_exec_artifact_error_and_timeout_dont_crash_parent():
     assert err.status == "error" and "boom" in err.stderr
     slow = exec_artifact("while True:\n    pass\n", timeout=1.0)
     assert slow.status == "timeout"   # parent process is still alive to assert this
+
+
+def test_render_xlsx_dumps_values_and_formulas(tmp_path):
+    import pytest
+    pytest.importorskip("openpyxl")
+    import openpyxl
+    from qea.artifacts import render_xlsx
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Summary"
+    ws["A1"] = "Revenue"; ws["B1"] = 1000; ws["B2"] = "=B1*2"
+    p = tmp_path / "model.xlsx"; wb.save(p)
+    text = render_xlsx(p)
+    assert "[ARTIFACT FILE: model.xlsx]" in text
+    assert 'Sheet "Summary"' in text
+    assert "'Revenue'" in text and "1000" in text
+    assert "=B1*2" in text          # formula string is rendered (data_only=False)
+
+
+def test_extract_openpyxl_code():
+    from qea.artifacts import extract_openpyxl_code
+    md = "Here is the workbook:\n```python\nimport openpyxl\nwb=openpyxl.Workbook()\nwb.save('x.xlsx')\n```\nDone."
+    code = extract_openpyxl_code(md)
+    assert code is not None and "openpyxl" in code and "save(" in code
+    assert extract_openpyxl_code("just a plain memo, no code") is None
+    assert extract_openpyxl_code("```python\nprint('hi')\n```") is None  # not an artifact block
