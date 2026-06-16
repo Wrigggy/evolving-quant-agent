@@ -141,8 +141,8 @@ Monthly Activity Summary
 1. **【关键】做「看得懂内容」的 grader**:Excel → 渲染成图 → 多模态 judge;会计这类先写**逐格(cell-level)确定性校验**。让「内容对不对」能真打分。
 2. **修打分噪声**:worker 多采样 / 续跑用稳态分,让「被采纳」可信。
 3. **让诊断 surface 内容缺陷**:改 B-pile debugger,使 proposer 能提实质改动,而不是第 14 个格式改动。
-4. **拿人类 gold 文件**:把 GDPval 的人工标准答案文件下载缓存,为「对比 gold 评分」铺路。
-5. **启动双 benchmark 路线**(见 §8):先**申请 FAB v2 的 license**。
+4. **✅ 拿人类 gold 文件(已完成)**:GDPval 全部 220 gold 任务的人工交付物已下载——**248 个文件 / 185 任务 / ~595 MB**(85 pdf · 65 xlsx · 64 docx · 17 pptx…),在 `data/gdpval/deliverable_files/<task_id>/`。「对比 gold 评分」的素材齐了。
+5. **启动双 benchmark 路线**(见 §8):① **申请 FAB v2 的 license**(组内确认后);② **以 Stirrup 当进化种子**——clone Artificial Analysis 的 Stirrup,在它的源码/工具/skills 上做进化(§8.3.1)。
 
 ---
 
@@ -168,18 +168,31 @@ Monthly Activity Summary
 ### 8.3 几条想清楚了的判断
 
 - **一个进循环、一个做最终测试**:FAB v2(可硬验证)当进化的打分信号;GDPval 当最后的「泛化测试」,只评一次。
-- **能力靠 seed、不靠进化**:头 80% 的提升来自现成脚手架(代码执行、检索、计算器),不值得让进化重新发明 → 用一个像样的 baseline 当进化起点。
-- **会计审计任务是「文件输出 + 可硬验证」的桥梁**:它的抽样公式、方差列、标记规则都能写成**逐格校验**,不靠主观打分 → 让进化在文件输出上拿到真梯度(正好接上 §7 第 1 项)。
+- **能力靠 seed、不靠进化**:头 80% 的提升来自现成脚手架(代码执行、检索、计算器),不值得让进化重新发明 → 用一个像样的 baseline 当进化起点。**这个 baseline 定了:用 Stirrup(见 §8.3.1)。**
+- **会计审计任务是「文件输出 + 可程序化评分」的样板**:它的抽样公式、方差列、标记规则都能写成**逐格校验**,不靠主观打分 → 让进化在文件输出上也拿到自动信号(正好接上 §7 第 1 项)。
 - **成功判据**:不追绝对榜首,改成「**进化出的外壳 vs 强手工外壳**的相对提升」,并**按九类分别看**。
+
+### 8.3.1 进化种子定了:Stirrup（新增,已 web 核实)
+
+**什么是 Stirrup**:Artificial Analysis 开源的一个**极简 agent 框架**(MIT,Python,也有 JS 版),最新 v0.1.11(2026-06)。默认工具就两类:**`code_exec`(在隔离临时目录跑代码)+ `web_fetch`/`web_search`**;支持 Local/Docker/E2B 沙箱;有一套 **Skills 系统**(模块化指令包)。设计哲学是「配合模型、别挡路,让模型自己选解法」。GDPval 的 Excel/Word/PPT 就是模型在它的 sandbox 里写代码产出的。
+> 注:它是 AA 出品 ✓;讨论纪要称它是 AA 跑 GDPval-AA leaderboard 的官方 harness——README 没明说,这点**待确认**。
+
+**为什么用它当进化种子**:
+1. **现成、极小、专为被改写而设计**(AA 自己建议 clone 后用 coding agent 改它)→ 正好适合当 QEA 进化的「初始外壳」,省掉重新发明脚手架。
+2. **和 GDPval-AA 评测语义对齐** → 进化出的东西能直接在官方语义下比较。
+3. **它的「极简」本身是个可证伪假设**:AA 押注「少加结构、让模型自己来」。如果 QEA 进化朝「加结构」涨分 → 反驳这个假设(有 claim 价值);如果进化收敛回极简 → 说明 AA 已接近最优。**两种结果都能写成论文。**
+
+**和已有东西的关系**:Stirrup = 被进化的**外壳本体**(初始 phenotype);AHE = 进化**机制**(变异/选择作用在 Stirrup 的源码 / 工具集 / skills 上)。⚠️ Stirrup 自带 Skills 系统,和我们设想的 MetaHarness「文件系统/加 scaffolding」有重叠 → 设计时要讲清增量在哪,否则会被质疑「这不就是 Stirrup skills」。
 
 ### 8.4 还要定的 / 已经定的
 
 **待定**
 1. 进化的打分数据用哪个?**倾向申请 FAB 的 450 验证集 license**,待组内确认。(最高优先级,定了才好往下做)
-2. 进化起点是「真·无工具」还是「baseline 外壳」?
-3. 强手工 baseline 外壳具体怎么配?
+2. 变异作用在 Stirrup 的哪一层?(源码 / 工具集 / skills 的具体边界)
+3. 强手工 baseline 外壳的具体配置(算相对增益用)。
 
 **已定**
+- **进化种子 = Stirrup**(§8.3.1);Stirrup = 外壳本体,AHE = 进化机制。
 - GDPval 接入方式 = 当最终泛化测试 + 给会计类任务写逐格校验。
 - 覆盖范围 = **先覆盖全九类、做尽量通用型**,但分类报提升,Financial Modeling 作为最亮的子结论。
 
@@ -187,4 +200,5 @@ Monthly Activity Summary
 
 - **GDPval** ✓:论文 [`arXiv:2510.04374`](https://arxiv.org/abs/2510.04374);[OpenAI 官方页](https://openai.com/index/gdpval/)。
 - **FAB v2** ✓:[Vals AI 页](https://www.vals.ai/benchmarks/fabv2);论文 [`arXiv:2508.00828`](https://arxiv.org/abs/2508.00828);[GitHub](https://github.com/vals-ai/finance-agent-v2)。
+- **Stirrup** ✓:[GitHub `ArtificialAnalysis/Stirrup`](https://github.com/ArtificialAnalysis/Stirrup)(MIT / Python+JS / 默认工具 code_exec+web / Skills 系统 / v0.1.11 2026-06,均已核实);[docs](https://stirrup.artificialanalysis.ai)。**待确认**:"AA 跑 GDPval-AA 的官方 harness"这一说法 README 未明说。
 - 待复核:GDPval 文件交付占比的精确百分比、顶格 win-rate 区间;FAB「每题 2 小时」时限。
