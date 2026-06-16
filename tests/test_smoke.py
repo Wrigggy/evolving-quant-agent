@@ -494,3 +494,26 @@ def test_b_worker_mock_unaffected():
     from qea.tasks import BTask
     t = BTask(task_id="bm", subtype="x", prompt="p", rubric="")
     assert quant_agent_solve(t, seed_harness(), mock=True, llm=None) == ""
+
+
+def test_softjudge_credits_artifact_from_rendering():
+    # Interim grader bridge end-to-end: a rendered-artifact deliverable lets the
+    # EXISTING text SoftJudge credit artifact rubric criteria (the format-basin fix).
+    import json
+    from qea.tasks import BTask
+    from qea.verifier import SoftJudge
+
+    class ArtifactJudge:
+        # credits each criterion iff the deliverable text shows the workbook/sheet
+        def complete(self, prompt, *, role="judge"):
+            d = prompt.split("DELIVERABLE:")[1]
+            v = {"1": "report.xlsx" in d, "2": 'Sheet "Summary"' in d}
+            return json.dumps({k: bool(x) for k, x in v.items()})
+
+    t = BTask(task_id="b", subtype="x", prompt="produce report.xlsx", rubric="",
+              rubric_items=[{"points": 1, "criterion": "submitted as an Excel workbook named report.xlsx"},
+                            {"points": 1, "criterion": "has a Summary sheet"}])
+    deliverable = 'Done.\n\n[ARTIFACT FILE: report.xlsx]\nSheet "Summary" (1x1):\n  A1: \'Total\''
+    r = SoftJudge(ArtifactJudge()).score(t, deliverable, None, mock=False, k=1)
+    assert r.score == 1.0                       # both artifact criteria credited
+    assert r.criterion_verdicts == {"1": True, "2": True}
