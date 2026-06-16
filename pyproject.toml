@@ -23,8 +23,3 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["qea"]
-
-[dependency-groups]
-dev = [
-    "pytest>=9.1.0",
-]
