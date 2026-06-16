@@ -450,3 +450,47 @@ def test_assemble_artifact_deliverable_survives_corrupt_xlsx(tmp_path):
            "open('report.xlsx','w').write('not a zip')\n```done")
     out = assemble_artifact_deliverable(bad, _BTaskStub(), tmp_path)
     assert "report.xlsx" in out and "unreadable workbook" in out   # placeholder, no raise
+
+
+def test_seed_has_xlsx_writer():
+    from qea.harness import seed_harness
+    h = seed_harness()
+    assert h.has("tool", "xlsx_writer") and h.has("tool", "code_exec")
+
+
+def test_b_worker_real_produces_artifact_when_seed_has_tool(tmp_path):
+    import pytest
+    pytest.importorskip("openpyxl")
+    from qea.agents import quant_agent_solve
+    from qea.harness import seed_harness
+    from qea.tasks import BTask
+
+    class CodeLLM:
+        def complete(self, prompt, *, role="quant_agent"):
+            assert "openpyxl" in prompt   # the seed tool advertised the capability
+            return ("Workbook attached.\n```python\nimport openpyxl\n"
+                    "wb=openpyxl.Workbook(); wb.active['A1']='ok'; wb.save('out.xlsx')\n```")
+    t = BTask(task_id="bx", subtype="x", prompt="make out.xlsx", rubric="")
+    out = quant_agent_solve(t, seed_harness(), mock=False, llm=CodeLLM(), artifact_dir=tmp_path)
+    assert "[ARTIFACT FILE: out.xlsx]" in out
+    assert (tmp_path / "bx" / "out.xlsx").exists()
+
+
+def test_b_worker_real_text_task_unchanged():
+    from qea.agents import quant_agent_solve
+    from qea.harness import seed_harness
+    from qea.tasks import BTask
+    class TextLLM:
+        def complete(self, prompt, *, role="quant_agent"):
+            return "A plain advisory memo with no spreadsheet."
+    t = BTask(task_id="bt", subtype="x", prompt="write a memo", rubric="")
+    out = quant_agent_solve(t, seed_harness(), mock=False, llm=TextLLM(), artifact_dir=None)
+    assert out == "A plain advisory memo with no spreadsheet."
+
+
+def test_b_worker_mock_unaffected():
+    from qea.agents import quant_agent_solve
+    from qea.harness import seed_harness
+    from qea.tasks import BTask
+    t = BTask(task_id="bm", subtype="x", prompt="p", rubric="")
+    assert quant_agent_solve(t, seed_harness(), mock=True, llm=None) == ""

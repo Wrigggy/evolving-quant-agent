@@ -148,4 +148,15 @@ def seed_harness() -> Harness:
         effect="exec_ok",
         origin="seed",
     )
+    h.slots["tool"]["xlsx_writer"] = Component(
+        name="xlsx_writer",
+        slot="tool",
+        content=(
+            "xlsx_writer: produce an .xlsx workbook deliverable by emitting a Python "
+            "code block using openpyxl that builds and saves the file; it is run in a "
+            "sandbox and the produced workbook is captured and graded."
+        ),
+        effect="artifact_ok",
+        origin="seed",
+    )
     return h
