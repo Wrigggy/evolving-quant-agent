@@ -13,3 +13,7 @@ venv/
 *.egg-info/
 .pytest_cache/
 .DS_Store
+
+# GDPval gold/reference binary files (re-fetchable via scripts/fetch_gdpval_deliverables.py)
+data/gdpval/deliverable_files/
+data/gdpval/reference_files/
