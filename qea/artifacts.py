@@ -18,9 +18,12 @@ def extract_openpyxl_code(text: str) -> str | None:
     parts = text.split("```")
     for i in range(1, len(parts), 2):           # odd indices are fenced blocks
         block = parts[i]
-        if block.startswith("python"):
-            block = block[len("python"):]
-        if "openpyxl" in block and ".save(" in block:
+        # drop a leading fence language tag line (```python / ```py / ```Python …)
+        first, _, rest = block.partition("\n")
+        if first.strip().lower() in ("python", "py", "python3"):
+            block = rest
+        # tolerate whitespace inside the save call (.save( "x.xlsx" ))
+        if "openpyxl" in block and ".save(" in block.replace(" ", ""):
             return block.strip()
     return None
 

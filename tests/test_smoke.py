@@ -409,3 +409,6 @@ def test_extract_openpyxl_code():
     assert code is not None and "openpyxl" in code and "save(" in code
     assert extract_openpyxl_code("just a plain memo, no code") is None
     assert extract_openpyxl_code("```python\nprint('hi')\n```") is None  # not an artifact block
+    # robust to fence-tag variation (```py / ```Python) and whitespace in .save(
+    assert extract_openpyxl_code("```py\nimport openpyxl\nopenpyxl.Workbook().save( 'x.xlsx' )\n```") is not None
+    assert extract_openpyxl_code("```Python\nimport openpyxl\nopenpyxl.Workbook().save('x.xlsx')\n```") is not None
