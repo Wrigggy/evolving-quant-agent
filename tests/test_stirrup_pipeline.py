@@ -75,3 +75,17 @@ def test_softjudge_real_sample_uses_shared_scorer():
     j = SoftJudge(_FixedLLM('{"1": true, "2": true}'))
     frac, verdicts = j._real_sample(t, "deliverable text")
     assert abs(frac - 1.0) < 1e-9
+
+
+# --------------------------------------------------------------------------- #
+# Task 4: render step (force degraded path for a fast, offline test)          #
+# --------------------------------------------------------------------------- #
+def test_render_extracts_text_and_degrades_without_render(tmp_path, monkeypatch):
+    import qea.grading.render as r
+    monkeypatch.setattr(r, "_soffice", lambda: None)  # force degraded path: fast + offline
+    xlsx = tmp_path / "deliverable.xlsx"; _make_xlsx(xlsx)
+    out = r.render("final text", [xlsx], tmp_path / "render")
+    assert isinstance(out, r.RenderedDeliverable)
+    assert out.text == "final text"
+    assert "DISCOUNT_RATE_9PCT" in out.extracted_text
+    assert out.images == [] and out.degraded  # no soffice -> no images, degrade note
