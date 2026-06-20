@@ -17,10 +17,21 @@ real = ["openai>=1.40", "anthropic>=0.40"]
 gdpval = ["pandas>=2.0", "pyarrow>=14.0"]
 # Real .xlsx artifact production by the B-pile worker (subprocess exec + render).
 artifacts = ["openpyxl>=3.1"]
+# Stirrup-on-E2B base-harness test: vanilla Stirrup agentic worker + multimodal
+# render (LibreOffice-headless is a SYSTEM dep, not pip). See
+# docs/superpowers/specs/2026-06-21-stirrup-e2b-base-harness-design.md
+stirrup = [
+    "stirrup @ git+https://github.com/ArtificialAnalysis/Stirrup.git",
+    "e2b",
+    "pymupdf",
+    "python-pptx",
+    "python-docx",
+    "openpyxl>=3.1",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["qea"]
+packages = ["qea", "qea.grading", "qea.workers"]
