@@ -73,15 +73,18 @@ QEA_STIRRUP_MAX_TURNS=20
 QEA_JUDGE_K=2
 ```
 
-- [ ] **Step 3: Install and copy the key**
+- [ ] **Step 3: Install deps, LibreOffice, and copy the key**
 
 Run:
 ```bash
 cd /Users/kevinwu/Coding/evolving-quant-agent
 pip install -e ".[real,gdpval,stirrup]"
+brew install --cask libreoffice    # PREREQUISITE for multimodal render (~1GB, one-time)
 grep -E '^E2B_API_KEY=' ../agentic-harness-engineering/.env >> .env   # then dedupe/edit .env
 ```
-Expected: Stirrup + e2b + pymupdf import without error; `.env` contains a real `E2B_API_KEY`.
+Expected: Stirrup + e2b + pymupdf import without error; `soffice` or `libreoffice`
+on PATH (`shutil.which("soffice")` non-None — render.py needs it for PNG pages);
+`.env` contains a real `E2B_API_KEY`.
 
 - [ ] **Step 4: Write the spike script** (`scripts/stirrup_spike.py`)
 
@@ -999,6 +1002,41 @@ git push -u origin qea/stirrup-e2b-base-harness
 ```
 
 ---
+
+## Deferred: Track-2 — `harness.py` ↔ Stirrup coupling (NOT in this plan)
+
+Recorded here so the architectural tension isn't lost. **This plan does not touch
+`qea/harness.py` and does not wire Stirrup into the 7-slot harness or the loop.**
+The base test runs *vanilla* Stirrup standalone precisely to avoid this tension.
+
+**The tension (correct intuition):** today the worker is a single `llm.complete()`
+call, and the 7-slot harness configures it via `assemble_system_prompt()` (a
+concatenated string). Stirrup is itself an agentic scaffold with its *own* tools,
+system prompt, and loop. Naively "stuffing Stirrup into the single-call worker slot"
+collides with `harness.py`, because both define tools/prompt/skill — the same space.
+
+**The resolution (when Track-2 is designed):** not "stuff in", but *upgrade + translate*.
+1. The **worker layer upgrades** from single-call to "a Stirrup `Agent`".
+2. `harness.py`'s 7 slots stop being concatenated into a prompt string and instead
+   are **translated into a Stirrup Agent spec**. The slots map cleanly onto Stirrup's
+   own extension points, so it is an interface, not a conflict:
+
+   | QEA evolved slot | Stirrup extension point |
+   |---|---|
+   | `tool` (seed: code_exec, xlsx_writer) | `Agent(tools=[...])` / ToolProvider |
+   | `prompt` | Agent system prompt |
+   | `skill` | Stirrup's `/skills/` modular skills system |
+   | `middleware` | Stirrup middleware / hooks |
+   | `memory` / `validator` / `router` | Agent-level config |
+
+   `assemble_system_prompt()` is the single-call-era adapter; Track-2 replaces it
+   with a `harness → Stirrup Agent spec` adapter. Evolution then mutates an *agent
+   configuration*, not a prompt string.
+
+**Open decision for Track-2 (the hard version of the tension):** the **seed source**.
+Does evolution seed from Stirrup's out-of-box default config (mutate from there), or
+does QEA's minimal seed (code_exec + xlsx_writer only) override Stirrup's defaults?
+This fixes "who owns tools/prompt". Decide when designing Track-2 — out of scope here.
 
 ## Self-Review
 
