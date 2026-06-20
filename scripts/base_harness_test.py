@@ -38,17 +38,50 @@ def _load_dotenv(path: str = ".env") -> None:
         os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
 
 
+def _run_with_retry(worker, task, attempts: int, backoff: float):
+    """Stirrup worker has no internal retry; transient proxy/E2B disconnects
+    (RemoteProtocolError / WriteError) are common here. Retry the whole task."""
+    import time
+    last = None
+    for i in range(attempts):
+        try:
+            return worker.run_task(task)
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            wait = backoff * (2 ** i)
+            print(f"  worker attempt {i + 1}/{attempts} failed ({type(exc).__name__}: {exc}); "
+                  f"retry in {wait:.0f}s")
+            time.sleep(wait)
+    raise last
+
+
 def main() -> None:
     _load_dotenv()
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=0, help="pilot subset size (0 = all)")
+    ap.add_argument("--stratify", action="store_true",
+                    help="pick round-robin across subtypes (diverse pilot incl. the wall occupation)")
     ap.add_argument("--out", default="docs/RESULTS_base_stirrup_e2b.md")
     args = ap.parse_args()
 
     tasks = load_gdpval_finance(broad=True, allow_download=True)
     if args.n:
-        tasks = tasks[: args.n]
+        if args.stratify:
+            buckets: dict = {}
+            for t in tasks:
+                buckets.setdefault(t.subtype, []).append(t)
+            order = list(buckets.values())
+            picked = []
+            while len(picked) < args.n and any(order):
+                for b in order:
+                    if b and len(picked) < args.n:
+                        picked.append(b.pop(0))
+            tasks = picked
+        else:
+            tasks = tasks[: args.n]
     judge_k = int(os.environ.get("QEA_JUDGE_K", "2"))
+    worker_retries = int(os.environ.get("QEA_WORKER_RETRIES", "3"))
+    backoff = float(os.environ.get("QEA_BACKOFF_BASE_SEC", "2.0"))
 
     worker = StirrupWorker()
     judge = MultimodalJudge(make_llm(mock=False), k=judge_k)
@@ -57,7 +90,7 @@ def main() -> None:
     for i, task in enumerate(tasks, 1):
         print(f"[{i}/{len(tasks)}] {task.task_id} ({task.subtype})")
         try:
-            deliverable = worker.run_task(task)
+            deliverable = _run_with_retry(worker, task, worker_retries, backoff)
             rendered = render(deliverable.final_text, deliverable.files,
                               Path("output/render") / str(task.task_id))
             res = judge.grade(task, rendered)
