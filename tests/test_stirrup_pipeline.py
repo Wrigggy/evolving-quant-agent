@@ -120,3 +120,17 @@ def test_multimodal_judge_grades_both_paths():
     assert abs(res.text_fraction - (2 / 3)) < 1e-9
     assert llm.image_calls == 2 and llm.text_calls == 2   # k=2 each path
     assert res.degraded is False                            # had images, no degrade notes
+
+
+# --------------------------------------------------------------------------- #
+# Task 6: Stirrup worker (stub — no E2B/API)                                  #
+# --------------------------------------------------------------------------- #
+from qea.workers.stirrup_worker import Deliverable, StubWorker  # noqa: E402
+
+
+def test_stub_worker_returns_deliverable(tmp_path):
+    f = tmp_path / "out.xlsx"; _make_xlsx(f)
+    w = StubWorker(final_text="done", files=[f])
+    d = w.run_task(_FakeTask())
+    assert isinstance(d, Deliverable)
+    assert d.task_id == "T1" and d.final_text == "done" and d.files == [f]
