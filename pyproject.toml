@@ -21,8 +21,8 @@ artifacts = ["openpyxl>=3.1"]
 # render (LibreOffice-headless is a SYSTEM dep, not pip). See
 # docs/superpowers/specs/2026-06-21-stirrup-e2b-base-harness-design.md
 stirrup = [
-    "stirrup @ git+https://github.com/ArtificialAnalysis/Stirrup.git",
-    "e2b",
+    # stirrup[e2b] pulls e2b + e2b-code-interpreter (the E2B backend needs both).
+    "stirrup[e2b] @ git+https://github.com/ArtificialAnalysis/Stirrup.git",
     "pymupdf",
     "python-pptx",
     "python-docx",

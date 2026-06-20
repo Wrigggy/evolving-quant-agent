@@ -134,3 +134,14 @@ def test_stub_worker_returns_deliverable(tmp_path):
     d = w.run_task(_FakeTask())
     assert isinstance(d, Deliverable)
     assert d.task_id == "T1" and d.final_text == "done" and d.files == [f]
+
+
+def test_extract_final_text_reads_finishparams_reason():
+    # Spike-confirmed: Stirrup returns FinishParams(reason=..., paths=[...]).
+    from qea.workers.stirrup_worker import _extract_final_text
+
+    class _FinishParams:
+        reason = "all done"
+        paths = ["report.xlsx"]
+
+    assert _extract_final_text(_FinishParams(), []) == "all done"

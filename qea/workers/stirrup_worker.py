@@ -30,22 +30,21 @@ class StubWorker:
         return Deliverable(task.task_id, self._final_text, self._files)
 
 
-def _extract_final_text(finish_params, history) -> str:
-    """Defensive: pull the agent's final message across plausible Stirrup shapes.
-    Refine to the exact shape recorded in the Task 1 spike comment."""
+def _extract_final_text(finish_params, history) -> str:  # noqa: ARG001
+    """Pull the agent's final text. Spike-confirmed shape: Stirrup returns a
+    ``FinishParams(reason=..., paths=[...])`` object; ``reason`` is the final
+    message. Fallbacks kept defensive in case the finish tool schema changes."""
     fp = finish_params
+    reason = getattr(fp, "reason", None)
+    if reason:
+        return str(reason)
     if isinstance(fp, dict):
-        for key in ("final_message", "message", "summary", "response", "text"):
+        for key in ("reason", "final_message", "message", "summary", "response", "text"):
             if fp.get(key):
                 return str(fp[key])
     for attr in ("final_message", "message", "summary", "response", "text"):
-        if hasattr(fp, attr) and getattr(fp, attr):
+        if getattr(fp, attr, None):
             return str(getattr(fp, attr))
-    if history:
-        last = history[-1]
-        if isinstance(last, dict):
-            return str(last.get("content", last))
-        return str(getattr(last, "content", last))
     return ""
 
 
