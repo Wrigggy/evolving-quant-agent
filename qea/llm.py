@@ -8,15 +8,25 @@ small (the loop is sequential in v0; the cap is enforced if you parallelize).
 
 from __future__ import annotations
 
+import base64
 import os
 import time
+from pathlib import Path
+
+
+def _encode_image(path) -> str:
+    """Local PNG/JPG -> data URL for multimodal message content."""
+    p = Path(path)
+    mime = "image/jpeg" if p.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+    b64 = base64.b64encode(p.read_bytes()).decode()
+    return f"data:{mime};base64,{b64}"
 
 
 class MockLLM:
     """Placeholder. Mock paths (quant_agent/evolve_agent/judge) are scripted and
     never actually call an LLM, but a client object is still passed around."""
 
-    def complete(self, prompt: str, *, role: str = "agent") -> str:  # noqa: ARG002
+    def complete(self, prompt: str, *, role: str = "agent", images=None) -> str:  # noqa: ARG002
         return ""
 
 
@@ -74,7 +84,7 @@ class OpenRouterLLM:
         env = self.ROLE_MODEL_ENV.get(role, "QEA_QUANT_AGENT_MODEL")
         return os.environ.get(env, "deepseek/deepseek-v4-pro")
 
-    def complete(self, prompt: str, *, role: str = "agent") -> str:
+    def complete(self, prompt: str, *, role: str = "agent", images=None) -> str:
         model = self._model(role)
         extra: dict = {}
         # Every model is pinned to ITS OWN official provider (no cross-pinning:
@@ -82,12 +92,19 @@ class OpenRouterLLM:
         prov = provider_for(model, self.provider_map)
         if prov:
             extra["provider"] = {"order": [prov], "allow_fallbacks": False}
+        if images:
+            content = [{"type": "text", "text": prompt}]
+            for im in images:
+                content.append({"type": "image_url", "image_url": {"url": _encode_image(im)}})
+            messages = [{"role": "user", "content": content}]
+        else:
+            messages = [{"role": "user", "content": prompt}]
         last: Exception | None = None
         for attempt in range(self.max_retries):
             try:
                 resp = self.client.chat.completions.create(
                     model=model,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     temperature=0.2,
                     extra_body=extra or None,
                 )
@@ -141,8 +158,17 @@ class AnthropicLLM:
         env = self.ROLE_MODEL_ENV.get(role, "QEA_QUANT_AGENT_MODEL")
         return os.environ.get(env, "deepseek-v4-pro[1m]")
 
-    def complete(self, prompt: str, *, role: str = "agent") -> str:
+    def complete(self, prompt: str, *, role: str = "agent", images=None) -> str:
         model = self._model(role)
+        if images:
+            blocks = [{"type": "text", "text": prompt}]
+            for im in images:
+                data = base64.b64encode(Path(im).read_bytes()).decode()
+                mime = "image/jpeg" if str(im).lower().endswith((".jpg", ".jpeg")) else "image/png"
+                blocks.append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": data}})
+            msgs = [{"role": "user", "content": blocks}]
+        else:
+            msgs = [{"role": "user", "content": prompt}]
         last: Exception | None = None
         for attempt in range(self.max_retries):
             try:
@@ -150,7 +176,7 @@ class AnthropicLLM:
                     model=model,
                     max_tokens=self.max_tokens,
                     temperature=0.2,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=msgs,
                 )
                 parts = [b.text for b in getattr(resp, "content", []) if getattr(b, "type", None) == "text"]
                 content = "".join(parts).strip()
