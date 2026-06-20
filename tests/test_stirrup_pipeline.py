@@ -89,3 +89,34 @@ def test_render_extracts_text_and_degrades_without_render(tmp_path, monkeypatch)
     assert out.text == "final text"
     assert "DISCOUNT_RATE_9PCT" in out.extracted_text
     assert out.images == [] and out.degraded  # no soffice -> no images, degrade note
+
+
+# --------------------------------------------------------------------------- #
+# Task 5: multimodal judge                                                    #
+# --------------------------------------------------------------------------- #
+from qea.grading.multimodal_judge import MultimodalJudge, GradeResult  # noqa: E402
+from qea.grading.render import RenderedDeliverable  # noqa: E402
+
+
+class _CountingLLM:
+    """Returns a fixed verdict JSON; records whether images were passed each call."""
+    def __init__(self): self.image_calls = 0; self.text_calls = 0
+    def complete(self, prompt, *, role="agent", images=None):
+        if images:
+            self.image_calls += 1
+        else:
+            self.text_calls += 1
+        return '{"1": true, "2": false}'
+
+
+def test_multimodal_judge_grades_both_paths():
+    t = _FakeTask()
+    rendered = RenderedDeliverable("final", "extracted DISCOUNT_RATE", images=["/tmp/p1.png"], degraded=[])
+    llm = _CountingLLM()
+    judge = MultimodalJudge(llm, k=2)
+    res = judge.grade(t, rendered)
+    assert isinstance(res, GradeResult)
+    assert abs(res.multimodal_fraction - (2 / 3)) < 1e-9
+    assert abs(res.text_fraction - (2 / 3)) < 1e-9
+    assert llm.image_calls == 2 and llm.text_calls == 2   # k=2 each path
+    assert res.degraded is False                            # had images, no degrade notes
