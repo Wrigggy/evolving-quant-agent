@@ -24,7 +24,7 @@ from pathlib import Path
 
 from qea.llm import make_llm
 from qea.tasks import load_gdpval_finance
-from qea.workers.stirrup_worker import StirrupWorker
+from qea.workers.stirrup_worker import StirrupWorker, Deliverable
 from qea.grading.render import render
 from qea.grading.multimodal_judge import MultimodalJudge
 
@@ -80,8 +80,15 @@ async def _amain(args) -> None:
     async def process(idx: int, task) -> None:
         nref = len(getattr(task, "reference_files", []) or [])
         try:
-            async with e2b_sem:  # cap concurrent live sandboxes at the E2B account limit
-                deliverable = await worker.arun_task(task)  # LLM once; E2B reconnects internally
+            existing = [p for p in (worker.out_root / str(task.task_id)).rglob("*")
+                        if p.is_file()] if worker.out_root.exists() else []
+            if args.reuse and existing:
+                # 补跑/re-grade: reuse the saved deliverable, skip the worker + E2B
+                # (applies the fixed scorer without re-sampling the LLM).
+                deliverable = Deliverable(str(task.task_id), "", existing)
+            else:
+                async with e2b_sem:  # cap concurrent live sandboxes at the E2B account limit
+                    deliverable = await worker.arun_task(task)  # LLM once; E2B reconnects internally
             rendered = await loop.run_in_executor(
                 pool, render, deliverable.final_text, deliverable.files,
                 Path("output/render") / str(task.task_id))
@@ -140,6 +147,9 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=0, help="subset size (0 = all)")
     ap.add_argument("--stratify", action="store_true",
                     help="round-robin across subtypes (diverse pilot incl. the wall occupation)")
+    ap.add_argument("--reuse", action="store_true",
+                    help="re-grade saved deliverables (skip worker/E2B); run worker only for "
+                         "tasks with no saved deliverable. For 补跑 + applying scoring fixes.")
     ap.add_argument("--out", default="docs/RESULTS_base_stirrup_e2b.md")
     args = ap.parse_args()
     asyncio.run(_amain(args))

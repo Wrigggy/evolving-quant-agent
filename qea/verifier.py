@@ -74,11 +74,16 @@ def build_rubric_prompt(task, deliverable: str, items: list, *, has_images: bool
 
 
 def score_rubric(txt: str, items: list) -> tuple[float, dict]:
-    """Parse judge JSON -> (points-weighted continuous fraction in [0,1], verdicts)."""
+    """Parse judge JSON -> (points-weighted continuous fraction in [0,1], verdicts).
+
+    GDPval rubrics include authored NEGATIVE (penalty) criteria. ``earned`` sums the
+    points of satisfied criteria (penalties subtract when their bad condition holds);
+    the denominator is the POSITIVE-point total (max achievable), so a flawless
+    deliverable scores 1.0 (not >1). Clamped to [0,1]."""
     verdicts = _parse_json_obj(txt) or {}
     earned = sum(c["points"] for i, c in enumerate(items) if _truthy(verdicts.get(str(i + 1))))
-    total = sum(c["points"] for c in items) or 1.0
-    return earned / total, verdicts
+    pos_total = sum(c["points"] for c in items if c["points"] > 0) or 1.0
+    return max(0.0, min(1.0, earned / pos_total)), verdicts
 
 
 # Mock soft-judge pass threshold and the jitter amplitude used to model the
