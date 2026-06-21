@@ -145,3 +145,43 @@ def test_extract_final_text_reads_finishparams_reason():
         paths = ["report.xlsx"]
 
     assert _extract_final_text(_FinishParams(), []) == "all done"
+
+
+# --------------------------------------------------------------------------- #
+# Task 10: E2B reconnect helper (sandbox-only retry, never the LLM)            #
+# --------------------------------------------------------------------------- #
+def test_call_with_reconnect_retries_command_only_no_llm():
+    import asyncio
+    import httpx
+    from qea.workers.e2b_reconnect import call_with_reconnect
+
+    state = {"calls": 0, "reconnects": 0}
+
+    async def flaky_call():
+        state["calls"] += 1
+        if state["calls"] == 1:
+            raise httpx.RemoteProtocolError("Server disconnected")
+        return "command-result"
+
+    async def reconnect():
+        state["reconnects"] += 1
+
+    out = asyncio.run(call_with_reconnect(flaky_call, reconnect, tries=4, backoff=0))
+    assert out == "command-result"
+    assert state["calls"] == 2 and state["reconnects"] == 1  # one drop -> one reconnect -> success
+
+
+def test_call_with_reconnect_raises_after_exhaustion():
+    import asyncio
+    import httpx
+    import pytest
+    from qea.workers.e2b_reconnect import call_with_reconnect
+
+    async def always_drop():
+        raise httpx.ReadError("boom")
+
+    async def reconnect():
+        pass
+
+    with pytest.raises(httpx.ReadError):
+        asyncio.run(call_with_reconnect(always_drop, reconnect, tries=2, backoff=0))

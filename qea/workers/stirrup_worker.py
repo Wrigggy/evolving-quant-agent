@@ -59,12 +59,14 @@ class StirrupWorker:
         os.environ.setdefault("OPENAI_API_KEY", os.environ.get("OPENROUTER_API_KEY", ""))
 
     def run_task(self, task) -> Deliverable:
-        return asyncio.run(self._run(task))
+        """Sync wrapper. For concurrent runs use ``await arun_task`` directly."""
+        return asyncio.run(self.arun_task(task))
 
-    async def _run(self, task) -> Deliverable:
+    async def arun_task(self, task) -> Deliverable:
         from stirrup import Agent
         from stirrup.clients.chat_completions_client import ChatCompletionsClient
-        from stirrup.tools.code_backends.e2b import E2BCodeExecToolProvider
+
+        from .e2b_reconnect import ReconnectingE2BCodeExecToolProvider
 
         out_dir = self.out_root / str(task.task_id)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -72,9 +74,22 @@ class StirrupWorker:
             base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
             model=self.model,
         )
-        code_exec = E2BCodeExecToolProvider(template=self.template)
+        # Reconnecting provider: an E2B disconnect retries the sandbox command only
+        # (LLM untouched -> single output attempt). Tunable via QEA_E2B_RECONNECT_TRIES.
+        code_exec = ReconnectingE2BCodeExecToolProvider(
+            template=self.template,
+            reconnect_tries=int(os.environ.get("QEA_E2B_RECONNECT_TRIES", "4")),
+            reconnect_backoff=float(os.environ.get("QEA_BACKOFF_BASE_SEC", "2.0")),
+        )
         agent = Agent(client=client, name="qea-base", tools=[code_exec], max_turns=self.max_turns)
-        async with agent.session(output_dir=str(out_dir)) as session:
+        # GDPval ships reference INPUT files; upload them so the agent uses real
+        # inputs instead of improvising (Stirrup lists them in the system prompt).
+        ref_files = [str(p) for p in getattr(task, "reference_files", None) or []
+                     if Path(p).exists()]
+        sess_kwargs: dict = {"output_dir": str(out_dir)}
+        if ref_files:
+            sess_kwargs["input_files"] = ref_files
+        async with agent.session(**sess_kwargs) as session:
             finish_params, history, _metadata = await session.run(task.prompt)
         files = [p for p in out_dir.rglob("*") if p.is_file()]
         return Deliverable(str(task.task_id), _extract_final_text(finish_params, history), files)
