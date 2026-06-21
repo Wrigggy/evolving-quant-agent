@@ -1,5 +1,23 @@
 # Findings — vanilla Stirrup-on-E2B base harness (GDPval finance, 2026-06-21)
 
+## UPDATE (post penalty-scoring fix + 补跑)
+
+After fixing `score_rubric` for GDPval penalty criteria (denominator = positive-point
+total, penalties subtract, clamp [0,1]) and re-grading saved deliverables + re-running
+the missing tasks (`--reuse`, max_turns 60):
+
+- **26/30 graded | mean multimodal 0.807 | text-only 0.787 | baseline 0.618 → worker effect +0.169.**
+- **No score >1.0 anymore** (`2d06bc0a` 1.066 → 1.000).
+- 补跑 recovered `46b34f78` (0→0.895), `0818571f` (0→0.802), `664a42e5` (fail→0.950),
+  `43dc9778` partial (0→0.252).
+- 4 residual infra failures: 2 sandbox-timeouts (60-turn runs exceed the 1800s sandbox
+  window — turns/lifetime tradeoff), 1 LLM disconnect, 1 judge JSON parse.
+
+The sections below describe the first (pre-fix) full run for history.
+
+---
+
+
 Setup: vanilla Stirrup agentic worker (deepseek-v4-pro), E2B sandbox, GDPval
 reference INPUT files uploaded, multimodal per-rubric grading (qwen/qwen3.7-plus
 over LibreOffice-rendered pages + extracted text), scoring math unchanged from
