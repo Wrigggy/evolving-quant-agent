@@ -24,10 +24,10 @@ from .harness import SLOTS, Edit
 # --------------------------------------------------------------------------- #
 # quant_agent.                                                                 #
 # --------------------------------------------------------------------------- #
-def quant_agent_solve(task, harness, *, mock: bool, llm):
+def quant_agent_solve(task, harness, *, mock: bool, llm, artifact_dir=None):
     if mock:
         return _quant_solve_mock(task, harness)
-    return _quant_solve_real(task, harness, llm)
+    return _quant_solve_real(task, harness, llm, artifact_dir=artifact_dir)
 
 
 def _quant_solve_mock(task, harness):
@@ -40,7 +40,7 @@ def _quant_solve_mock(task, harness):
     return {"runnable": runnable, "parameterized": parameterized, "memorized": memorized}
 
 
-def _quant_solve_real(task, harness, llm):
+def _quant_solve_real(task, harness, llm, artifact_dir=None):
     sys = harness.assemble_system_prompt()
     if task.pile == "A":
         prompt = (
@@ -50,8 +50,21 @@ def _quant_solve_real(task, harness, llm):
         )
         txt = llm.complete(prompt, role="quant_agent")
         return _extract_code(txt)
-    prompt = f"{sys}\n\nTASK: {task.prompt}\n\nWrite the deliverable."
-    return llm.complete(prompt, role="quant_agent")
+    can_xlsx = harness.has("tool", "xlsx_writer")
+    extra = ""
+    if can_xlsx:
+        extra = (
+            "\n\nIf the task requires a spreadsheet/workbook deliverable, output a "
+            "single Python code block that uses `openpyxl` to build the workbook and "
+            "save it (use the exact filename the task requires) in the current "
+            "directory. Otherwise, write the text deliverable."
+        )
+    prompt = f"{sys}\n\nTASK: {task.prompt}\n\nWrite the deliverable.{extra}"
+    txt = llm.complete(prompt, role="quant_agent")
+    if can_xlsx:
+        from .artifacts import assemble_artifact_deliverable
+        return assemble_artifact_deliverable(txt, task, artifact_dir)
+    return txt
 
 
 def _extract_code(txt: str) -> str:
@@ -206,8 +219,8 @@ def _propose_real(iteration, eval_summary, diagnosis, harness, buffer, llm):
         failing_context = "FAILING TASKS:\n" + "\n".join(fails)
     prompt = (
         "You evolve a quant agent harness with 7 slots "
-        "(tool/middleware/skill/prompt/validator/memory/router). The seed has only "
-        "the code_exec tool. Propose EXACTLY ONE edit, justified by evidence.\n\n"
+        "(tool/middleware/skill/prompt/validator/memory/router). The seed has the "
+        "code_exec and xlsx_writer tools. Propose EXACTLY ONE edit, justified by evidence.\n\n"
         f"CURRENT HARNESS: {json.dumps(harness.summary())}\n\n"
         f"DIAGNOSIS: {diagnosis.get('root_cause_tag')} — {diagnosis.get('overview')}\n\n"
         f"{failing_context}\n\n"

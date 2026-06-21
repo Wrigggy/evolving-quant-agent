@@ -58,6 +58,29 @@ def _truthy(v) -> bool:
         return v.strip().lower() in ("true", "yes", "1", "y", "satisfied")
     return False
 
+def build_rubric_prompt(task, deliverable: str, items: list, *, has_images: bool = False) -> str:
+    """Single source of truth for the per-criterion rubric prompt (text + multimodal)."""
+    lines = [f"{i + 1}. (+{c['points']}) {c['criterion']}" for i, c in enumerate(items)]
+    img_note = (" Rendered pages of the deliverable are attached as images; "
+                "its extracted text is included below." if has_images else "")
+    return (
+        "You are grading a finance deliverable against an itemized GDPval rubric. "
+        "For EACH numbered criterion, decide whether the deliverable satisfies it. "
+        'Return ONLY a JSON object mapping each criterion number (as a string) to '
+        "true or false." + img_note + "\n\n"
+        f"TASK:\n{task.prompt}\n\nRUBRIC:\n" + "\n".join(lines) +
+        f"\n\nDELIVERABLE:\n{deliverable}\n\nJSON:"
+    )
+
+
+def score_rubric(txt: str, items: list) -> tuple[float, dict]:
+    """Parse judge JSON -> (points-weighted continuous fraction in [0,1], verdicts)."""
+    verdicts = _parse_json_obj(txt) or {}
+    earned = sum(c["points"] for i, c in enumerate(items) if _truthy(verdicts.get(str(i + 1))))
+    total = sum(c["points"] for c in items) or 1.0
+    return earned / total, verdicts
+
+
 # Mock soft-judge pass threshold and the jitter amplitude used to model the
 # non-determinism of an LLM judge (iron law 2 / 3 illustration).
 _SOFT_PASS = 0.60
@@ -257,20 +280,9 @@ class SoftJudge:
         items = getattr(task, "rubric_items", None) or []
         if not items:
             return self._real_holistic(task, deliverable), {}
-        lines = [f"{i + 1}. (+{c['points']}) {c['criterion']}" for i, c in enumerate(items)]
-        prompt = (
-            "You are grading a finance deliverable against an itemized GDPval rubric. "
-            "For EACH numbered criterion, decide whether the deliverable satisfies it. "
-            'Return ONLY a JSON object mapping each criterion number (as a string) to '
-            "true or false.\n\n"
-            f"TASK:\n{task.prompt}\n\nRUBRIC:\n" + "\n".join(lines) +
-            f"\n\nDELIVERABLE:\n{deliverable}\n\nJSON:"
-        )
+        prompt = build_rubric_prompt(task, deliverable, items)
         txt = self.llm.complete(prompt, role="judge")
-        verdicts = _parse_json_obj(txt) or {}
-        earned = sum(c["points"] for i, c in enumerate(items) if _truthy(verdicts.get(str(i + 1))))
-        total = sum(c["points"] for c in items) or 1.0
-        return earned / total, verdicts
+        return score_rubric(txt, items)
 
     def _real_holistic(self, task, deliverable: str) -> float:
         prompt = (

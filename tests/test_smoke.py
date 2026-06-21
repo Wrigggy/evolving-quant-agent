@@ -218,6 +218,46 @@ def test_provider_pin_is_per_model_official(monkeypatch):
     assert provider_for("qwen/qwen3.7-max", pmap) == "other"        # env overrides built-in
 
 
+def test_anthropic_llm_routes_role_to_model_and_parses(monkeypatch):
+    # AnthropicLLM resolves per-role model, calls messages.create, parses text blocks.
+    anthropic = pytest.importorskip("anthropic")
+    from qea.llm import AnthropicLLM
+    seen = {}
+
+    class FakeBlock:
+        type = "text"
+        def __init__(self, text): self.text = text
+
+    class FakeResp:
+        def __init__(self, text): self.content = [FakeBlock(text)]
+
+    class FakeClient:
+        def __init__(self, **kw):
+            seen["init"] = kw
+            self.messages = self
+        def create(self, *, model, max_tokens, temperature, messages):
+            seen["model"] = model
+            return FakeResp(f"hello from {model}")
+
+    monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
+    monkeypatch.setenv("QEA_ANTHROPIC_AUTH_TOKEN", "tok")
+    monkeypatch.setenv("QEA_ANTHROPIC_BASE_URL", "https://example/apps/anthropic")
+    monkeypatch.setenv("QEA_JUDGE_MODEL", "deepseek-v4-pro[1m]")
+    out = AnthropicLLM().complete("hi", role="judge")
+    assert out == "hello from deepseek-v4-pro[1m]"
+    assert seen["model"] == "deepseek-v4-pro[1m]"            # role -> model resolution
+    assert seen["init"]["base_url"] == "https://example/apps/anthropic"
+    assert seen["init"]["auth_token"] == "tok"               # Bearer-token auth
+
+
+def test_make_llm_selects_anthropic_backend_when_token_set(monkeypatch):
+    anthropic = pytest.importorskip("anthropic")
+    import qea.llm as llmmod
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **kw: type("C", (), {"messages": None})())
+    monkeypatch.setenv("QEA_ANTHROPIC_AUTH_TOKEN", "tok")
+    assert type(llmmod.make_llm(False)).__name__ == "AnthropicLLM"
+
+
 def test_gdpval_local_fork_preferred():
     # The rubric fork in data/gdpval/ must be used (no network) when present.
     from qea.tasks import _GDPVAL_LOCAL_PARQUET, _load_gdpval_df
@@ -360,3 +400,160 @@ def test_benchmark_owns_grader_and_corpus():
     assert bm.grader is not None
     assert isinstance(bm.answer_corpus, list) and len(bm.answer_corpus) > 0
     assert bm.debugger_kind == "b_pile"
+
+
+def test_exec_artifact_produces_xlsx_and_scrubs_env(tmp_path, monkeypatch):
+    import pytest
+    pytest.importorskip("openpyxl")
+    from qea.sandbox import exec_artifact
+    monkeypatch.setenv("OPENROUTER_API_KEY", "SECRET_KEY_DO_NOT_LEAK")
+    code = (
+        "import openpyxl, os\n"
+        "assert 'OPENROUTER_API_KEY' not in os.environ, 'secret leaked into child'\n"
+        "wb = openpyxl.Workbook(); ws = wb.active; ws['A1'] = 'hello'\n"
+        "wb.save('report.xlsx')\n"
+    )
+    res = exec_artifact(code, timeout=10.0)
+    assert res.status == "success"
+    assert len(res.paths) == 1 and res.paths[0].name == "report.xlsx"
+
+
+def test_exec_artifact_error_and_timeout_dont_crash_parent():
+    import pytest
+    from qea.sandbox import exec_artifact
+    err = exec_artifact("raise RuntimeError('boom')\n", timeout=10.0)
+    assert err.status == "error" and "boom" in err.stderr
+    slow = exec_artifact("while True:\n    pass\n", timeout=1.0)
+    assert slow.status == "timeout"   # parent process is still alive to assert this
+
+
+def test_render_xlsx_dumps_values_and_formulas(tmp_path):
+    import pytest
+    pytest.importorskip("openpyxl")
+    import openpyxl
+    from qea.artifacts import render_xlsx
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Summary"
+    ws["A1"] = "Revenue"; ws["B1"] = 1000; ws["B2"] = "=B1*2"
+    p = tmp_path / "model.xlsx"; wb.save(p)
+    text = render_xlsx(p)
+    assert "[ARTIFACT FILE: model.xlsx]" in text
+    assert 'Sheet "Summary"' in text
+    assert "'Revenue'" in text and "1000" in text
+    assert "=B1*2" in text          # formula string is rendered (data_only=False)
+
+
+def test_extract_openpyxl_code():
+    from qea.artifacts import extract_openpyxl_code
+    md = "Here is the workbook:\n```python\nimport openpyxl\nwb=openpyxl.Workbook()\nwb.save('x.xlsx')\n```\nDone."
+    code = extract_openpyxl_code(md)
+    assert code is not None and "openpyxl" in code and "save(" in code
+    assert extract_openpyxl_code("just a plain memo, no code") is None
+    assert extract_openpyxl_code("```python\nprint('hi')\n```") is None  # not an artifact block
+    # robust to fence-tag variation (```py / ```Python) and whitespace in .save(
+    assert extract_openpyxl_code("```py\nimport openpyxl\nopenpyxl.Workbook().save( 'x.xlsx' )\n```") is not None
+    assert extract_openpyxl_code("```Python\nimport openpyxl\nopenpyxl.Workbook().save('x.xlsx')\n```") is not None
+
+
+def _BTaskStub(tid="b1"):
+    from qea.tasks import BTask
+    return BTask(task_id=tid, subtype="Accountants and Auditors", prompt="produce report.xlsx", rubric="")
+
+def test_assemble_artifact_deliverable_produces_and_persists(tmp_path):
+    import pytest
+    pytest.importorskip("openpyxl")
+    from qea.artifacts import assemble_artifact_deliverable
+    llm_text = ("Here is the workbook.\n```python\nimport openpyxl\n"
+                "wb=openpyxl.Workbook(); ws=wb.active; ws.title='Summary'; ws['A1']='Total'; ws['B1']=42\n"
+                "wb.save('report.xlsx')\n```")
+    artifact_dir = tmp_path / "artifacts"
+    out = assemble_artifact_deliverable(llm_text, _BTaskStub(), artifact_dir)
+    assert "[ARTIFACT FILE: report.xlsx]" in out and "'Total'" in out
+    assert "import openpyxl" not in out            # raw code stripped from the narrative
+    assert (artifact_dir / "b1" / "report.xlsx").exists()   # persisted under <dir>/<task_id>/
+
+def test_assemble_artifact_deliverable_text_and_error_paths(tmp_path):
+    from qea.artifacts import assemble_artifact_deliverable
+    # plain text task -> unchanged
+    assert assemble_artifact_deliverable("just a memo", _BTaskStub(), tmp_path) == "just a memo"
+    # erroring artifact code -> graceful: keep the narrative, no crash
+    bad = "```python\nimport openpyxl\nraise RuntimeError('x')\nwb=1\n.save('y.xlsx')\n```narrative"
+    out = assemble_artifact_deliverable(bad, _BTaskStub(), tmp_path)
+    assert "[ARTIFACT FILE" not in out             # nothing produced
+
+def test_assemble_artifact_deliverable_survives_corrupt_xlsx(tmp_path):
+    import pytest
+    pytest.importorskip("openpyxl")
+    from qea.artifacts import assemble_artifact_deliverable
+    # child exits 0 but writes a NON-xlsx file named report.xlsx -> exec "success" but
+    # render_xlsx would raise BadZipFile. Must degrade to a placeholder, not crash.
+    bad = ("```python\nimport openpyxl\n# not a real .save( call:\n"
+           "open('report.xlsx','w').write('not a zip')\n```done")
+    out = assemble_artifact_deliverable(bad, _BTaskStub(), tmp_path)
+    assert "report.xlsx" in out and "unreadable workbook" in out   # placeholder, no raise
+
+
+def test_seed_has_xlsx_writer():
+    from qea.harness import seed_harness
+    h = seed_harness()
+    assert h.has("tool", "xlsx_writer") and h.has("tool", "code_exec")
+
+
+def test_b_worker_real_produces_artifact_when_seed_has_tool(tmp_path):
+    import pytest
+    pytest.importorskip("openpyxl")
+    from qea.agents import quant_agent_solve
+    from qea.harness import seed_harness
+    from qea.tasks import BTask
+
+    class CodeLLM:
+        def complete(self, prompt, *, role="quant_agent"):
+            assert "openpyxl" in prompt   # the seed tool advertised the capability
+            return ("Workbook attached.\n```python\nimport openpyxl\n"
+                    "wb=openpyxl.Workbook(); wb.active['A1']='ok'; wb.save('out.xlsx')\n```")
+    t = BTask(task_id="bx", subtype="x", prompt="make out.xlsx", rubric="")
+    out = quant_agent_solve(t, seed_harness(), mock=False, llm=CodeLLM(), artifact_dir=tmp_path)
+    assert "[ARTIFACT FILE: out.xlsx]" in out
+    assert (tmp_path / "bx" / "out.xlsx").exists()
+
+
+def test_b_worker_real_text_task_unchanged():
+    from qea.agents import quant_agent_solve
+    from qea.harness import seed_harness
+    from qea.tasks import BTask
+    class TextLLM:
+        def complete(self, prompt, *, role="quant_agent"):
+            return "A plain advisory memo with no spreadsheet."
+    t = BTask(task_id="bt", subtype="x", prompt="write a memo", rubric="")
+    out = quant_agent_solve(t, seed_harness(), mock=False, llm=TextLLM(), artifact_dir=None)
+    assert out == "A plain advisory memo with no spreadsheet."
+
+
+def test_b_worker_mock_unaffected():
+    from qea.agents import quant_agent_solve
+    from qea.harness import seed_harness
+    from qea.tasks import BTask
+    t = BTask(task_id="bm", subtype="x", prompt="p", rubric="")
+    assert quant_agent_solve(t, seed_harness(), mock=True, llm=None) == ""
+
+
+def test_softjudge_credits_artifact_from_rendering():
+    # Interim grader bridge end-to-end: a rendered-artifact deliverable lets the
+    # EXISTING text SoftJudge credit artifact rubric criteria (the format-basin fix).
+    import json
+    from qea.tasks import BTask
+    from qea.verifier import SoftJudge
+
+    class ArtifactJudge:
+        # credits each criterion iff the deliverable text shows the workbook/sheet
+        def complete(self, prompt, *, role="judge"):
+            d = prompt.split("DELIVERABLE:")[1]
+            v = {"1": "report.xlsx" in d, "2": 'Sheet "Summary"' in d}
+            return json.dumps({k: bool(x) for k, x in v.items()})
+
+    t = BTask(task_id="b", subtype="x", prompt="produce report.xlsx", rubric="",
+              rubric_items=[{"points": 1, "criterion": "submitted as an Excel workbook named report.xlsx"},
+                            {"points": 1, "criterion": "has a Summary sheet"}])
+    deliverable = 'Done.\n\n[ARTIFACT FILE: report.xlsx]\nSheet "Summary" (1x1):\n  A1: \'Total\''
+    r = SoftJudge(ArtifactJudge()).score(t, deliverable, None, mock=False, k=1)
+    assert r.score == 1.0                       # both artifact criteria credited
+    assert r.criterion_verdicts == {"1": True, "2": True}

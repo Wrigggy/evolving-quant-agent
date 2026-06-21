@@ -212,6 +212,36 @@ offline `--mock` plumbing test.
 harness always produces the same deliverable text within a run, eliminating
 regeneration noise from the rubric-score comparisons.
 
+### File-producing worker (v0.1)
+
+The B-pile worker can now produce a real `.xlsx` file instead of text-only output.
+The flow: the worker emits an `openpyxl` code block → `exec_artifact` runs it in a
+subprocess sandbox (temp `work_dir`, scrubbed environment with no secrets, killed
+on timeout — the AHE `LocalSandbox` pattern) → the produced file is persisted under
+`results/<run>/artifacts/<task_id>/` → `render_xlsx` converts it to faithful text
+(filename + sheets + cell values + formula strings) appended to the deliverable, so
+the existing rubric grader can credit artifact criteria such as "submitted as an
+Excel workbook named X with sheet Y". This unblocks the **format basin** for
+Accountants/Auditors tasks (rubric mean 0.100) where format/layout criteria were
+failing on text-only output.
+
+**Install the `[artifacts]` extra** to enable xlsx production:
+
+```bash
+pip install -e ".[artifacts]"
+```
+
+**v0.1 known limit:** openpyxl-written formulas are persisted as formula strings
+without computed values — `render_xlsx` faithfully reports them as-is (e.g.
+`=SUM(B2:B10)`). Formula value computation is deferred to sub-project 3 (LibreOffice
+recalc or a `formulas`/`pycel` engine).
+
+This is **sub-project 1 of 3** toward faithful GDPval file grading:
+- Sub-project 2: gold human-deliverable file acquisition (fetch + cache the binary
+  files behind `deliverable_file_urls` in the GDPval fork).
+- Sub-project 3: faithful file-aware / multimodal grader (xlsx → LibreOffice-headless
+  render → image → multimodal judge, plus formula-value computation).
+
 ## Acceptance
 
 Mechanism-level (not absolute score). The offline `--mock` run and
@@ -245,6 +275,8 @@ qea/
   agents.py        quant_agent + evolve_agent (scripted mock) + diagnose (B-pile branch + firewall)
   llm.py           OpenRouter client (provider pin / backoff) + MockLLM
   observability.py three-layer persistence
+  sandbox.py       exec_artifact: subprocess executor (AHE LocalSandbox pattern) -> ArtifactResult
+  artifacts.py     extract_openpyxl_code + render_xlsx + assemble_artifact_deliverable
 run.py             CLI entry (--mock / --real)
 tests/test_smoke.py
 ROADMAP.md         next steps, explicitly NOT-in-v0

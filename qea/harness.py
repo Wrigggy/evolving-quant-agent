@@ -136,7 +136,8 @@ class Harness:
 
 
 def seed_harness() -> Harness:
-    """Minimal seed: one tool (deterministic code-execution sandbox), six empty slots."""
+    """Minimal seed: two tools (the deterministic code-execution sandbox `code_exec`
+    and the `xlsx_writer` artifact capability), the other six slots empty."""
     h = Harness()
     h.slots["tool"]["code_exec"] = Component(
         name="code_exec",
@@ -146,6 +147,17 @@ def seed_harness() -> Harness:
             "Deterministic, sandboxed, with a wall-clock timeout."
         ),
         effect="exec_ok",
+        origin="seed",
+    )
+    h.slots["tool"]["xlsx_writer"] = Component(
+        name="xlsx_writer",
+        slot="tool",
+        content=(
+            "xlsx_writer: produce an .xlsx workbook deliverable by emitting a Python "
+            "code block using openpyxl that builds and saves the file; it is run in a "
+            "sandbox and the produced workbook is captured and graded."
+        ),
+        effect="artifact_ok",
         origin="seed",
     )
     return h

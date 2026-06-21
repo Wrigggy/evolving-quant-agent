@@ -195,6 +195,7 @@ class BTask:
     prompt: str
     rubric: str                              # rubric_pretty (human-readable)
     rubric_items: list = field(default_factory=list)  # [{points, criterion}] from rubric_json
+    reference_files: list = field(default_factory=list)  # local paths of GDPval input files
     gold: str | None = None
     gdpval_lineage: str = ""
     # Mock-only: scores the world model returns with/without the discipline a
@@ -397,6 +398,24 @@ _GDPVAL_PARQUET_URL = (
 # Local fork of the gold parquet (scripts/fork_gdpval.py); preferred over the
 # network so runs are pinned to the snapshot in data/gdpval/MANIFEST.md.
 _GDPVAL_LOCAL_PARQUET = Path(__file__).resolve().parent.parent / "data" / "gdpval" / "gdpval_gold.parquet"
+# GDPval reference INPUT files, fetched by scripts/fetch_gdpval_reference_files.py to
+# data/gdpval/reference_files/<task_id>/<basename>. Empty if not yet fetched.
+_GDPVAL_REF_DIR = Path(__file__).resolve().parent.parent / "data" / "gdpval" / "reference_files"
+
+
+def _local_reference_files(task_id: str, ref_entries) -> list[str]:
+    """Map a row's reference_files entries to existing local paths (or []) ."""
+    out: list[str] = []
+    try:
+        entries = list(ref_entries) if ref_entries is not None else []
+    except TypeError:
+        entries = []
+    for e in entries:
+        name = str(e).split("/")[-1]
+        p = _GDPVAL_REF_DIR / str(task_id) / name
+        if p.exists():
+            out.append(str(p))
+    return out
 
 
 def _load_gdpval_df():
@@ -443,6 +462,7 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> l
                         prompt=str(row["prompt"]),
                         rubric=str(row.get("rubric_pretty", "")),
                         rubric_items=_parse_rubric_json(row.get("rubric_json")),
+                        reference_files=_local_reference_files(row["task_id"], row.get("reference_files")),
                         gdpval_lineage=f"gdpval:{row['occupation']} (real, original task)",
                     )
                 )

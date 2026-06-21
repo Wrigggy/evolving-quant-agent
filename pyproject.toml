@@ -1,6 +1,6 @@
 [project]
 name = "evolving-quant-agent"
-version = "0.0.1"
+version = "0.1.0"
 description = "QEA v0 — a task-family-aware evolutionary harness for quant/finance numeric tasks. Reuses the AHE evolve->falsify->rollback loop with quant semantics."
 requires-python = ">=3.10"
 # Core is PURE STDLIB on purpose (v0 is a mechanism check): `python run.py --mock`
@@ -9,15 +9,29 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
-# Real OpenRouter run (quant_agent / evolve_agent / judge).
-real = ["openai>=1.40"]
+# Real run. openai = OpenRouter backend; anthropic = DashScope/Anthropic-compatible
+# backend (auto-selected when QEA_ANTHROPIC_AUTH_TOKEN is set).
+real = ["openai>=1.40", "anthropic>=0.40"]
 # Real GDPval B-pile loader (HuggingFace parquet). Without these, the loader
 # falls back to bundled offline fixtures so mock + offline still work.
 gdpval = ["pandas>=2.0", "pyarrow>=14.0"]
+# Real .xlsx artifact production by the B-pile worker (subprocess exec + render).
+artifacts = ["openpyxl>=3.1"]
+# Stirrup-on-E2B base-harness test: vanilla Stirrup agentic worker + multimodal
+# render (LibreOffice-headless is a SYSTEM dep, not pip). See
+# docs/superpowers/specs/2026-06-21-stirrup-e2b-base-harness-design.md
+stirrup = [
+    # stirrup[e2b] pulls e2b + e2b-code-interpreter (the E2B backend needs both).
+    "stirrup[e2b] @ git+https://github.com/ArtificialAnalysis/Stirrup.git",
+    "pymupdf",
+    "python-pptx",
+    "python-docx",
+    "openpyxl>=3.1",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["qea"]
+packages = ["qea", "qea.grading", "qea.workers"]
