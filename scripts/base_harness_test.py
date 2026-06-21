@@ -80,7 +80,7 @@ def main() -> None:
         else:
             tasks = tasks[: args.n]
     judge_k = int(os.environ.get("QEA_JUDGE_K", "2"))
-    worker_retries = int(os.environ.get("QEA_WORKER_RETRIES", "3"))
+    worker_retries = int(os.environ.get("QEA_WORKER_RETRIES", "5"))
     backoff = float(os.environ.get("QEA_BACKOFF_BASE_SEC", "2.0"))
 
     worker = StirrupWorker()
