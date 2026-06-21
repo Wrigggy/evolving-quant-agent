@@ -73,6 +73,10 @@ class StirrupWorker:
         client = ChatCompletionsClient(
             base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
             model=self.model,
+            # Transport-level retries of a SINGLE failed call (flaky SOCKS proxy ->
+            # "Server disconnected"). This recovers the one output; it is NOT a
+            # whole-task re-roll / best-of-N (the conversation is unchanged).
+            max_retries=int(os.environ.get("QEA_LLM_MAX_RETRIES", "6")),
         )
         # Reconnecting provider: an E2B disconnect retries the sandbox command only
         # (LLM untouched -> single output attempt). Tunable via QEA_E2B_RECONNECT_TRIES.
