@@ -63,6 +63,24 @@ def test_score_rubric_points_weighted_fraction():
     assert verdicts == {"1": True, "2": False}
 
 
+def test_score_rubric_handles_negative_penalty_criteria():
+    # GDPval rubrics include authored penalty criteria (negative points). Denominator
+    # must be the POSITIVE-point total (max achievable), and result clamped to [0,1],
+    # else a flawless deliverable that banks positives + avoids the penalty scores >1.
+    items = [{"points": 2, "criterion": "good A"},
+             {"points": 2, "criterion": "good B"},
+             {"points": -5, "criterion": "bad thing present (penalty)"}]
+    # all positives satisfied, penalty NOT triggered -> perfect 1.0 (was 4/-1 -> bug)
+    frac, _ = score_rubric('{"1": true, "2": true, "3": false}', items)
+    assert abs(frac - 1.0) < 1e-9
+    # penalty triggered -> (4 - 5)/4 = -0.25 -> clamped to 0.0
+    frac2, _ = score_rubric('{"1": true, "2": true, "3": true}', items)
+    assert abs(frac2 - 0.0) < 1e-9
+    # one positive + no penalty -> 2/4 = 0.5
+    frac3, _ = score_rubric('{"1": true, "2": false, "3": false}', items)
+    assert abs(frac3 - 0.5) < 1e-9
+
+
 def test_build_rubric_prompt_contains_task_rubric_deliverable():
     t = _FakeTask()
     p = build_rubric_prompt(t, "MY DELIVERABLE", t.rubric_items)
