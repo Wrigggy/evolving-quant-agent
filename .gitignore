@@ -17,3 +17,5 @@ venv/
 # GDPval gold/reference binary files (re-fetchable via scripts/fetch_gdpval_deliverables.py)
 data/gdpval/deliverable_files/
 data/gdpval/reference_files/
+.venv312/
+output/

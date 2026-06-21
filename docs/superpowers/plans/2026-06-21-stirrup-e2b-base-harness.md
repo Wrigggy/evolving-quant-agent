@@ -99,7 +99,18 @@ Run once after install; read the printed output and update qea/workers/stirrup_w
 """
 import asyncio, os, json
 from pathlib import Path
-from dotenv import load_dotenv
+
+
+def load_dotenv(path=".env"):  # no-dep loader (repo convention; python-dotenv not a dep)
+    p = Path(path)
+    if not p.exists():
+        return
+    for line in p.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, _, v = line.partition("=")
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
 
 load_dotenv()
 # Stirrup's ChatCompletionsClient may read OPENAI_API_KEY rather than OPENROUTER_API_KEY.
