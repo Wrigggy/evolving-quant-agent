@@ -82,6 +82,9 @@ class StirrupWorker:
         # (LLM untouched -> single output attempt). Tunable via QEA_E2B_RECONNECT_TRIES.
         code_exec = ReconnectingE2BCodeExecToolProvider(
             template=self.template,
+            # Sandbox lifetime must exceed a full agentic run; default 600s (10 min)
+            # expires mid-run at 40 turns on data-heavy tasks ("sandbox not found").
+            timeout=int(os.environ.get("QEA_E2B_SANDBOX_TIMEOUT", "1800")),
             reconnect_tries=int(os.environ.get("QEA_E2B_RECONNECT_TRIES", "4")),
             reconnect_backoff=float(os.environ.get("QEA_BACKOFF_BASE_SEC", "2.0")),
         )
