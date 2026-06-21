@@ -29,6 +29,10 @@ stirrup = [
     "openpyxl>=3.1",
 ]
 
+fab = [
+    "beautifulsoup4>=4.12", "lxml>=5.0", "ddgs>=9.0",
+]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
