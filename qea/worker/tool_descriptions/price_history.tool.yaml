@@ -1,0 +1,11 @@
+type: tool
+name: price_history
+description: Daily OHLCV price history for an equity ticker (free, via Yahoo/stooq).
+input_schema:
+  type: object
+  properties:
+    ticker: {type: string, description: "Ticker, e.g. 'AAPL'."}
+    start: {type: string, description: "Start date YYYY-MM-DD."}
+    end: {type: string, description: "End date YYYY-MM-DD."}
+  required: [ticker, start, end]
+  additionalProperties: false

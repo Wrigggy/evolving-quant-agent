@@ -1,0 +1,39 @@
+type: agent
+name: qea_fab_worker
+max_context_tokens: 200000
+system_prompt: ./systemprompt.md
+system_prompt_type: jinja
+tool_call_mode: openai
+max_iterations: 40
+
+llm_config:
+  model: ${env.LLM_MODEL}
+  base_url: ${env.LLM_BASE_URL}
+  api_key: ${env.LLM_API_KEY}
+  max_tokens: 8000
+  temperature: 0.2
+  stream: true
+  api_type: openai_chat_completion
+
+tools:
+  - name: edgar_search
+    yaml_path: ./tool_descriptions/edgar_search.tool.yaml
+    binding: tools.fab.research:edgar_search
+  - name: company_filings
+    yaml_path: ./tool_descriptions/company_filings.tool.yaml
+    binding: tools.fab.research:company_filings
+  - name: fetch_page
+    yaml_path: ./tool_descriptions/fetch_page.tool.yaml
+    binding: tools.fab.research:fetch_page
+  - name: retrieve_from_filing
+    yaml_path: ./tool_descriptions/retrieve_from_filing.tool.yaml
+    binding: tools.fab.research:retrieve_from_filing
+  - name: price_history
+    yaml_path: ./tool_descriptions/price_history.tool.yaml
+    binding: tools.fab.research:price_history
+  - name: web_search
+    yaml_path: ./tool_descriptions/web_search.tool.yaml
+    binding: tools.fab.research:web_search
+
+tracers:
+  - import: nexau.archs.tracer.adapters.in_memory:InMemoryTracer
