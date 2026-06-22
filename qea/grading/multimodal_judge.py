@@ -30,9 +30,15 @@ class MultimodalJudge:
         self.llm = llm
         self.k = k
 
+    # Cap deliverable text fed to the judge: a data-heavy .xlsx can extract to >1M
+    # tokens and overflow the judge's context. Page images carry the layout; this
+    # bounds the text portion. Tunable via QEA_JUDGE_DELIVERABLE_CHARS.
+    import os as _os
+    MAX_DELIVERABLE_CHARS = int(_os.environ.get("QEA_JUDGE_DELIVERABLE_CHARS", "60000"))
+
     def grade(self, task, rendered) -> GradeResult:
         items = getattr(task, "rubric_items", None) or []
-        deliverable_text = rendered.extracted_text or rendered.text
+        deliverable_text = (rendered.extracted_text or rendered.text)[:self.MAX_DELIVERABLE_CHARS]
         if not items:
             return GradeResult(task.task_id, 0.0, 0.0, {}, 0.0, True)
 
