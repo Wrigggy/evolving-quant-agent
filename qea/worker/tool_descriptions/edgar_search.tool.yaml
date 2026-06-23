@@ -1,0 +1,10 @@
+type: tool
+name: edgar_search
+description: Full-text search SEC EDGAR filings (free official API). Returns matching filings with company, form, date, and document URL.
+input_schema:
+  type: object
+  properties:
+    query: {type: string, description: "Full-text query, e.g. 'CrowdStrike Charlotte AI'."}
+    forms: {type: string, description: "Optional comma-separated form types, e.g. '10-K,10-Q'."}
+  required: [query]
+  additionalProperties: false

@@ -20,3 +20,4 @@ data/gdpval/reference_files/
 .venv312/
 output/
 docs/*.html
+.venv-nexau/
