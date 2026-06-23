@@ -58,6 +58,23 @@ Each evolve iteration snapshots `qea/worker/` into `experiments/<ts>/worker/` (A
 - **Phase 3 — structure + GDPval:** reorganize into `qea/{bench,evolve,worker}`; add shell/code tool + sandbox file-export for GDPval; multimodal grading unchanged; reproduce GDPval base.
 - **Phase 4 — Level-B evolve loop:** wire the evolve loop + evolve-agent file-tools scoped to `qea/worker/`; snapshot per iteration; weaken the seed; measure headroom (weak-seed vs configured).
 
+## Architecture (the mental model — worker vs evolve vs loop)
+NOT "NexAU nested in NexAU". It is a **deterministic loop (plain code, NOT an agent)
+orchestrating TWO sibling NexAU agents** at different levels:
+- **worker agent** (NexAU) — does the benchmark task (`qea/worker/`, `qea/worker_gdpval/`).
+- **evolve agent** (NexAU, **Phase 4, not built yet**) — edits the worker DIRECTORY's
+  files (prompt/tools/skills) via file-edit tools; the AHE `agents/evolve_agent` analog.
+- **loop** (`qea/loop.py`, deterministic code) — runs worker→score, feeds results to the
+  evolve agent, it edits the dir, loop re-runs worker → keep/rollback. keep/rollback +
+  fair scoring + budget stay in CODE, not inside an agent.
+
+The current QEA evolve agent (`qea/agents.py` `evolve_agent_propose`) is **text-only**
+(single LLM call → JSON slot-edit, Level A) and is NOT a NexAU agent. Spike
+`scripts/nexau_edit_spike.py` confirms a NexAU agent CAN edit a harness file in place →
+Phase 4 = make the evolve agent a file-editing NexAU agent (Level B) + weaken the seed.
+NexAU supports sub-agents, so evolve COULD run worker nested — but don't; siblings + a
+code loop is cleaner (AHE pattern).
+
 ## Out of scope (now)
 - The actual evolution *experiments* (just stand up the loop + measure headroom).
 - Porting the old `--mock` synthetic A-pile fixture to NexAU (evolution-side; leave on the current path until Phase 4 needs it).
