@@ -140,21 +140,34 @@ def main():
     done = [0]
     print(f"running {len(tasks)} GDPval tasks on NexAU | conc {conc} | judge k={k}", flush=True)
 
+    import time as _time
+    attempts = int(os.environ.get("QEA_GDPVAL_TASK_ATTEMPTS", "2"))
+
     def process(i, task):
-        try:
-            final_text, produced, mon = run_task(task)
-            rendered = render(final_text, produced, mon_dir / str(task.task_id))
-            res = judge.grade(task, rendered)
-            row = {"id": task.task_id, "sub": task.subtype, "mm": res.multimodal_fraction,
-                   "text": res.text_fraction, "files": len(produced), "imgs": len(rendered.images),
-                   "deg": res.degraded, "err": "", **mon}
-            msg = (f"mm={res.multimodal_fraction:.3f} text={res.text_fraction:.3f} "
-                   f"files={len(produced)} turns={mon['turns']} {mon['secs']}s")
-        except Exception as exc:  # noqa: BLE001
-            row = {"id": task.task_id, "sub": task.subtype, "mm": None, "text": None, "files": 0,
-                   "imgs": 0, "deg": True, "err": f"{type(exc).__name__}: {exc}",
-                   "tool_calls": 0, "tool_errors": 0, "turns": 0, "secs": 0}
-            msg = f"FAIL {type(exc).__name__}: {exc}"
+        # Stagger the first wave's startup so N concurrent TLS handshakes through the
+        # local proxy don't all fire at once (the handshake burst that caused the
+        # ConnectTimeouts). Only spreads each wave by a few seconds.
+        _time.sleep((i % conc) * 2.5)
+        row = msg = None
+        for attempt in range(1, attempts + 1):
+            try:
+                final_text, produced, mon = run_task(task)
+                rendered = render(final_text, produced, mon_dir / str(task.task_id))
+                res = judge.grade(task, rendered)
+                row = {"id": task.task_id, "sub": task.subtype, "mm": res.multimodal_fraction,
+                       "text": res.text_fraction, "files": len(produced), "imgs": len(rendered.images),
+                       "deg": res.degraded, "err": "", **mon}
+                msg = (f"mm={res.multimodal_fraction:.3f} text={res.text_fraction:.3f} "
+                       f"files={len(produced)} turns={mon['turns']} {mon['secs']}s"
+                       + (f" (attempt {attempt})" if attempt > 1 else ""))
+                break
+            except Exception as exc:  # noqa: BLE001
+                row = {"id": task.task_id, "sub": task.subtype, "mm": None, "text": None, "files": 0,
+                       "imgs": 0, "deg": True, "err": f"{type(exc).__name__}: {exc}",
+                       "tool_calls": 0, "tool_errors": 0, "turns": 0, "secs": 0}
+                msg = f"FAIL (attempt {attempt}/{attempts}) {type(exc).__name__}: {exc}"
+                if attempt < attempts:
+                    _time.sleep(5 * attempt)  # backoff before whole-task retry
         rows[i] = row
         with lock:
             done[0] += 1

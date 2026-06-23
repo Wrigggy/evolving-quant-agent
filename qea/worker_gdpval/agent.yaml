@@ -17,6 +17,13 @@ llm_config:
   temperature: 0.2
   stream: true
   api_type: openai_chat_completion
+  # timeout (float seconds) -> httpx.Timeout(connect=read=write=pool=timeout). The OpenAI
+  # SDK default is connect=5s, and under the startup burst (N sandboxes + N concurrent TLS
+  # handshakes through the local SOCKS proxy at once) the proxy can't finish the TLS
+  # handshake in 5s -> httpcore.ConnectTimeout on start_tls -> APITimeoutError on every
+  # retry. 180s gives the handshake (and large-context prefill) ample margin; steady
+  # streaming never approaches the read gap. max_retries default (5) still applies.
+  timeout: 180
 
 tools:
   - name: run_shell_command
