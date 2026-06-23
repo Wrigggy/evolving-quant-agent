@@ -78,25 +78,24 @@ def run_task(task):
     pre = {p for p in workdir.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED}
     cfg = AgentConfig.from_yaml(config_path=WORKER / "agent.yaml")
     agent = Agent(config=cfg)
+    # Pin the sandbox cwd to our isolated per-task dir so the agent's saves (relative
+    # OR absolute) land here -> clean counts + parallel-safe (no shared sandbox dir).
+    try:
+        agent.sandbox_manager.instance.work_dir = workdir
+    except Exception:  # noqa: BLE001
+        pass
     note = (f"\n\nIMPORTANT: Your working directory is {workdir}\n"
             f"The reference input files {sorted(ref_names)} are in that directory. "
-            f"Read inputs from there, and SAVE your deliverable file(s) into that EXACT "
-            f"directory using absolute paths (e.g. {workdir}/Deliverable.xlsx). "
-            f"Run `ls -la {workdir}` to verify your file is saved before finishing.")
+            f"Read inputs from there, and SAVE your deliverable file(s) into that directory. "
+            f"Run `ls -la` to verify your file is saved before finishing.")
     ctx = {"date": "2026-06-23", "username": os.environ.get("USER", "kevin"),
            "working_directory": str(workdir)}
     ctx["env_content"] = dict(ctx)
     resp = agent.run(message=task.prompt + note, context=ctx)
     final_text = resp if isinstance(resp, str) else resp[0]
-    # glob the controlled workdir AND the post-run sandbox work_dir (hedge), union
-    search = [workdir]
-    try:
-        search.append(Path(agent.sandbox_manager.instance.work_dir))
-    except Exception:  # noqa: BLE001
-        pass
-    produced = {p for d in search for p in d.rglob("*")
+    produced = [p for p in workdir.rglob("*")
                 if p.is_file() and p.suffix.lower() in SUPPORTED
-                and p not in pre and p.name not in ref_names}
+                and p not in pre and p.name not in ref_names]
     produced = sorted(produced, key=lambda p: p.stat().st_mtime, reverse=True)
     mon = _trace_summary(agent)
     mon["secs"] = round(time.time() - t0, 1)
@@ -130,14 +129,18 @@ def main():
             tasks = tasks[: args.n]
     k = int(os.environ.get("QEA_JUDGE_K", "2"))
     judge = MultimodalJudge(make_llm(mock=False), k=k)
-    import json
-    rows = []
+    import json, threading
+    from concurrent.futures import ThreadPoolExecutor
+    conc = int(os.environ.get("QEA_GDPVAL_CONCURRENCY", "3"))
+    rows = [None] * len(tasks)
     mon_dir = REPO / "output" / "nexau_gdpval"
     mon_dir.mkdir(parents=True, exist_ok=True)
     monf = open(mon_dir / "monitor.jsonl", "w")
-    print(f"running {len(tasks)} GDPval tasks on NexAU | judge k={k}", flush=True)
-    for i, task in enumerate(tasks, 1):
-        print(f"[{i}/{len(tasks)}] {task.task_id} ({task.subtype}) refs={len(task.reference_files or [])}", flush=True)
+    lock = threading.Lock()
+    done = [0]
+    print(f"running {len(tasks)} GDPval tasks on NexAU | conc {conc} | judge k={k}", flush=True)
+
+    def process(i, task):
         try:
             final_text, produced, mon = run_task(task)
             rendered = render(final_text, produced, mon_dir / str(task.task_id))
@@ -145,16 +148,21 @@ def main():
             row = {"id": task.task_id, "sub": task.subtype, "mm": res.multimodal_fraction,
                    "text": res.text_fraction, "files": len(produced), "imgs": len(rendered.images),
                    "deg": res.degraded, "err": "", **mon}
-            print(f"  mm={res.multimodal_fraction:.3f} text={res.text_fraction:.3f} files={len(produced)} "
-                  f"| turns={mon['turns']} tool_calls={mon['tool_calls']} tool_errs={mon['tool_errors']} "
-                  f"{mon['secs']}s", flush=True)
+            msg = (f"mm={res.multimodal_fraction:.3f} text={res.text_fraction:.3f} "
+                   f"files={len(produced)} turns={mon['turns']} {mon['secs']}s")
         except Exception as exc:  # noqa: BLE001
             row = {"id": task.task_id, "sub": task.subtype, "mm": None, "text": None, "files": 0,
                    "imgs": 0, "deg": True, "err": f"{type(exc).__name__}: {exc}",
                    "tool_calls": 0, "tool_errors": 0, "turns": 0, "secs": 0}
-            print(f"  FAIL {type(exc).__name__}: {exc}", flush=True)
-        rows.append(row)
-        monf.write(json.dumps(row) + "\n"); monf.flush()
+            msg = f"FAIL {type(exc).__name__}: {exc}"
+        rows[i] = row
+        with lock:
+            done[0] += 1
+            print(f"[{done[0]}/{len(tasks)}] {task.task_id} ({task.subtype}) {msg}", flush=True)
+            monf.write(json.dumps(row) + "\n"); monf.flush()
+
+    with ThreadPoolExecutor(max_workers=conc) as pool:
+        list(pool.map(lambda a: process(*a), enumerate(tasks)))
     monf.close()
 
     ok = [r for r in rows if r["mm"] is not None]
