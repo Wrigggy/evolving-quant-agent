@@ -33,34 +33,74 @@ def _load_dotenv():
     os.environ.setdefault("LLM_MODEL", "deepseek/deepseek-v4-pro")
 
 
+def _trace_summary(agent) -> dict:
+    """Lightweight monitoring from the NexAU trace. Message has no tool_calls field
+    (tool activity is in content/role), so count by role: assistant turns + tool-result
+    messages (proxy for tool calls) + error markers in tool results."""
+    turns = tool_results = tool_errors = 0
+    try:
+        for m in (agent.full_trace or []):
+            role = getattr(m, "role", "")
+            try:
+                text = m.get_text_content()
+            except Exception:  # noqa: BLE001
+                text = str(getattr(m, "content", "") or "")
+            if role == "assistant":
+                turns += 1
+            elif role in ("tool", "tool_result", "function", "user") and text:
+                # NexAU surfaces tool outputs as tool/user-role messages
+                if role != "user":
+                    tool_results += 1
+                if any(k in text for k in ("Error", "❌", "failed", "Traceback", "Invalid parameters")):
+                    tool_errors += 1
+    except Exception:  # noqa: BLE001
+        pass
+    return {"tool_calls": tool_results, "tool_errors": tool_errors, "turns": turns}
+
+
 def run_task(task):
-    """Returns (final_text, [produced deliverable file paths])."""
+    """Returns (final_text, [produced deliverable file paths], monitor dict).
+
+    Uses a CONTROLLED absolute working dir (LocalSandbox runs locally, so absolute
+    paths are reliable) instead of the sandbox's work_dir, which can resume to a new
+    path mid-run and lose the produced files."""
+    import time
     from nexau import Agent, AgentConfig
-    cfg = AgentConfig.from_yaml(config_path=WORKER / "agent.yaml")
-    agent = Agent(config=cfg)
-    sbx = agent.sandbox_manager.instance
-    wd = Path(sbx.work_dir)
+    t0 = time.time()
+    workdir = REPO / "output" / "nexau_gdpval" / str(task.task_id) / "work"
+    workdir.mkdir(parents=True, exist_ok=True)
     ref_names = set()
     for rf in (task.reference_files or []):
         rf = Path(rf)
         if rf.exists():
-            shutil.copy(rf, wd / rf.name)
+            shutil.copy(rf, workdir / rf.name)
             ref_names.add(rf.name)
-    # snapshot supported files BEFORE the run (work_dir may be reused/accumulate);
-    # produced = files NEW after the run, excluding the reference inputs.
-    pre = {p for p in wd.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED}
-    note = (f"\n\nReference input files in your working directory: {sorted(ref_names)}."
-            if ref_names else "")
+    pre = {p for p in workdir.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED}
+    cfg = AgentConfig.from_yaml(config_path=WORKER / "agent.yaml")
+    agent = Agent(config=cfg)
+    note = (f"\n\nIMPORTANT: Your working directory is {workdir}\n"
+            f"The reference input files {sorted(ref_names)} are in that directory. "
+            f"Read inputs from there, and SAVE your deliverable file(s) into that EXACT "
+            f"directory using absolute paths (e.g. {workdir}/Deliverable.xlsx). "
+            f"Run `ls -la {workdir}` to verify your file is saved before finishing.")
     ctx = {"date": "2026-06-23", "username": os.environ.get("USER", "kevin"),
-           "working_directory": str(wd)}
+           "working_directory": str(workdir)}
     ctx["env_content"] = dict(ctx)
     resp = agent.run(message=task.prompt + note, context=ctx)
     final_text = resp if isinstance(resp, str) else resp[0]
-    produced = [p for p in wd.rglob("*")
+    # glob the controlled workdir AND the post-run sandbox work_dir (hedge), union
+    search = [workdir]
+    try:
+        search.append(Path(agent.sandbox_manager.instance.work_dir))
+    except Exception:  # noqa: BLE001
+        pass
+    produced = {p for d in search for p in d.rglob("*")
                 if p.is_file() and p.suffix.lower() in SUPPORTED
-                and p not in pre and p.name not in ref_names]
-    produced.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return final_text, produced[:12]
+                and p not in pre and p.name not in ref_names}
+    produced = sorted(produced, key=lambda p: p.stat().st_mtime, reverse=True)
+    mon = _trace_summary(agent)
+    mon["secs"] = round(time.time() - t0, 1)
+    return final_text, produced[:12], mon
 
 
 def main():
@@ -90,22 +130,32 @@ def main():
             tasks = tasks[: args.n]
     k = int(os.environ.get("QEA_JUDGE_K", "2"))
     judge = MultimodalJudge(make_llm(mock=False), k=k)
+    import json
     rows = []
-    print(f"running {len(tasks)} GDPval tasks on NexAU | judge k={k}")
+    mon_dir = REPO / "output" / "nexau_gdpval"
+    mon_dir.mkdir(parents=True, exist_ok=True)
+    monf = open(mon_dir / "monitor.jsonl", "w")
+    print(f"running {len(tasks)} GDPval tasks on NexAU | judge k={k}", flush=True)
     for i, task in enumerate(tasks, 1):
-        print(f"[{i}/{len(tasks)}] {task.task_id} ({task.subtype}) refs={len(task.reference_files or [])}")
+        print(f"[{i}/{len(tasks)}] {task.task_id} ({task.subtype}) refs={len(task.reference_files or [])}", flush=True)
         try:
-            final_text, produced = run_task(task)
-            rendered = render(final_text, produced, REPO / "output" / "nexau_gdpval" / str(task.task_id))
+            final_text, produced, mon = run_task(task)
+            rendered = render(final_text, produced, mon_dir / str(task.task_id))
             res = judge.grade(task, rendered)
-            rows.append({"id": task.task_id, "sub": task.subtype, "mm": res.multimodal_fraction,
-                         "text": res.text_fraction, "files": len(produced),
-                         "imgs": len(rendered.images), "deg": res.degraded, "err": ""})
-            print(f"  mm={res.multimodal_fraction:.3f} text={res.text_fraction:.3f} files={len(produced)}")
+            row = {"id": task.task_id, "sub": task.subtype, "mm": res.multimodal_fraction,
+                   "text": res.text_fraction, "files": len(produced), "imgs": len(rendered.images),
+                   "deg": res.degraded, "err": "", **mon}
+            print(f"  mm={res.multimodal_fraction:.3f} text={res.text_fraction:.3f} files={len(produced)} "
+                  f"| turns={mon['turns']} tool_calls={mon['tool_calls']} tool_errs={mon['tool_errors']} "
+                  f"{mon['secs']}s", flush=True)
         except Exception as exc:  # noqa: BLE001
-            rows.append({"id": task.task_id, "sub": task.subtype, "mm": None, "text": None,
-                         "files": 0, "imgs": 0, "deg": True, "err": f"{type(exc).__name__}: {exc}"})
-            print(f"  FAIL {type(exc).__name__}: {exc}")
+            row = {"id": task.task_id, "sub": task.subtype, "mm": None, "text": None, "files": 0,
+                   "imgs": 0, "deg": True, "err": f"{type(exc).__name__}: {exc}",
+                   "tool_calls": 0, "tool_errors": 0, "turns": 0, "secs": 0}
+            print(f"  FAIL {type(exc).__name__}: {exc}", flush=True)
+        rows.append(row)
+        monf.write(json.dumps(row) + "\n"); monf.flush()
+    monf.close()
 
     ok = [r for r in rows if r["mm"] is not None]
     mm = statistics.mean(r["mm"] for r in ok) if ok else 0.0
