@@ -106,3 +106,54 @@ def test_trace_fold_preserves_firewall():
     payload = repr(diag.proposer_payload())
     assert "SECRET-CONTROL-TOTAL-98765" not in payload   # firewall holds with traces folded in
     assert "t1" in diag.predicted_fix_task_ids
+
+
+def test_snapshot_and_diff_and_signature(tmp_path):
+    from qea.evolve_runtime import snapshot_dir, dir_unified_diff, diff_signature, DirEdit
+    src = tmp_path / "incumbent"
+    (src / "tool_descriptions").mkdir(parents=True)
+    (src / "systemprompt.md").write_text("original line\n")
+    (src / "agent.yaml").write_text("name: w\n")
+
+    snap = tmp_path / "snap"
+    snapshot_dir(src, snap)
+    assert (snap / "systemprompt.md").read_text() == "original line\n"
+
+    # no edit yet -> empty diff, and a DirEdit over an empty diff has empty content
+    assert dir_unified_diff(src, snap) == ""
+    # edit the snapshot
+    (snap / "systemprompt.md").write_text("original line\nADDED guidance\n")
+    diff = dir_unified_diff(src, snap)
+    assert "ADDED guidance" in diff and "systemprompt.md" in diff
+
+    sig = diff_signature(diff)
+    assert isinstance(sig, str) and len(sig) == 64           # sha256 hex
+    # identical diff -> identical signature; different diff -> different
+    assert diff_signature(diff) == sig
+    assert diff_signature(diff + "x") != sig
+
+    # DirEdit is the Edit-like shim the buffer + leakage guard consume
+    de = DirEdit(diff)
+    assert de.signature() == sig
+    assert "ADDED guidance" in de.content            # leakage guard inspects .content
+    assert de.summary                                 # non-empty human summary
+
+
+def test_leakage_guard_blocks_dir_edit_that_pastes_answer():
+    from qea.verifier import LeakageGuard
+    from qea.evolve_runtime import DirEdit
+    corpus = ["flags any going-concern triggers in the liquidity position"]
+    guard = LeakageGuard(corpus, threshold=0.6)
+    leaked_diff = ("--- a/systemprompt.md\n+++ b/systemprompt.md\n"
+                   "+Always flags any going-concern triggers in the liquidity position.\n")
+    assert guard.is_leak(DirEdit(leaked_diff)) is True
+    ok_diff = ("--- a/systemprompt.md\n+++ b/systemprompt.md\n"
+               "+After producing the file, list the directory to verify it was written.\n")
+    assert guard.is_leak(DirEdit(ok_diff)) is False
+
+
+def test_evolve_agent_config_loads():
+    from nexau import AgentConfig
+    from qea.evolve_runtime import EVOLVE_DIR
+    cfg = AgentConfig.from_yaml(config_path=EVOLVE_DIR / "agent.yaml")
+    assert cfg is not None
