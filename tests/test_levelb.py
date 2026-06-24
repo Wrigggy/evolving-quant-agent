@@ -251,3 +251,19 @@ def test_levelb_loop_rolls_back_non_improving_edit(tmp_path, monkeypatch):
     res = L.run_gdpval_levelb(cfg, _tasks=tasks, _llm=StubLLM())
     assert res.n_kept == 0 and res.n_rolled_back == 1        # flat score -> rolled back
     assert res.records[0].verdict == "INEFFECTIVE"
+
+
+@pytest.mark.skipif(os.environ.get("QEA_LEVELB_SMOKE") != "1",
+                    reason="set QEA_LEVELB_SMOKE=1 to run the real-API NexAU Level-B smoke test")
+def test_levelb_smoke_one_task_one_iter(tmp_path):
+    # End-to-end on ONE real GDPval task, ONE iteration, against the real NexAU
+    # weak worker + evolve agent. Proves the wiring runs; makes no headroom claim.
+    import run as runmod
+    runmod._load_dotenv()
+    from qea.loop_levelb import LevelBConfig, run_gdpval_levelb
+    cfg = LevelBConfig(n_iters=1, k=1, n_tasks=1, results_dir=str(tmp_path / "res"))
+    res = run_gdpval_levelb(cfg)
+    assert res.n_tasks == 1
+    assert len(res.mean_score_trajectory) >= 1
+    assert Path(res.final_worker_dir).exists()
+    assert (Path(cfg.results_dir) / "iter_001" / "manifest.json").exists()

@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 
 from qea.loop import Config, acceptance_signals, run_synthetic_fixture, run_gdpval_soft
+from qea.loop_levelb import LevelBConfig, run_gdpval_levelb
 
 
 def _load_dotenv(path: str = ".env") -> None:
@@ -52,14 +53,30 @@ def main() -> int:
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--mock", action="store_true", help="offline scripted smoke test (default)")
     mode.add_argument("--real", action="store_true", help="real OpenRouter run (needs .env)")
+    mode.add_argument("--levelb", action="store_true",
+                      help="real mode: Level-B evolution (file-editing evolve agent edits the NexAU worker dir)")
     ap.add_argument("--iters", type=int, default=4)
     ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--core", action="store_true", help="real mode: ~25 core finance occupations instead of ~30 broad")
     ap.add_argument("--resume", action="store_true", help="real mode: continue a prior gdpval_soft run from its checkpoint")
+    ap.add_argument("--n-tasks", type=int, default=5, help="levelb: number of GDPval tasks per iteration")
     ap.add_argument("--results-dir", default="results/latest")
     args = ap.parse_args()
 
     _load_dotenv()
+
+    if args.levelb:
+        lcfg = LevelBConfig(n_iters=args.iters, k=args.k, n_tasks=args.n_tasks,
+                            broad=not args.core, results_dir=args.results_dir)
+        print(f"[run] mode=LEVEL-B (NexAU worker dir evolved by a file-editing evolve agent) "
+              f"iters={lcfg.n_iters} k={lcfg.k} n_tasks={lcfg.n_tasks} -> {lcfg.results_dir}")
+        res = run_gdpval_levelb(lcfg)
+        _print_levelb(res)
+        rose = res.mean_score_trajectory[-1] > res.mean_score_trajectory[0] + res.noise_margin
+        print(f"\n  ==> LEVEL-B HEADROOM {'OBSERVED' if rose else 'NOT OBSERVED'}: "
+              f"mean {res.mean_score_trajectory[0]:.3f} -> {res.mean_score_trajectory[-1]:.3f} "
+              f"(noise floor {res.noise_margin:.3f}), {res.n_kept} edit(s) kept.")
+        return 0 if rose else 1
     mock = not args.real  # mock is the default
     if mock:
         os.environ["MOCK_LLM"] = "1"
@@ -107,6 +124,19 @@ def _print_soft(res) -> None:
     for occ, (o, t) in sorted(res.final_per_occupation.items()):
         pr = (100.0 * o / t) if t else 0.0
         print(f"    {occ[:46]:46} {o}/{t} = {pr:5.1f}%   mean {means.get(occ, 0.0):.3f}")
+    print(f"  kept/rolledback/blocked: {res.n_kept}/{res.n_rolled_back}/{res.n_blocked}")
+
+
+def _print_levelb(res) -> None:
+    print(f"\n=== Level-B evolution ({res.n_tasks} GDPval tasks, multimodal-grade gate) ===")
+    print(f"  noise floor (gain a candidate must beat): {res.noise_margin}")
+    print(f"  mean multimodal-score trajectory: {res.mean_score_trajectory}")
+    print(f"  {'iter':>4} {'verdict':<16} {'kept':<8} inc->cand")
+    for r in res.records:
+        flag = "BLOCKED" if r.blocked else ("keep" if r.kept else "rollback")
+        print(f"  {r.iteration:>4} {r.verdict:<16} {flag:<8} {r.inc_mean:.3f}->{r.cand_mean:.3f}  | {r.edit_summary}")
+    print(f"  final mean multimodal score: {res.final_mean_score}")
+    print(f"  final worker dir: {res.final_worker_dir}")
     print(f"  kept/rolledback/blocked: {res.n_kept}/{res.n_rolled_back}/{res.n_blocked}")
 
 
