@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import statistics
 import sys
 from pathlib import Path
@@ -19,7 +18,6 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 WORKER = REPO / "qea" / "worker_gdpval"
 sys.path.insert(0, str(REPO))
-SUPPORTED = {".xlsx", ".pptx", ".docx", ".pdf"}
 
 
 def _load_dotenv():
@@ -33,73 +31,13 @@ def _load_dotenv():
     os.environ.setdefault("LLM_MODEL", "deepseek/deepseek-v4-pro")
 
 
-def _trace_summary(agent) -> dict:
-    """Lightweight monitoring from the NexAU trace. Message has no tool_calls field
-    (tool activity is in content/role), so count by role: assistant turns + tool-result
-    messages (proxy for tool calls) + error markers in tool results."""
-    turns = tool_results = tool_errors = 0
-    try:
-        for m in (agent.full_trace or []):
-            role = getattr(m, "role", "")
-            try:
-                text = m.get_text_content()
-            except Exception:  # noqa: BLE001
-                text = str(getattr(m, "content", "") or "")
-            if role == "assistant":
-                turns += 1
-            elif role in ("tool", "tool_result", "function", "user") and text:
-                # NexAU surfaces tool outputs as tool/user-role messages
-                if role != "user":
-                    tool_results += 1
-                if any(k in text for k in ("Error", "❌", "failed", "Traceback", "Invalid parameters")):
-                    tool_errors += 1
-    except Exception:  # noqa: BLE001
-        pass
-    return {"tool_calls": tool_results, "tool_errors": tool_errors, "turns": turns}
-
-
 def run_task(task):
     """Returns (final_text, [produced deliverable file paths], monitor dict).
-
-    Uses a CONTROLLED absolute working dir (LocalSandbox runs locally, so absolute
-    paths are reliable) instead of the sandbox's work_dir, which can resume to a new
-    path mid-run and lose the produced files."""
-    import time
-    from nexau import Agent, AgentConfig
-    t0 = time.time()
-    workdir = REPO / "output" / "nexau_gdpval" / str(task.task_id) / "work"
-    workdir.mkdir(parents=True, exist_ok=True)
-    ref_names = set()
-    for rf in (task.reference_files or []):
-        rf = Path(rf)
-        if rf.exists():
-            shutil.copy(rf, workdir / rf.name)
-            ref_names.add(rf.name)
-    pre = {p for p in workdir.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED}
-    cfg = AgentConfig.from_yaml(config_path=WORKER / "agent.yaml")
-    agent = Agent(config=cfg)
-    # Pin the sandbox cwd to our isolated per-task dir so the agent's saves (relative
-    # OR absolute) land here -> clean counts + parallel-safe (no shared sandbox dir).
-    try:
-        agent.sandbox_manager.instance.work_dir = workdir
-    except Exception:  # noqa: BLE001
-        pass
-    note = (f"\n\nIMPORTANT: Your working directory is {workdir}\n"
-            f"The reference input files {sorted(ref_names)} are in that directory. "
-            f"Read inputs from there, and SAVE your deliverable file(s) into that directory. "
-            f"Run `ls -la` to verify your file is saved before finishing.")
-    ctx = {"date": "2026-06-23", "username": os.environ.get("USER", "kevin"),
-           "working_directory": str(workdir)}
-    ctx["env_content"] = dict(ctx)
-    resp = agent.run(message=task.prompt + note, context=ctx)
-    final_text = resp if isinstance(resp, str) else resp[0]
-    produced = [p for p in workdir.rglob("*")
-                if p.is_file() and p.suffix.lower() in SUPPORTED
-                and p not in pre and p.name not in ref_names]
-    produced = sorted(produced, key=lambda p: p.stat().st_mtime, reverse=True)
-    mon = _trace_summary(agent)
-    mon["secs"] = round(time.time() - t0, 1)
-    return final_text, produced[:12], mon
+    Delegates to qea.worker_runtime.run_worker so the base test and the Level-B
+    loop run the IDENTICAL worker invocation."""
+    from qea.worker_runtime import run_worker
+    run = run_worker(task, WORKER, REPO / "output" / "nexau_gdpval" / str(task.task_id))
+    return run.deliverable_text, run.produced_files, run.trace
 
 
 def main():
