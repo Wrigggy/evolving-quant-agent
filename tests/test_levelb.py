@@ -68,3 +68,41 @@ def test_weak_seed_is_process_limited_not_capability_walled():
     # but the shell tool is still available (capability is recoverable by editing)
     tool_yaml = (WEAK_DIR / "tool_descriptions" / "run_shell_command.tool.yaml").read_text()
     assert "run_shell_command" in tool_yaml
+
+
+def test_process_note_is_answer_free_and_flags_no_deliverable():
+    from qea.debugger import process_note
+    # produced no file, burned few turns -> the headroom signal
+    n = process_note({"files": 0, "turns": 4, "tool_calls": 2, "tool_errors": 1, "secs": 30.0})
+    assert "no deliverable file" in n.lower()
+    assert "4 turn" in n
+    assert "1 tool error" in n
+    # a healthy run produces a benign note
+    ok = process_note({"files": 1, "turns": 11, "tool_calls": 6, "tool_errors": 0, "secs": 200.0})
+    assert "produced" in ok.lower() and "no deliverable file" not in ok.lower()
+    # process notes carry only counts — never any answer/number-from-the-task content
+    assert "$" not in n and "going-concern" not in n
+
+
+def test_trace_fold_preserves_firewall():
+    from qea.tasks import BTask
+    from qea.verifier import TaskResult
+    from qea.falsify import EvalSummary
+    from qea.debugger import diagnose_b_pile
+
+    class CriticLLM:
+        def complete(self, prompt, *, role="judge"):
+            if "Classify" in prompt:
+                return '{"root_cause_tag": "WrongStructure", "target_slot": "prompt"}'
+            return "The deliverable omits the required reconciliation section."
+
+    res = {"t1": TaskResult("t1", "Accountants and Auditors", "B", False, False, False, 0.3, 0.0,
+                            None, criterion_verdicts={"1": False})}
+    tasks = [BTask(task_id="t1", subtype="Accountants and Auditors", prompt="reconcile the ledger",
+                   rubric="", rubric_items=[{"points": 1, "criterion": "reconciles to control total"}],
+                   gold="SECRET-CONTROL-TOTAL-98765")]
+    diag = diagnose_b_pile(EvalSummary(res, {"t1": "weak memo"}), tasks, llm=CriticLLM(),
+                           traces={"t1": {"files": 0, "turns": 3, "tool_errors": 1}})
+    payload = repr(diag.proposer_payload())
+    assert "SECRET-CONTROL-TOTAL-98765" not in payload   # firewall holds with traces folded in
+    assert "t1" in diag.predicted_fix_task_ids
