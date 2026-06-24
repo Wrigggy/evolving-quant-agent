@@ -157,3 +157,97 @@ def test_evolve_agent_config_loads():
     from qea.evolve_runtime import EVOLVE_DIR
     cfg = AgentConfig.from_yaml(config_path=EVOLVE_DIR / "agent.yaml")
     assert cfg is not None
+
+
+def test_levelb_loop_keeps_improving_edit_offline(tmp_path, monkeypatch):
+    import qea.loop_levelb as L
+    from qea.worker_runtime import WorkerRun
+    from qea.grading.multimodal_judge import GradeResult
+    from qea.tasks import BTask
+
+    tasks = [BTask(task_id="t1", subtype="Accountants and Auditors", prompt="p", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "c"}], gold="g")]
+
+    class StubLLM:  # the firewalled debugger's critic + classify calls
+        def complete(self, prompt, *, role="judge", **kw):
+            return ('{"root_cause_tag":"WrongStructure","target_slot":"prompt"}'
+                    if "Classify" in prompt else "omits the required structure")
+
+    # worker: returns a fixed deliverable + trace; score depends on whether the
+    # incumbent worker prompt has been improved (the evolve agent appends a marker).
+    def fake_run_worker(task, worker_dir, run_dir):
+        improved = "IMPROVED" in (worker_dir / "systemprompt.md").read_text()
+        return WorkerRun(f"deliverable improved={improved}", [], {"files": 1, "turns": 5, "tool_errors": 0})
+    monkeypatch.setattr(L, "run_worker", fake_run_worker)
+
+    # judge: 0.50 for the seed, 0.90 once the worker prompt is improved
+    class FakeJudge:
+        def __init__(self, *a, **k): pass
+        def grade(self, task, rendered):
+            score = 0.90 if "improved=True" in rendered.text else 0.50
+            return GradeResult(task.task_id, score, score, {"1": score > 0.6}, 0.0, False)
+    monkeypatch.setattr(L, "MultimodalJudge", FakeJudge)
+
+    # render: trivial passthrough exposing .text / .extracted_text / .images / .degraded
+    def fake_render(text, produced, out_dir):
+        from types import SimpleNamespace
+        return SimpleNamespace(text=text, extracted_text=text, images=[], degraded=False)
+    monkeypatch.setattr(L, "render", fake_render)
+
+    # evolve agent: appends the IMPROVED marker to the snapshot's systemprompt.md
+    def fake_run_evolve(snapshot_dir_path, diag, run_dir):
+        sp = snapshot_dir_path / "systemprompt.md"
+        sp.write_text(sp.read_text() + "\nIMPROVED: verify the file before finishing.\n")
+        return {"final_text": "added verify guidance", "trace": {"turns": 2}}
+    monkeypatch.setattr(L, "run_evolve_agent", fake_run_evolve)
+
+    seed = tmp_path / "seed"; (seed / "tool_descriptions").mkdir(parents=True)
+    (seed / "agent.yaml").write_text("name: w\n")
+    (seed / "systemprompt.md").write_text("do the task\n")
+    cfg = L.LevelBConfig(n_iters=1, k=1, n_tasks=1, results_dir=str(tmp_path / "res"),
+                         seed_worker_dir=str(seed))
+
+    res = L.run_gdpval_levelb(cfg, _tasks=tasks, _llm=StubLLM())
+    assert res.n_kept == 1                                   # the +0.40 edit beats the noise floor
+    assert res.mean_score_trajectory[-1] > res.mean_score_trajectory[0]
+    assert "IMPROVED" in (Path(res.final_worker_dir) / "systemprompt.md").read_text()
+
+
+def test_levelb_loop_rolls_back_non_improving_edit(tmp_path, monkeypatch):
+    import qea.loop_levelb as L
+    from qea.worker_runtime import WorkerRun
+    from qea.grading.multimodal_judge import GradeResult
+    from qea.tasks import BTask
+    from types import SimpleNamespace
+
+    tasks = [BTask(task_id="t1", subtype="x", prompt="p", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "c"}], gold="g")]
+
+    class StubLLM:
+        def complete(self, prompt, *, role="judge", **kw):
+            return ('{"root_cause_tag":"WrongStructure","target_slot":"prompt"}'
+                    if "Classify" in prompt else "omits the required structure")
+
+    monkeypatch.setattr(L, "run_worker",
+                        lambda task, wd, rd: WorkerRun("same", [], {"files": 1, "turns": 5, "tool_errors": 0}))
+
+    class FlatJudge:
+        def __init__(self, *a, **k): pass
+        def grade(self, task, rendered):
+            return GradeResult(task.task_id, 0.50, 0.50, {"1": False}, 0.0, False)  # never improves
+    monkeypatch.setattr(L, "MultimodalJudge", FlatJudge)
+    monkeypatch.setattr(L, "render",
+                        lambda t, p, o: SimpleNamespace(text=t, extracted_text=t, images=[], degraded=False))
+    # evolve makes a real (but useless) change so the diff is non-empty
+    def ev(snap, diag, rd):
+        sp = snap / "systemprompt.md"; sp.write_text(sp.read_text() + "\nnoise edit\n")
+        return {"final_text": "x", "trace": {}}
+    monkeypatch.setattr(L, "run_evolve_agent", ev)
+
+    seed = tmp_path / "seed"; (seed / "tool_descriptions").mkdir(parents=True)
+    (seed / "agent.yaml").write_text("name: w\n"); (seed / "systemprompt.md").write_text("do it\n")
+    cfg = L.LevelBConfig(n_iters=1, k=1, n_tasks=1, results_dir=str(tmp_path / "res"),
+                         seed_worker_dir=str(seed))
+    res = L.run_gdpval_levelb(cfg, _tasks=tasks, _llm=StubLLM())
+    assert res.n_kept == 0 and res.n_rolled_back == 1        # flat score -> rolled back
+    assert res.records[0].verdict == "INEFFECTIVE"
