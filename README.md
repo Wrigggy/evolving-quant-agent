@@ -263,21 +263,53 @@ trajectory), not a mechanism assertion.
 
 ## Layout
 
+The repo carries **two worker substrates** (see [docs/BASELINES.md](docs/BASELINES.md)
+for their measured baselines):
+- **Stirrup (code-first)** — workers built in Python (`qea/workers/`). The original
+  substrate; the GDPval base baseline (mean multimodal **0.807**) was measured here.
+- **NexAU (directory/YAML agent)** — workers that ARE a directory (`agent.yaml` +
+  `systemprompt.md` + `tool_descriptions/` + `tools/`): `qea/worker/` (FAB),
+  `qea/worker_gdpval/` (GDPval, base baseline **0.797**). This is the native
+  evolvable-harness form the Level-B evolve loop targets (Phase 4, planned).
+
 ```
 qea/
-  loop.py          evolve->falsify->rollback driver: run_gdpval_soft + run_synthetic_fixture + acceptance_signals
-  benchmark.py     Benchmark abstraction: gdpval_benchmark / synthetic_fixture_benchmark
-  harness.py       7-slot Harness, minimal seed, Component/Edit, clone/apply/rollback
-  falsify.py       verdict engine (evaluate_changes) + decide_keep_soft + LEAKAGE_BLOCKED + rejected-edit buffer
-  verifier.py      SoftJudge (rubric %, continuous, per-criterion verdicts) + HardVerifier (probe) + LeakageGuard
-  debugger.py      B-pile debugger: Critic + attribution + firewall -> SanitizedDiagnosis
-  tasks.py         load_gdpval_finance() / load_gdpval_a_pile() (fixture only) + rubric_corpus + reference fns
-  agents.py        quant_agent + evolve_agent (scripted mock) + diagnose (B-pile branch + firewall)
-  llm.py           OpenRouter client (provider pin / backoff) + MockLLM
-  observability.py three-layer persistence
-  sandbox.py       exec_artifact: subprocess executor (AHE LocalSandbox pattern) -> ArtifactResult
-  artifacts.py     extract_openpyxl_code + render_xlsx + assemble_artifact_deliverable
-run.py             CLI entry (--mock / --real)
+  loop.py            evolve->falsify->rollback driver: run_gdpval_soft + run_synthetic_fixture + acceptance_signals
+  benchmark.py       Benchmark abstraction: gdpval_benchmark / synthetic_fixture_benchmark
+  harness.py         7-slot Harness, minimal seed, Component/Edit, clone/apply/rollback (Level-A abstraction; mock loop)
+  falsify.py         verdict engine (evaluate_changes) + decide_keep_soft + LEAKAGE_BLOCKED + rejected-edit buffer
+  verifier.py        SoftJudge (rubric %, continuous, per-criterion verdicts) + HardVerifier (probe) + LeakageGuard
+  debugger.py        B-pile debugger: Critic + attribution + firewall -> SanitizedDiagnosis
+  tasks.py           load_gdpval_finance() / load_gdpval_a_pile() (fixture only) + rubric_corpus + reference fns
+  tasks_fab.py       FAB benchmark task loader
+  agents.py          quant_agent + evolve_agent (scripted mock) + diagnose (B-pile branch + firewall)
+  llm.py             OpenRouter client (provider pin / backoff) + MockLLM
+  observability.py   three-layer persistence
+  sandbox.py         exec_artifact: subprocess executor (AHE LocalSandbox pattern) -> ArtifactResult
+  artifacts.py       extract_openpyxl_code + render_xlsx + assemble_artifact_deliverable
+  grading/           runtime-independent multimodal grading pipeline
+    render.py        LibreOffice->PDF->PyMuPDF PNG + per-type text extraction
+    multimodal_judge.py  MultimodalJudge: per-rubric vision grade (k-repeat median) -> GradeResult
+  workers/           STIRRUP (code-first) workers
+    stirrup_worker.py    GDPval Stirrup worker (the 0.807 base baseline)
+    fab_worker.py / fab_tools.py   FAB Stirrup worker + its tools
+    e2b_reconnect.py     E2B sandbox reconnect helper
+  worker/            NexAU FAB worker (agent dir: qea_fab_worker)
+  worker_gdpval/     NexAU GDPval worker (agent dir; the 0.797 base baseline)
+run.py               CLI entry (--mock / --real)
+scripts/             runnable experiments + data tooling
+  nexau_gdpval_run.py / nexau_fab_run.py   NexAU base tests
+  base_harness_test.py / fab_base_test.py  Stirrup base tests
+  fork_gdpval.py / fetch_gdpval_*.py       GDPval fork + reference/deliverable fetchers
+  build_report.py / md_to_pdf.py / ab_judge.py / *_spike.py   reporting + spikes
+data/
+  gdpval/            pinned GDPval fork (gold parquet, rubrics, MANIFEST) + git-ignored fetched files
+  fab/               FAB benchmark data
+docs/                results, findings, reports, baselines, specs, plans (see below)
+  BASELINES.md       consolidated Stirrup vs NexAU base baselines (per-task rubric stats)
+  RESULTS_*.md       per-run result tables;  superpowers/specs/ + superpowers/plans/  design docs
+results/ output/     run outputs + experiment dirs (git-ignored)
+inspection/          local manual-viewing area for loose reference inputs / scratch scripts (git-ignored; see inspection/README.md)
 tests/test_smoke.py
-ROADMAP.md         next steps, explicitly NOT-in-v0
+ROADMAP.md           next steps
 ```

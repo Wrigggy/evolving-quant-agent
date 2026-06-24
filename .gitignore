@@ -21,3 +21,7 @@ data/gdpval/reference_files/
 output/
 docs/*.html
 .venv-nexau/
+
+# Local inspection artifacts (loose reference inputs / scratch build scripts /
+# rendered pages pulled out for manual viewing). Organized, not committed.
+inspection/
