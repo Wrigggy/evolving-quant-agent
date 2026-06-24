@@ -84,7 +84,8 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
     sanitized diagnosis (answer-free) — never the grader gold / rubric text. Returns
     a small summary dict (final text + trace)."""
     from nexau import Agent, AgentConfig
-    from .worker_runtime import summarize_trace
+    from .worker_runtime import ensure_nexau_llm_env, summarize_trace
+    ensure_nexau_llm_env()
     snap = Path(snapshot_dir_path)
     cfg = AgentConfig.from_yaml(config_path=EVOLVE_DIR / "agent.yaml")
     agent = Agent(config=cfg)

@@ -16,6 +16,18 @@ from pathlib import Path
 SUPPORTED = {".xlsx", ".pptx", ".docx", ".pdf"}
 
 
+def ensure_nexau_llm_env() -> None:
+    """The NexAU agent.yaml resolves ${env.LLM_API_KEY|LLM_BASE_URL|LLM_MODEL} at
+    config load. Map them from OPENROUTER_* (matching scripts/nexau_gdpval_run.py)
+    so any caller of the NexAU runtime — base test OR Level-B loop — is covered.
+    Only overrides LLM_API_KEY when OPENROUTER_API_KEY is present, so offline tests
+    that set a dummy LLM_API_KEY are left untouched."""
+    if os.environ.get("OPENROUTER_API_KEY"):
+        os.environ["LLM_API_KEY"] = os.environ["OPENROUTER_API_KEY"]
+    os.environ.setdefault("LLM_BASE_URL", os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"))
+    os.environ.setdefault("LLM_MODEL", "deepseek/deepseek-v4-pro")
+
+
 @dataclass
 class WorkerRun:
     deliverable_text: str
@@ -52,6 +64,7 @@ def run_worker(task, worker_dir: Path, run_dir: Path) -> WorkerRun:
     per-task workdir under run_dir. Copies the task reference files in, pins the
     sandbox cwd, captures produced deliverable files (before/after diff) + trace."""
     from nexau import Agent, AgentConfig
+    ensure_nexau_llm_env()
     t0 = time.time()
     worker_dir, run_dir = Path(worker_dir), Path(run_dir)
     workdir = run_dir / str(task.task_id) / "work"
