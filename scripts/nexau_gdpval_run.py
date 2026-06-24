@@ -33,34 +33,73 @@ def _load_dotenv():
     os.environ.setdefault("LLM_MODEL", "deepseek/deepseek-v4-pro")
 
 
+def _trace_summary(agent) -> dict:
+    """Lightweight monitoring from the NexAU trace. Message has no tool_calls field
+    (tool activity is in content/role), so count by role: assistant turns + tool-result
+    messages (proxy for tool calls) + error markers in tool results."""
+    turns = tool_results = tool_errors = 0
+    try:
+        for m in (agent.full_trace or []):
+            role = getattr(m, "role", "")
+            try:
+                text = m.get_text_content()
+            except Exception:  # noqa: BLE001
+                text = str(getattr(m, "content", "") or "")
+            if role == "assistant":
+                turns += 1
+            elif role in ("tool", "tool_result", "function", "user") and text:
+                # NexAU surfaces tool outputs as tool/user-role messages
+                if role != "user":
+                    tool_results += 1
+                if any(k in text for k in ("Error", "❌", "failed", "Traceback", "Invalid parameters")):
+                    tool_errors += 1
+    except Exception:  # noqa: BLE001
+        pass
+    return {"tool_calls": tool_results, "tool_errors": tool_errors, "turns": turns}
+
+
 def run_task(task):
-    """Returns (final_text, [produced deliverable file paths])."""
+    """Returns (final_text, [produced deliverable file paths], monitor dict).
+
+    Uses a CONTROLLED absolute working dir (LocalSandbox runs locally, so absolute
+    paths are reliable) instead of the sandbox's work_dir, which can resume to a new
+    path mid-run and lose the produced files."""
+    import time
     from nexau import Agent, AgentConfig
-    cfg = AgentConfig.from_yaml(config_path=WORKER / "agent.yaml")
-    agent = Agent(config=cfg)
-    sbx = agent.sandbox_manager.instance
-    wd = Path(sbx.work_dir)
+    t0 = time.time()
+    workdir = REPO / "output" / "nexau_gdpval" / str(task.task_id) / "work"
+    workdir.mkdir(parents=True, exist_ok=True)
     ref_names = set()
     for rf in (task.reference_files or []):
         rf = Path(rf)
         if rf.exists():
-            shutil.copy(rf, wd / rf.name)
+            shutil.copy(rf, workdir / rf.name)
             ref_names.add(rf.name)
-    # snapshot supported files BEFORE the run (work_dir may be reused/accumulate);
-    # produced = files NEW after the run, excluding the reference inputs.
-    pre = {p for p in wd.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED}
-    note = (f"\n\nReference input files in your working directory: {sorted(ref_names)}."
-            if ref_names else "")
+    pre = {p for p in workdir.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED}
+    cfg = AgentConfig.from_yaml(config_path=WORKER / "agent.yaml")
+    agent = Agent(config=cfg)
+    # Pin the sandbox cwd to our isolated per-task dir so the agent's saves (relative
+    # OR absolute) land here -> clean counts + parallel-safe (no shared sandbox dir).
+    try:
+        agent.sandbox_manager.instance.work_dir = workdir
+    except Exception:  # noqa: BLE001
+        pass
+    note = (f"\n\nIMPORTANT: Your working directory is {workdir}\n"
+            f"The reference input files {sorted(ref_names)} are in that directory. "
+            f"Read inputs from there, and SAVE your deliverable file(s) into that directory. "
+            f"Run `ls -la` to verify your file is saved before finishing.")
     ctx = {"date": "2026-06-23", "username": os.environ.get("USER", "kevin"),
-           "working_directory": str(wd)}
+           "working_directory": str(workdir)}
     ctx["env_content"] = dict(ctx)
     resp = agent.run(message=task.prompt + note, context=ctx)
     final_text = resp if isinstance(resp, str) else resp[0]
-    produced = [p for p in wd.rglob("*")
+    produced = [p for p in workdir.rglob("*")
                 if p.is_file() and p.suffix.lower() in SUPPORTED
                 and p not in pre and p.name not in ref_names]
-    produced.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return final_text, produced[:12]
+    produced = sorted(produced, key=lambda p: p.stat().st_mtime, reverse=True)
+    mon = _trace_summary(agent)
+    mon["secs"] = round(time.time() - t0, 1)
+    return final_text, produced[:12], mon
 
 
 def main():
@@ -90,22 +129,54 @@ def main():
             tasks = tasks[: args.n]
     k = int(os.environ.get("QEA_JUDGE_K", "2"))
     judge = MultimodalJudge(make_llm(mock=False), k=k)
-    rows = []
-    print(f"running {len(tasks)} GDPval tasks on NexAU | judge k={k}")
-    for i, task in enumerate(tasks, 1):
-        print(f"[{i}/{len(tasks)}] {task.task_id} ({task.subtype}) refs={len(task.reference_files or [])}")
-        try:
-            final_text, produced = run_task(task)
-            rendered = render(final_text, produced, REPO / "output" / "nexau_gdpval" / str(task.task_id))
-            res = judge.grade(task, rendered)
-            rows.append({"id": task.task_id, "sub": task.subtype, "mm": res.multimodal_fraction,
-                         "text": res.text_fraction, "files": len(produced),
-                         "imgs": len(rendered.images), "deg": res.degraded, "err": ""})
-            print(f"  mm={res.multimodal_fraction:.3f} text={res.text_fraction:.3f} files={len(produced)}")
-        except Exception as exc:  # noqa: BLE001
-            rows.append({"id": task.task_id, "sub": task.subtype, "mm": None, "text": None,
-                         "files": 0, "imgs": 0, "deg": True, "err": f"{type(exc).__name__}: {exc}"})
-            print(f"  FAIL {type(exc).__name__}: {exc}")
+    import json, threading
+    from concurrent.futures import ThreadPoolExecutor
+    conc = int(os.environ.get("QEA_GDPVAL_CONCURRENCY", "3"))
+    rows = [None] * len(tasks)
+    mon_dir = REPO / "output" / "nexau_gdpval"
+    mon_dir.mkdir(parents=True, exist_ok=True)
+    monf = open(mon_dir / "monitor.jsonl", "w")
+    lock = threading.Lock()
+    done = [0]
+    print(f"running {len(tasks)} GDPval tasks on NexAU | conc {conc} | judge k={k}", flush=True)
+
+    import time as _time
+    attempts = int(os.environ.get("QEA_GDPVAL_TASK_ATTEMPTS", "2"))
+
+    def process(i, task):
+        # Stagger the first wave's startup so N concurrent TLS handshakes through the
+        # local proxy don't all fire at once (the handshake burst that caused the
+        # ConnectTimeouts). Only spreads each wave by a few seconds.
+        _time.sleep((i % conc) * 2.5)
+        row = msg = None
+        for attempt in range(1, attempts + 1):
+            try:
+                final_text, produced, mon = run_task(task)
+                rendered = render(final_text, produced, mon_dir / str(task.task_id))
+                res = judge.grade(task, rendered)
+                row = {"id": task.task_id, "sub": task.subtype, "mm": res.multimodal_fraction,
+                       "text": res.text_fraction, "files": len(produced), "imgs": len(rendered.images),
+                       "deg": res.degraded, "err": "", **mon}
+                msg = (f"mm={res.multimodal_fraction:.3f} text={res.text_fraction:.3f} "
+                       f"files={len(produced)} turns={mon['turns']} {mon['secs']}s"
+                       + (f" (attempt {attempt})" if attempt > 1 else ""))
+                break
+            except Exception as exc:  # noqa: BLE001
+                row = {"id": task.task_id, "sub": task.subtype, "mm": None, "text": None, "files": 0,
+                       "imgs": 0, "deg": True, "err": f"{type(exc).__name__}: {exc}",
+                       "tool_calls": 0, "tool_errors": 0, "turns": 0, "secs": 0}
+                msg = f"FAIL (attempt {attempt}/{attempts}) {type(exc).__name__}: {exc}"
+                if attempt < attempts:
+                    _time.sleep(5 * attempt)  # backoff before whole-task retry
+        rows[i] = row
+        with lock:
+            done[0] += 1
+            print(f"[{done[0]}/{len(tasks)}] {task.task_id} ({task.subtype}) {msg}", flush=True)
+            monf.write(json.dumps(row) + "\n"); monf.flush()
+
+    with ThreadPoolExecutor(max_workers=conc) as pool:
+        list(pool.map(lambda a: process(*a), enumerate(tasks)))
+    monf.close()
 
     ok = [r for r in rows if r["mm"] is not None]
     mm = statistics.mean(r["mm"] for r in ok) if ok else 0.0

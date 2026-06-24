@@ -10,10 +10,20 @@ llm_config:
   model: ${env.LLM_MODEL}
   base_url: ${env.LLM_BASE_URL}
   api_key: ${env.LLM_API_KEY}
-  max_tokens: 8000
+  # Generous total budget (NOT a reasoning cap): with only 8k the model got cut off
+  # mid-reasoning and returned empty content. 32k lets reasoning finish AND leave room
+  # to emit content/tool calls. Bump further if heavy tasks still truncate.
+  max_tokens: 32000
   temperature: 0.2
   stream: true
   api_type: openai_chat_completion
+  # timeout (float seconds) -> httpx.Timeout(connect=read=write=pool=timeout). The OpenAI
+  # SDK default is connect=5s, and under the startup burst (N sandboxes + N concurrent TLS
+  # handshakes through the local SOCKS proxy at once) the proxy can't finish the TLS
+  # handshake in 5s -> httpcore.ConnectTimeout on start_tls -> APITimeoutError on every
+  # retry. 180s gives the handshake (and large-context prefill) ample margin; steady
+  # streaming never approaches the read gap. max_retries default (5) still applies.
+  timeout: 180
 
 tools:
   - name: run_shell_command
