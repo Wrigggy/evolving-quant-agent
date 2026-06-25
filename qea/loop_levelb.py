@@ -22,6 +22,7 @@ from .benchmark import gdpval_benchmark
 from .debugger import diagnose_b_pile
 from .evolve_runtime import DirEdit, dir_unified_diff, run_evolve_agent, snapshot_dir
 from .falsify import EvalSummary, LEAKAGE_BLOCKED, RejectedEditBuffer, decide_keep_soft
+from .grading.format_gate import apply_gate
 from .grading.multimodal_judge import MultimodalJudge
 from .grading.render import render
 from .llm import make_llm
@@ -72,31 +73,39 @@ class LevelBResult:
         return d
 
 
-def _eval_summary_from_grades(grades: dict, traces: dict, deliverables: dict, tasks) -> EvalSummary:
-    """Adapt MultimodalJudge GradeResults into the EvalSummary the debugger expects."""
+def _eval_summary_from_grades(grades: dict, gated: dict, traces: dict, deliverables: dict, tasks) -> EvalSummary:
+    """Adapt MultimodalJudge GradeResults into the EvalSummary the debugger expects.
+    The canonical score is the FORMAT-GATED score (`gated[tid]`); a format miss makes
+    the task fail oos so the debugger flags it for the evolve agent to fix."""
     by_id = {t.task_id: t for t in tasks}
     results = {}
     for tid, g in grades.items():
         sub = getattr(by_id.get(tid), "subtype", "")
-        oos = g.multimodal_fraction >= 0.60
-        results[tid] = TaskResult(tid, sub, "B", oos, oos, oos, g.multimodal_fraction,
+        score = gated.get(tid, g.multimodal_fraction)
+        oos = score >= 0.60
+        results[tid] = TaskResult(tid, sub, "B", oos, oos, oos, score,
                                   g.variance, None, criterion_verdicts=g.verdicts)
     return EvalSummary(results, deliverables)
 
 
 def evaluate_dir(worker_dir: Path, tasks, judge, run_dir: Path, *, k: int):
-    """Run the worker on every task with the given worker dir, render + grade each.
-    Returns (grades, traces, deliverables, mean_score)."""
+    """Run the worker on every task with the given worker dir, render + grade each,
+    then apply the deliverable-format gate (canonical score = gated; content kept for
+    diagnosis). Returns (grades, gated, traces, deliverables, mean_gated_score)."""
     worker_dir, run_dir = Path(worker_dir), Path(run_dir)
-    grades, traces, deliverables = {}, {}, {}
+    grades, gated, traces, deliverables = {}, {}, {}, {}
     for task in tasks:
         wr = run_worker(task, worker_dir, run_dir)
         rendered = render(wr.deliverable_text, wr.produced_files, run_dir / str(task.task_id))
-        grades[task.task_id] = judge.grade(task, rendered)
-        traces[task.task_id] = wr.trace
+        g = judge.grade(task, rendered)
+        gscore, fmt_ok = apply_gate(g.multimodal_fraction, task, wr.produced_files)
+        grades[task.task_id] = g
+        gated[task.task_id] = gscore
+        traces[task.task_id] = {**wr.trace, "content_mm": round(g.multimodal_fraction, 4),
+                                "format_ok": fmt_ok}
         deliverables[task.task_id] = rendered.text or ""
-    mean = (statistics.mean(g.multimodal_fraction for g in grades.values()) if grades else 0.0)
-    return grades, traces, deliverables, mean
+    mean = (statistics.mean(gated.values()) if gated else 0.0)
+    return grades, gated, traces, deliverables, mean
 
 
 def run_gdpval_levelb(cfg: LevelBConfig, *, _tasks=None, _llm=None) -> LevelBResult:
@@ -120,8 +129,8 @@ def run_gdpval_levelb(cfg: LevelBConfig, *, _tasks=None, _llm=None) -> LevelBRes
     snapshot_dir(Path(cfg.seed_worker_dir), incumbent)
 
     # seed eval + a 2nd same-dir eval for the noise floor (mirror run_gdpval_soft)
-    grades, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, judge, results_dir / "seed", k=cfg.k)
-    _, _, _, noise_mean = evaluate_dir(incumbent, tasks, judge, results_dir / "seed_noise", k=cfg.k)
+    grades, gated, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, judge, results_dir / "seed", k=cfg.k)
+    _, _, _, _, noise_mean = evaluate_dir(incumbent, tasks, judge, results_dir / "seed_noise", k=cfg.k)
     noise_margin = max(0.01, abs(inc_mean - noise_mean))
 
     ms_traj = [round(inc_mean, 4)]
@@ -129,7 +138,7 @@ def run_gdpval_levelb(cfg: LevelBConfig, *, _tasks=None, _llm=None) -> LevelBRes
     n_kept = n_rb = n_blocked = 0
 
     for it in range(1, cfg.n_iters + 1):
-        inc_eval = _eval_summary_from_grades(grades, traces, deliverables, tasks)
+        inc_eval = _eval_summary_from_grades(grades, gated, traces, deliverables, tasks)
         diag = diagnose_b_pile(inc_eval, tasks, llm=llm, traces=traces).proposer_payload()
 
         cand_dir = results_dir / f"iter_{it:03d}" / "worker"
@@ -149,13 +158,13 @@ def run_gdpval_levelb(cfg: LevelBConfig, *, _tasks=None, _llm=None) -> LevelBRes
             verdict, kept, cand_mean = "BLOCKED", False, inc_mean
             n_blocked += 1
         else:
-            cg, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, judge, results_dir / f"iter_{it:03d}" / "grade", k=cfg.k)
+            cg, cgated, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, judge, results_dir / f"iter_{it:03d}" / "grade", k=cfg.k)
             kept = decide_keep_soft(inc_mean, cand_mean, noise_margin)
             verdict = "EFFECTIVE" if kept else "INEFFECTIVE"
             if kept:
                 n_kept += 1
                 incumbent = cand_dir
-                grades, traces, deliverables, inc_mean = cg, ct, cd, cand_mean
+                grades, gated, traces, deliverables, inc_mean = cg, cgated, ct, cd, cand_mean
             else:
                 n_rb += 1
                 buffer.add(edit, verdict, 0, 0, "no aggregate score gain beyond the noise floor")

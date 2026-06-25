@@ -253,6 +253,38 @@ def test_levelb_loop_rolls_back_non_improving_edit(tmp_path, monkeypatch):
     assert res.records[0].verdict == "INEFFECTIVE"
 
 
+def test_format_gate_keyed_to_gold_extension():
+    from qea.grading.format_gate import format_ok, apply_gate
+    from qea.tasks import BTask
+
+    # text-gold task (no required ext) -> always ok, even with no files
+    txt = BTask(task_id="t", subtype="x", prompt="p", rubric="", deliverable_exts=[])
+    assert format_ok(txt, []) is True
+    assert apply_gate(0.8, txt, []) == (0.8, True)
+
+    # xlsx-gold task: must produce an .xlsx
+    xls = BTask(task_id="t", subtype="x", prompt="p", rubric="", deliverable_exts=[".xlsx"])
+    assert format_ok(xls, ["/tmp/report.xlsx"]) is True
+    assert apply_gate(0.83, xls, ["/tmp/report.xlsx"]) == (0.83, True)
+    # wrong container (asked xlsx, produced pdf) -> gated to 0
+    assert format_ok(xls, ["/tmp/report.pdf"]) is False
+    assert apply_gate(0.83, xls, ["/tmp/report.pdf"]) == (0.0, False)
+    # no file at all (text answer) -> gated to 0
+    assert apply_gate(0.83, xls, []) == (0.0, False)
+
+    # multi-ext gold: any one matching extension satisfies it
+    both = BTask(task_id="t", subtype="x", prompt="p", rubric="", deliverable_exts=[".pdf", ".xlsx"])
+    assert format_ok(both, ["/tmp/a.xlsx"]) is True
+
+
+def test_gdpval_loader_populates_deliverable_exts():
+    # The GDPval loader must attach the gold deliverable extension(s) to each task.
+    from qea.tasks import _gold_deliverable_exts
+    assert _gold_deliverable_exts(["deliverable_files/abc/Fall Music Tour Output.xlsx"]) == [".xlsx"]
+    assert _gold_deliverable_exts(None) == []          # text deliverable -> no required ext
+    assert _gold_deliverable_exts(["a/x.pdf", "b/y.pptx"]) == [".pdf", ".pptx"]
+
+
 @pytest.mark.skipif(os.environ.get("QEA_LEVELB_SMOKE") != "1",
                     reason="set QEA_LEVELB_SMOKE=1 to run the real-API NexAU Level-B smoke test")
 def test_levelb_smoke_one_task_one_iter(tmp_path):

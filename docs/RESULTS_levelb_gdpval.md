@@ -87,10 +87,18 @@ run produced a real `.xlsx`, 0.871). The only *systematic* miss is `c7d83f01` (g
 `.ipynb`): neither worker can emit a Jupyter notebook (the worker prompt/tooling never
 mentions it) — a genuine capability gap, fairly gated to 0 for both.
 
-Implication: the gate is the right *semantics* (adopt it — it costs ~0.02 and correctly
-zeroes format-violating answers like the no-file `.ipynb`/`.pdf` cases), but it is **not**
-the lever that creates Level-B headroom. The headroom work (cap iterations / narrow the
-tool / select tasks the base worker genuinely cannot do, e.g. `.ipynb`) still stands.
+Implication: the gate is the right *semantics* but is **not** the lever that creates
+Level-B headroom. The headroom work (cap iterations / narrow the tool / select tasks the
+base worker genuinely cannot do, e.g. `.ipynb`) still stands.
+
+**ADOPTED (baked in):** the deliverable-format gate is now the **canonical Level-B score**
+(`qea/grading/format_gate.py`, applied in `qea/loop_levelb.py:evaluate_dir`): the score
+driving keep/rollback + the debugger's oos is `gated_mm` (0 on a gold-format miss); the raw
+`content_mm` is kept in the trace for the firewalled debugger's diagnosis (so "content good,
+format wrong" stays distinguishable). Required format = `task.deliverable_exts` (the gold
+deliverable extension(s), populated by the GDPval loader; empty = text deliverable, no file
+required). The base-test script still reports `content_mm`; use `scripts/format_gate_analysis.py`
+for its gated view.
 
 ## Conclusion + next steps (deliberately NOT run here)
 

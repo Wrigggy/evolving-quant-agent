@@ -196,6 +196,9 @@ class BTask:
     rubric: str                              # rubric_pretty (human-readable)
     rubric_items: list = field(default_factory=list)  # [{points, criterion}] from rubric_json
     reference_files: list = field(default_factory=list)  # local paths of GDPval input files
+    # Required deliverable file extension(s) = the GDPval GOLD deliverable's type(s).
+    # Empty == the gold deliverable is text (no file required). Used by the format gate.
+    deliverable_exts: list = field(default_factory=list)
     gold: str | None = None
     gdpval_lineage: str = ""
     # Mock-only: scores the world model returns with/without the discipline a
@@ -418,6 +421,18 @@ def _local_reference_files(task_id: str, ref_entries) -> list[str]:
     return out
 
 
+def _gold_deliverable_exts(del_entries) -> list[str]:
+    """Distinct file extension(s) of the GDPval GOLD deliverable(s) = the REQUIRED
+    output format(s). Empty list means the gold deliverable is text (no file)."""
+    import os
+    try:
+        entries = list(del_entries) if del_entries is not None else []
+    except TypeError:
+        entries = []
+    exts = {os.path.splitext(str(e))[1].lower() for e in entries}
+    return sorted(e for e in exts if e)
+
+
 def _load_gdpval_df():
     """Gold parquet as a DataFrame: local fork first, network fallback."""
     import pandas as pd  # optional dep
@@ -463,6 +478,7 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> l
                         rubric=str(row.get("rubric_pretty", "")),
                         rubric_items=_parse_rubric_json(row.get("rubric_json")),
                         reference_files=_local_reference_files(row["task_id"], row.get("reference_files")),
+                        deliverable_exts=_gold_deliverable_exts(row.get("deliverable_files")),
                         gdpval_lineage=f"gdpval:{row['occupation']} (real, original task)",
                     )
                 )
