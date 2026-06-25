@@ -1,0 +1,25 @@
+type: agent
+name: qea_evolve_agent
+max_context_tokens: 200000
+system_prompt: ./systemprompt.md
+system_prompt_type: jinja
+tool_call_mode: openai
+max_iterations: 30
+
+llm_config:
+  model: ${env.LLM_MODEL}
+  base_url: ${env.LLM_BASE_URL}
+  api_key: ${env.LLM_API_KEY}
+  max_tokens: 32000
+  temperature: 0.3
+  stream: true
+  api_type: openai_chat_completion
+  timeout: 180
+
+tools:
+  - name: run_shell_command
+    yaml_path: ./tool_descriptions/run_shell_command.tool.yaml
+    binding: nexau.archs.tool.builtin.shell_tools.run_shell_command:run_shell_command
+
+tracers:
+  - import: nexau.archs.tracer.adapters.in_memory:InMemoryTracer

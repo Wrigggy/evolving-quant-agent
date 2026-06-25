@@ -16,6 +16,25 @@ B_TAG_SLOT = {
 }
 
 
+def process_note(trace: dict) -> str:
+    """Turn a worker trace summary into an ANSWER-FREE process observation. The
+    trace carries only counts (files/turns/tool_calls/tool_errors/secs), never any
+    task answer, so it is inherently firewall-safe — this function only formats it."""
+    if not trace:
+        return "no trace captured"
+    files = int(trace.get("files", 0) or 0)
+    turns = int(trace.get("turns", 0) or 0)
+    errs = int(trace.get("tool_errors", 0) or 0)
+    parts = []
+    if files == 0:
+        parts.append(f"produced no deliverable file after {turns} turn(s)")
+    else:
+        parts.append(f"produced {files} file(s) in {turns} turn(s)")
+    if errs:
+        parts.append(f"{errs} tool error(s)")
+    return "; ".join(parts)
+
+
 @dataclass
 class SanitizedDiagnosis:
     root_cause_tag: str
@@ -67,10 +86,11 @@ def _failed_criteria_texts(task, verdicts: dict) -> list[str]:
     return out
 
 
-def diagnose_b_pile(eval_summary, tasks, *, llm, mode: str = "hybrid") -> SanitizedDiagnosis:
+def diagnose_b_pile(eval_summary, tasks, *, llm, mode: str = "hybrid", traces: dict | None = None) -> SanitizedDiagnosis:
     # COST: one Critic judge-call per FAILING B task + one classify call, per
     # iteration (up to ~n+1 judge calls when most tasks fail). Keep in mind on
-    # large task sets / long runs.
+    # large task sets / long runs. The worker trace (process side) is folded in
+    # answer-free via process_note().
     by_id = {t.task_id: t for t in tasks}
     critic = Critic(llm)
     notes, failing_ids, occ_counts = [], [], {}
@@ -85,6 +105,8 @@ def diagnose_b_pile(eval_summary, tasks, *, llm, mode: str = "hybrid") -> Saniti
             note = critic.note(task, eval_summary.deliverables.get(tid, ""), failed)
         except Exception:  # noqa: BLE001 - a critic outage must not kill the run (mirror evaluate())
             note = f"deliverable left {len(failed)} rubric criterion(s) unmet (critic unavailable)"
+        if traces and tid in traces:
+            note = f"{note} [process: {process_note(traces[tid])}]"
         notes.append(note)
         failing_ids.append(tid)
         occ_counts[r.subtype] = occ_counts.get(r.subtype, 0) + 1
