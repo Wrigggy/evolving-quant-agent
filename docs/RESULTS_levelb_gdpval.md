@@ -59,6 +59,39 @@ anticipated this ("if the weak seed scores ~full, the weakening was insufficient
 - 2 of the 5 tasks hit transient `deepseek` "empty model response" (reasoning_tokens=1)
   blips, absorbed by NexAU's retry; both still scored.
 
+## Full-30 weak-vs-full + deliverable-format gate (update 2026-06-25)
+
+Ran the weak seed across the full 30 tasks (`scripts/nexau_gdpval_run.py` with
+`QEA_WORKER_DIR=qea/worker_gdpval_weak`, conc 4) and applied a post-hoc
+**deliverable-format gate** (`scripts/format_gate_analysis.py`): each task's required
+format = its GDPval **gold deliverable extension**; a task whose gold is text requires
+no file; `gated_mm` = `content_mm` if the worker produced a file of the required type,
+else 0.
+
+| run | content mean | format-gated mean | format misses |
+|---|---|---|---|
+| full worker (`qea/worker_gdpval/`) | 0.797 | 0.772 | 2 (`43dc9778` .pdf, `c7d83f01` .ipynb — both no-file) |
+| weak seed (`qea/worker_gdpval_weak/`) | 0.791 | 0.771 | 1 (`c7d83f01` .ipynb — no-file) |
+
+**Finding 1 — headroom still absent on the representative set.** On the full 30, weak ≈
+full on both content (0.791 vs 0.797) and gated (0.771 vs 0.772) — a tie inside judge
+noise. The earlier "weak 0.743 > full 0.604" was a **5-AA subset artifact** (AA is the
+full worker's worst occupation + the `43dc9778` abandonment). Confirms the headroom
+premise fails: a one-line-prompt weak seed is as good as the full worker; deepseek-v4-pro
+is process-sufficient, prompt guidance is not the bottleneck.
+
+**Finding 2 — the format gate is well-defined but immaterial for these workers.** It only
+moves each run by ~−0.02, because both workers produce the correct file type on 29/30.
+The 5-AA "text-answer beats Excel-gold" effect did NOT generalize (weak's `7b08cd4d` this
+run produced a real `.xlsx`, 0.871). The only *systematic* miss is `c7d83f01` (gold
+`.ipynb`): neither worker can emit a Jupyter notebook (the worker prompt/tooling never
+mentions it) — a genuine capability gap, fairly gated to 0 for both.
+
+Implication: the gate is the right *semantics* (adopt it — it costs ~0.02 and correctly
+zeroes format-violating answers like the no-file `.ipynb`/`.pdf` cases), but it is **not**
+the lever that creates Level-B headroom. The headroom work (cap iterations / narrow the
+tool / select tasks the base worker genuinely cannot do, e.g. `.ipynb`) still stands.
+
 ## Conclusion + next steps (deliberately NOT run here)
 
 The Level-B loop is built and proven; what is missing is a real headroom gap to

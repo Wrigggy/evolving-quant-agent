@@ -75,11 +75,25 @@ NexAU's full 5. Use the per-task table below for like-for-like.
 | 4c4dc603-c21c-4284-8fb1-1b827c1fddf4 | Securities, Commodities, and Financial Services Sales Agents | 0.923 | 0.923 |
 | bb499d9c-0263-4684-9238-75e8e86077b1 | Securities, Commodities, and Financial Services Sales Agents | 0.674 | 0.646 |
 
-## Use as the Level-B headroom anchor
+## Weak seed (Phase 4) + deliverable-format gate
 
-These are the **full-worker** ceilings. Phase 4 measures a deliberately **weakened**
-seed worker (`qea/worker_gdpval_weak/`) against the NexAU 0.797 ceiling; the gap is the
-headroom the evolve loop targets. Recorded separately in `docs/RESULTS_levelb_gdpval.md`.
+The Level-B weak seed (`qea/worker_gdpval_weak/`, minimal one-line prompt, bare shell)
+was base-tested on the same full 30 tasks. A post-hoc **format gate**
+(`scripts/format_gate_analysis.py`) scores `gated_mm` = `content_mm` only if the worker
+produced a file matching the task's GDPval **gold deliverable extension** (text-gold
+tasks need no file), else 0.
+
+| run | content mean | format-gated mean | format misses |
+|---|---|---|---|
+| full worker (NexAU) | 0.797 | 0.772 | 2 (`43dc9778` .pdf, `c7d83f01` .ipynb — no file) |
+| weak seed (NexAU) | 0.791 | 0.771 | 1 (`c7d83f01` .ipynb — no file) |
+
+**Weak ≈ full on the representative 30** (content 0.791 vs 0.797; gated 0.771 vs 0.772 —
+a tie inside judge noise). So the prompt-weakening creates **no Level-B headroom**:
+deepseek-v4-pro is process-sufficient with a one-line prompt. The format gate moves both
+runs only ~−0.02 (both produce the right file type on 29/30); the only systematic miss is
+the `.ipynb` task neither worker can emit. Detail + next steps in
+`docs/RESULTS_levelb_gdpval.md`; full weak table in `docs/RESULTS_gdpval_weak.md`.
 
 ## Other benchmarks (FAB)
 
