@@ -87,6 +87,21 @@ run produced a real `.xlsx`, 0.871). The only *systematic* miss is `c7d83f01` (g
 `.ipynb`): neither worker can emit a Jupyter notebook (the worker prompt/tooling never
 mentions it) — a genuine capability gap, fairly gated to 0 for both.
 
+Format-miss breakdown (why the gate doesn't separate them — both barely miss):
+
+| worker | format OK | misses | detail |
+|---|---|---|---|
+| full | 28/30 | 2 | `c7d83f01` .ipynb no-file (0.755→0) + `43dc9778` .pdf no-file (already 0.000, no effect) |
+| weak | 29/30 | 1 | `c7d83f01` .ipynb no-file (0.585→0) |
+
+Note: there were **zero "wrong container" cases** (right file, wrong type) for either worker
+— every miss was "produced no file when one was required," and both runs' real point loss
+is dominated by the *same* shared `.ipynb` task. The gate is a near-equal translation on
+both (full −0.025, weak −0.020), so it can't separate them; on the format dimension weak is
+not worse than full (fewer misses). Worker output format is somewhat stochastic across runs
+(the 5-AA `7b08cd4d` text answer vs the 30-run `.xlsx`), but over 30 tasks both reliably
+emit files.
+
 Implication: the gate is the right *semantics* but is **not** the lever that creates
 Level-B headroom. The headroom work (cap iterations / narrow the tool / select tasks the
 base worker genuinely cannot do, e.g. `.ipynb`) still stands.
