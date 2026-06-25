@@ -16,7 +16,11 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-WORKER = REPO / "qea" / "worker_gdpval"
+# Worker dir + output label are overridable so the same harness can base-test the
+# full worker OR the weak seed without clobbering each other's results.
+WORKER = REPO / (os.environ.get("QEA_WORKER_DIR") or "qea/worker_gdpval")
+RUN_LABEL = os.environ.get("QEA_RUN_LABEL", "nexau_gdpval")
+RESULTS_MD = os.environ.get("QEA_RESULTS_MD", "docs/RESULTS_gdpval_nexau.md")
 sys.path.insert(0, str(REPO))
 
 
@@ -36,7 +40,7 @@ def run_task(task):
     Delegates to qea.worker_runtime.run_worker so the base test and the Level-B
     loop run the IDENTICAL worker invocation."""
     from qea.worker_runtime import run_worker
-    run = run_worker(task, WORKER, REPO / "output" / "nexau_gdpval" / str(task.task_id))
+    run = run_worker(task, WORKER, REPO / "output" / RUN_LABEL / str(task.task_id))
     return run.deliverable_text, run.produced_files, run.trace
 
 
@@ -71,7 +75,7 @@ def main():
     from concurrent.futures import ThreadPoolExecutor
     conc = int(os.environ.get("QEA_GDPVAL_CONCURRENCY", "3"))
     rows = [None] * len(tasks)
-    mon_dir = REPO / "output" / "nexau_gdpval"
+    mon_dir = REPO / "output" / RUN_LABEL
     mon_dir.mkdir(parents=True, exist_ok=True)
     monf = open(mon_dir / "monitor.jsonl", "w")
     lock = threading.Lock()
@@ -129,8 +133,8 @@ def main():
         mmv = f"{r['mm']:.3f}" if r["mm"] is not None else "—"
         txv = f"{r['text']:.3f}" if r["text"] is not None else "—"
         lines.append(f"| {r['id']} | {r['sub']} | {mmv} | {txv} | {r['files']} | {r['imgs']} | {r['deg']} | {r['err']} |")
-    Path("docs/RESULTS_gdpval_nexau.md").write_text("\n".join(lines) + "\n")
-    print(f"\nGraded {len(ok)}/{len(rows)}  mean mm={mm:.3f}  -> docs/RESULTS_gdpval_nexau.md")
+    Path(RESULTS_MD).write_text("\n".join(lines) + "\n")
+    print(f"\nGraded {len(ok)}/{len(rows)}  mean mm={mm:.3f}  -> {RESULTS_MD}")
 
 
 if __name__ == "__main__":
