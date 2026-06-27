@@ -100,3 +100,18 @@ the `.ipynb` task neither worker can emit. Detail + next steps in
 FAB v2 public-27 base: Stirrup → [RESULTS_fab_base.md](RESULTS_fab_base.md) (generous
 0.659 / strict 0.231); NexAU → [RESULTS_fab_nexau.md](RESULTS_fab_nexau.md) (generous
 0.618 ≈ Stirrup, port fidelity confirmed).
+
+**FAB weak seed (Phase 4 headroom test)** → [RESULTS_fab_weak.md](RESULTS_fab_weak.md):
+stripping the 4 SEC-specialized tools (`edgar_search`/`company_filings`/`retrieve_from_filing`/
+`price_history`), leaving only `fetch_page`+`web_search`, drops generous **0.618 → 0.388
+(−0.230, −37%)**; 13/27 tasks collapse to ~45-char non-answers (can't reach filings).
+
+| benchmark | full | weak seed | gap |
+|---|---|---|---|
+| GDPval (shell-gated) | 0.797 / gated 0.772 | 0.791 / 0.771 | ~0 (no headroom) |
+| FAB (tool-gated) | 0.618 | 0.388 | **−0.230 (real headroom)** |
+
+**Key contrast:** weakening only creates Level-B headroom when it removes a capability the
+worker can't reconstruct in one episode. GDPval's general shell → self-recovers → no gap.
+FAB's SEC retrieval tools → not reconstructable from `fetch_page`+`web_search` → a real
+~0.23 gap. **FAB is the benchmark to run the actual evolution loop on.**

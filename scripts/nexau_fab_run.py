@@ -17,7 +17,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-WORKER = REPO / "qea" / "worker"
+WORKER = REPO / (os.environ.get("QEA_WORKER_DIR") or "qea/worker")
+RESULTS_MD = os.environ.get("QEA_RESULTS_MD", "docs/RESULTS_fab_nexau.md")
 sys.path.insert(0, str(REPO))     # for qea.*
 sys.path.insert(0, str(WORKER))   # for the `tools.fab.research` tool bindings
 
@@ -106,8 +107,8 @@ def main():
         t = r["task"]; g = f"{r['frac']:.3f}" if r["frac"] is not None else "—"
         s = ("1" if (r["frac"] or 0) >= 0.999 else "0") if r["frac"] is not None else "—"
         lines.append(f"| {t.task_id} | {t.subtype} | {g} | {s} | {len(r['answer'])} | {r['err']} |")
-    Path("docs/RESULTS_fab_nexau.md").write_text("\n".join(lines) + "\n")
-    print(f"\nGraded {len(ok)}/{len(rows)}  generous={gen:.3f}  strict={strict:.3f}  -> docs/RESULTS_fab_nexau.md")
+    Path(RESULTS_MD).write_text("\n".join(lines) + "\n")
+    print(f"\nGraded {len(ok)}/{len(rows)}  generous={gen:.3f}  strict={strict:.3f}  -> {RESULTS_MD}")
 
 
 if __name__ == "__main__":

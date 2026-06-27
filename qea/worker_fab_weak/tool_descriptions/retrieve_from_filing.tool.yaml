@@ -1,0 +1,10 @@
+type: tool
+name: retrieve_from_filing
+description: Retrieve the most relevant passages from a large filing/page by query (keyword search inside the document). Use to read specific topics in a 10-K/10-Q.
+input_schema:
+  type: object
+  properties:
+    url: {type: string, description: "URL of a (possibly large) filing/page."}
+    query: {type: string, description: "What to find, e.g. 'artificial intelligence risks Charlotte AI'."}
+  required: [url, query]
+  additionalProperties: false

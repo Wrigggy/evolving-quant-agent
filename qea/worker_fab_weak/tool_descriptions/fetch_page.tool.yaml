@@ -1,0 +1,9 @@
+type: tool
+name: fetch_page
+description: Fetch a URL and return its extracted text (<=40k chars). For large SEC filings prefer retrieve_from_filing.
+input_schema:
+  type: object
+  properties:
+    url: {type: string, description: "URL to fetch."}
+  required: [url]
+  additionalProperties: false

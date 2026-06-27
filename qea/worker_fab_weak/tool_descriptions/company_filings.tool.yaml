@@ -1,0 +1,10 @@
+type: tool
+name: company_filings
+description: List a company's recent SEC filings by ticker (resolves ticker->CIK). Use to find a specific 10-K/10-Q URL.
+input_schema:
+  type: object
+  properties:
+    ticker: {type: string, description: "Ticker, e.g. 'CRWD' (strip exchange prefix)."}
+    forms: {type: string, description: "Comma-separated form types to keep, e.g. '10-K,10-Q'."}
+  required: [ticker]
+  additionalProperties: false
