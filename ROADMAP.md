@@ -92,18 +92,59 @@ has been **deleted**: it fused measurement and decision and could not produce an
 absolute score. The rubric %-gate (`decide_keep_soft`) is the current gate. Pairwise
 / Elo are not retained even as a diagnostic.
 
+## Findings from Phase 4 — NexAU Level-B substrate (2026-06)
+
+The worker substrate moved Stirrup→NexAU (the harness IS an editable agent directory:
+`agent.yaml` + `systemprompt.md` + `tool_descriptions/` + `tools/`), and a deterministic
+loop (`qea/loop_levelb.py`) now orchestrates two sibling NexAU agents — a weak worker and
+a **file-editing evolve agent** that edits a snapshot of the worker dir. Base parity held
+(GDPval-on-NexAU 0.797 ≈ Stirrup 0.807; FAB-on-NexAU 0.618 ≈ Stirrup 0.659). See
+`docs/BASELINES.md`, `docs/RESULTS_levelb_gdpval.md`, `docs/RESULTS_fab_weak.md`.
+
+- **THE headroom finding — weakening only helps when it removes a capability the worker
+  cannot reconstruct in ONE episode.**
+
+  | benchmark | full | weak seed | gap |
+  |---|---|---|---|
+  | GDPval (general shell tool) | 0.797 / gated 0.772 | 0.791 / 0.771 | ~0 — **no headroom** |
+  | FAB (SEC-retrieval tools) | 0.618 | 0.388 | **−0.230 — real headroom** |
+
+  A strong agentic worker with a general shell + many turns **self-recovers** stripped
+  prompt guidance in-context, so prompt-weakening on GDPval leaves no gap to evolve. FAB is
+  **tool-gated**: removing `retrieve_from_filing`/`company_filings`/`edgar_search` makes
+  deep-filing-read and filing-URL-discovery unreconstructable from `fetch_page`+`web_search`
+  → 13/27 tasks collapse to ~45-char non-answers → a real ~0.23 gap. **Lesson: weaken the
+  agentic loop's self-recovery capability (tools / iteration budget), not prompt prose.**
+- **The FAB gap is a well-posed Level-B target.** The removed tools' code still lives in
+  `qea/worker_fab_weak/tools/fab/research.py`; only their `agent.yaml` bindings were dropped.
+  So the evolve agent recovers the gap by **re-wiring a tool into `agent.yaml`** — a clean
+  AHE-style harness edit, not answer leakage.
+- **Deliverable-format gate (baked in).** Canonical Level-B score = 0 unless the worker
+  produces a file matching the task's GDPval gold deliverable extension (`task.deliverable_exts`;
+  text-gold tasks need no file); raw content % kept for the firewalled debugger
+  (`qea/grading/format_gate.py`). On the current workers it moves scores only ~−0.02 (both
+  produce the right type on 29/30; only systematic miss = the `.ipynb` task neither emits).
+- **Cost note.** ~12 min per GDPval worker run; `evaluate_dir` is sequential → multi-iter
+  evolution runs cost hours. Add concurrency before long runs.
+
 ## Next experiments (priority order)
 
-1. **Run the B-pile debugger on the original 30 GDPval tasks** (the first real
-   experiment under the new architecture). Acceptance: run N iterations under the
-   `decide_keep_soft` gate; success = keep rate departs 0 with replicated wins
-   (budget ~$15 / ~3h). The B-debugger + sanitized observations fix the structural
-   reason all prior edits were refused or harmful.
-2. **File-producing worker for the Accountants/Auditors wall** (rubric mean 0.100;
+1. **Run the actual Level-B evolution loop on FAB + the weak seed** (the real Phase-4
+   experiment, now that a genuine headroom gap exists). Adapt `qea/loop_levelb.py` to the
+   FAB benchmark (text answers + `score_rubric` grader, no multimodal `render`/`MultimodalJudge`)
+   and point it at `qea/worker_fab_weak/`. Acceptance: the file-editing evolve agent recovers
+   a meaningful fraction of the 0.618−0.388 = 0.230 gap by editing the worker dir
+   (re-wiring/adding tools), kept only past the noise floor. This is the first run where the
+   loop has something real to recover — GDPval had none.
+2. **(Superseded / done) Run the B-pile debugger on the original 30 GDPval tasks.** Ran under
+   the `decide_keep_soft` gate; the GDPval headroom finding above (weak ≈ full) shows GDPval is
+   capability-sufficient for this base model, so it is NOT the benchmark to drive evolution —
+   FAB is. Keep GDPval only as a soft transfer eval.
+3. **File-producing worker for the Accountants/Auditors wall** (rubric mean 0.100;
    capability gap, untouched by all prior middleware edits) — .xlsx/.pdf output via
    openpyxl/LibreOffice in the sandbox; overlaps with the "GDPval B-pile grading
-   fidelity" stub below.
-3. **Judge options (settled, act when relevant):** switch `QEA_JUDGE_MODEL` to
+   fidelity" stub below. (Largely shipped: the NexAU worker now builds real files.)
+4. **Judge options (settled, act when relevant):** switch `QEA_JUDGE_MODEL` to
    `google/gemini-3.1-pro-preview` for full rubric fidelity once accessible; or
    use the ~3x-cheaper deepseek judge for long runs (A/B-validated at ~90%
    agreement; qwen stays default for its smaller null deviation).
