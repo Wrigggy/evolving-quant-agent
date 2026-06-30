@@ -17,6 +17,21 @@ from pathlib import Path
 SUPPORTED = {".xlsx", ".pptx", ".docx", ".pdf"}
 
 
+def pin_provider(llm_config) -> None:
+    """Pin the OpenRouter provider for this model. AHE lesson (also baked into qea.llm
+    + .env): routed third-party providers return empty/mis-parsed completions — the
+    intermittent `content_len=0` empties that stall the worker/evolve agent. NexAU's
+    LLMConfig has no provider field, so inject it via `extra_body`, which
+    `to_openai_params()` forwards to `client.chat.completions.create(...)`."""
+    try:
+        from .llm import provider_for, resolve_provider_map
+        prov = provider_for(getattr(llm_config, "model", "") or "", resolve_provider_map())
+        if prov:
+            llm_config.set_param("extra_body", {"provider": {"order": [prov], "allow_fallbacks": False}})
+    except Exception:  # noqa: BLE001 - never block a run on provider pinning
+        pass
+
+
 def ensure_nexau_llm_env() -> None:
     """The NexAU agent.yaml resolves ${env.LLM_API_KEY|LLM_BASE_URL|LLM_MODEL} at
     config load. Map them from OPENROUTER_* (matching scripts/nexau_gdpval_run.py)
@@ -92,6 +107,7 @@ def run_worker(task, worker_dir: Path, run_dir: Path) -> WorkerRun:
     pre = {p for p in workdir.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED}
 
     cfg = AgentConfig.from_yaml(config_path=worker_dir / "agent.yaml")
+    pin_provider(cfg.llm_config)
     agent = Agent(config=cfg)
     try:
         agent.sandbox_manager.instance.work_dir = workdir
