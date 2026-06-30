@@ -129,13 +129,26 @@ a **file-editing evolve agent** that edits a snapshot of the worker dir. Base pa
 
 ## Next experiments (priority order)
 
-1. **Run the actual Level-B evolution loop on FAB + the weak seed** (the real Phase-4
-   experiment, now that a genuine headroom gap exists). Adapt `qea/loop_levelb.py` to the
-   FAB benchmark (text answers + `score_rubric` grader, no multimodal `render`/`MultimodalJudge`)
-   and point it at `qea/worker_fab_weak/`. Acceptance: the file-editing evolve agent recovers
-   a meaningful fraction of the 0.618−0.388 = 0.230 gap by editing the worker dir
-   (re-wiring/adding tools), kept only past the noise floor. This is the first run where the
-   loop has something real to recover — GDPval had none.
+1. **Run the actual Level-B evolution loop on FAB + the weak seed** (the real experiment,
+   now that a genuine headroom gap exists). INFRASTRUCTURE BUILT (Phase 5,
+   `docs/superpowers/specs/2026-06-30-phase5-generalizable-levelb-mechanism-design.md`):
+   `qea/loop_levelb.py` is now benchmark-agnostic (`run_levelb(cfg, benchmark)` + the
+   `Evaluator` abstraction), with AHE prediction-falsification keep/rollback, a NexAU-
+   modification reference for the evolve agent, and an `evidence_mode` firewall switch.
+   ACTION: run `run.py --levelb --benchmark fab --evidence-mode ahe_corpus` on
+   `qea/worker_fab_weak/`. Acceptance: the file-editing evolve agent recovers a meaningful
+   fraction of the 0.618−0.388 = 0.230 gap by editing the worker dir (re-wiring/adding
+   tools), kept only past the noise floor. NOTE: the weak FAB worker is slow/empty-response-
+   prone under large context; `evaluate_dir` is now per-task fault-tolerant, but add
+   concurrency + bound the noise-floor double-eval before scaling task count.
+1b. **Firewall ON/OFF + gold-reading ablations (the evolve-agent observability study).**
+   With `evidence_mode` as the switch: (a) compare `ahe_corpus` (firewall relaxed, traces
+   + analysis, NO gold) vs `sanitized` (iron-law-2 ON) to measure what the firewall costs;
+   (b) **let the evolve agent read the GOLD answer** — the maximal firewall-off ablation
+   (beyond AHE, which has no gold), to establish the absolute ceiling (expected: gains are
+   hardcoding). Run only as a clearly-labeled ablation, never as the canonical mechanism.
+   (c) **web tools for the evolve agent** — AHE has them, but on a finance benchmark web
+   search is a backdoor to the gold; gate it behind the same ablation flag.
 2. **(Superseded / done) Run the B-pile debugger on the original 30 GDPval tasks.** Ran under
    the `decide_keep_soft` gate; the GDPval headroom finding above (weak ≈ full) shows GDPval is
    capability-sufficient for this base model, so it is NOT the benchmark to drive evolution —

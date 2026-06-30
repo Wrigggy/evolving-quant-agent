@@ -271,6 +271,55 @@ regressed lists for the history feed. `LevelBResult` is unchanged in shape.
 4. **AFlow 5× repeated eval**, **evaluation cascade** (cheap subset → full),
    **DGM tamper-evident markers**, **`evaluate_dir` concurrency**.
 
+## 10. Update (2026-06-30): AHE-parity evolve agent + firewall mode flag
+
+After comparing our minimal evolve agent against the AHE form (it has 10 tools, a
+mandatory analysis "reading list", and a `nexau-evolution-guide` reference skill), we
+close the gap on every dimension, with one principled control:
+
+- **(b) NexAU-modification reference (always on, answer-free):**
+  `qea/evolve_agent/reference/NEXAU_GUIDE.md` — the substrate format (agent.yaml schema,
+  the 3 parts of a tool, how to re-wire/add a tool, loop knobs, built-in tool paths).
+  Inlined into every evolve prompt (`_read_reference`). This is the highest-leverage
+  fix given the AHE finding that *evolve-agent strength is the bottleneck*: with
+  code-writing authority but no substrate reference, the agent would emit invalid
+  tools/bindings. No task content — safe in both modes.
+
+- **(a) AHE evidence corpus (opt-in via `evidence_mode`):** `LevelBConfig.evidence_mode`
+  selects the evolve agent's input:
+  - `sanitized` (DEFAULT, canonical, **iron-law-2 firewall ON**): answer-free diagnosis
+    + edit history only — unchanged from §4.
+  - `ahe_corpus` (**firewall relaxed**): the loop builds an evidence corpus
+    (`_build_evidence`) — `overview.md` distilling each FAILING task (failed rubric
+    criteria + process + the worker's OWN deliverable), `evolution_history.md`, and raw
+    per-task traces on disk (`run_worker` now dumps a capped `trace.txt`) for
+    drill-down. The overview + history are inlined; traces are referenced for optional
+    drill-down (AHE's "read the distilled overview first" pattern). **The gold answer is
+    NEVER written into the corpus** — AHE itself has no gold (test-verified coding
+    tasks), so AHE-parity does NOT mean leaking gold. Leakage exposure is the worker's
+    own attempts + capability-level failed-criteria text (low–medium), bounded by the
+    still-active `LeakageGuard` on the resulting diff.
+
+- **Tools:** the evolve agent keeps `run_shell_command`, which is a superset for file
+  operations (read/write/edit/grep/ls); the reference documents the shell edit+verify
+  pattern. The only capability-adding AHE tool we do NOT add is **web search/fetch** —
+  see backlog (it is a backdoor to the gold we deliberately withhold).
+
+This makes `evidence_mode` the exact ON/OFF firewall switch for the comparison in the
+backlog: run `ahe_corpus` first to see whether the mechanism produces gains at AHE
+parity; if gains are flat it is the evolve-agent/worker capability bottleneck, not the
+firewall; later flip to `sanitized` to measure the firewall's cost.
+
+Backlog additions (deferred, NOT in this run):
+- **Let the evolve agent read the GOLD answer** — the maximal firewall-off ablation
+  (beyond AHE, which has no gold). Establishes the absolute ceiling but gains would be
+  hardcoding; run only as a clearly-labeled ablation.
+- **Web tools for the evolve agent** — AHE has them, but on a finance benchmark web
+  search is a backdoor to the gold answer; deferred next to the gold-reading ablation.
+- **Per-task critic notes + stability/trends in the corpus** — richer answer-free
+  signal (AHE's overview is LLM-distilled per task; ours currently uses failed-criteria
+  + deliverable). Cheap to add later.
+
 ## 9. Testing
 
 Offline (no LLM/network), extending `tests/test_levelb.py`:

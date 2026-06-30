@@ -64,6 +64,9 @@ def main() -> int:
                     help="levelb: which benchmark to evolve on (default fab)")
     ap.add_argument("--seed-worker", default=None,
                     help="levelb: seed worker dir (defaults per benchmark)")
+    ap.add_argument("--evidence-mode", default="sanitized", choices=["sanitized", "ahe_corpus"],
+                    help="levelb: evolve-agent evidence — sanitized (firewall ON) or "
+                         "ahe_corpus (traces+analysis, no gold; firewall relaxed)")
     ap.add_argument("--results-dir", default="results/latest")
     args = ap.parse_args()
 
@@ -74,9 +77,11 @@ def main() -> int:
                                     else "qea/worker_gdpval_weak")
         lcfg = LevelBConfig(n_iters=args.iters, k=args.k, n_tasks=args.n_tasks,
                             broad=not args.core, results_dir=args.results_dir,
-                            benchmark=args.benchmark, seed_worker_dir=seed)
+                            benchmark=args.benchmark, seed_worker_dir=seed,
+                            evidence_mode=args.evidence_mode)
         print(f"[run] mode=LEVEL-B ({lcfg.benchmark} worker dir evolved by a file-editing evolve agent) "
-              f"iters={lcfg.n_iters} k={lcfg.k} n_tasks={lcfg.n_tasks} seed={seed} -> {lcfg.results_dir}")
+              f"iters={lcfg.n_iters} k={lcfg.k} n_tasks={lcfg.n_tasks} seed={seed} "
+              f"evidence={lcfg.evidence_mode} -> {lcfg.results_dir}")
         res = run_levelb(lcfg)
         _print_levelb(res)
         rose = res.mean_score_trajectory[-1] > res.mean_score_trajectory[0] + res.noise_margin

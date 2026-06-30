@@ -115,4 +115,19 @@ def run_worker(task, worker_dir: Path, run_dir: Path) -> WorkerRun:
     trace = summarize_trace(agent)
     trace["secs"] = round(time.time() - t0, 1)
     trace["files"] = len(produced)
+    # Dump the full trajectory (capped) for the AHE-corpus evidence drill-down path.
+    trace_path = workdir.parent / "trace.txt"
+    try:
+        msgs = []
+        for m in (agent.full_trace or []):
+            role = getattr(m, "role", "")
+            try:
+                txt = m.get_text_content()
+            except Exception:  # noqa: BLE001
+                txt = str(getattr(m, "content", "") or "")
+            msgs.append(f"[{role}] {txt}")
+        trace_path.write_text("\n\n".join(msgs)[:200000])
+        trace["trace_path"] = str(trace_path)
+    except Exception:  # noqa: BLE001
+        trace["trace_path"] = ""
     return WorkerRun(final_text, produced, trace)

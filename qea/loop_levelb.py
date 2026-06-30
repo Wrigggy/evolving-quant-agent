@@ -41,6 +41,10 @@ class LevelBConfig:
     results_dir: str = "results/levelb"
     benchmark: str = "fab"           # "fab" | "gdpval"
     seed_worker_dir: str = "qea/worker_fab_weak"
+    # "sanitized" = iron-law-2 firewall ON (evolve agent sees only the answer-free
+    # diagnosis). "ahe_corpus" = AHE-style evidence corpus (traces + per-task failure
+    # analysis + edit history); firewall relaxed, but the gold answer is NEVER included.
+    evidence_mode: str = "sanitized"
 
 
 @dataclass
@@ -130,6 +134,41 @@ def _edit_history(records: list) -> str:
     return "\n".join(lines)
 
 
+def _build_evidence(evidence_dir: Path, diag: dict, evals: dict, traces: dict,
+                    deliverables: dict, tasks, records: list) -> Path:
+    """AHE-style evidence corpus (firewall-OFF mode). overview.md distills per FAILING
+    task: failed rubric criteria + process + the worker's OWN deliverable (truncated);
+    evolution_history.md logs prior edits + verdicts; raw per-task traces stay on disk
+    for drill-down. The gold answer is NEVER written here."""
+    evidence_dir = Path(evidence_dir)
+    (evidence_dir / "traces").mkdir(parents=True, exist_ok=True)
+    by_id = {t.task_id: t for t in tasks}
+    lines = ["# Evidence overview (firewall-off corpus; NO gold answer included)", "",
+             f"Dominant deficiency: {diag.get('root_cause_tag')} — {diag.get('overview', '')}", ""]
+    for tid, e in evals.items():
+        if e.gated_score >= 0.60:
+            continue
+        task = by_id.get(tid)
+        items = getattr(task, "rubric_items", None) or []
+        failed = [items[i]["criterion"] for i in range(len(items))
+                  if e.verdicts and e.verdicts.get(str(i + 1)) is False]
+        tr = traces.get(tid, {})
+        proc = (f"files={tr.get('files', 0)} turns={tr.get('turns', 0)} "
+                f"tool_errors={tr.get('tool_errors', 0)}"
+                + (f" ERROR={tr.get('error')}" if tr.get("error") else ""))
+        lines += [
+            f"## {tid} ({getattr(task, 'subtype', '')}) — gated {e.gated_score:.2f}",
+            f"- failed criteria ({len(failed)}): " + ("; ".join(failed[:8]) or "(none captured)"),
+            f"- process: {proc}",
+            f"- full trace: {tr.get('trace_path') or '(none)'}",
+            "- worker deliverable (truncated):",
+            (deliverables.get(tid, "") or "")[:1500], ""]
+    (evidence_dir / "overview.md").write_text("\n".join(lines))
+    hist = "\n".join(f"- iter {r.iteration}: {r.edit_summary} -> {r.verdict}" for r in records) or "(none yet)"
+    (evidence_dir / "evolution_history.md").write_text("# Evolution history\n\n" + hist + "\n")
+    return evidence_dir
+
+
 def _classify(edit, inc_evals: dict, cand_evals: dict, delta: float) -> dict:
     """Continuous-score adaptation of AHE's prediction-falsification: a task counts
     as flipped/regressed only if its GATED score moved more than the noise tolerance
@@ -183,7 +222,12 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
         iterdir = results_dir / f"iter_{it:03d}"
         cand_dir = iterdir / "worker"
         snapshot_dir(incumbent, cand_dir)
-        ev_out = run_evolve_agent(cand_dir, diag, iterdir, edit_history=_edit_history(records))
+        evidence_dir = None
+        if cfg.evidence_mode == "ahe_corpus":
+            evidence_dir = _build_evidence(iterdir / "evidence", diag, evals, traces,
+                                           deliverables, tasks, records)
+        ev_out = run_evolve_agent(cand_dir, diag, iterdir,
+                                  edit_history=_edit_history(records), evidence_dir=evidence_dir)
         pred = ev_out.get("prediction") or {}
         diff = dir_unified_diff(incumbent, cand_dir)
         edit = DirEdit(diff, predicted_fixes=pred.get("predicted_fixes", []),

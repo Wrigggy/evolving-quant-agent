@@ -190,7 +190,7 @@ def test_levelb_loop_keeps_improving_edit_offline(tmp_path, monkeypatch):
     monkeypatch.setattr(L, "run_worker", fake_run_worker)
 
     # evolve agent: appends the IMPROVED marker + predicts it fixes t1
-    def fake_run_evolve(snapshot_dir_path, diag, run_dir, *, edit_history=""):
+    def fake_run_evolve(snapshot_dir_path, diag, run_dir, *, edit_history="", evidence_dir=None):
         sp = snapshot_dir_path / "systemprompt.md"
         sp.write_text(sp.read_text() + "\nIMPROVED: verify the file before finishing.\n")
         return {"final_text": "added verify guidance", "trace": {"turns": 2},
@@ -228,7 +228,7 @@ def test_levelb_loop_rolls_back_non_improving_edit(tmp_path, monkeypatch):
                         lambda task, wd, rd: WorkerRun("same", [], {"files": 1, "turns": 5, "tool_errors": 0}))
 
     # evolve makes a real (but useless) change so the diff is non-empty; predicts t1
-    def ev(snap, diag, rd, *, edit_history=""):
+    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None):
         sp = snap / "systemprompt.md"; sp.write_text(sp.read_text() + "\nnoise edit\n")
         return {"final_text": "x", "trace": {}, "prediction": {"predicted_fixes": ["t1"], "risk_tasks": []}}
     monkeypatch.setattr(L, "run_evolve_agent", ev)
@@ -347,6 +347,66 @@ def test_classify_verdict_table():
     # INEFFECTIVE: nothing moves
     e4 = DirEdit("d", predicted_fixes=["a"], risk_tasks=[])
     assert _classify(e4, inc, evals({"a": 0.2, "b": 0.5, "c": 0.5}), 0.05)["verdict"] == "INEFFECTIVE"
+
+
+def test_nexau_reference_guide_is_loadable_and_substrate_only():
+    from qea.evolve_runtime import _read_reference
+    ref = _read_reference()
+    assert ref and "binding:" in ref and "tools:" in ref      # (b) reference present
+    assert "max_iterations" in ref and "tool_descriptions" in ref
+
+
+def test_build_evidence_corpus_includes_failure_not_gold(tmp_path):
+    from qea.loop_levelb import _build_evidence
+    from qea.evaluator import TaskEval
+    from qea.tasks import BTask
+
+    tasks = [BTask(task_id="t1", subtype="x", prompt="p", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "reconciles to the control total"},
+                                 {"points": 1, "criterion": "lists assumptions"}],
+                   gold="SECRET-GOLD-ANSWER-42")]
+    evals = {"t1": TaskEval(0.2, 0.2, False, "my weak memo", {"1": False, "2": True}, 0.0)}
+    traces = {"t1": {"files": 0, "turns": 3, "tool_errors": 1, "trace_path": "/x/trace.txt"}}
+    diag = {"root_cause_tag": "WrongStructure", "overview": "structure missing"}
+
+    ed = _build_evidence(tmp_path / "ev", diag, evals, traces, {"t1": "my weak memo"}, tasks, [])
+    overview = (ed / "overview.md").read_text()
+    assert "reconciles to the control total" in overview      # the FAILED criterion (verdict False)
+    assert "lists assumptions" not in overview                # the passed criterion is not listed
+    assert "my weak memo" in overview                         # worker's own deliverable
+    assert "SECRET-GOLD-ANSWER-42" not in overview            # gold is NEVER written
+    assert (ed / "evolution_history.md").exists()
+
+
+def test_levelb_ahe_corpus_mode_passes_evidence_dir(tmp_path, monkeypatch):
+    import qea.loop_levelb as L
+    from qea.worker_runtime import WorkerRun
+    from qea.tasks import BTask
+
+    tasks = [BTask(task_id="t1", subtype="x", prompt="p", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "c"}], gold="g")]
+    monkeypatch.setattr(L, "run_worker",
+                        lambda task, wd, rd: WorkerRun("weak ans", [], {"files": 0, "turns": 2, "tool_errors": 0}))
+
+    captured = {}
+    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None):
+        captured["evidence_dir"] = evidence_dir
+        return {"final_text": "x", "trace": {}, "prediction": {"predicted_fixes": [], "risk_tasks": []}}
+    monkeypatch.setattr(L, "run_evolve_agent", ev)
+
+    class StubLLM:
+        def complete(self, prompt, *, role="judge", **kw):
+            return ('{"root_cause_tag":"WrongStructure","target_slot":"prompt"}'
+                    if "Classify" in prompt else "omits structure")
+
+    seed = tmp_path / "seed"; (seed / "tool_descriptions").mkdir(parents=True)
+    (seed / "agent.yaml").write_text("name: w\n"); (seed / "systemprompt.md").write_text("do it\n")
+    cfg = L.LevelBConfig(n_iters=1, k=1, n_tasks=1, results_dir=str(tmp_path / "res"),
+                         seed_worker_dir=str(seed), evidence_mode="ahe_corpus")
+    # failing task (0.3 < 0.6) so it lands in the evidence overview
+    L.run_levelb(cfg, _tasks=tasks, _evaluator=_FakeEval(base=0.3, improved=0.3), _llm=StubLLM())
+    assert captured["evidence_dir"] is not None
+    assert (Path(captured["evidence_dir"]) / "overview.md").exists()
 
 
 def test_make_benchmark_routes_to_the_right_evaluator():

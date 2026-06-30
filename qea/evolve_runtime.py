@@ -112,13 +112,37 @@ def _parse_prediction(text: str) -> dict:
     return {"predicted_fixes": [], "risk_tasks": []}
 
 
+def _read_reference() -> str:
+    """The (b) answer-free NexAU-modification reference, inlined into every evolve
+    prompt so the agent knows the substrate format (how to wire/write a tool, the
+    agent.yaml schema, the loop knobs) when using its code-writing authority."""
+    try:
+        return (EVOLVE_DIR / "reference" / "NEXAU_GUIDE.md").read_text()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _read_first(path: Path, limit: int = 20000) -> str:
+    try:
+        return path.read_text()[:limit]
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir: Path,
-                     *, edit_history: str = "") -> dict:
-    """Invoke the file-editing NexAU evolve agent against the snapshot. Reads ONLY the
-    sanitized diagnosis (answer-free) — never the grader gold / rubric text. The agent
-    may edit ANY file in the worker dir (prompt, tool descriptions, agent.yaml bindings,
-    or new tool code). Returns the final text, an answer-free trace, and the parsed
-    prediction (which tasks the edit is expected to fix / put at risk)."""
+                     *, edit_history: str = "", evidence_dir=None) -> dict:
+    """Invoke the file-editing NexAU evolve agent against the snapshot. The agent may
+    edit ANY file in the worker dir (prompt, tool descriptions, agent.yaml bindings, or
+    new tool code) and is always handed the answer-free NexAU-modification reference (b).
+
+    Two evidence modes:
+    - sanitized (evidence_dir=None): the agent sees ONLY the answer-free diagnosis +
+      edit history (iron-law-2 firewall ON).
+    - ahe_corpus (evidence_dir set): the agent is ALSO handed the AHE-style evidence
+      corpus (per-task failure overview + edit history inlined, raw traces available
+      for drill-down). Firewall relaxed — but the gold answer is NEVER included.
+
+    Returns the final text, an answer-free trace, and the parsed prediction."""
     from nexau import Agent, AgentConfig
     from .worker_runtime import ensure_nexau_llm_env, summarize_trace
     ensure_nexau_llm_env()
@@ -130,28 +154,52 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
     except Exception:  # noqa: BLE001
         pass
     task_ids = sanitized_diagnosis.get("predicted_fix_task_ids") or []
-    history_block = f"\nEDITS ALREADY TRIED (do not repeat):\n{edit_history}\n" if edit_history else ""
-    msg = (
+    reference = _read_reference()
+
+    head = (
         "Your working directory contains a worker agent defined as files (agent.yaml, "
         "systemprompt.md, tool_descriptions/, and possibly tools/). Make ONE focused "
-        "harness improvement that addresses the deficiency CLASS in the diagnosis below, "
-        "then stop. You may edit any file in the working directory — rewrite the prompt, "
-        "edit a tool description, re-wire a tool binding in agent.yaml, or add a new tool "
-        "— but NEVER hardcode task answers, numbers, or domain facts. Improve how the "
-        "worker WORKS, not what it answers.\n\n"
-        "First inspect the current files (e.g. `cat systemprompt.md`, `cat agent.yaml`, "
+        "harness improvement that addresses the deficiency CLASS below, then stop. You "
+        "may edit any file in the working directory — rewrite the prompt, edit a tool "
+        "description, re-wire a tool binding in agent.yaml, or add a new tool — but NEVER "
+        "hardcode task answers, numbers, or domain facts. Improve how the worker WORKS, "
+        "not what it answers.\n\n"
+        "First inspect the current files (`cat agent.yaml`, `cat systemprompt.md`, "
         "`ls tool_descriptions/`), then make a minimal targeted edit.\n\n"
-        f"SANITIZED DIAGNOSIS (answer-free):\n"
-        f"- root cause: {sanitized_diagnosis.get('root_cause_tag')}\n"
-        f"- category: {sanitized_diagnosis.get('deficiency_category')}\n"
-        f"- overview: {sanitized_diagnosis.get('overview')}\n"
-        f"- tasks currently failing: {task_ids}\n"
-        f"{history_block}\n"
-        "END your reply with a JSON object on its own line predicting the effect of your "
-        'edit, using ONLY task ids from the failing list above, e.g.:\n'
+        f"## NexAU modification reference\n{reference}\n"
+    )
+
+    if evidence_dir is not None:
+        evidence_dir = Path(evidence_dir)
+        overview = _read_first(evidence_dir / "overview.md")
+        history = _read_first(evidence_dir / "evolution_history.md", 6000)
+        evidence_block = (
+            "## Failure evidence (MANDATORY — read before editing; NO gold answer here)\n"
+            "The overview below distills why tasks failed (failed criteria, process, the "
+            "worker's own deliverable). Raw per-task trajectories are on disk under "
+            f"`{evidence_dir / 'traces'}` — drill into them with the shell only if needed.\n\n"
+            f"### overview.md\n{overview}\n\n### evolution_history.md\n{history}\n\n"
+            f"- root cause (classified): {sanitized_diagnosis.get('root_cause_tag')}\n"
+            f"- tasks currently failing: {task_ids}\n"
+        )
+    else:
+        history_block = f"\nEDITS ALREADY TRIED (do not repeat):\n{edit_history}\n" if edit_history else ""
+        evidence_block = (
+            f"## Diagnosis (answer-free)\n"
+            f"- root cause: {sanitized_diagnosis.get('root_cause_tag')}\n"
+            f"- category: {sanitized_diagnosis.get('deficiency_category')}\n"
+            f"- overview: {sanitized_diagnosis.get('overview')}\n"
+            f"- tasks currently failing: {task_ids}\n"
+            f"{history_block}"
+        )
+
+    tail = (
+        "\nEND your reply with a JSON object on its own line predicting the effect of "
+        'your edit, using ONLY task ids from the failing list above, e.g.:\n'
         '{"predicted_fixes": ["<task_id>", ...], "risk_tasks": ["<task_id>", ...], '
         '"rationale": "<one sentence>"}\n'
     )
+    msg = head + evidence_block + tail
     ctx = {"working_directory": str(snap), "username": os.environ.get("USER", "kevin")}
     ctx["env_content"] = dict(ctx)
     resp = agent.run(message=msg, context=ctx)
