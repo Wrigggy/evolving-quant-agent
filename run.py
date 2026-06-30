@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 
 from qea.loop import Config, acceptance_signals, run_synthetic_fixture, run_gdpval_soft
-from qea.loop_levelb import LevelBConfig, run_gdpval_levelb
+from qea.loop_levelb import LevelBConfig, run_levelb
 
 
 def _load_dotenv(path: str = ".env") -> None:
@@ -59,18 +59,25 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--core", action="store_true", help="real mode: ~25 core finance occupations instead of ~30 broad")
     ap.add_argument("--resume", action="store_true", help="real mode: continue a prior gdpval_soft run from its checkpoint")
-    ap.add_argument("--n-tasks", type=int, default=5, help="levelb: number of GDPval tasks per iteration")
+    ap.add_argument("--n-tasks", type=int, default=5, help="levelb: number of tasks per iteration")
+    ap.add_argument("--benchmark", default="fab", choices=["fab", "gdpval"],
+                    help="levelb: which benchmark to evolve on (default fab)")
+    ap.add_argument("--seed-worker", default=None,
+                    help="levelb: seed worker dir (defaults per benchmark)")
     ap.add_argument("--results-dir", default="results/latest")
     args = ap.parse_args()
 
     _load_dotenv()
 
     if args.levelb:
+        seed = args.seed_worker or ("qea/worker_fab_weak" if args.benchmark == "fab"
+                                    else "qea/worker_gdpval_weak")
         lcfg = LevelBConfig(n_iters=args.iters, k=args.k, n_tasks=args.n_tasks,
-                            broad=not args.core, results_dir=args.results_dir)
-        print(f"[run] mode=LEVEL-B (NexAU worker dir evolved by a file-editing evolve agent) "
-              f"iters={lcfg.n_iters} k={lcfg.k} n_tasks={lcfg.n_tasks} -> {lcfg.results_dir}")
-        res = run_gdpval_levelb(lcfg)
+                            broad=not args.core, results_dir=args.results_dir,
+                            benchmark=args.benchmark, seed_worker_dir=seed)
+        print(f"[run] mode=LEVEL-B ({lcfg.benchmark} worker dir evolved by a file-editing evolve agent) "
+              f"iters={lcfg.n_iters} k={lcfg.k} n_tasks={lcfg.n_tasks} seed={seed} -> {lcfg.results_dir}")
+        res = run_levelb(lcfg)
         _print_levelb(res)
         rose = res.mean_score_trajectory[-1] > res.mean_score_trajectory[0] + res.noise_margin
         print(f"\n  ==> LEVEL-B HEADROOM {'OBSERVED' if rose else 'NOT OBSERVED'}: "
@@ -128,14 +135,14 @@ def _print_soft(res) -> None:
 
 
 def _print_levelb(res) -> None:
-    print(f"\n=== Level-B evolution ({res.n_tasks} GDPval tasks, multimodal-grade gate) ===")
+    print(f"\n=== Level-B evolution ({res.n_tasks} {res.benchmark or ''} tasks, format-gated score) ===")
     print(f"  noise floor (gain a candidate must beat): {res.noise_margin}")
-    print(f"  mean multimodal-score trajectory: {res.mean_score_trajectory}")
+    print(f"  mean gated-score trajectory: {res.mean_score_trajectory}")
     print(f"  {'iter':>4} {'verdict':<16} {'kept':<8} inc->cand")
     for r in res.records:
         flag = "BLOCKED" if r.blocked else ("keep" if r.kept else "rollback")
         print(f"  {r.iteration:>4} {r.verdict:<16} {flag:<8} {r.inc_mean:.3f}->{r.cand_mean:.3f}  | {r.edit_summary}")
-    print(f"  final mean multimodal score: {res.final_mean_score}")
+    print(f"  final mean gated score: {res.final_mean_score}")
     print(f"  final worker dir: {res.final_worker_dir}")
     print(f"  kept/rolledback/blocked: {res.n_kept}/{res.n_rolled_back}/{res.n_blocked}")
 

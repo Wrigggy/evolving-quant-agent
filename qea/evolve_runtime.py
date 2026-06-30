@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import json
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 EVOLVE_DIR = Path(__file__).resolve().parent / "evolve_agent"
@@ -58,9 +59,15 @@ def diff_signature(diff: str) -> str:
 
 @dataclass
 class DirEdit:
-    """Edit-like shim so the existing RejectedEditBuffer + LeakageGuard work on a
-    directory diff unchanged (they only call .signature() / read .content / .summary)."""
+    """Edit-like shim so the existing RejectedEditBuffer + LeakageGuard +
+    evaluate_changes work on a directory diff unchanged. The buffer/guard call
+    .signature()/.content/.summary; evaluate_changes reads .predicted_fixes /
+    .risk_tasks (the evolve agent's prediction) + .slot/.component_name."""
     diff: str
+    predicted_fixes: list = field(default_factory=list)
+    risk_tasks: list = field(default_factory=list)
+    op: str = "edit"
+    slot: str = "worker_dir"
 
     def signature(self) -> str:
         return diff_signature(self.diff)
@@ -72,17 +79,46 @@ class DirEdit:
                          if l.startswith("+") and not l.startswith("+++"))
 
     @property
+    def _files(self) -> list:
+        return sorted({l[6:] for l in self.diff.splitlines() if l.startswith("+++ b/")})
+
+    @property
+    def component_name(self) -> str:
+        return ",".join(self._files) or "(none)"
+
+    @property
     def summary(self) -> str:
-        files = sorted({l[4:] for l in self.diff.splitlines() if l.startswith("+++ b/")})
         adds = sum(1 for l in self.diff.splitlines() if l.startswith("+") and not l.startswith("+++"))
         dels = sum(1 for l in self.diff.splitlines() if l.startswith("-") and not l.startswith("---"))
-        return f"edit {', '.join(files) or '(none)'} (+{adds}/-{dels})" if self.diff else "(no change)"
+        return f"edit {', '.join(self._files) or '(none)'} (+{adds}/-{dels})" if self.diff else "(no change)"
 
 
-def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir: Path) -> dict:
+def _parse_prediction(text: str) -> dict:
+    """Pull the evolve agent's prediction JSON from its final message. Returns
+    {"predicted_fixes": [...], "risk_tasks": [...]} (empty lists if absent/malformed)."""
+    dec = json.JSONDecoder()
+    i = text.find("{")
+    while i >= 0:
+        try:
+            obj, _ = dec.raw_decode(text[i:])
+            if isinstance(obj, dict) and ("predicted_fixes" in obj or "risk_tasks" in obj):
+                return {
+                    "predicted_fixes": [str(t) for t in (obj.get("predicted_fixes") or [])],
+                    "risk_tasks": [str(t) for t in (obj.get("risk_tasks") or [])],
+                }
+        except json.JSONDecodeError:
+            pass
+        i = text.find("{", i + 1)
+    return {"predicted_fixes": [], "risk_tasks": []}
+
+
+def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir: Path,
+                     *, edit_history: str = "") -> dict:
     """Invoke the file-editing NexAU evolve agent against the snapshot. Reads ONLY the
-    sanitized diagnosis (answer-free) — never the grader gold / rubric text. Returns
-    a small summary dict (final text + trace)."""
+    sanitized diagnosis (answer-free) — never the grader gold / rubric text. The agent
+    may edit ANY file in the worker dir (prompt, tool descriptions, agent.yaml bindings,
+    or new tool code). Returns the final text, an answer-free trace, and the parsed
+    prediction (which tasks the edit is expected to fix / put at risk)."""
     from nexau import Agent, AgentConfig
     from .worker_runtime import ensure_nexau_llm_env, summarize_trace
     ensure_nexau_llm_env()
@@ -93,20 +129,32 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
         agent.sandbox_manager.instance.work_dir = snap
     except Exception:  # noqa: BLE001
         pass
+    task_ids = sanitized_diagnosis.get("predicted_fix_task_ids") or []
+    history_block = f"\nEDITS ALREADY TRIED (do not repeat):\n{edit_history}\n" if edit_history else ""
     msg = (
-        "You may improve the worker agent in your working directory. You may edit ONLY "
-        "files inside the working directory (its agent.yaml, systemprompt.md, and "
-        "tool_descriptions/). Make ONE focused improvement that addresses the diagnosis "
-        "below, then stop. Do NOT invent task answers or domain facts — improve the "
-        "agent's PROCESS (prompt guidance, tool descriptions).\n\n"
+        "Your working directory contains a worker agent defined as files (agent.yaml, "
+        "systemprompt.md, tool_descriptions/, and possibly tools/). Make ONE focused "
+        "harness improvement that addresses the deficiency CLASS in the diagnosis below, "
+        "then stop. You may edit any file in the working directory — rewrite the prompt, "
+        "edit a tool description, re-wire a tool binding in agent.yaml, or add a new tool "
+        "— but NEVER hardcode task answers, numbers, or domain facts. Improve how the "
+        "worker WORKS, not what it answers.\n\n"
+        "First inspect the current files (e.g. `cat systemprompt.md`, `cat agent.yaml`, "
+        "`ls tool_descriptions/`), then make a minimal targeted edit.\n\n"
         f"SANITIZED DIAGNOSIS (answer-free):\n"
         f"- root cause: {sanitized_diagnosis.get('root_cause_tag')}\n"
         f"- category: {sanitized_diagnosis.get('deficiency_category')}\n"
-        f"- suggested focus: {sanitized_diagnosis.get('suggested_target_slot')}\n"
         f"- overview: {sanitized_diagnosis.get('overview')}\n"
+        f"- tasks currently failing: {task_ids}\n"
+        f"{history_block}\n"
+        "END your reply with a JSON object on its own line predicting the effect of your "
+        'edit, using ONLY task ids from the failing list above, e.g.:\n'
+        '{"predicted_fixes": ["<task_id>", ...], "risk_tasks": ["<task_id>", ...], '
+        '"rationale": "<one sentence>"}\n'
     )
     ctx = {"working_directory": str(snap), "username": os.environ.get("USER", "kevin")}
     ctx["env_content"] = dict(ctx)
     resp = agent.run(message=msg, context=ctx)
     final_text = resp if isinstance(resp, str) else (resp[0] if resp else "")
-    return {"final_text": final_text, "trace": summarize_trace(agent)}
+    return {"final_text": final_text, "trace": summarize_trace(agent),
+            "prediction": _parse_prediction(final_text)}

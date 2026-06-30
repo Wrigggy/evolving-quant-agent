@@ -159,10 +159,20 @@ def test_evolve_agent_config_loads():
     assert cfg is not None
 
 
+class _FakeEval:
+    """Benchmark-agnostic fake Evaluator: score depends on whether the worker prompt
+    was improved (the evolve agent appends a marker the fake worker echoes)."""
+    def __init__(self, base=0.50, improved=0.90):
+        self.base, self.improved = base, improved
+    def evaluate(self, task, worker_run, out_dir=None):
+        from qea.evaluator import TaskEval
+        s = self.improved if "improved=True" in worker_run.deliverable_text else self.base
+        return TaskEval(s, s, True, worker_run.deliverable_text, {"1": s > 0.6}, 0.0)
+
+
 def test_levelb_loop_keeps_improving_edit_offline(tmp_path, monkeypatch):
     import qea.loop_levelb as L
     from qea.worker_runtime import WorkerRun
-    from qea.grading.multimodal_judge import GradeResult
     from qea.tasks import BTask
 
     tasks = [BTask(task_id="t1", subtype="Accountants and Auditors", prompt="p", rubric="",
@@ -173,32 +183,18 @@ def test_levelb_loop_keeps_improving_edit_offline(tmp_path, monkeypatch):
             return ('{"root_cause_tag":"WrongStructure","target_slot":"prompt"}'
                     if "Classify" in prompt else "omits the required structure")
 
-    # worker: returns a fixed deliverable + trace; score depends on whether the
-    # incumbent worker prompt has been improved (the evolve agent appends a marker).
+    # worker: returns a fixed deliverable; "improved=True" once the prompt is edited.
     def fake_run_worker(task, worker_dir, run_dir):
         improved = "IMPROVED" in (worker_dir / "systemprompt.md").read_text()
         return WorkerRun(f"deliverable improved={improved}", [], {"files": 1, "turns": 5, "tool_errors": 0})
     monkeypatch.setattr(L, "run_worker", fake_run_worker)
 
-    # judge: 0.50 for the seed, 0.90 once the worker prompt is improved
-    class FakeJudge:
-        def __init__(self, *a, **k): pass
-        def grade(self, task, rendered):
-            score = 0.90 if "improved=True" in rendered.text else 0.50
-            return GradeResult(task.task_id, score, score, {"1": score > 0.6}, 0.0, False)
-    monkeypatch.setattr(L, "MultimodalJudge", FakeJudge)
-
-    # render: trivial passthrough exposing .text / .extracted_text / .images / .degraded
-    def fake_render(text, produced, out_dir):
-        from types import SimpleNamespace
-        return SimpleNamespace(text=text, extracted_text=text, images=[], degraded=False)
-    monkeypatch.setattr(L, "render", fake_render)
-
-    # evolve agent: appends the IMPROVED marker to the snapshot's systemprompt.md
-    def fake_run_evolve(snapshot_dir_path, diag, run_dir):
+    # evolve agent: appends the IMPROVED marker + predicts it fixes t1
+    def fake_run_evolve(snapshot_dir_path, diag, run_dir, *, edit_history=""):
         sp = snapshot_dir_path / "systemprompt.md"
         sp.write_text(sp.read_text() + "\nIMPROVED: verify the file before finishing.\n")
-        return {"final_text": "added verify guidance", "trace": {"turns": 2}}
+        return {"final_text": "added verify guidance", "trace": {"turns": 2},
+                "prediction": {"predicted_fixes": ["t1"], "risk_tasks": []}}
     monkeypatch.setattr(L, "run_evolve_agent", fake_run_evolve)
 
     seed = tmp_path / "seed"; (seed / "tool_descriptions").mkdir(parents=True)
@@ -207,8 +203,10 @@ def test_levelb_loop_keeps_improving_edit_offline(tmp_path, monkeypatch):
     cfg = L.LevelBConfig(n_iters=1, k=1, n_tasks=1, results_dir=str(tmp_path / "res"),
                          seed_worker_dir=str(seed))
 
-    res = L.run_gdpval_levelb(cfg, _tasks=tasks, _llm=StubLLM())
+    res = L.run_levelb(cfg, _tasks=tasks, _evaluator=_FakeEval(), _llm=StubLLM())
     assert res.n_kept == 1                                   # the +0.40 edit beats the noise floor
+    assert res.records[0].verdict == "EFFECTIVE"            # predicted t1 fixed, t1 flipped
+    assert res.records[0].improved == ["t1"]
     assert res.mean_score_trajectory[-1] > res.mean_score_trajectory[0]
     assert "IMPROVED" in (Path(res.final_worker_dir) / "systemprompt.md").read_text()
 
@@ -216,9 +214,7 @@ def test_levelb_loop_keeps_improving_edit_offline(tmp_path, monkeypatch):
 def test_levelb_loop_rolls_back_non_improving_edit(tmp_path, monkeypatch):
     import qea.loop_levelb as L
     from qea.worker_runtime import WorkerRun
-    from qea.grading.multimodal_judge import GradeResult
     from qea.tasks import BTask
-    from types import SimpleNamespace
 
     tasks = [BTask(task_id="t1", subtype="x", prompt="p", rubric="",
                    rubric_items=[{"points": 1, "criterion": "c"}], gold="g")]
@@ -231,24 +227,19 @@ def test_levelb_loop_rolls_back_non_improving_edit(tmp_path, monkeypatch):
     monkeypatch.setattr(L, "run_worker",
                         lambda task, wd, rd: WorkerRun("same", [], {"files": 1, "turns": 5, "tool_errors": 0}))
 
-    class FlatJudge:
-        def __init__(self, *a, **k): pass
-        def grade(self, task, rendered):
-            return GradeResult(task.task_id, 0.50, 0.50, {"1": False}, 0.0, False)  # never improves
-    monkeypatch.setattr(L, "MultimodalJudge", FlatJudge)
-    monkeypatch.setattr(L, "render",
-                        lambda t, p, o: SimpleNamespace(text=t, extracted_text=t, images=[], degraded=False))
-    # evolve makes a real (but useless) change so the diff is non-empty
-    def ev(snap, diag, rd):
+    # evolve makes a real (but useless) change so the diff is non-empty; predicts t1
+    def ev(snap, diag, rd, *, edit_history=""):
         sp = snap / "systemprompt.md"; sp.write_text(sp.read_text() + "\nnoise edit\n")
-        return {"final_text": "x", "trace": {}}
+        return {"final_text": "x", "trace": {}, "prediction": {"predicted_fixes": ["t1"], "risk_tasks": []}}
     monkeypatch.setattr(L, "run_evolve_agent", ev)
 
     seed = tmp_path / "seed"; (seed / "tool_descriptions").mkdir(parents=True)
     (seed / "agent.yaml").write_text("name: w\n"); (seed / "systemprompt.md").write_text("do it\n")
     cfg = L.LevelBConfig(n_iters=1, k=1, n_tasks=1, results_dir=str(tmp_path / "res"),
                          seed_worker_dir=str(seed))
-    res = L.run_gdpval_levelb(cfg, _tasks=tasks, _llm=StubLLM())
+    # a flat evaluator: score never moves -> nothing flips -> INEFFECTIVE -> rolled back
+    res = L.run_levelb(cfg, _tasks=tasks, _evaluator=_FakeEval(base=0.50, improved=0.50),
+                       _llm=StubLLM())
     assert res.n_kept == 0 and res.n_rolled_back == 1        # flat score -> rolled back
     assert res.records[0].verdict == "INEFFECTIVE"
 
@@ -285,16 +276,100 @@ def test_gdpval_loader_populates_deliverable_exts():
     assert _gold_deliverable_exts(["a/x.pdf", "b/y.pptx"]) == [".pdf", ".pptx"]
 
 
+def test_rubric_text_evaluator_scores_and_no_op_gate():
+    from qea.evaluator import RubricTextEvaluator
+    from qea.worker_runtime import WorkerRun
+    from qea.tasks import BTask
+
+    class JudgeLLM:
+        def complete(self, prompt, *, role="judge", **kw):
+            return "1: yes\n2: no"            # 1 of 2 criteria satisfied -> 0.5
+    task = BTask(task_id="f0", subtype="x", prompt="p", rubric="",
+                 rubric_items=[{"points": 1, "criterion": "a"}, {"points": 1, "criterion": "b"}])
+    te = RubricTextEvaluator(JudgeLLM(), k=1).evaluate(task, WorkerRun("my answer", [], {}), None)
+    assert 0.0 <= te.content_score <= 1.0
+    assert te.format_ok is True and te.gated_score == te.content_score   # text-gold -> gate no-op
+    assert te.deliverable_text == "my answer"
+
+
+def test_multimodal_evaluator_applies_format_gate():
+    from qea.evaluator import MultimodalEvaluator
+    from qea.worker_runtime import WorkerRun
+    from qea.grading.multimodal_judge import GradeResult
+    from qea.tasks import BTask
+    from types import SimpleNamespace
+
+    ev = MultimodalEvaluator(llm=None)
+    ev.judge = SimpleNamespace(grade=lambda task, rendered: GradeResult(task.task_id, 0.8, 0.8, {"1": True}, 0.0, False))
+    # stub render so no LibreOffice/PyMuPDF is needed (evaluate imports it at call time)
+    monkey = SimpleNamespace(text="t", extracted_text="t", images=[], degraded=[])
+    import qea.grading.render as R
+    orig = R.render
+    R.render = lambda text, files, out_dir: monkey
+    try:
+        xls = BTask(task_id="g0", subtype="x", prompt="p", rubric="", deliverable_exts=[".xlsx"])
+        ok = ev.evaluate(xls, WorkerRun("t", ["/tmp/report.xlsx"], {}), "/tmp/out")
+        assert ok.gated_score == 0.8 and ok.format_ok is True
+        miss = ev.evaluate(xls, WorkerRun("t", ["/tmp/report.pdf"], {}), "/tmp/out")
+        assert miss.content_score == 0.8 and miss.gated_score == 0.0 and miss.format_ok is False
+    finally:
+        R.render = orig
+
+
+def test_prediction_parsing_handles_present_absent_malformed():
+    from qea.evolve_runtime import _parse_prediction
+    good = _parse_prediction('done.\n{"predicted_fixes": ["t1", "t2"], "risk_tasks": ["t3"]}')
+    assert good == {"predicted_fixes": ["t1", "t2"], "risk_tasks": ["t3"]}
+    absent = _parse_prediction("I changed the prompt, no JSON here.")
+    assert absent == {"predicted_fixes": [], "risk_tasks": []}
+    malformed = _parse_prediction('{"predicted_fixes": [oops')
+    assert malformed == {"predicted_fixes": [], "risk_tasks": []}
+
+
+def test_classify_verdict_table():
+    from qea.loop_levelb import _classify
+    from qea.evolve_runtime import DirEdit
+    from qea.evaluator import TaskEval
+
+    def evals(scores):  # tid -> gated score
+        return {t: TaskEval(s, s, True, "", {}, 0.0) for t, s in scores.items()}
+
+    inc = evals({"a": 0.2, "b": 0.5, "c": 0.5})
+    # EFFECTIVE: predicted a fixed, a flips, nothing regresses
+    e = DirEdit("d", predicted_fixes=["a"], risk_tasks=[])
+    assert _classify(e, inc, evals({"a": 0.9, "b": 0.5, "c": 0.5}), 0.05)["verdict"] == "EFFECTIVE"
+    # HARMFUL: nothing predicted-fixed flipped, an unattributed task regressed
+    e2 = DirEdit("d", predicted_fixes=["a"], risk_tasks=[])
+    assert _classify(e2, inc, evals({"a": 0.2, "b": 0.1, "c": 0.5}), 0.05)["verdict"] == "HARMFUL"
+    # MIXED: a predicted fix flips AND an unattributed task regresses
+    e3 = DirEdit("d", predicted_fixes=["a"], risk_tasks=[])
+    assert _classify(e3, inc, evals({"a": 0.9, "b": 0.1, "c": 0.5}), 0.05)["verdict"] == "MIXED"
+    # INEFFECTIVE: nothing moves
+    e4 = DirEdit("d", predicted_fixes=["a"], risk_tasks=[])
+    assert _classify(e4, inc, evals({"a": 0.2, "b": 0.5, "c": 0.5}), 0.05)["verdict"] == "INEFFECTIVE"
+
+
+def test_make_benchmark_routes_to_the_right_evaluator():
+    from qea.benchmark import make_benchmark
+    from qea.evaluator import RubricTextEvaluator
+    fab = make_benchmark("fab", llm=None, k=2)
+    assert fab.name == "fab_v2" and isinstance(fab.evaluator, RubricTextEvaluator)
+    assert fab.answer_corpus and all(isinstance(c, str) for c in fab.answer_corpus)
+    with pytest.raises(ValueError):
+        make_benchmark("nonsense")
+
+
 @pytest.mark.skipif(os.environ.get("QEA_LEVELB_SMOKE") != "1",
                     reason="set QEA_LEVELB_SMOKE=1 to run the real-API NexAU Level-B smoke test")
 def test_levelb_smoke_one_task_one_iter(tmp_path):
-    # End-to-end on ONE real GDPval task, ONE iteration, against the real NexAU
-    # weak worker + evolve agent. Proves the wiring runs; makes no headroom claim.
+    # End-to-end on ONE real FAB task, ONE iteration, against the real NexAU weak
+    # worker + evolve agent. Proves the wiring runs; makes no headroom claim.
     import run as runmod
     runmod._load_dotenv()
-    from qea.loop_levelb import LevelBConfig, run_gdpval_levelb
-    cfg = LevelBConfig(n_iters=1, k=1, n_tasks=1, results_dir=str(tmp_path / "res"))
-    res = run_gdpval_levelb(cfg)
+    from qea.loop_levelb import LevelBConfig, run_levelb
+    cfg = LevelBConfig(n_iters=1, k=1, n_tasks=1, benchmark="fab",
+                       seed_worker_dir="qea/worker_fab_weak", results_dir=str(tmp_path / "res"))
+    res = run_levelb(cfg)
     assert res.n_tasks == 1
     assert len(res.mean_score_trajectory) >= 1
     assert Path(res.final_worker_dir).exists()

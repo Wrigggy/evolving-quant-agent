@@ -1,30 +1,32 @@
-"""The deterministic Level-B evolution loop (NexAU substrate).
+"""The deterministic Level-B evolution loop (NexAU substrate, benchmark-agnostic).
 
 Orchestrates two sibling NexAU agents — the weak worker and the file-editing evolve
-agent — around an INDEPENDENT grader (the same MultimodalJudge the base test used)
-and a FIREWALLED debugger. keep/rollback, the noise-floor soft gate, the leakage
-guard, and the rejected-edit buffer all live HERE, in code; the evolve agent decides
-nothing and never runs the grader.
+agent — around an INDEPENDENT, per-benchmark Evaluator and a FIREWALLED debugger.
+keep/rollback, the noise-floor soft gate, the AHE prediction-falsification verdict,
+the leakage guard, and the rejected-edit buffer all live HERE, in code; the evolve
+agent decides nothing and never runs the grader.
+
+The loop is benchmark-agnostic: it consumes a `Benchmark` (tasks + evaluator +
+answer_corpus) and never imports a grader. The SAME `run_levelb` runs on FAB and
+GDPval by swapping `cfg.benchmark` + `cfg.seed_worker_dir`.
 
 Incumbent = a worker DIRECTORY (not a Harness object). Each iteration snapshots the
 incumbent dir, lets the evolve agent edit the snapshot from an answer-free diagnosis,
-re-grades, and promotes the snapshot only on an aggregate-score gain beyond the noise
-floor (decide_keep_soft).
+re-grades, classifies the edit against the agent's own prediction, and promotes the
+snapshot only on an aggregate-score gain beyond the noise floor that is not HARMFUL.
 """
 from __future__ import annotations
 
 import json
 import statistics
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from .benchmark import gdpval_benchmark
+from .benchmark import make_benchmark
 from .debugger import diagnose_b_pile
 from .evolve_runtime import DirEdit, dir_unified_diff, run_evolve_agent, snapshot_dir
-from .falsify import EvalSummary, LEAKAGE_BLOCKED, RejectedEditBuffer, decide_keep_soft
-from .grading.format_gate import apply_gate
-from .grading.multimodal_judge import MultimodalJudge
-from .grading.render import render
+from .falsify import (EvalSummary, LEAKAGE_BLOCKED, RejectedEditBuffer,
+                      decide_keep_soft, evaluate_changes)
 from .llm import make_llm
 from .verifier import LeakageGuard, TaskResult
 from .worker_runtime import run_worker
@@ -34,10 +36,11 @@ from .worker_runtime import run_worker
 class LevelBConfig:
     n_iters: int = 2
     k: int = 2
-    n_tasks: int = 5                 # small by default — Phase 4 stands up the loop
+    n_tasks: int = 5                 # small by default — stands up the loop
     broad: bool = True
     results_dir: str = "results/levelb"
-    seed_worker_dir: str = "qea/worker_gdpval_weak"
+    benchmark: str = "fab"           # "fab" | "gdpval"
+    seed_worker_dir: str = "qea/worker_fab_weak"
 
 
 @dataclass
@@ -50,6 +53,8 @@ class LevelBRecord:
     root_cause_tag: str
     inc_mean: float
     cand_mean: float
+    improved: list = field(default_factory=list)
+    regressed: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -63,6 +68,7 @@ class LevelBResult:
     noise_margin: float
     final_mean_score: float
     final_worker_dir: str
+    benchmark: str = ""
     n_kept: int = 0
     n_rolled_back: int = 0
     n_blocked: int = 0
@@ -73,52 +79,74 @@ class LevelBResult:
         return d
 
 
-def _eval_summary_from_grades(grades: dict, gated: dict, traces: dict, deliverables: dict, tasks) -> EvalSummary:
-    """Adapt MultimodalJudge GradeResults into the EvalSummary the debugger expects.
-    The canonical score is the FORMAT-GATED score (`gated[tid]`); a format miss makes
-    the task fail oos so the debugger flags it for the evolve agent to fix."""
+def _eval_summary(evals: dict, deliverables: dict, tasks) -> EvalSummary:
+    """Adapt per-task TaskEvals into the EvalSummary the debugger expects. The
+    canonical score is the FORMAT-GATED score; a format miss makes the task fail oos
+    so the debugger flags it for the evolve agent to fix."""
     by_id = {t.task_id: t for t in tasks}
     results = {}
-    for tid, g in grades.items():
+    for tid, e in evals.items():
         sub = getattr(by_id.get(tid), "subtype", "")
-        score = gated.get(tid, g.multimodal_fraction)
-        oos = score >= 0.60
-        results[tid] = TaskResult(tid, sub, "B", oos, oos, oos, score,
-                                  g.variance, None, criterion_verdicts=g.verdicts)
+        oos = e.gated_score >= 0.60
+        results[tid] = TaskResult(tid, sub, "B", oos, oos, oos, e.gated_score,
+                                  e.variance, None, criterion_verdicts=e.verdicts)
     return EvalSummary(results, deliverables)
 
 
-def evaluate_dir(worker_dir: Path, tasks, judge, run_dir: Path, *, k: int):
-    """Run the worker on every task with the given worker dir, render + grade each,
-    then apply the deliverable-format gate (canonical score = gated; content kept for
-    diagnosis). Returns (grades, gated, traces, deliverables, mean_gated_score)."""
+def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path):
+    """Run the worker on every task with the given worker dir, then score each run
+    through the benchmark's Evaluator (which owns render/grade/gate). Returns
+    (evals, traces, deliverables, mean_gated_score). The loop imports no grader."""
     worker_dir, run_dir = Path(worker_dir), Path(run_dir)
-    grades, gated, traces, deliverables = {}, {}, {}, {}
+    evals, traces, deliverables = {}, {}, {}
     for task in tasks:
         wr = run_worker(task, worker_dir, run_dir)
-        rendered = render(wr.deliverable_text, wr.produced_files, run_dir / str(task.task_id))
-        g = judge.grade(task, rendered)
-        gscore, fmt_ok = apply_gate(g.multimodal_fraction, task, wr.produced_files)
-        grades[task.task_id] = g
-        gated[task.task_id] = gscore
-        traces[task.task_id] = {**wr.trace, "content_mm": round(g.multimodal_fraction, 4),
-                                "format_ok": fmt_ok}
-        deliverables[task.task_id] = rendered.text or ""
-    mean = (statistics.mean(gated.values()) if gated else 0.0)
-    return grades, gated, traces, deliverables, mean
+        te = evaluator.evaluate(task, wr, run_dir / str(task.task_id))
+        evals[task.task_id] = te
+        traces[task.task_id] = {**wr.trace, "content": round(te.content_score, 4),
+                                "format_ok": te.format_ok}
+        deliverables[task.task_id] = te.deliverable_text
+    mean = statistics.mean(e.gated_score for e in evals.values()) if evals else 0.0
+    return evals, traces, deliverables, mean
 
 
-def run_gdpval_levelb(cfg: LevelBConfig, *, _tasks=None, _llm=None) -> LevelBResult:
-    """Stand up + run the Level-B loop. `_tasks` / `_llm` inject a task list / LLM for
-    offline tests; in real use the GDPval benchmark + make_llm provide them."""
+def _edit_history(records: list) -> str:
+    """AFlow-style labeled edit history fed to the evolve agent so it does not
+    re-propose falsified edits. One line per prior iteration: summary -> verdict."""
+    lines = []
+    for r in records:
+        lines.append(f"- iter {r.iteration}: {r.edit_summary} -> {r.verdict}")
+    return "\n".join(lines)
+
+
+def _classify(edit, inc_evals: dict, cand_evals: dict, delta: float) -> dict:
+    """Continuous-score adaptation of AHE's prediction-falsification: a task counts
+    as flipped/regressed only if its GATED score moved more than the noise tolerance
+    `delta`; then evaluate_changes assigns the 5-class verdict against the evolve
+    agent's predicted_fixes / risk_tasks."""
+    inc = {tid: e.gated_score for tid, e in inc_evals.items()}
+    cand = {tid: e.gated_score for tid, e in cand_evals.items()}
+    flipped = sorted(t for t in cand if cand[t] - inc.get(t, 0.0) > delta)
+    regressed = sorted(t for t in cand if inc.get(t, 0.0) - cand[t] > delta)
+    ev = evaluate_changes(edit, {"flipped": flipped, "regressed": regressed})
+    ev["flipped"], ev["regressed"] = flipped, regressed
+    return ev
+
+
+def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=None,
+               _llm=None) -> LevelBResult:
+    """Stand up + run the Level-B loop on `cfg.benchmark`. `_tasks`/`_evaluator`/`_llm`
+    inject a task list / evaluator / LLM for offline tests; in real use a Benchmark
+    (built here from cfg.benchmark unless one is passed) provides them."""
     llm = _llm if _llm is not None else make_llm(False)
-    judge = MultimodalJudge(llm, k=cfg.k)
     if _tasks is not None:
-        tasks, answer_corpus = _tasks, []
+        tasks, evaluator, answer_corpus = _tasks, _evaluator, []
     else:
-        bm = gdpval_benchmark(broad=cfg.broad, allow_download=True, llm=llm)
-        tasks = bm.tasks[: cfg.n_tasks]
-        answer_corpus = bm.answer_corpus
+        if benchmark is None:
+            benchmark = make_benchmark(cfg.benchmark, llm=llm, broad=cfg.broad, k=cfg.k)
+        tasks = benchmark.tasks[: cfg.n_tasks]
+        evaluator = benchmark.evaluator
+        answer_corpus = benchmark.answer_corpus
     guard = LeakageGuard(answer_corpus)
     buffer = RejectedEditBuffer()
     results_dir = Path(cfg.results_dir)
@@ -128,9 +156,9 @@ def run_gdpval_levelb(cfg: LevelBConfig, *, _tasks=None, _llm=None) -> LevelBRes
     incumbent = results_dir / "incumbent_worker"
     snapshot_dir(Path(cfg.seed_worker_dir), incumbent)
 
-    # seed eval + a 2nd same-dir eval for the noise floor (mirror run_gdpval_soft)
-    grades, gated, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, judge, results_dir / "seed", k=cfg.k)
-    _, _, _, _, noise_mean = evaluate_dir(incumbent, tasks, judge, results_dir / "seed_noise", k=cfg.k)
+    # seed eval + a 2nd same-dir eval for the noise floor
+    evals, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed")
+    _, _, _, noise_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed_noise")
     noise_margin = max(0.01, abs(inc_mean - noise_mean))
 
     ms_traj = [round(inc_mean, 4)]
@@ -138,15 +166,19 @@ def run_gdpval_levelb(cfg: LevelBConfig, *, _tasks=None, _llm=None) -> LevelBRes
     n_kept = n_rb = n_blocked = 0
 
     for it in range(1, cfg.n_iters + 1):
-        inc_eval = _eval_summary_from_grades(grades, gated, traces, deliverables, tasks)
+        inc_eval = _eval_summary(evals, deliverables, tasks)
         diag = diagnose_b_pile(inc_eval, tasks, llm=llm, traces=traces).proposer_payload()
 
-        cand_dir = results_dir / f"iter_{it:03d}" / "worker"
+        iterdir = results_dir / f"iter_{it:03d}"
+        cand_dir = iterdir / "worker"
         snapshot_dir(incumbent, cand_dir)
-        run_evolve_agent(cand_dir, diag, results_dir / f"iter_{it:03d}")
+        ev_out = run_evolve_agent(cand_dir, diag, iterdir, edit_history=_edit_history(records))
+        pred = ev_out.get("prediction") or {}
         diff = dir_unified_diff(incumbent, cand_dir)
-        edit = DirEdit(diff)
+        edit = DirEdit(diff, predicted_fixes=pred.get("predicted_fixes", []),
+                       risk_tasks=pred.get("risk_tasks", []))
 
+        improved = regressed = []
         if not diff:
             verdict, kept, cand_mean = "NO_EDIT", False, inc_mean
             n_blocked += 1
@@ -158,27 +190,31 @@ def run_gdpval_levelb(cfg: LevelBConfig, *, _tasks=None, _llm=None) -> LevelBRes
             verdict, kept, cand_mean = "BLOCKED", False, inc_mean
             n_blocked += 1
         else:
-            cg, cgated, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, judge, results_dir / f"iter_{it:03d}" / "grade", k=cfg.k)
-            kept = decide_keep_soft(inc_mean, cand_mean, noise_margin)
-            verdict = "EFFECTIVE" if kept else "INEFFECTIVE"
+            cand_evals, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade")
+            cls = _classify(edit, evals, cand_evals, noise_margin)
+            verdict, improved, regressed = cls["verdict"], cls["flipped"], cls["regressed"]
+            # promote iff a real aggregate gain beyond the noise floor AND not harmful
+            kept = decide_keep_soft(inc_mean, cand_mean, noise_margin) and verdict != "HARMFUL"
             if kept:
                 n_kept += 1
                 incumbent = cand_dir
-                grades, gated, traces, deliverables, inc_mean = cg, cgated, ct, cd, cand_mean
+                evals, traces, deliverables, inc_mean = cand_evals, ct, cd, cand_mean
             else:
                 n_rb += 1
                 buffer.add(edit, verdict, 0, 0, "no aggregate score gain beyond the noise floor")
 
-        records.append(LevelBRecord(it, verdict in ("NO_EDIT", LEAKAGE_BLOCKED, "BLOCKED"), verdict, kept,
-                                    edit.summary, diag.get("root_cause_tag", ""),
-                                    round(inc_mean, 4), round(cand_mean, 4)))
+        records.append(LevelBRecord(
+            it, verdict in ("NO_EDIT", LEAKAGE_BLOCKED, "BLOCKED"), verdict, kept,
+            edit.summary, diag.get("root_cause_tag", ""), round(inc_mean, 4),
+            round(cand_mean, 4), list(improved), list(regressed)))
         ms_traj.append(round(inc_mean, 4))
         _persist(results_dir, it, verdict, kept, edit, diag, inc_mean)
 
     return LevelBResult(
         n_tasks=len(tasks), mean_score_trajectory=ms_traj, records=records,
         noise_margin=round(noise_margin, 4), final_mean_score=round(inc_mean, 4),
-        final_worker_dir=str(incumbent), n_kept=n_kept, n_rolled_back=n_rb, n_blocked=n_blocked)
+        final_worker_dir=str(incumbent), benchmark=cfg.benchmark,
+        n_kept=n_kept, n_rolled_back=n_rb, n_blocked=n_blocked)
 
 
 def _persist(results_dir: Path, it: int, verdict: str, kept: bool, edit, diag: dict, inc_mean: float) -> None:
@@ -187,6 +223,8 @@ def _persist(results_dir: Path, it: int, verdict: str, kept: bool, edit, diag: d
     (d / "manifest.json").write_text(json.dumps({
         "iteration": it, "verdict": verdict, "kept": kept,
         "edit_summary": edit.summary, "diff_signature": edit.signature(),
+        "predicted_fixes": list(getattr(edit, "predicted_fixes", [])),
+        "risk_tasks": list(getattr(edit, "risk_tasks", [])),
         "diagnosis": diag, "inc_mean": round(inc_mean, 4),
     }, indent=2, default=str))
     (d / "edit.diff").write_text(edit.diff)

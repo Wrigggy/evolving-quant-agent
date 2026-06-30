@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -67,6 +68,16 @@ def run_worker(task, worker_dir: Path, run_dir: Path) -> WorkerRun:
     ensure_nexau_llm_env()
     t0 = time.time()
     worker_dir, run_dir = Path(worker_dir), Path(run_dir)
+    # FAB-style workers bind tools by RELATIVE module path (e.g. tools.fab.research:fn),
+    # so the worker dir (each per-iteration snapshot) must be importable. Put it first
+    # on sys.path and drop any cached `tools.*` modules so an edited snapshot's tool
+    # code reloads instead of resolving to a previously-cached version.
+    wd = str(worker_dir)
+    if wd in sys.path:
+        sys.path.remove(wd)
+    sys.path.insert(0, wd)
+    for m in [name for name in sys.modules if name == "tools" or name.startswith("tools.")]:
+        del sys.modules[m]
     workdir = run_dir / str(task.task_id) / "work"
     workdir.mkdir(parents=True, exist_ok=True)
     ref_names = set()
