@@ -49,6 +49,7 @@ class LevelBConfig:
     # (accurate but doubles the slow seed cost). >0 = use this fixed margin and SKIP the
     # 2nd eval (cheap; for expensive workers). e.g. 0.05.
     noise_margin: float = 0.0
+    concurrency: int = 1             # parallel worker runs per eval (essential for full FAB)
 
 
 @dataclass
@@ -101,30 +102,42 @@ def _eval_summary(evals: dict, deliverables: dict, tasks) -> EvalSummary:
     return EvalSummary(results, deliverables)
 
 
-def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path):
+def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurrency: int = 1):
     """Run the worker on every task with the given worker dir, then score each run
     through the benchmark's Evaluator (which owns render/grade/gate). Returns
-    (evals, traces, deliverables, mean_gated_score). The loop imports no grader."""
+    (evals, traces, deliverables, mean_gated_score). The loop imports no grader.
+
+    `concurrency` worker runs in parallel (ThreadPoolExecutor) — essential for full
+    benchmarks (FAB 27 tasks). The cross-snapshot `tools.*` reload is done ONCE here
+    (prepare_worker_imports) BEFORE the pool, so threads only import (lock-safe)."""
     from .evaluator import TaskEval
+    from .worker_runtime import prepare_worker_imports
     worker_dir, run_dir = Path(worker_dir), Path(run_dir)
+    prepare_worker_imports(worker_dir)
     evals, traces, deliverables = {}, {}, {}
-    for task in tasks:
+
+    def _one(task):
         try:
             wr = run_worker(task, worker_dir, run_dir)
             te = evaluator.evaluate(task, wr, run_dir / str(task.task_id))
-            evals[task.task_id] = te
-            traces[task.task_id] = {**wr.trace, "content": round(te.content_score, 4),
-                                    "format_ok": te.format_ok}
-            deliverables[task.task_id] = te.deliverable_text
-        except Exception as exc:  # noqa: BLE001 - one worker/grader failure must not
-            # kill a multi-task, multi-iteration run (mirrors the base scripts'
-            # per-task try/except). A crashed worker IS a task failure: score it 0 so
+            tr = {**wr.trace, "content": round(te.content_score, 4), "format_ok": te.format_ok}
+            return task.task_id, te, tr, te.deliverable_text
+        except Exception as exc:  # noqa: BLE001 - one worker/grader failure must not kill
+            # a multi-task/iteration run. A crashed worker IS a task failure: score 0 so
             # the debugger flags it, and record the error in the answer-free trace.
-            evals[task.task_id] = TaskEval(0.0, 0.0, False, "", {}, 0.0)
-            traces[task.task_id] = {"error": f"{type(exc).__name__}: {exc}"[:300],
-                                    "files": 0, "turns": 0, "tool_calls": 0,
-                                    "tool_errors": 1, "content": 0.0, "format_ok": False}
-            deliverables[task.task_id] = ""
+            tr = {"error": f"{type(exc).__name__}: {exc}"[:300], "files": 0, "turns": 0,
+                  "tool_calls": 0, "tool_errors": 1, "content": 0.0, "format_ok": False}
+            return task.task_id, TaskEval(0.0, 0.0, False, "", {}, 0.0), tr, ""
+
+    if concurrency > 1 and len(tasks) > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            results = list(pool.map(_one, tasks))
+    else:
+        results = [_one(t) for t in tasks]
+
+    for tid, te, tr, deliv in results:
+        evals[tid], traces[tid], deliverables[tid] = te, tr, deliv
     mean = statistics.mean(e.gated_score for e in evals.values()) if evals else 0.0
     return evals, traces, deliverables, mean
 
@@ -212,11 +225,11 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
 
     # seed eval; noise floor either fixed (cfg.noise_margin>0, cheap) or measured via a
     # 2nd same-dir eval (cfg.noise_margin==0, accurate but doubles the slow seed cost).
-    evals, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed")
+    evals, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed", concurrency=cfg.concurrency)
     if cfg.noise_margin > 0:
         noise_margin = cfg.noise_margin
     else:
-        _, _, _, noise_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed_noise")
+        _, _, _, noise_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed_noise", concurrency=cfg.concurrency)
         noise_margin = max(0.01, abs(inc_mean - noise_mean))
 
     ms_traj = [round(inc_mean, 4)]
@@ -253,7 +266,7 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             verdict, kept, cand_mean = "BLOCKED", False, inc_mean
             n_blocked += 1
         else:
-            cand_evals, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade")
+            cand_evals, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade", concurrency=cfg.concurrency)
             cls = _classify(edit, evals, cand_evals, noise_margin)
             verdict, improved, regressed = cls["verdict"], cls["flipped"], cls["regressed"]
             # promote iff a real aggregate gain beyond the noise floor AND not harmful

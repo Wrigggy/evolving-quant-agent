@@ -32,6 +32,19 @@ def pin_provider(llm_config) -> None:
         pass
 
 
+def prepare_worker_imports(worker_dir) -> None:
+    """Put the worker dir first on sys.path and drop cached `tools.*` modules so an
+    edited snapshot's relative-bound tool code reloads. Call ONCE per worker dir before
+    any concurrent run_worker calls — the module clear races with imports, so it must
+    NOT run inside the thread pool."""
+    wd = str(Path(worker_dir))
+    if wd in sys.path:
+        sys.path.remove(wd)
+    sys.path.insert(0, wd)
+    for m in [name for name in sys.modules if name == "tools" or name.startswith("tools.")]:
+        del sys.modules[m]
+
+
 def ensure_nexau_llm_env() -> None:
     """The NexAU agent.yaml resolves ${env.LLM_API_KEY|LLM_BASE_URL|LLM_MODEL} at
     config load. Map them from OPENROUTER_* (matching scripts/nexau_gdpval_run.py)
@@ -87,15 +100,12 @@ def run_worker(task, worker_dir: Path, run_dir: Path) -> WorkerRun:
     t0 = time.time()
     worker_dir, run_dir = Path(worker_dir), Path(run_dir)
     # FAB-style workers bind tools by RELATIVE module path (e.g. tools.fab.research:fn),
-    # so the worker dir (each per-iteration snapshot) must be importable. Put it first
-    # on sys.path and drop any cached `tools.*` modules so an edited snapshot's tool
-    # code reloads instead of resolving to a previously-cached version.
+    # so the worker dir must be importable. Idempotent insert only (no module clear) so
+    # this is concurrency-safe: the cross-snapshot `tools.*` reload is done ONCE in
+    # evaluate_dir (prepare_worker_imports) before any thread pool runs.
     wd = str(worker_dir)
-    if wd in sys.path:
-        sys.path.remove(wd)
-    sys.path.insert(0, wd)
-    for m in [name for name in sys.modules if name == "tools" or name.startswith("tools.")]:
-        del sys.modules[m]
+    if wd not in sys.path:
+        sys.path.insert(0, wd)
     # MUST be absolute: the sandbox shell `cd`s to the pinned work_dir from a different
     # base cwd, so a relative work_dir breaks file reads/writes (see evolve_runtime).
     workdir = (run_dir / str(task.task_id) / "work").resolve()

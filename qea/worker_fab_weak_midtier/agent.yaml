@@ -1,0 +1,35 @@
+type: agent
+name: qea_fab_worker_weak
+max_context_tokens: 200000
+system_prompt: ./systemprompt.md
+system_prompt_type: jinja
+tool_call_mode: openai
+max_iterations: 20
+
+llm_config:
+  model: ${env.LLM_MODEL}
+  base_url: ${env.LLM_BASE_URL}
+  api_key: ${env.LLM_API_KEY}
+  max_tokens: 8000
+  temperature: 0.2
+  stream: true
+  api_type: openai_chat_completion
+  # Single float -> httpx connect=read=write=pool. The OpenAI SDK default connect=5s
+  # times out under the local SOCKS proxy's TLS handshake -> APITimeoutError. (Matches
+  # the GDPval worker; the documented connect-timeout gotcha.)
+  timeout: 180
+
+# Weak seed: only the two GENERIC web primitives. The SEC-specialized conveniences
+# (edgar_search / company_filings / retrieve_from_filing / price_history) are removed
+# and left for evolution to (re)discover -> a deep-filing-read + filing-URL-discovery
+# gap the worker cannot reconstruct within a single episode.
+tools:
+  - name: fetch_page
+    yaml_path: ./tool_descriptions/fetch_page.tool.yaml
+    binding: tools.fab.research:fetch_page
+  - name: web_search
+    yaml_path: ./tool_descriptions/web_search.tool.yaml
+    binding: tools.fab.research:web_search
+
+tracers:
+  - import: nexau.archs.tracer.adapters.in_memory:InMemoryTracer

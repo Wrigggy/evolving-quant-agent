@@ -70,6 +70,8 @@ def main() -> int:
     ap.add_argument("--noise-margin", type=float, default=0.0,
                     help="levelb: fixed keep-floor margin (>0 skips the 2nd seed eval); "
                          "0 measures it via a 2nd same-dir eval (slower)")
+    ap.add_argument("--concurrency", type=int, default=1,
+                    help="levelb: parallel worker runs per eval (use 4 for full FAB)")
     ap.add_argument("--results-dir", default="results/latest")
     args = ap.parse_args()
 
