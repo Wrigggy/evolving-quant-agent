@@ -45,6 +45,10 @@ class LevelBConfig:
     # diagnosis). "ahe_corpus" = AHE-style evidence corpus (traces + per-task failure
     # analysis + edit history); firewall relaxed, but the gold answer is NEVER included.
     evidence_mode: str = "sanitized"
+    # noise floor for decide_keep_soft. 0.0 = MEASURE it via a 2nd same-dir seed eval
+    # (accurate but doubles the slow seed cost). >0 = use this fixed margin and SKIP the
+    # 2nd eval (cheap; for expensive workers). e.g. 0.05.
+    noise_margin: float = 0.0
 
 
 @dataclass
@@ -206,10 +210,14 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
     incumbent = results_dir / "incumbent_worker"
     snapshot_dir(Path(cfg.seed_worker_dir), incumbent)
 
-    # seed eval + a 2nd same-dir eval for the noise floor
+    # seed eval; noise floor either fixed (cfg.noise_margin>0, cheap) or measured via a
+    # 2nd same-dir eval (cfg.noise_margin==0, accurate but doubles the slow seed cost).
     evals, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed")
-    _, _, _, noise_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed_noise")
-    noise_margin = max(0.01, abs(inc_mean - noise_mean))
+    if cfg.noise_margin > 0:
+        noise_margin = cfg.noise_margin
+    else:
+        _, _, _, noise_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed_noise")
+        noise_margin = max(0.01, abs(inc_mean - noise_mean))
 
     ms_traj = [round(inc_mean, 4)]
     records: list = []

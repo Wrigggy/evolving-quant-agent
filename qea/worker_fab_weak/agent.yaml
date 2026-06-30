@@ -4,7 +4,7 @@ max_context_tokens: 200000
 system_prompt: ./systemprompt.md
 system_prompt_type: jinja
 tool_call_mode: openai
-max_iterations: 40
+max_iterations: 20
 
 llm_config:
   model: ${env.LLM_MODEL}
