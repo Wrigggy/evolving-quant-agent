@@ -149,6 +149,21 @@ a **file-editing evolve agent** that edits a snapshot of the worker dir. Base pa
    hardcoding). Run only as a clearly-labeled ablation, never as the canonical mechanism.
    (c) **web tools for the evolve agent** — AHE has them, but on a finance benchmark web
    search is a backdoor to the gold; gate it behind the same ablation flag.
+1c. **Harder weak-seed difficulty tiers (a CLEAN evolve-agent capability test).** The
+   current FAB weak seed is the EASY tier: only the agent.yaml *bindings* of the 4 SEC
+   tools were removed — their `tools/fab/research.py` implementations AND their
+   `tool_descriptions/*.tool.yaml` were left in the dir, and the NexAU reference even
+   names the "re-wire an unbound tool" move. So the first end-to-end run (Phase 5,
+   2026-06-30) proved the PLUMBING (diagnose -> edit -> land -> no leak) but NOT
+   evolve-agent capability — the recovery target was signposted in the directory.
+   Escalate: **(tier 1)** also delete the removed tools' `tool_descriptions/*.tool.yaml`
+   so the agent must infer the needed capability, not read a leftover label; **(tier 2,
+   AHE-complete)** also delete the implementations from `research.py`, forcing the agent
+   to actually WRITE the SEC-retrieval tool (real code synthesis — expect deepseek, a
+   weak executor, to struggle: the AHE evolve-agent-is-the-bottleneck finding); and
+   **soften the (b) reference** to describe the NexAU format generally WITHOUT naming the
+   re-wire recipe. Only meaningful after 1 (easy tier) gives a working score-recovery
+   baseline.
 2. **(Superseded / done) Run the B-pile debugger on the original 30 GDPval tasks.** Ran under
    the `decide_keep_soft` gate; the GDPval headroom finding above (weak ≈ full) shows GDPval is
    capability-sufficient for this base model, so it is NOT the benchmark to drive evolution —
