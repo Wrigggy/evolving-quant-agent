@@ -47,8 +47,13 @@ Level-B headroom**(削弱 worker 让演化有东西可恢复);(3) 演化机制�
 | Stirrup (code) | E2B sandbox | 26/30 | **0.807** | 4 (E2B 超时/断连) |
 | NexAU (agent dir) | LocalSandbox | 30/30 | **0.797** | 0(修了 connect-timeout 后) |
 
-港 fidelity −0.010,统计上持平。FAB v2 public-27:Stirrup generous 0.659 vs NexAU 0.618(同样持平)。
-文件型 worker + reference 文件把纯文本 baseline 的 text-grade 抬了 **+0.169**,多模态再 +0.020。
+迁移后质量持平(−0.010)。FAB v2 public-27 同样持平(Stirrup 0.659 vs NexAU 0.618)。
+
+**一个通俗但关键的点:worker 现在能交出"多文件交付物"(xlsx/pdf 等),是因为它有了自己的
+agentic 循环。** Stirrup / NexAU 形态的 worker 能**多轮地**读输入、建文件、存文件、检查;而更早的
+"code agent"形态**没有自己的循环**——只能一次性吐文本,所以根本产不出文件。正是"给了 worker 一个
+循环"这件事,把纯文本 baseline 的得分抬了 **+0.169**(多模态再 +0.020)。这条后面很重要:**worker 的
+能力,很大一部分来自它的循环,而不只是它的 prompt。**
 
 **(b) 两个 weak worker —— headroom 的关键发现。** 同一套机制,只换削弱方式:
 
@@ -57,12 +62,12 @@ Level-B headroom**(削弱 worker 让演化有东西可恢复);(3) 演化机制�
 | GDPval | prompt 砍成一行 + 裸 shell | 0.791 / gated 0.771 | 0.797 / 0.772 | ~0 | ❌ 无 |
 | FAB | 删 4 个 SEC 检索工具绑定,只留 fetch_page+web_search | **0.388** | **0.618** | **−0.230 (−37%)** | ✅ 有 |
 
-**核心结论(conclusion-first):headroom 来自"agentic 循环无法在单 episode 内自恢复的能力缺失",
-不是 prompt 文字。** GDPval 的通用 shell 让强 worker 一轮内自己补回缺失的指导 → 无 gap;FAB 的 SEC
-检索工具无法从 fetch_page+web_search 重建 → 留下真 0.23 gap(13/27 任务塌成 ~45 字符的非答案)。
+**核心结论(说人话):想让"演化"有东西可恢复,就得削掉 worker 一轮之内自己补不回来的能力。**
+- 砍 **prompt**(把指导砍成一行):没用。强 base model 一轮内自己就把套路想起来了 → GDPval ~0 gap。
+- 砍 **工具/能力**(删掉 SEC 检索工具):有用。没有检索工具,worker 在一个 episode 里**重建不出**
+  "找到 filing → 深读"的能力 → FAB 留下真 0.23 gap,13/27 任务直接塌成 ~45 字符的非答案。
 
-**(c) deliverable-format gate**:输出文件扩展名不匹配 gold(文本-gold 任务豁免)就判 0。两个 worker 各
-只动 ~−0.02(29/30 输出对类型),证明格式不是当前主要失分点。
+换句话说:**worker 的能力主要长在"工具 + 循环"上,不在 prompt 文字上;所以削弱也要削在工具/循环上。**
 
 ### 案例研究 / Case Study
 
@@ -79,18 +84,12 @@ weak FAB worker 缺检索工具,fab_00/fab_08 因够不着 SEC filing 塌成非�
 > 我写的 NexAU 参考又点名了"re-wire unbound tool"这个动作 —— 恢复目标被 signpost 了。所以本案证明的是
 > **管道通了(诊断→编辑→落地→无泄漏),不是 evolve agent 的能力**。
 
-**Case B — "机制在哪卡住":三个基础设施 blocker(靠探针逐个定位)+ 一个吞吐瓶颈。**
-端到端不是一次跑通的,定位链如下(每步有硬证据):
-1. **LLM 空响应风暴** → 根因:OpenRouter 把 `deepseek-v4-pro` 路由到 flaky provider 返回
-   `content_len=0`(小 context 也发生);judge 有 provider pin 而 NexAU agent 没有。**修**:经
-   `extra_body.provider`(NexAU `LLMConfig` 无该字段,走 `extra_params`→`to_openai_params`)pin 官方源。
-2. **"summary 说改了但 diff 空"** → 根因:**work_dir 是相对路径**,sandbox shell 从别的 cwd 去
-   `cd <相对路径>` 失败 → 每次 read/edit 都 "File not found" → agent 空转到 max_iterations 后
-   **幻觉式叙述了一堆没发生的编辑**。**修**:work_dir 全部 `.resolve()` 绝对化。(此 bug 真实 loop 也中招。)
-3. **deepseek 拼不对多行 heredoc** → 编辑不落地。**修**:给 evolve agent 配 `read_file`/`write_file`/
-   `replace` 结构化工具 —— 这正是 AHE evolve agent 自带文件工具的原因。
-4. **吞吐瓶颈(已暂停处)**:weak FAB worker 每个检索任务空转到 `max_iterations:40`(~10–17min/run),
-   noise-floor 又把慢 seed 跑两遍,且串行 → n_tasks=2/iters=1 要 ~80min。**所以"分数恢复"这一环还没测到。**
+**Case B — "机制在哪卡住":三个基础设施坑 + 一个吞吐瓶颈。** 端到端不是一次跑通的——evolve agent
+推理一直是对的,但执行被三个 NexAU 基础设施坑挡住(都靠探针逐个定位、已修,细节在 commit / checkpoint):
+provider 路由导致空响应、work_dir 用了相对路径导致读写全失败(agent 因此幻觉式报告"已编辑"实则没改)、
+弱模型拼不对多行 shell 写入(改用结构化文件工具解决)。修完后管道才通。**最后卡在吞吐**:weak FAB worker
+没检索工具时每个任务空转到 `max_iterations:40`(~10–17min/run),加上 noise-floor 重复评 + 串行,
+小样本也要 ~80min,**所以"分数恢复"这一环还没测到**(已暂停,见 checkpoint)。
 
 ---
 
@@ -113,6 +112,18 @@ weak FAB worker 缺检索工具,fab_00/fab_08 因够不着 SEC filing 塌成非�
 
 ## 3. 问题与困难（待讨论）/ Problems & Open Questions
 
+- **[核心讨论] 削弱 base harness 该削"工具插件"还是"引擎循环能力"?** 这取决于最终科研目标。我们的
+  目标是**保持泛化、把这套演化机制外推到多种 base harness**,而这两种削弱方式的泛化属性不同:
+  - **削工具插件**(如 FAB 删 SEC 工具):headroom 是 **benchmark-specific** 的——只有 FAB 有 SEC 工具,
+    GDPval 没有。当前简单档走的就是这条,好处是恢复路径清晰、deepseek 够得着。
+  - **削引擎循环能力**(如砍掉 tracer / 砍迭代预算 / 砍掉"产出文件的循环"):headroom 是
+    **benchmark-无关**的——**每个 agentic worker 都有循环**,这种削弱对 GDPval / FAB 一视同仁地制造
+    headroom(回到 §1:GDPval worker 能产多文件正是靠循环,砍掉循环它就和早期 code-agent 一样产不出)。
+    这更契合"外推到多 harness"的目标,但要小心别削过头超出 evolve agent 的重建能力(AHE 已证 evolve-agent
+    是瓶颈)。**讨论点:为了泛化,是否应把削弱重心从"工具"移到"引擎循环"?**
+  - **多个 base harness 候选(供外推验证,可扩展)**:① FAB worker(SEC 检索 / 文本作答);
+    ② GDPval worker(多文件交付 / 多模态);③ AHE Terminal-Bench-2 coding harness(已复现,跨域到编程);
+    ④ 其它通用 NexAU agent 目录。机制已 benchmark-无关,新增一个 = 加一个 `Benchmark` + seed 即可。
 - **[已解决] 三个 NexAU 基础设施坑**(provider-pin / 绝对 work_dir / 结构化文件工具)已修并写入 checkpoint,
   属于"基底踩坑"而非机制问题。
 - **[待讨论] 简单难度档signpost太强。** 当前 FAB weak 把恢复目标(工具描述文件)留在目录里 + 参考点名了招式,
