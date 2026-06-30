@@ -83,7 +83,8 @@ def main() -> int:
         lcfg = LevelBConfig(n_iters=args.iters, k=args.k, n_tasks=args.n_tasks,
                             broad=not args.core, results_dir=args.results_dir,
                             benchmark=args.benchmark, seed_worker_dir=seed,
-                            evidence_mode=args.evidence_mode, noise_margin=args.noise_margin)
+                            evidence_mode=args.evidence_mode, noise_margin=args.noise_margin,
+                            concurrency=args.concurrency)
         print(f"[run] mode=LEVEL-B ({lcfg.benchmark} worker dir evolved by a file-editing evolve agent) "
               f"iters={lcfg.n_iters} k={lcfg.k} n_tasks={lcfg.n_tasks} seed={seed} "
               f"evidence={lcfg.evidence_mode} -> {lcfg.results_dir}")
