@@ -121,9 +121,13 @@ provider 路由导致空响应、work_dir 用了相对路径导致读写全失�
     headroom(回到 §1:GDPval worker 能产多文件正是靠循环,砍掉循环它就和早期 code-agent 一样产不出)。
     这更契合"外推到多 harness"的目标,但要小心别削过头超出 evolve agent 的重建能力(AHE 已证 evolve-agent
     是瓶颈)。**讨论点:为了泛化,是否应把削弱重心从"工具"移到"引擎循环"?**
-  - **多个 base harness 候选(供外推验证,可扩展)**:① FAB worker(SEC 检索 / 文本作答);
-    ② GDPval worker(多文件交付 / 多模态);③ AHE Terminal-Bench-2 coding harness(已复现,跨域到编程);
-    ④ 其它通用 NexAU agent 目录。机制已 benchmark-无关,新增一个 = 加一个 `Benchmark` + seed 即可。
+  - **多个 base harness(agent 框架)候选 —— 演化机制要外推到的目标基底,不只是 NexAU**:除当前的
+    **NexAU**,候选有 **mini-SWE-agent**、**smolagents**、**OpenAI Agents SDK**、**Confucius Code Agent**。
+    诉求:演化机制(loop + evolve agent + firewall + 预测-证伪 keep/rollback)本身**不应绑死 NexAU**,
+    而应能套在任意一个 agent 框架上去演化它的 harness。注意区分两条轴:**框架轴**(NexAU / mini-SWE-agent /
+    …,即"用什么 agent 基底")与**任务轴**(FAB / GDPval / Terminal-Bench,即"做什么任务")。这条也呼应
+    上面的削弱之争:**跨框架通用的 headroom 更可能来自"引擎循环能力"这类每个框架都有的东西,而非某框架
+    特有的工具插件** —— 这正是把削弱重心往"引擎循环"移的理由。
 - **[已解决] 三个 NexAU 基础设施坑**(provider-pin / 绝对 work_dir / 结构化文件工具)已修并写入 checkpoint,
   属于"基底踩坑"而非机制问题。
 - **[待讨论] 简单难度档signpost太强。** 当前 FAB weak 把恢复目标(工具描述文件)留在目录里 + 参考点名了招式,
