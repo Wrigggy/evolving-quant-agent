@@ -14,6 +14,10 @@ llm_config:
   temperature: 0.2
   stream: true
   api_type: openai_chat_completion
+  # Single float -> httpx connect=read=write=pool. The OpenAI SDK default connect=5s
+  # times out under the local SOCKS proxy's TLS handshake -> APITimeoutError. (Matches
+  # the GDPval worker; the documented connect-timeout gotcha.)
+  timeout: 180
 
 tools:
   - name: edgar_search

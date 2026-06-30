@@ -44,6 +44,9 @@ def summarize_trace(agent) -> dict:
     try:
         for m in (agent.full_trace or []):
             role = getattr(m, "role", "")
+            # NexAU roles are an enum (Role.ASSISTANT/Role.TOOL/...); normalize to a
+            # lowercase leaf string so counts work for BOTH the enum and plain strings.
+            role = str(getattr(role, "value", role)).split(".")[-1].lower()
             try:
                 text = m.get_text_content()
             except Exception:  # noqa: BLE001
