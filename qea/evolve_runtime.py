@@ -146,7 +146,10 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
     from nexau import Agent, AgentConfig
     from .worker_runtime import ensure_nexau_llm_env, pin_provider, summarize_trace
     ensure_nexau_llm_env()
-    snap = Path(snapshot_dir_path)
+    # MUST be absolute: the sandbox shell/file tools `cd`/resolve relative to the pinned
+    # work_dir from a different base cwd, so a relative work_dir -> "No such file or
+    # directory" on every read/edit (the agent then loops + narrates phantom edits).
+    snap = Path(snapshot_dir_path).resolve()
     cfg = AgentConfig.from_yaml(config_path=EVOLVE_DIR / "agent.yaml")
     pin_provider(cfg.llm_config)
     agent = Agent(config=cfg)
@@ -165,13 +168,15 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
         "description, re-wire a tool binding in agent.yaml, or add a new tool — but NEVER "
         "hardcode task answers, numbers, or domain facts. Improve how the worker WORKS, "
         "not what it answers.\n\n"
-        "First inspect the current files (`cat agent.yaml`, `cat systemprompt.md`, "
-        "`ls tool_descriptions/`), then make a minimal targeted edit.\n\n"
+        "Inspect files with read_file, then edit with the write_file (create/overwrite) "
+        "or replace (surgical) tools — NOT run_shell_command heredocs, which fumble on "
+        "multi-line YAML/Python. An edit only counts if it changes a file on disk; "
+        "re-read the file to confirm before finishing.\n\n"
         f"## NexAU modification reference\n{reference}\n"
     )
 
     if evidence_dir is not None:
-        evidence_dir = Path(evidence_dir)
+        evidence_dir = Path(evidence_dir).resolve()
         overview = _read_first(evidence_dir / "overview.md")
         history = _read_first(evidence_dir / "evolution_history.md", 6000)
         evidence_block = (
@@ -205,5 +210,25 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
     ctx["env_content"] = dict(ctx)
     resp = agent.run(message=msg, context=ctx)
     final_text = resp if isinstance(resp, str) else (resp[0] if resp else "")
+    # Dump the evolve agent's own trajectory (capped) for debugging whether it actually
+    # executed tool calls vs only narrated edits.
+    try:
+        out = []
+        for m in (agent.full_trace or []):
+            role = str(getattr(getattr(m, "role", ""), "value", getattr(m, "role", ""))).split(".")[-1].lower()
+            content = getattr(m, "content", "")
+            tcs = getattr(m, "tool_calls", None)
+            tc_repr = ""
+            if tcs:
+                parts = []
+                for tc in tcs:
+                    fn = getattr(getattr(tc, "function", None), "name", None) or getattr(tc, "name", "?")
+                    args = getattr(getattr(tc, "function", None), "arguments", None) or getattr(tc, "arguments", "")
+                    parts.append(f"CALL {fn}({str(args)[:400]})")
+                tc_repr = " | ".join(parts)
+            out.append(f"=== [{role}] ===\nTOOL_CALLS: {tc_repr}\nCONTENT: {str(content)[:1200]}")
+        (Path(run_dir) / "evolve_trace.txt").write_text("\n\n".join(out)[:160000])
+    except Exception as exc:  # noqa: BLE001
+        (Path(run_dir) / "evolve_trace.txt").write_text(f"dump failed: {exc}")
     return {"final_text": final_text, "trace": summarize_trace(agent),
             "prediction": _parse_prediction(final_text)}

@@ -1,0 +1,14 @@
+type: tool
+name: write_file
+description: >-
+  Write (create or overwrite) a file with the given content. Use this for any
+  multi-line file write — creating a new tool .py / .tool.yaml, or rewriting
+  systemprompt.md or agent.yaml. PREFER this over `run_shell_command` heredocs for
+  file edits: it is far more reliable for multi-line YAML/Python content.
+input_schema:
+  type: object
+  properties:
+    file_path: {type: string, description: "Path to the file to write (relative to the working directory)."}
+    content: {type: string, description: "Full content to write to the file."}
+  required: [file_path, content]
+  additionalProperties: false

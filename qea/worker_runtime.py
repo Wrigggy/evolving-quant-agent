@@ -96,7 +96,9 @@ def run_worker(task, worker_dir: Path, run_dir: Path) -> WorkerRun:
     sys.path.insert(0, wd)
     for m in [name for name in sys.modules if name == "tools" or name.startswith("tools.")]:
         del sys.modules[m]
-    workdir = run_dir / str(task.task_id) / "work"
+    # MUST be absolute: the sandbox shell `cd`s to the pinned work_dir from a different
+    # base cwd, so a relative work_dir breaks file reads/writes (see evolve_runtime).
+    workdir = (run_dir / str(task.task_id) / "work").resolve()
     workdir.mkdir(parents=True, exist_ok=True)
     ref_names = set()
     for rf in (getattr(task, "reference_files", None) or []):

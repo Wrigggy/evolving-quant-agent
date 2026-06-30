@@ -90,9 +90,15 @@ a description yaml). Useful ones: `nexau.archs.tool.builtin.shell_tools.run_shel
 
 ## Editing mechanism
 
-You edit with `run_shell_command`: inspect (`cat agent.yaml`, `ls tool_descriptions/`),
-then write (`cat > systemprompt.md <<'EOF' ... EOF`, or a small python `open(...,'w')`).
-Verify your edit parses (e.g. `python -c "import yaml,sys; yaml.safe_load(open('agent.yaml'))"`).
+You have structured tools — use them, they are reliable for multi-line content:
+- `read_file` — inspect a file before editing.
+- `write_file` — create a new file (a tool `.py`, a `.tool.yaml`) or rewrite one wholesale.
+- `replace` — surgically swap an exact snippet (e.g. add a `tools:` entry to agent.yaml).
+
+Do NOT write files with `run_shell_command` heredocs (`cat > f <<EOF`) — they fumble on
+multi-line YAML/Python. Reserve `run_shell_command` for verification, e.g.
+`python -c "import yaml; yaml.safe_load(open('agent.yaml'))"`. An edit only counts if it
+changes the file on disk — re-read the file to confirm before finishing.
 
 ## Hard rule
 

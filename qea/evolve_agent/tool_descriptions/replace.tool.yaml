@@ -1,0 +1,16 @@
+type: tool
+name: replace
+description: >-
+  Replace an exact text snippet in a file. Use for small, targeted edits (e.g. add a
+  `tools:` entry to agent.yaml) without rewriting the whole file. Include enough
+  surrounding context in old_string to match uniquely. PREFER this over shell `sed`
+  for surgical edits.
+input_schema:
+  type: object
+  properties:
+    file_path: {type: string, description: "Path to the file to modify."}
+    old_string: {type: string, description: "Exact literal text to replace (include surrounding context to match uniquely)."}
+    new_string: {type: string, description: "Text to replace old_string with."}
+    expected_replacements: {type: integer, description: "(optional) number of occurrences to replace; default 1."}
+  required: [file_path, old_string, new_string]
+  additionalProperties: false

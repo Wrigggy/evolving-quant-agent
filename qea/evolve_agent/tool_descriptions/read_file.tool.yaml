@@ -1,0 +1,13 @@
+type: tool
+name: read_file
+description: >-
+  Read a text file's content (optionally a line range). Use to inspect the worker's
+  agent.yaml / systemprompt.md / tool_descriptions/*.tool.yaml before editing.
+input_schema:
+  type: object
+  properties:
+    file_path: {type: string, description: "Path to the file to read."}
+    offset: {type: integer, description: "(optional) 0-based line to start from."}
+    limit: {type: integer, description: "(optional) max lines to read."}
+  required: [file_path]
+  additionalProperties: false
