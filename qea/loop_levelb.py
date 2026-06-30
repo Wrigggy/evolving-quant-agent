@@ -97,15 +97,26 @@ def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path):
     """Run the worker on every task with the given worker dir, then score each run
     through the benchmark's Evaluator (which owns render/grade/gate). Returns
     (evals, traces, deliverables, mean_gated_score). The loop imports no grader."""
+    from .evaluator import TaskEval
     worker_dir, run_dir = Path(worker_dir), Path(run_dir)
     evals, traces, deliverables = {}, {}, {}
     for task in tasks:
-        wr = run_worker(task, worker_dir, run_dir)
-        te = evaluator.evaluate(task, wr, run_dir / str(task.task_id))
-        evals[task.task_id] = te
-        traces[task.task_id] = {**wr.trace, "content": round(te.content_score, 4),
-                                "format_ok": te.format_ok}
-        deliverables[task.task_id] = te.deliverable_text
+        try:
+            wr = run_worker(task, worker_dir, run_dir)
+            te = evaluator.evaluate(task, wr, run_dir / str(task.task_id))
+            evals[task.task_id] = te
+            traces[task.task_id] = {**wr.trace, "content": round(te.content_score, 4),
+                                    "format_ok": te.format_ok}
+            deliverables[task.task_id] = te.deliverable_text
+        except Exception as exc:  # noqa: BLE001 - one worker/grader failure must not
+            # kill a multi-task, multi-iteration run (mirrors the base scripts'
+            # per-task try/except). A crashed worker IS a task failure: score it 0 so
+            # the debugger flags it, and record the error in the answer-free trace.
+            evals[task.task_id] = TaskEval(0.0, 0.0, False, "", {}, 0.0)
+            traces[task.task_id] = {"error": f"{type(exc).__name__}: {exc}"[:300],
+                                    "files": 0, "turns": 0, "tool_calls": 0,
+                                    "tool_errors": 1, "content": 0.0, "format_ok": False}
+            deliverables[task.task_id] = ""
     mean = statistics.mean(e.gated_score for e in evals.values()) if evals else 0.0
     return evals, traces, deliverables, mean
 

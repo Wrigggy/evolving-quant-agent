@@ -359,6 +359,32 @@ def test_make_benchmark_routes_to_the_right_evaluator():
         make_benchmark("nonsense")
 
 
+def test_evaluate_dir_tolerates_worker_failure(tmp_path, monkeypatch):
+    # A crashing worker (e.g. NexAU empty-response after retries) must not kill the
+    # run: the task scores 0, the error is recorded in the trace, the loop continues.
+    import qea.loop_levelb as L
+    from qea.tasks import BTask
+
+    tasks = [BTask(task_id="t1", subtype="x", prompt="p", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "c"}]),
+             BTask(task_id="t2", subtype="x", prompt="p", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "c"}])]
+
+    def boom(task, wd, rd):
+        if task.task_id == "t1":
+            raise RuntimeError("Error in agent execution: No response content or tool calls")
+        from qea.worker_runtime import WorkerRun
+        return WorkerRun("ok answer", [], {"files": 0, "turns": 3, "tool_errors": 0})
+    monkeypatch.setattr(L, "run_worker", boom)
+
+    evals, traces, deliverables, mean = L.evaluate_dir(
+        tmp_path / "w", tasks, _FakeEval(base=0.7, improved=0.7), tmp_path / "r")
+    assert evals["t1"].gated_score == 0.0 and evals["t1"].format_ok is False
+    assert "RuntimeError" in traces["t1"]["error"]
+    assert evals["t2"].gated_score == 0.7                 # the healthy task still scored
+    assert mean == 0.35                                    # (0.0 + 0.7) / 2
+
+
 @pytest.mark.skipif(os.environ.get("QEA_LEVELB_SMOKE") != "1",
                     reason="set QEA_LEVELB_SMOKE=1 to run the real-API NexAU Level-B smoke test")
 def test_levelb_smoke_one_task_one_iter(tmp_path):

@@ -94,9 +94,14 @@ def run_worker(task, worker_dir: Path, run_dir: Path) -> WorkerRun:
         agent.sandbox_manager.instance.work_dir = workdir
     except Exception:  # noqa: BLE001
         pass
-    note = (f"\n\nIMPORTANT: Your working directory is {workdir}\n"
-            f"The reference input files {sorted(ref_names)} are in that directory. "
-            f"Read inputs from there, and SAVE your deliverable file(s) into that directory.")
+    # Only file-deliverable tasks (reference files in, or a required deliverable
+    # extension) get the file-saving note; text-answer benchmarks like FAB get the
+    # bare prompt, matching their base test. Keyed to the task, not the benchmark name.
+    is_file_task = bool(ref_names) or bool(getattr(task, "deliverable_exts", None))
+    note = ((f"\n\nIMPORTANT: Your working directory is {workdir}\n"
+             f"The reference input files {sorted(ref_names)} are in that directory. "
+             f"Read inputs from there, and SAVE your deliverable file(s) into that directory.")
+            if is_file_task else "")
     ctx = {"date": "2026-06-25", "username": os.environ.get("USER", "kevin"),
            "working_directory": str(workdir)}
     ctx["env_content"] = dict(ctx)
