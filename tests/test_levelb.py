@@ -70,16 +70,19 @@ def test_weak_seed_is_process_limited_not_capability_walled():
     assert "run_shell_command" in tool_yaml
 
 
-def test_process_note_is_answer_free_and_flags_no_deliverable():
+def test_process_note_is_answer_free_and_file_signal_is_format_aware():
     from qea.debugger import process_note
-    # produced no file, burned few turns -> the headroom signal
-    n = process_note({"files": 0, "turns": 4, "tool_calls": 2, "tool_errors": 1, "secs": 30.0})
+    # a REQUIRED file is missing (format_ok False) -> flag "no deliverable file"
+    n = process_note({"files": 0, "turns": 4, "tool_errors": 1, "format_ok": False})
     assert "no deliverable file" in n.lower()
-    assert "4 turn" in n
-    assert "1 tool error" in n
-    # a healthy run produces a benign note
-    ok = process_note({"files": 1, "turns": 11, "tool_calls": 6, "tool_errors": 0, "secs": 200.0})
-    assert "produced" in ok.lower() and "no deliverable file" not in ok.lower()
+    assert "4 turn" in n and "1 tool error" in n
+    # TEXT-answer task (format_ok True, files=0 is NORMAL) -> do NOT flag a missing file
+    txt = process_note({"files": 0, "turns": 40, "tool_errors": 2, "format_ok": True})
+    assert "no deliverable file" not in txt.lower()
+    assert "40 turn" in txt and "2 tool error" in txt
+    # a healthy file-producing run
+    ok = process_note({"files": 1, "turns": 11, "tool_errors": 0, "format_ok": True})
+    assert "produced 1 file" in ok.lower() and "no deliverable file" not in ok.lower()
     # process notes carry only counts — never any answer/number-from-the-task content
     assert "$" not in n and "going-concern" not in n
 

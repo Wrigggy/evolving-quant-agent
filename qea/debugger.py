@@ -25,11 +25,15 @@ def process_note(trace: dict) -> str:
     files = int(trace.get("files", 0) or 0)
     turns = int(trace.get("turns", 0) or 0)
     errs = int(trace.get("tool_errors", 0) or 0)
-    parts = []
-    if files == 0:
-        parts.append(f"produced no deliverable file after {turns} turn(s)")
-    else:
-        parts.append(f"produced {files} file(s) in {turns} turn(s)")
+    # A missing file is only a deficiency when a file was REQUIRED (format_ok is False).
+    # On a TEXT-answer benchmark (e.g. FAB) files==0 is NORMAL — flagging it as "no
+    # deliverable" mis-steers the diagnosis toward a write tool instead of the real gap.
+    file_required_but_missing = files == 0 and not trace.get("format_ok", True)
+    parts = [f"ran {turns} turn(s)"]
+    if file_required_but_missing:
+        parts.append("produced no deliverable file (one was required)")
+    elif files:
+        parts.append(f"produced {files} file(s)")
     if errs:
         parts.append(f"{errs} tool error(s)")
     return "; ".join(parts)
