@@ -159,6 +159,16 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
         pass
     task_ids = sanitized_diagnosis.get("predicted_fix_task_ids") or []
     reference = _read_reference()
+    # Open-ended diagnosis (Agent-Debugger `ask` style) is the PRIMARY steering signal:
+    # a free-form root cause + a proposed harness change (which can say "wire in a tool").
+    rc = sanitized_diagnosis.get("root_cause") or sanitized_diagnosis.get("overview") or ""
+    mech = sanitized_diagnosis.get("general_mechanism") or ""
+    kind = sanitized_diagnosis.get("mechanism_kind") or sanitized_diagnosis.get("root_cause_tag") or ""
+    diag_lines = (
+        f"- ROOT CAUSE: {rc}\n"
+        f"- SUGGESTED HARNESS CHANGE ({kind}): {mech}\n"
+        f"- tasks currently failing: {task_ids}\n"
+    )
 
     head = (
         "Your working directory contains a worker agent defined as files (agent.yaml, "
@@ -185,17 +195,13 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
             "worker's own deliverable). Raw per-task trajectories are on disk under "
             f"`{evidence_dir / 'traces'}` — drill into them with the shell only if needed.\n\n"
             f"### overview.md\n{overview}\n\n### evolution_history.md\n{history}\n\n"
-            f"- root cause (classified): {sanitized_diagnosis.get('root_cause_tag')}\n"
-            f"- tasks currently failing: {task_ids}\n"
+            f"## Diagnosis (answer-free)\n{diag_lines}"
         )
     else:
         history_block = f"\nEDITS ALREADY TRIED (do not repeat):\n{edit_history}\n" if edit_history else ""
         evidence_block = (
             f"## Diagnosis (answer-free)\n"
-            f"- root cause: {sanitized_diagnosis.get('root_cause_tag')}\n"
-            f"- category: {sanitized_diagnosis.get('deficiency_category')}\n"
-            f"- overview: {sanitized_diagnosis.get('overview')}\n"
-            f"- tasks currently failing: {task_ids}\n"
+            f"{diag_lines}"
             f"{history_block}"
         )
 

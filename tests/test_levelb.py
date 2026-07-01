@@ -92,8 +92,12 @@ def test_trace_fold_preserves_firewall():
 
     class CriticLLM:
         def complete(self, prompt, *, role="judge"):
-            if "Classify" in prompt:
-                return '{"root_cause_tag": "WrongStructure", "target_slot": "prompt"}'
+            # the OPEN-ENDED diagnosis call (Agent-Debugger `ask` style) asks for JSON
+            # with a general_mechanism; it can name a TOOL to wire in.
+            if "general_mechanism" in prompt:
+                return ('{"root_cause": "worker cannot reach the filing", '
+                        '"general_mechanism": "wire in the unbound retrieve_from_filing tool", '
+                        '"kind": "tool"}')
             return "The deliverable omits the required reconciliation section."
 
     res = {"t1": TaskResult("t1", "Accountants and Auditors", "B", False, False, False, 0.3, 0.0,
@@ -106,6 +110,9 @@ def test_trace_fold_preserves_firewall():
     payload = repr(diag.proposer_payload())
     assert "SECRET-CONTROL-TOTAL-98765" not in payload   # firewall holds with traces folded in
     assert "t1" in diag.predicted_fix_task_ids
+    # open-ended diagnosis can point at a TOOL (what the retired 5-tag classifier couldn't)
+    assert diag.mechanism_kind == "tool"
+    assert "retrieve_from_filing" in diag.general_mechanism
 
 
 def test_snapshot_and_diff_and_signature(tmp_path):

@@ -42,6 +42,14 @@ class SanitizedDiagnosis:
     suggested_target_slot: str
     predicted_fix_task_ids: list = field(default_factory=list)
     overview: str = ""
+    # OPEN-ENDED diagnosis (the real Agent Debugger's `ask` mode, not the retired fixed
+    # 5-tag classifier): a free-form ROOT CAUSE + a GENERAL MECHANISM = one harness change
+    # (a prompt rule, a TOOL to wire in/add, a binding, or middleware). mechanism_kind is
+    # an OPEN hint (prompt|tool|binding|middleware|other), not a closed vocabulary. Both are
+    # answer-free (the AHE "NOT task-specific knowledge" instruction IS the firewall).
+    root_cause: str = ""
+    general_mechanism: str = ""
+    mechanism_kind: str = ""
 
     def proposer_payload(self) -> dict:
         """The ONLY thing the proposer sees. Contains no rubric answers / gold."""
@@ -51,6 +59,9 @@ class SanitizedDiagnosis:
             "suggested_target_slot": self.suggested_target_slot,
             "predicted_fix_task_ids": list(self.predicted_fix_task_ids),
             "overview": self.overview,
+            "root_cause": self.root_cause,
+            "general_mechanism": self.general_mechanism,
+            "mechanism_kind": self.mechanism_kind,
             "_b_pile": True,
         }
 
@@ -114,26 +125,46 @@ def diagnose_b_pile(eval_summary, tasks, *, llm, mode: str = "hybrid", traces: d
     if not notes:
         return SanitizedDiagnosis("None", "no dominant deficiency", "", [], "No failing B tasks.")
 
-    tag_vocab = ", ".join(B_TAG_SLOT)
-    classify = (
-        "Classify the dominant deficiency across these answer-free notes into ONE tag "
-        f"from {{{tag_vocab}}}"
-        + (" and name the harness slot to target" if mode == "free" else "")
-        + '. Return JSON {"root_cause_tag":..., "target_slot":...}.\n\nNOTES:\n'
+    # OPEN-ENDED cross-task root-cause analysis, faithful to the real Agent Debugger's
+    # `ask` mode (agentic_harness_engineering): ask for a free-form ROOT CAUSE + a
+    # GENERAL MECHANISM = ONE harness change (prompt rule / TOOL / binding / middleware),
+    # NOT a pick from a closed vocabulary. The "NOT task-specific" instruction is the
+    # firewall (iron-law-2) — it forbids leaking any answer/number. The retired fixed
+    # 5-tag classifier (B_TAG_SLOT) had no "missing tool/capability" category, so it
+    # mislabeled tool gaps and steered edits toward prompt; this does not.
+    ask = (
+        "You are doing cross-task root-cause analysis of an agent worker's failures, to "
+        "propose ONE harness change. Below are answer-free deficiency notes + process "
+        "observations for the failing tasks.\n\n"
+        "Rules: describe only the MISSING CAPABILITY / STRUCTURE / MECHANISM — NEVER a "
+        "task-specific answer, number, or domain fact (that is a hard firewall).\n\n"
+        "Produce JSON with:\n"
+        '- "root_cause": the fundamental reason these tasks fail (one sentence).\n'
+        '- "general_mechanism": ONE harness change that would prevent this failure CLASS '
+        "generally — a prompt rule, a TOOL to wire in or add, a tool binding, or middleware. "
+        "If the worker loops without reaching a data source / gives up without an answer, "
+        "consider whether it is MISSING A TOOL/CAPABILITY that should be wired in (look for "
+        "an unbound implementation) or added.\n"
+        '- "kind": one of prompt | tool | binding | middleware | other.\n\n'
+        'Return JSON {"root_cause": "...", "general_mechanism": "...", "kind": "..."}.\n\nNOTES:\n'
         + "\n".join(f"- {n}" for n in notes)
     )
     try:
-        obj = _parse_first_json(llm.complete(classify, role="evolve_agent")) or {}
-    except Exception:  # noqa: BLE001 - classifier outage -> default tag, don't crash the run
+        obj = _parse_first_json(llm.complete(ask, role="evolve_agent")) or {}
+    except Exception:  # noqa: BLE001 - debugger outage -> minimal diagnosis, don't crash
         obj = {}
-    tag = obj.get("root_cause_tag", "WrongStructure")
-    slot = obj.get("target_slot") if mode == "free" else B_TAG_SLOT.get(tag, "prompt")
+    root_cause = str(obj.get("root_cause", "") or "").strip()
+    mechanism = str(obj.get("general_mechanism", "") or "").strip()
+    kind = str(obj.get("kind", "") or "other").strip().lower()
     return SanitizedDiagnosis(
-        root_cause_tag=tag,
-        deficiency_category=f"{len(notes)} task(s) with {tag} across {len(occ_counts)} occupation(s)",
-        suggested_target_slot=slot or B_TAG_SLOT.get(tag, "prompt"),
+        root_cause_tag=kind or "other",  # kept for logging/back-compat (now the open kind)
+        deficiency_category=f"{len(notes)} failing task(s) across {len(occ_counts)} occupation(s)",
+        suggested_target_slot=kind,
         predicted_fix_task_ids=failing_ids,
-        overview=f"{tag}: dominant B-pile deficiency over {len(failing_ids)} failing task(s).",
+        overview=(root_cause or f"dominant B-pile deficiency over {len(failing_ids)} failing task(s)."),
+        root_cause=root_cause,
+        general_mechanism=mechanism,
+        mechanism_kind=kind,
     )
 
 
