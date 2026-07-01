@@ -38,5 +38,5 @@ sandbox_config:
   type: e2b
   api_key: ${env.E2B_API_KEY}
   template: base
-  timeout: 300
+  timeout: 1300
   force_http: false
