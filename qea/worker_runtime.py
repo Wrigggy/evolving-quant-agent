@@ -17,6 +17,32 @@ from pathlib import Path
 SUPPORTED = {".xlsx", ".pptx", ".docx", ".pdf"}
 
 
+def install_e2b_shim() -> None:
+    """NexAU 0.3.9's e2b_sandbox.py calls the non-existent `Sandbox.beta_create(...)`
+    (removed from current e2b SDK — 2.25/2.30 only have `create`). AHE sidesteps this by
+    using Harbor's `AsyncSandbox.create`; we instead shim `beta_create` onto `create`
+    (args map 1:1 — api_key/api_url are valid ApiParams; auto_pause is dropped). No-op if
+    e2b is absent or already has beta_create."""
+    try:
+        import e2b
+        if hasattr(e2b.Sandbox, "beta_create"):
+            return
+
+        def beta_create(cls, *, template=None, timeout=None, api_key=None, api_url=None,
+                        metadata=None, envs=None, auto_pause=None, **kw):
+            opts = {}
+            if api_key:
+                opts["api_key"] = api_key
+            if api_url:
+                opts["api_url"] = api_url
+            return cls.create(template=template, timeout=timeout,
+                              metadata=metadata or None, envs=envs or None, **opts)
+
+        e2b.Sandbox.beta_create = classmethod(beta_create)
+    except Exception:  # noqa: BLE001 - never block a run on the shim
+        pass
+
+
 def pin_provider(llm_config) -> None:
     """Pin the OpenRouter provider for this model. AHE lesson (also baked into qea.llm
     + .env): routed third-party providers return empty/mis-parsed completions — the
@@ -55,6 +81,7 @@ def ensure_nexau_llm_env() -> None:
         os.environ["LLM_API_KEY"] = os.environ["OPENROUTER_API_KEY"]
     os.environ.setdefault("LLM_BASE_URL", os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"))
     os.environ.setdefault("LLM_MODEL", "deepseek/deepseek-v4-pro")
+    install_e2b_shim()  # make NexAU's E2B sandbox usable on the current e2b SDK
 
 
 @dataclass
