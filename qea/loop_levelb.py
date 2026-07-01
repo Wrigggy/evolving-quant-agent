@@ -17,6 +17,7 @@ snapshot only on an aggregate-score gain beyond the noise floor that is not HARM
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import statistics
 from dataclasses import asdict, dataclass, field
@@ -102,32 +103,70 @@ def _eval_summary(evals: dict, deliverables: dict, tasks) -> EvalSummary:
     return EvalSummary(results, deliverables)
 
 
-def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurrency: int = 1):
+def _worker_sig(worker_dir: Path) -> str:
+    """Short stable hash of the worker dir's text files — the cache key so RESUME
+    only reuses a cached task result when the worker dir is byte-identical (seed is
+    stable across relaunches; an evolved candidate has a different sig)."""
+    from .evolve_runtime import _text_files
+    tf = _text_files(Path(worker_dir))
+    h = hashlib.sha1()
+    for rel in sorted(tf):
+        h.update(rel.encode()); h.update("".join(tf[rel]).encode())
+    return h.hexdigest()[:12]
+
+
+def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurrency: int = 1,
+                 cache_dir=None):
     """Run the worker on every task with the given worker dir, then score each run
     through the benchmark's Evaluator (which owns render/grade/gate). Returns
     (evals, traces, deliverables, mean_gated_score). The loop imports no grader.
 
     `concurrency` worker runs in parallel (ThreadPoolExecutor) — essential for full
     benchmarks (FAB 27 tasks). The cross-snapshot `tools.*` reload is done ONCE here
-    (prepare_worker_imports) BEFORE the pool, so threads only import (lock-safe)."""
+    (prepare_worker_imports) BEFORE the pool, so threads only import (lock-safe).
+
+    `cache_dir` enables RESUME: a completed task's result is persisted to
+    `cache_dir/{worker_sig}__{task_id}.json`; on a later launch (after the environment
+    reaps a long run) the cached result is loaded instead of re-running the worker, so
+    repeated launches ACCUMULATE to completion."""
     from .evaluator import TaskEval
     from .worker_runtime import prepare_worker_imports
     worker_dir, run_dir = Path(worker_dir), Path(run_dir)
     prepare_worker_imports(worker_dir)
     evals, traces, deliverables = {}, {}, {}
+    sig = _worker_sig(worker_dir) if cache_dir else None
+    if cache_dir:
+        Path(cache_dir).mkdir(parents=True, exist_ok=True)
+
+    def _cache_file(task):
+        return Path(cache_dir) / f"{sig}__{task.task_id}.json" if cache_dir else None
 
     def _one(task):
+        cf = _cache_file(task)
+        if cf is not None and cf.exists():
+            try:
+                d = json.loads(cf.read_text())
+                return task.task_id, TaskEval(**d["eval"]), d["trace"], d["deliverable"]
+            except Exception:  # noqa: BLE001 - corrupt cache entry -> just re-run
+                pass
         try:
             wr = run_worker(task, worker_dir, run_dir)
             te = evaluator.evaluate(task, wr, run_dir / str(task.task_id))
             tr = {**wr.trace, "content": round(te.content_score, 4), "format_ok": te.format_ok}
-            return task.task_id, te, tr, te.deliverable_text
+            out = (task.task_id, te, tr, te.deliverable_text)
         except Exception as exc:  # noqa: BLE001 - one worker/grader failure must not kill
             # a multi-task/iteration run. A crashed worker IS a task failure: score 0 so
             # the debugger flags it, and record the error in the answer-free trace.
             tr = {"error": f"{type(exc).__name__}: {exc}"[:300], "files": 0, "turns": 0,
                   "tool_calls": 0, "tool_errors": 1, "content": 0.0, "format_ok": False}
-            return task.task_id, TaskEval(0.0, 0.0, False, "", {}, 0.0), tr, ""
+            out = (task.task_id, TaskEval(0.0, 0.0, False, "", {}, 0.0), tr, "")
+        if cf is not None:
+            try:
+                cf.write_text(json.dumps({"eval": asdict(out[1]), "trace": out[2],
+                                          "deliverable": out[3]}, default=str))
+            except Exception:  # noqa: BLE001
+                pass
+        return out
 
     if concurrency > 1 and len(tasks) > 1:
         from concurrent.futures import ThreadPoolExecutor
@@ -225,11 +264,11 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
 
     # seed eval; noise floor either fixed (cfg.noise_margin>0, cheap) or measured via a
     # 2nd same-dir eval (cfg.noise_margin==0, accurate but doubles the slow seed cost).
-    evals, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed", concurrency=cfg.concurrency)
+    evals, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache")
     if cfg.noise_margin > 0:
         noise_margin = cfg.noise_margin
     else:
-        _, _, _, noise_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed_noise", concurrency=cfg.concurrency)
+        _, _, _, noise_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed_noise", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache")
         noise_margin = max(0.01, abs(inc_mean - noise_mean))
 
     ms_traj = [round(inc_mean, 4)]
@@ -242,14 +281,23 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
 
         iterdir = results_dir / f"iter_{it:03d}"
         cand_dir = iterdir / "worker"
-        snapshot_dir(incumbent, cand_dir)
-        evidence_dir = None
-        if cfg.evidence_mode == "ahe_corpus":
-            evidence_dir = _build_evidence(iterdir / "evidence", diag, evals, traces,
-                                           deliverables, tasks, records)
-        ev_out = run_evolve_agent(cand_dir, diag, iterdir,
-                                  edit_history=_edit_history(records), evidence_dir=evidence_dir)
-        pred = ev_out.get("prediction") or {}
+        pred_file = iterdir / "prediction.json"
+        if cand_dir.exists() and pred_file.exists():
+            # RESUME: a prior (reaped) launch already produced this iteration's edit —
+            # reuse it verbatim instead of re-running the evolve agent, so the candidate
+            # eval below can cache-accumulate across relaunches.
+            pred = json.loads(pred_file.read_text())
+        else:
+            snapshot_dir(incumbent, cand_dir)
+            evidence_dir = None
+            if cfg.evidence_mode == "ahe_corpus":
+                evidence_dir = _build_evidence(iterdir / "evidence", diag, evals, traces,
+                                               deliverables, tasks, records)
+            ev_out = run_evolve_agent(cand_dir, diag, iterdir,
+                                      edit_history=_edit_history(records), evidence_dir=evidence_dir)
+            pred = ev_out.get("prediction") or {}
+            iterdir.mkdir(parents=True, exist_ok=True)
+            pred_file.write_text(json.dumps(pred))
         diff = dir_unified_diff(incumbent, cand_dir)
         edit = DirEdit(diff, predicted_fixes=pred.get("predicted_fixes", []),
                        risk_tasks=pred.get("risk_tasks", []))
@@ -266,7 +314,7 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             verdict, kept, cand_mean = "BLOCKED", False, inc_mean
             n_blocked += 1
         else:
-            cand_evals, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade", concurrency=cfg.concurrency)
+            cand_evals, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache")
             cls = _classify(edit, evals, cand_evals, noise_margin)
             verdict, improved, regressed = cls["verdict"], cls["flipped"], cls["regressed"]
             # promote iff a real aggregate gain beyond the noise floor AND not harmful
