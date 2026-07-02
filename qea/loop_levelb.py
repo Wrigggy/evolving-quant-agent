@@ -171,9 +171,12 @@ def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurren
             return any(k in m for k in
                        ("ratelimit", "429", "rate limit", "sandbox", "timeout",
                         "timed out", "connection", "disconnect", "remoteprotocol",
-                        "protocolerror", "temporarily", "econnreset", "eof occurred"))
+                        "protocolerror", "temporarily", "econnreset", "eof occurred",
+                        # sandbox I/O connection drops during a file write / stream read
+                        "broken pipe", "writeerror", "errno 32", "readerror",
+                        "connectionreset", "connectionerror", "502", "503", "504"))
         transient = False
-        _MAX_ATTEMPTS = 3
+        _MAX_ATTEMPTS = 4
         for _attempt in range(_MAX_ATTEMPTS):
             try:
                 wr = _run_worker(task, worker_dir, run_dir)
