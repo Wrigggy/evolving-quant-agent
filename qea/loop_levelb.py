@@ -30,7 +30,6 @@ from .falsify import (EvalSummary, LEAKAGE_BLOCKED, RejectedEditBuffer,
                       decide_keep_soft, evaluate_changes)
 from .llm import make_llm
 from .verifier import LeakageGuard, TaskResult
-from .worker_runtime import run_worker
 
 
 @dataclass
@@ -51,6 +50,12 @@ class LevelBConfig:
     # 2nd eval (cheap; for expensive workers). e.g. 0.05.
     noise_margin: float = 0.0
     concurrency: int = 1             # parallel worker runs per eval (essential for full FAB)
+    # Worker execution backend. "local" = run the agent in the local Python process
+    # (fast, but each run holds a large LLM context locally -> memory-bound at high
+    # concurrency). "e2b_full" = run the ENTIRE agent inside a per-task E2B cloud VM
+    # (Harbor-style full offload via worker_e2b.run_worker_e2b): local footprint stays
+    # near-zero, so 20-way concurrency no longer risks a macOS memory batch-kill.
+    execution: str = "local"
 
 
 @dataclass
@@ -116,7 +121,7 @@ def _worker_sig(worker_dir: Path) -> str:
 
 
 def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurrency: int = 1,
-                 cache_dir=None):
+                 cache_dir=None, execution: str = "local"):
     """Run the worker on every task with the given worker dir, then score each run
     through the benchmark's Evaluator (which owns render/grade/gate). Returns
     (evals, traces, deliverables, mean_gated_score). The loop imports no grader.
@@ -130,9 +135,14 @@ def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurren
     reaps a long run) the cached result is loaded instead of re-running the worker, so
     repeated launches ACCUMULATE to completion."""
     from .evaluator import TaskEval
-    from .worker_runtime import prepare_worker_imports
     worker_dir, run_dir = Path(worker_dir), Path(run_dir)
-    prepare_worker_imports(worker_dir)
+    # Backend select. "e2b_full" runs the whole agent in a cloud VM (worker_e2b), so the
+    # local `tools.*` reload is irrelevant (the worker never imports in-process here).
+    if execution == "e2b_full":
+        from .worker_e2b import run_worker_e2b as _run_worker
+    else:
+        from .worker_runtime import prepare_worker_imports, run_worker as _run_worker
+        prepare_worker_imports(worker_dir)
     evals, traces, deliverables = {}, {}, {}
     sig = _worker_sig(worker_dir) if cache_dir else None
     if cache_dir:
@@ -150,7 +160,7 @@ def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurren
             except Exception:  # noqa: BLE001 - corrupt cache entry -> just re-run
                 pass
         try:
-            wr = run_worker(task, worker_dir, run_dir)
+            wr = _run_worker(task, worker_dir, run_dir)
             te = evaluator.evaluate(task, wr, run_dir / str(task.task_id))
             tr = {**wr.trace, "content": round(te.content_score, 4), "format_ok": te.format_ok}
             out = (task.task_id, te, tr, te.deliverable_text)
@@ -264,11 +274,11 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
 
     # seed eval; noise floor either fixed (cfg.noise_margin>0, cheap) or measured via a
     # 2nd same-dir eval (cfg.noise_margin==0, accurate but doubles the slow seed cost).
-    evals, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache")
+    evals, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache", execution=cfg.execution)
     if cfg.noise_margin > 0:
         noise_margin = cfg.noise_margin
     else:
-        _, _, _, noise_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed_noise", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache")
+        _, _, _, noise_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed_noise", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache", execution=cfg.execution)
         noise_margin = max(0.01, abs(inc_mean - noise_mean))
 
     ms_traj = [round(inc_mean, 4)]
@@ -314,7 +324,7 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             verdict, kept, cand_mean = "BLOCKED", False, inc_mean
             n_blocked += 1
         else:
-            cand_evals, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache")
+            cand_evals, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache", execution=cfg.execution)
             cls = _classify(edit, evals, cand_evals, noise_margin)
             verdict, improved, regressed = cls["verdict"], cls["flipped"], cls["regressed"]
             # promote iff a real aggregate gain beyond the noise floor AND not harmful
