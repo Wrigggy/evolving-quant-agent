@@ -159,18 +159,42 @@ def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurren
                 return task.task_id, TaskEval(**d["eval"]), d["trace"], d["deliverable"]
             except Exception:  # noqa: BLE001 - corrupt cache entry -> just re-run
                 pass
-        try:
-            wr = _run_worker(task, worker_dir, run_dir)
-            te = evaluator.evaluate(task, wr, run_dir / str(task.task_id))
-            tr = {**wr.trace, "content": round(te.content_score, 4), "format_ok": te.format_ok}
-            out = (task.task_id, te, tr, te.deliverable_text)
-        except Exception as exc:  # noqa: BLE001 - one worker/grader failure must not kill
-            # a multi-task/iteration run. A crashed worker IS a task failure: score 0 so
-            # the debugger flags it, and record the error in the answer-free trace.
-            tr = {"error": f"{type(exc).__name__}: {exc}"[:300], "files": 0, "turns": 0,
-                  "tool_calls": 0, "tool_errors": 1, "content": 0.0, "format_ok": False}
-            out = (task.task_id, TaskEval(0.0, 0.0, False, "", {}, 0.0), tr, "")
-        if cf is not None:
+        # A transient infra failure (E2B 429/rate-limit, sandbox create/resume, a
+        # RemoteProtocolError "Server disconnected" between the VM worker and OpenRouter)
+        # is NOT a real task result. Scoring it 0 asymmetrically penalizes whichever eval
+        # got unlucky — on a candidate that means a spurious regression that flips the
+        # keep/rollback verdict at the noise-floor margin. So: retry the worker on a
+        # transient error before giving up, and never cache a transient 0 (it would poison
+        # resume). A genuine worker/grader failure (non-transient) is a real 0 and is cached.
+        def _is_transient(exc):
+            m = f"{type(exc).__name__}: {exc}".lower()
+            return any(k in m for k in
+                       ("ratelimit", "429", "rate limit", "sandbox", "timeout",
+                        "timed out", "connection", "disconnect", "remoteprotocol",
+                        "protocolerror", "temporarily", "econnreset", "eof occurred"))
+        transient = False
+        _MAX_ATTEMPTS = 3
+        for _attempt in range(_MAX_ATTEMPTS):
+            try:
+                wr = _run_worker(task, worker_dir, run_dir)
+                te = evaluator.evaluate(task, wr, run_dir / str(task.task_id))
+                tr = {**wr.trace, "content": round(te.content_score, 4), "format_ok": te.format_ok}
+                out = (task.task_id, te, tr, te.deliverable_text)
+                transient = False
+                break
+            except Exception as exc:  # noqa: BLE001 - one worker/grader failure must not kill
+                # a multi-task/iteration run. A crashed worker IS a task failure: score 0 so
+                # the debugger flags it, and record the error in the answer-free trace.
+                tr = {"error": f"{type(exc).__name__}: {exc}"[:300], "files": 0, "turns": 0,
+                      "tool_calls": 0, "tool_errors": 1, "content": 0.0, "format_ok": False}
+                out = (task.task_id, TaskEval(0.0, 0.0, False, "", {}, 0.0), tr, "")
+                transient = _is_transient(exc)
+                if transient and _attempt < _MAX_ATTEMPTS - 1:
+                    print(f"[eval] {task.task_id} transient error "
+                          f"(attempt {_attempt + 1}/{_MAX_ATTEMPTS}), retrying: {tr['error'][:80]}")
+                    continue
+                break
+        if cf is not None and not transient:
             try:
                 cf.write_text(json.dumps({"eval": asdict(out[1]), "trace": out[2],
                                           "deliverable": out[3]}, default=str))
