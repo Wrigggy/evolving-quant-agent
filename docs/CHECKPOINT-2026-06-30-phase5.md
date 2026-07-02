@@ -1,5 +1,10 @@
 # Checkpoint — Phase 5 generalizable Level-B mechanism (2026-06-30)
 
+> **SUPERSEDED by `CHECKPOINT-2026-07-02-phase5.md`.** Kept as a point-in-time record.
+> Since this was written: open-ended debugger landed, the max_iterations lowering was
+> tried and REVERTED, and the E2B full-offload worker backend was added (solves the
+> throughput/memory problem this checkpoint's "pending optimizations" were chasing).
+
 Paused mid-run. This captures state so work can resume cleanly.
 
 ## Branch / commits
