@@ -314,6 +314,10 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
 
     for it in range(1, cfg.n_iters + 1):
         inc_eval = _eval_summary(evals, deliverables, tasks)
+        # Phase markers: the diagnose step makes one critic (judge) call per failing task
+        # (~n sequential calls) then one evolve-agent call, so it can legitimately take
+        # minutes — without a marker a slow diagnose is indistinguishable from a hang.
+        print(f"[iter {it}] diagnosing ({sum(1 for r in inc_eval.results.values() if r.pile=='B' and not r.oos_pass)} failing B tasks)...", flush=True)
         diag = diagnose_b_pile(inc_eval, tasks, llm=llm, traces=traces).proposer_payload()
 
         iterdir = results_dir / f"iter_{it:03d}"
@@ -330,11 +334,13 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             if cfg.evidence_mode == "ahe_corpus":
                 evidence_dir = _build_evidence(iterdir / "evidence", diag, evals, traces,
                                                deliverables, tasks, records)
+            print(f"[iter {it}] evolve agent editing the worker dir...", flush=True)
             ev_out = run_evolve_agent(cand_dir, diag, iterdir,
                                       edit_history=_edit_history(records), evidence_dir=evidence_dir)
             pred = ev_out.get("prediction") or {}
             iterdir.mkdir(parents=True, exist_ok=True)
             pred_file.write_text(json.dumps(pred))
+        print(f"[iter {it}] evaluating candidate on {len(tasks)} tasks...", flush=True)
         diff = dir_unified_diff(incumbent, cand_dir)
         edit = DirEdit(diff, predicted_fixes=pred.get("predicted_fixes", []),
                        risk_tasks=pred.get("risk_tasks", []))

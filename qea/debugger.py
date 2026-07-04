@@ -108,22 +108,40 @@ def diagnose_b_pile(eval_summary, tasks, *, llm, mode: str = "hybrid", traces: d
     # answer-free via process_note().
     by_id = {t.task_id: t for t in tasks}
     critic = Critic(llm)
-    notes, failing_ids, occ_counts = [], [], {}
+    # Collect the failing B tasks first, then generate critic notes CONCURRENTLY. The
+    # notes are independent per task; done sequentially this is ~n judge calls in series,
+    # which dominates the loop when the judge endpoint is slow (observed ~40s/call). A
+    # thread pool cuts diagnose wall-time ~n-fold without changing the notes or scoring.
+    failing = []  # (tid, r, task, failed_criteria)
     for tid, r in eval_summary.results.items():
         if r.pile != "B" or r.oos_pass:
             continue
         task = by_id.get(tid)
         if task is None:
             continue
-        failed = _failed_criteria_texts(task, r.criterion_verdicts or {})
+        failing.append((tid, r, task, _failed_criteria_texts(task, r.criterion_verdicts or {})))
+
+    def _note(item):
+        tid, _r, task, failed = item
         try:
             note = critic.note(task, eval_summary.deliverables.get(tid, ""), failed)
         except Exception:  # noqa: BLE001 - a critic outage must not kill the run (mirror evaluate())
             note = f"deliverable left {len(failed)} rubric criterion(s) unmet (critic unavailable)"
         if traces and tid in traces:
             note = f"{note} [process: {process_note(traces[tid])}]"
-        notes.append(note)
-        failing_ids.append(tid)
+        return note
+
+    if len(failing) > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(8, len(failing))) as pool:
+            note_list = list(pool.map(_note, failing))  # map preserves order
+    else:
+        note_list = [_note(x) for x in failing]
+
+    notes = note_list
+    failing_ids = [tid for tid, *_ in failing]
+    occ_counts = {}
+    for tid, r, _task, _failed in failing:
         occ_counts[r.subtype] = occ_counts.get(r.subtype, 0) + 1
 
     if not notes:
