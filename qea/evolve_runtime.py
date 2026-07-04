@@ -151,6 +151,19 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
     # directory" on every read/edit (the agent then loops + narrates phantom edits).
     snap = Path(snapshot_dir_path).resolve()
     cfg = AgentConfig.from_yaml(config_path=EVOLVE_DIR / "agent.yaml")
+    # The evolve agent's model can be swapped INDEPENDENTLY of the worker via
+    # QEA_EVOLVE_AGENT_MODEL. The agent.yaml resolves ${env.LLM_MODEL}, but LLM_MODEL is
+    # SHARED with the worker (the E2B VM inherits it) — setting it globally would also
+    # change the weak worker. So override just this agent's model here, after from_yaml,
+    # leaving LLM_MODEL (worker) untouched. pin_provider() runs AFTER so the swapped
+    # model gets its own official-provider pin (extend the map for new prefixes, e.g.
+    # QEA_PROVIDER_MAP="z-ai=z-ai" for GLM).
+    _evolve_model = os.environ.get("QEA_EVOLVE_AGENT_MODEL")
+    if _evolve_model:
+        try:
+            cfg.llm_config.model = _evolve_model
+        except Exception:  # noqa: BLE001 - fall back to the config-object setter
+            cfg.llm_config.set_param("model", _evolve_model)
     pin_provider(cfg.llm_config)
     agent = Agent(config=cfg)
     try:
