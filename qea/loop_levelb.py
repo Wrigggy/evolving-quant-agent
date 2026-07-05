@@ -32,6 +32,27 @@ from .llm import make_llm
 from .verifier import LeakageGuard, TaskResult
 
 
+# Transient infra failures (E2B 429/rate-limit, sandbox create/resume, RemoteProtocolError
+# "Server disconnected", broken-pipe I/O drops, 5xx gateways) are NOT real task results.
+# Shared here so BOTH the eval (don't-cache + retry) and the keep decision (exclude from the
+# seed-vs-candidate comparison) treat them identically — a task that infra-failed on either
+# side must never count as a regression that masks a real edit at the noise-floor margin.
+_TRANSIENT_KEYS = (
+    "ratelimit", "429", "rate limit", "sandbox", "timeout", "timed out", "connection",
+    "disconnect", "remoteprotocol", "protocolerror", "temporarily", "econnreset",
+    "eof occurred", "broken pipe", "writeerror", "errno 32", "readerror",
+    "connectionreset", "connectionerror", "502", "503", "504",
+)
+
+
+def _is_transient_error(err: str) -> bool:
+    """True if an answer-free trace's error string is a transient infra failure."""
+    if not err:
+        return False
+    e = err.lower()
+    return any(k in e for k in _TRANSIENT_KEYS)
+
+
 @dataclass
 class LevelBConfig:
     n_iters: int = 2
@@ -167,14 +188,7 @@ def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurren
         # transient error before giving up, and never cache a transient 0 (it would poison
         # resume). A genuine worker/grader failure (non-transient) is a real 0 and is cached.
         def _is_transient(exc):
-            m = f"{type(exc).__name__}: {exc}".lower()
-            return any(k in m for k in
-                       ("ratelimit", "429", "rate limit", "sandbox", "timeout",
-                        "timed out", "connection", "disconnect", "remoteprotocol",
-                        "protocolerror", "temporarily", "econnreset", "eof occurred",
-                        # sandbox I/O connection drops during a file write / stream read
-                        "broken pipe", "writeerror", "errno 32", "readerror",
-                        "connectionreset", "connectionerror", "502", "503", "504"))
+            return _is_transient_error(f"{type(exc).__name__}: {exc}")
         transient = False
         _MAX_ATTEMPTS = 4
         for _attempt in range(_MAX_ATTEMPTS):
@@ -358,10 +372,27 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             n_blocked += 1
         else:
             cand_evals, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache", execution=cfg.execution)
-            cls = _classify(edit, evals, cand_evals, noise_margin)
+            # FAIR-SUBSET keep: exclude any task that hit a transient infra failure on the
+            # incumbent OR the candidate side, so infra noise (429/sandbox/disconnect) can
+            # never score a task 0 and mask a real edit at the noise-floor margin. In a clean
+            # run (no masking) fair_tids == all tasks and this is a no-op. The verdict AND the
+            # gain gate are both computed on the fair subset for consistency.
+            masked = {t.task_id for t in tasks
+                      if _is_transient_error(ct.get(t.task_id, {}).get("error", ""))
+                      or _is_transient_error(traces.get(t.task_id, {}).get("error", ""))}
+            fair_tids = [t.task_id for t in tasks if t.task_id in cand_evals and t.task_id not in masked]
+            fair_inc = statistics.mean(evals[tid].gated_score for tid in fair_tids) if fair_tids else inc_mean
+            fair_cand = statistics.mean(cand_evals[tid].gated_score for tid in fair_tids) if fair_tids else cand_mean
+            fair_evals = {tid: evals[tid] for tid in fair_tids}
+            fair_cevals = {tid: cand_evals[tid] for tid in fair_tids}
+            cls = _classify(edit, fair_evals, fair_cevals, noise_margin)
             verdict, improved, regressed = cls["verdict"], cls["flipped"], cls["regressed"]
+            if masked:
+                print(f"[iter {it}] fair-subset keep: {len(masked)} task(s) infra-masked and "
+                      f"excluded; decided on {len(fair_tids)}/{len(tasks)} "
+                      f"(fair inc={fair_inc:.4f} cand={fair_cand:.4f}, full cand={cand_mean:.4f})", flush=True)
             # promote iff a real aggregate gain beyond the noise floor AND not harmful
-            kept = decide_keep_soft(inc_mean, cand_mean, noise_margin) and verdict != "HARMFUL"
+            kept = decide_keep_soft(fair_inc, fair_cand, noise_margin) and verdict != "HARMFUL"
             if kept:
                 n_kept += 1
                 incumbent = cand_dir
