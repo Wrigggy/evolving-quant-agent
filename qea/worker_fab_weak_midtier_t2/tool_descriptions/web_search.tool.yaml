@@ -1,0 +1,9 @@
+type: tool
+name: web_search
+description: General web search (free, via DuckDuckGo). Returns titles, URLs, snippets.
+input_schema:
+  type: object
+  properties:
+    query: {type: string, description: "Web search query."}
+  required: [query]
+  additionalProperties: false

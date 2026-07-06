@@ -1,0 +1,9 @@
+type: tool
+name: fetch_page
+description: Fetch a URL and return its extracted text (truncated at <=40k chars; large documents are cut off).
+input_schema:
+  type: object
+  properties:
+    url: {type: string, description: "URL to fetch."}
+  required: [url]
+  additionalProperties: false
