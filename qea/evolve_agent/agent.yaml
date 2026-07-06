@@ -32,6 +32,11 @@ tools:
   - name: run_shell_command
     yaml_path: ./tool_descriptions/run_shell_command.tool.yaml
     binding: nexau.archs.tool.builtin.shell_tools.run_shell_command:run_shell_command
+  # AHE-style self-test: execute Python in the worker dir to verify synthesized/edited
+  # tool code actually imports + runs before finishing (critical for code-synthesis tiers).
+  - name: run_code
+    yaml_path: ./tool_descriptions/run_code.tool.yaml
+    binding: nexau.archs.tool.builtin.run_code_tool:run_code_tool
 
 tracers:
   - import: nexau.archs.tracer.adapters.in_memory:InMemoryTracer

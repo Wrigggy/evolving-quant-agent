@@ -1,0 +1,20 @@
+type: tool
+name: run_code
+description: >-
+  Execute a Python code block in the working directory (where the worker agent's
+  files live) and return stdout / stderr / exit_code. USE THIS TO SELF-TEST any tool
+  code you write or edit BEFORE you finish: import the module and call the function on
+  a small sample input to confirm it imports, has the expected signature, and runs
+  without a syntax / import / runtime error. A tool the worker cannot import or call is
+  worse than no tool. The cwd is the worker directory, so `import tools.fab.research`
+  (etc.) resolves the same way the worker will import it. Network calls may be blocked
+  in this local check — a network error is fine (it means your code reached the call);
+  a SyntaxError / ImportError / TypeError means your code is broken and must be fixed.
+input_schema:
+  type: object
+  properties:
+    code_block: {type: string, description: "Python code to execute (e.g. an import + a sample call)."}
+    timeout: {type: integer, description: "(optional) timeout in milliseconds; default 120000, max 600000."}
+    description: {type: string, description: "(optional) brief description of what the test checks."}
+  required: [code_block]
+  additionalProperties: false

@@ -33,6 +33,13 @@ def _text_files(d: Path) -> dict:
     d = Path(d)
     out = {}
     for p in sorted(d.rglob("*")):
+        # Skip scratch files run_code/execute_code drops in the work dir (normally
+        # auto-cleaned; guard against a leftover becoming a phantom edit in the diff/sig)
+        # and __pycache__.
+        if p.name.startswith("tmp") and p.suffix == ".py":
+            continue
+        if "__pycache__" in p.parts:
+            continue
         if p.is_file() and p.suffix.lower() in _TEXT_SUFFIXES:
             try:
                 out[str(p.relative_to(d))] = p.read_text().splitlines(keepends=True)
@@ -201,6 +208,11 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
         "replace (surgical) tools — NOT run_shell_command heredocs, which fumble on "
         "multi-line YAML/Python. An edit only counts if it changes a file on disk; "
         "re-read each file you changed to confirm before finishing.\n\n"
+        "SELF-TEST any tool code you WRITE or EDIT with the `run_code` tool before you "
+        "finish: import the module and call the function on a small sample input to prove "
+        "it imports and runs (`import tools.fab.research; print(research.some_fn(...))`). A "
+        "tool that raises SyntaxError/ImportError/TypeError is worse than none — fix it "
+        "before finishing. (A network error in the check is fine; a code error is not.)\n\n"
         f"## NexAU modification reference\n{reference}\n"
     )
 
