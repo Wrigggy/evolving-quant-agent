@@ -71,23 +71,32 @@ class SanitizedDiagnosis:
 
 
 class Critic:
-    """Sees the deliverable + which criteria failed (+ gold as reference) and emits
-    an ANSWER-FREE deficiency note: what capability/structure is missing, never the
-    answer value. This is the inner wall of the firewall."""
+    """Sees the deliverable + which criteria failed (+ gold as reference) and emits a
+    PRECISE root-cause note (AHE-style, no answer firewall): it MAY compare the produced
+    value to the expected one to name the TRUE cause — e.g. distinguish 'computed the
+    wrong figure' from 'read a truncated/wrong source and approximated' from 'omitted the
+    section entirely'. The anti-cheat guard is at the EDIT stage (LeakageGuard blocks
+    pasting answer material into worker files), not here — starving the diagnosis of the
+    values destroyed exactly the signal that tells compute-gap from retrieval-gap."""
     def __init__(self, llm) -> None:
         self.llm = llm
 
     def note(self, task, deliverable: str, failed_criteria: list[str]) -> str:
         prompt = (
-            "You are reviewing why a finance deliverable fell short. You may see the "
-            "rubric and a reference answer, but your note MUST describe only the "
-            "MISSING CAPABILITY OR STRUCTURE (e.g. 'omits the required sensitivity "
-            "analysis'). NEVER state any specific answer value, number, or verbatim "
-            "rubric text. One sentence.\n\n"
+            "You are diagnosing WHY a finance deliverable fell short — find the TRUE root "
+            "cause, like a debugger cross-referencing expected vs produced. You have the "
+            "rubric/reference answer; USE it: compare what the worker produced to what was "
+            "expected and infer the mechanism. Distinguish, when relevant: a COMPUTE gap "
+            "(math/derivation wrong), a RETRIEVAL gap (produced a value CLOSE-but-wrong or "
+            "generic, i.e. it never read the actual source/filing and approximated), a "
+            "FORMAT gap (right content, wrong structure), or an OMISSION (section missing "
+            "entirely). Name the mechanism in ONE sentence; you may cite the values as "
+            "evidence. (Do NOT prescribe hard-coding the answer — that is caught at edit "
+            "time; your job is to identify the capability gap.)\n\n"
             f"TASK:\n{task.prompt}\n\n"
             f"FAILED CRITERIA (count={len(failed_criteria)}):\n"
             + "\n".join(f"- {c}" for c in failed_criteria) +
-            f"\n\nDELIVERABLE:\n{deliverable}\n\nANSWER-FREE DEFICIENCY NOTE:"
+            f"\n\nDELIVERABLE:\n{deliverable}\n\nROOT-CAUSE NOTE:"
         )
         return self.llm.complete(prompt, role="judge").strip()
 
@@ -148,26 +157,34 @@ def diagnose_b_pile(eval_summary, tasks, *, llm, mode: str = "hybrid", traces: d
         return SanitizedDiagnosis("None", "no dominant deficiency", "", [], "No failing B tasks.")
 
     # OPEN-ENDED cross-task root-cause analysis, faithful to the real Agent Debugger's
-    # `ask` mode (agentic_harness_engineering): ask for a free-form ROOT CAUSE + a
-    # GENERAL MECHANISM = ONE harness change (prompt rule / TOOL / binding / middleware),
-    # NOT a pick from a closed vocabulary. The "NOT task-specific" instruction is the
-    # firewall (iron-law-2) — it forbids leaking any answer/number. The retired fixed
-    # 5-tag classifier (B_TAG_SLOT) had no "missing tool/capability" category, so it
-    # mislabeled tool gaps and steered edits toward prompt; this does not.
+    # `ask` mode (agentic_harness_engineering). NO answer firewall: the notes above may
+    # cite expected-vs-produced values, and the debugger reasons from them to find the TRUE
+    # cause (a value that is close-but-wrong is a RETRIEVAL tell, not a compute one — the
+    # old firewall abstracted that away and mis-steered edits to a calculator for iters).
+    # The anti-cheat guard is at edit time (LeakageGuard), not here. It surfaces ALL
+    # distinct capability gaps (not one dominant), since the evolve agent is now allowed to
+    # ship several fixes per iteration.
     ask = (
         "You are doing cross-task root-cause analysis of an agent worker's failures, to "
-        "propose ONE harness change. Below are answer-free deficiency notes + process "
-        "observations for the failing tasks.\n\n"
-        "Rules: describe only the MISSING CAPABILITY / STRUCTURE / MECHANISM — NEVER a "
-        "task-specific answer, number, or domain fact (that is a hard firewall).\n\n"
-        "Produce JSON with:\n"
-        '- "root_cause": the fundamental reason these tasks fail (one sentence).\n'
-        '- "general_mechanism": ONE harness change that would prevent this failure CLASS '
-        "generally — a prompt rule, a TOOL to wire in or add, a tool binding, or middleware. "
-        "If the worker loops without reaching a data source / gives up without an answer, "
-        "consider whether it is MISSING A TOOL/CAPABILITY that should be wired in (look for "
-        "an unbound implementation) or added.\n"
-        '- "kind": one of prompt | tool | binding | middleware | other.\n\n'
+        "propose the harness change(s) that would fix them. Below are root-cause notes "
+        "(which may cite expected-vs-produced values) + process observations.\n\n"
+        "Reason from the EVIDENCE to the TRUE cause. Watch the tells: a value that is "
+        "close-but-wrong or generic => the worker never reached the real SOURCE (retrieval/"
+        "deep-read gap), NOT a computation gap; math that is derived wrong => a compute gap; "
+        "right content in the wrong shape => a format gap; a whole section absent => an "
+        "omission/planning gap. If the worker loops without reaching a data source or gives "
+        "up, check for a MISSING TOOL/CAPABILITY that should be wired in — look for an "
+        "unbound implementation under tools/ that the agent.yaml no longer binds.\n\n"
+        "Do NOT prescribe hard-coding any task answer (that is caught at edit time); "
+        "prescribe GENERAL capability fixes.\n\n"
+        "Produce JSON:\n"
+        '- "root_cause": the single most important reason these tasks fail (one sentence, '
+        "may cite values as evidence).\n"
+        '- "general_mechanism": the harness change(s) that would prevent this failure class '
+        "generally — a prompt rule, a TOOL to wire in / add, a tool binding, or middleware. "
+        "If there are SEVERAL distinct gaps, list them all (the evolve agent can fix several "
+        "in one pass), most impactful first.\n"
+        '- "kind": the primary one of prompt | tool | binding | middleware | other.\n\n'
         'Return JSON {"root_cause": "...", "general_mechanism": "...", "kind": "..."}.\n\nNOTES:\n'
         + "\n".join(f"- {n}" for n in notes)
     )

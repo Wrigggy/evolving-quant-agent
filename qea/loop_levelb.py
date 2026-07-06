@@ -250,7 +250,8 @@ def _build_evidence(evidence_dir: Path, diag: dict, evals: dict, traces: dict,
     evidence_dir = Path(evidence_dir)
     (evidence_dir / "traces").mkdir(parents=True, exist_ok=True)
     by_id = {t.task_id: t for t in tasks}
-    lines = ["# Evidence overview (firewall-off corpus; NO gold answer included)", "",
+    lines = ["# Evidence overview (root-cause corpus; failed criteria include expected values "
+             "for diagnosis — do NOT hard-code any answer into a worker file)", "",
              f"Dominant deficiency: {diag.get('root_cause_tag')} — {diag.get('overview', '')}", ""]
     for tid, e in evals.items():
         if e.gated_score >= 0.60:

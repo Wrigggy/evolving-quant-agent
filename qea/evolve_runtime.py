@@ -185,16 +185,22 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
 
     head = (
         "Your working directory contains a worker agent defined as files (agent.yaml, "
-        "systemprompt.md, tool_descriptions/, and possibly tools/). Make ONE focused "
-        "harness improvement that addresses the deficiency CLASS below, then stop. You "
-        "may edit any file in the working directory — rewrite the prompt, edit a tool "
-        "description, re-wire a tool binding in agent.yaml, or add a new tool — but NEVER "
-        "hardcode task answers, numbers, or domain facts. Improve how the worker WORKS, "
-        "not what it answers.\n\n"
-        "Inspect files with read_file, then edit with the write_file (create/overwrite) "
-        "or replace (surgical) tools — NOT run_shell_command heredocs, which fumble on "
+        "systemprompt.md, tool_descriptions/, and possibly tools/). Make the harness "
+        "improvement(s) that address the deficiency(ies) below. You are NOT limited to one "
+        "change — if the diagnosis names several distinct capability gaps, fix as many as "
+        "the evidence supports in this pass (e.g. wire in a retrieval tool AND add a "
+        "calculator AND tighten the prompt). Prefer high-impact, well-supported edits; do "
+        "not pad with speculative ones. You may edit any file — rewrite the prompt, edit a "
+        "tool description, re-wire a tool binding in agent.yaml, or add a new tool. Improve "
+        "how the worker WORKS, not what it answers: NEVER hard-code a task's answer, a "
+        "specific number, or a domain fact into a worker file (that is cheating and is "
+        "rejected) — even though the evidence may show you expected values, they are for "
+        "diagnosis only.\n\n"
+        "Inspect files with read_file (and `ls tools/` / read the impl to find unbound "
+        "tools you can re-wire), then edit with the write_file (create/overwrite) or "
+        "replace (surgical) tools — NOT run_shell_command heredocs, which fumble on "
         "multi-line YAML/Python. An edit only counts if it changes a file on disk; "
-        "re-read the file to confirm before finishing.\n\n"
+        "re-read each file you changed to confirm before finishing.\n\n"
         f"## NexAU modification reference\n{reference}\n"
     )
 
@@ -203,17 +209,19 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
         overview = _read_first(evidence_dir / "overview.md")
         history = _read_first(evidence_dir / "evolution_history.md", 6000)
         evidence_block = (
-            "## Failure evidence (MANDATORY — read before editing; NO gold answer here)\n"
-            "The overview below distills why tasks failed (failed criteria, process, the "
-            "worker's own deliverable). Raw per-task trajectories are on disk under "
-            f"`{evidence_dir / 'traces'}` — drill into them with the shell only if needed.\n\n"
+            "## Failure evidence (MANDATORY — read before editing)\n"
+            "The overview distills why tasks failed (failed criteria incl. expected values, "
+            "process, the worker's own deliverable). Use it to see WHAT the worker got wrong "
+            "vs expected — for diagnosis only, never to hard-code an answer. Raw per-task "
+            f"trajectories are on disk under `{evidence_dir / 'traces'}` — drill in with the "
+            "shell if you need more detail.\n\n"
             f"### overview.md\n{overview}\n\n### evolution_history.md\n{history}\n\n"
-            f"## Diagnosis (answer-free)\n{diag_lines}"
+            f"## Diagnosis (root cause + suggested change)\n{diag_lines}"
         )
     else:
         history_block = f"\nEDITS ALREADY TRIED (do not repeat):\n{edit_history}\n" if edit_history else ""
         evidence_block = (
-            f"## Diagnosis (answer-free)\n"
+            f"## Diagnosis (root cause + suggested change)\n"
             f"{diag_lines}"
             f"{history_block}"
         )
