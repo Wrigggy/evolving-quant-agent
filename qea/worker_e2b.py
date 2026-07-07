@@ -79,7 +79,10 @@ def run_worker_e2b(task, worker_dir, run_dir) -> WorkerRun:
 
         run = sbx.commands.run(
             "cd /home/user && python3 entry.py",
-            envs={"OPENROUTER_API_KEY": key, "LLM_MODEL": os.environ.get("LLM_MODEL", "deepseek/deepseek-v4-pro")},
+            envs={"OPENROUTER_API_KEY": key,
+                  "LLM_MODEL": os.environ.get("LLM_MODEL", "deepseek/deepseek-v4-pro"),
+                  # capability gate for gap experiments (see e2b_entry): block in-VM pip
+                  "QEA_E2B_BLOCK_PIP": os.environ.get("QEA_E2B_BLOCK_PIP", "")},
             timeout=_sandbox_timeout(),
         )
 

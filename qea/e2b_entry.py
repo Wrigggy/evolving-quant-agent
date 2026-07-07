@@ -34,6 +34,18 @@ os.environ.setdefault("LLM_BASE_URL", "https://openrouter.ai/api/v1")
 os.environ.setdefault("LLM_MODEL", "deepseek/deepseek-v4-pro")
 sys.path.insert(0, str(AGENT_DIR))  # tools.* are bound by relative module path
 
+# Optional capability gate for Level-B gap experiments: QEA_E2B_BLOCK_PIP=1 disables
+# pip inside this VM BEFORE the agent runs, so a shell worker cannot self-install
+# missing libraries (openpyxl etc.) — otherwise the "missing library" gap self-heals
+# within one episode (observed: the weak GDPval worker pip-installed openpyxl).
+if os.environ.get("QEA_E2B_BLOCK_PIP") == "1":
+    import subprocess
+    subprocess.run(
+        "sudo mv /usr/lib/python3/dist-packages/pip /usr/lib/python3/dist-packages/.pip_disabled 2>/dev/null; "
+        "for p in $(which -a pip pip3 2>/dev/null | sort -u); do sudo chmod -x \"$p\" 2>/dev/null; done; "
+        "python3 -m pip --version >/dev/null 2>&1 && echo PIP_STILL_WORKS || echo PIP_BLOCKED",
+        shell=True)
+
 from nexau import Agent, AgentConfig  # noqa: E402
 
 cfg = AgentConfig.from_yaml(config_path=AGENT_DIR / "agent.yaml")
