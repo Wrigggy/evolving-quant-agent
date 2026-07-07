@@ -403,7 +403,13 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             kept = decide_keep_soft(fair_inc, fair_cand, noise_margin) and verdict != "HARMFUL"
             if kept:
                 n_kept += 1
-                incumbent = cand_dir
+                # Materialize the kept state INTO the incumbent_worker dir (mirror copy)
+                # instead of repointing at the iter's snapshot: the iter dir stays a
+                # frozen historical artifact, and results_dir/incumbent_worker — the
+                # path the run advertises as "final worker dir" — is actually current.
+                # (Bug: it used to hold the untouched seed forever.)
+                snapshot_dir(cand_dir, results_dir / "incumbent_worker")
+                incumbent = results_dir / "incumbent_worker"
                 evals, traces, deliverables, inc_mean = cand_evals, ct, cd, cand_mean
             else:
                 n_rb += 1
