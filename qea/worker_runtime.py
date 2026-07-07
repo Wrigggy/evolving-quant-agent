@@ -7,6 +7,7 @@ and an answer-free trace summary (tool_calls / tool_errors / turns / secs).
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sys
@@ -91,6 +92,46 @@ class WorkerRun:
     trace: dict = field(default_factory=dict)
 
 
+def render_message(m) -> str:
+    """Render a NexAU Message's FULL content for the trajectory dump. Message.content
+    is a list of typed blocks; get_text_content() returns only TextBlocks, so an
+    assistant turn that is purely tool_calls — and every tool result — rendered as ""
+    (the GDPval 'content-empty trace' bug). Walk the blocks instead: text, tool_use
+    (name + args), tool_result (text, error-flagged), reasoning (capped)."""
+    parts: list[str] = []
+    try:
+        blocks = getattr(m, "content", None) or []
+        if isinstance(blocks, str):
+            return blocks
+        for b in blocks:
+            btype = getattr(b, "type", "")
+            if btype == "text" and getattr(b, "text", ""):
+                parts.append(b.text)
+            elif btype == "tool_use":
+                try:
+                    args = json.dumps(getattr(b, "input", {}), ensure_ascii=False)
+                except Exception:  # noqa: BLE001
+                    args = str(getattr(b, "input", ""))
+                parts.append(f"<tool_call {getattr(b, 'name', '?')}> {args[:3000]}")
+            elif btype == "tool_result":
+                c = getattr(b, "content", "")
+                if isinstance(c, list):
+                    c = "".join(getattr(p, "text", "") if getattr(p, "type", "") == "text"
+                                else "<image>" for p in c)
+                tag = "<tool_result ERROR>" if getattr(b, "is_error", False) else "<tool_result>"
+                parts.append(f"{tag} {str(c)[:5000]}")
+            elif btype == "reasoning" and getattr(b, "text", ""):
+                parts.append(f"<reasoning> {b.text[:1500]}")
+    except Exception:  # noqa: BLE001
+        pass
+    if not parts:
+        try:
+            return m.get_text_content()
+        except Exception:  # noqa: BLE001
+            return str(getattr(m, "content", "") or "")
+    return "\n".join(parts)
+
+
 def summarize_trace(agent) -> dict:
     """Answer-free monitoring from the NexAU trace. A message has no tool_calls
     field (tool activity is in content/role), so count by role: assistant turns +
@@ -102,10 +143,7 @@ def summarize_trace(agent) -> dict:
             # NexAU roles are an enum (Role.ASSISTANT/Role.TOOL/...); normalize to a
             # lowercase leaf string so counts work for BOTH the enum and plain strings.
             role = str(getattr(role, "value", role)).split(".")[-1].lower()
-            try:
-                text = m.get_text_content()
-            except Exception:  # noqa: BLE001
-                text = str(getattr(m, "content", "") or "")
+            text = render_message(m)  # block-aware: tool results are NOT TextBlocks
             if role == "assistant":
                 turns += 1
             elif role in ("tool", "tool_result", "function", "user") and text:
@@ -179,11 +217,7 @@ def run_worker(task, worker_dir: Path, run_dir: Path) -> WorkerRun:
         msgs = []
         for m in (agent.full_trace or []):
             role = getattr(m, "role", "")
-            try:
-                txt = m.get_text_content()
-            except Exception:  # noqa: BLE001
-                txt = str(getattr(m, "content", "") or "")
-            msgs.append(f"[{role}] {txt}")
+            msgs.append(f"[{role}] {render_message(m)}")
         trace_path.write_text("\n\n".join(msgs)[:200000])
         trace["trace_path"] = str(trace_path)
     except Exception:  # noqa: BLE001
