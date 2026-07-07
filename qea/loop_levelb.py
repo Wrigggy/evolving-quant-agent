@@ -350,8 +350,15 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
                 evidence_dir = _build_evidence(iterdir / "evidence", diag, evals, traces,
                                                deliverables, tasks, records)
             print(f"[iter {it}] evolve agent editing the worker dir...", flush=True)
-            ev_out = run_evolve_agent(cand_dir, diag, iterdir,
-                                      edit_history=_edit_history(records), evidence_dir=evidence_dir)
+            # Both sibling agents (worker + evolve) run in the cloud when execution=e2b_full,
+            # so the local orchestrator stays memory-light (matters for GDPval's heavier local
+            # grade/render). The evolve backend edits a VM copy of cand_dir and downloads it back.
+            if cfg.execution == "e2b_full":
+                from .evolve_e2b import run_evolve_agent_e2b as _run_evolve
+            else:
+                _run_evolve = run_evolve_agent
+            ev_out = _run_evolve(cand_dir, diag, iterdir,
+                                 edit_history=_edit_history(records), evidence_dir=evidence_dir)
             pred = ev_out.get("prediction") or {}
             iterdir.mkdir(parents=True, exist_ok=True)
             pred_file.write_text(json.dumps(pred))

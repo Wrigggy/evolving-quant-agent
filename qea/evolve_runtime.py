@@ -136,6 +136,77 @@ def _read_first(path: Path, limit: int = 20000) -> str:
         return ""
 
 
+def _build_evolve_message(sanitized_diagnosis: dict, *, edit_history: str = "",
+                          evidence_dir=None, evidence_ref: str = None) -> str:
+    """Build the evolve-agent prompt (diagnosis + optional AHE evidence + reference +
+    predict-JSON tail). Shared by the local (run_evolve_agent) and E2B (run_evolve_agent_e2b)
+    paths. `evidence_dir` is where overview.md/history are READ from (local); `evidence_ref`
+    is the path STRING to reference for shell drill-down (the VM path for the E2B backend;
+    defaults to the local evidence_dir/traces)."""
+    reference = _read_reference()
+    task_ids = sanitized_diagnosis.get("predicted_fix_task_ids") or []
+    rc = sanitized_diagnosis.get("root_cause") or sanitized_diagnosis.get("overview") or ""
+    mech = sanitized_diagnosis.get("general_mechanism") or ""
+    kind = sanitized_diagnosis.get("mechanism_kind") or sanitized_diagnosis.get("root_cause_tag") or ""
+    diag_lines = (
+        f"- ROOT CAUSE: {rc}\n"
+        f"- SUGGESTED HARNESS CHANGE ({kind}): {mech}\n"
+        f"- tasks currently failing: {task_ids}\n"
+    )
+    head = (
+        "Your working directory contains a worker agent defined as files (agent.yaml, "
+        "systemprompt.md, tool_descriptions/, and possibly tools/). Make the harness "
+        "improvement(s) that address the deficiency(ies) below. You are NOT limited to one "
+        "change — if the diagnosis names several distinct capability gaps, fix as many as "
+        "the evidence supports in this pass (e.g. wire in a retrieval tool AND add a "
+        "calculator AND tighten the prompt). Prefer high-impact, well-supported edits; do "
+        "not pad with speculative ones. You may edit any file — rewrite the prompt, edit a "
+        "tool description, re-wire a tool binding in agent.yaml, or add a new tool. Improve "
+        "how the worker WORKS, not what it answers: NEVER hard-code a task's answer, a "
+        "specific number, or a domain fact into a worker file (that is cheating and is "
+        "rejected) — even though the evidence may show you expected values, they are for "
+        "diagnosis only.\n\n"
+        "Inspect files with read_file (and `ls tools/` / read the impl to find unbound "
+        "tools you can re-wire), then edit with the write_file (create/overwrite) or "
+        "replace (surgical) tools — NOT run_shell_command heredocs, which fumble on "
+        "multi-line YAML/Python. An edit only counts if it changes a file on disk; "
+        "re-read each file you changed to confirm before finishing.\n\n"
+        "SELF-TEST any tool code you WRITE or EDIT with the `run_code` tool before you "
+        "finish: import the module and call the function on a small sample input to prove "
+        "it imports and runs (`import tools.fab.research; print(research.some_fn(...))`). A "
+        "tool that raises SyntaxError/ImportError/TypeError is worse than none — fix it "
+        "before finishing. (A network error in the check is fine; a code error is not.)\n\n"
+        f"## NexAU modification reference\n{reference}\n"
+    )
+    if evidence_dir is not None:
+        evidence_dir = Path(evidence_dir).resolve()
+        traces_ref = evidence_ref or str(evidence_dir / "traces")
+        overview = _read_first(evidence_dir / "overview.md")
+        history = _read_first(evidence_dir / "evolution_history.md", 6000)
+        evidence_block = (
+            "## Failure evidence (MANDATORY — read before editing)\n"
+            "The overview distills why tasks failed (failed criteria incl. expected values, "
+            "process, the worker's own deliverable). Use it to see WHAT the worker got wrong "
+            "vs expected — for diagnosis only, never to hard-code an answer. Raw per-task "
+            f"trajectories are on disk under `{traces_ref}` — drill in with the shell if you "
+            "need more detail.\n\n"
+            f"### overview.md\n{overview}\n\n### evolution_history.md\n{history}\n\n"
+            f"## Diagnosis (root cause + suggested change)\n{diag_lines}"
+        )
+    else:
+        history_block = f"\nEDITS ALREADY TRIED (do not repeat):\n{edit_history}\n" if edit_history else ""
+        evidence_block = (
+            f"## Diagnosis (root cause + suggested change)\n{diag_lines}{history_block}"
+        )
+    tail = (
+        "\nEND your reply with a JSON object on its own line predicting the effect of "
+        'your edit, using ONLY task ids from the failing list above, e.g.:\n'
+        '{"predicted_fixes": ["<task_id>", ...], "risk_tasks": ["<task_id>", ...], '
+        '"rationale": "<one sentence>"}\n'
+    )
+    return head + evidence_block + tail
+
+
 def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir: Path,
                      *, edit_history: str = "", evidence_dir=None) -> dict:
     """Invoke the file-editing NexAU evolve agent against the snapshot. The agent may
@@ -177,74 +248,8 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
         agent.sandbox_manager.instance.work_dir = snap
     except Exception:  # noqa: BLE001
         pass
-    task_ids = sanitized_diagnosis.get("predicted_fix_task_ids") or []
-    reference = _read_reference()
-    # Open-ended diagnosis (Agent-Debugger `ask` style) is the PRIMARY steering signal:
-    # a free-form root cause + a proposed harness change (which can say "wire in a tool").
-    rc = sanitized_diagnosis.get("root_cause") or sanitized_diagnosis.get("overview") or ""
-    mech = sanitized_diagnosis.get("general_mechanism") or ""
-    kind = sanitized_diagnosis.get("mechanism_kind") or sanitized_diagnosis.get("root_cause_tag") or ""
-    diag_lines = (
-        f"- ROOT CAUSE: {rc}\n"
-        f"- SUGGESTED HARNESS CHANGE ({kind}): {mech}\n"
-        f"- tasks currently failing: {task_ids}\n"
-    )
-
-    head = (
-        "Your working directory contains a worker agent defined as files (agent.yaml, "
-        "systemprompt.md, tool_descriptions/, and possibly tools/). Make the harness "
-        "improvement(s) that address the deficiency(ies) below. You are NOT limited to one "
-        "change — if the diagnosis names several distinct capability gaps, fix as many as "
-        "the evidence supports in this pass (e.g. wire in a retrieval tool AND add a "
-        "calculator AND tighten the prompt). Prefer high-impact, well-supported edits; do "
-        "not pad with speculative ones. You may edit any file — rewrite the prompt, edit a "
-        "tool description, re-wire a tool binding in agent.yaml, or add a new tool. Improve "
-        "how the worker WORKS, not what it answers: NEVER hard-code a task's answer, a "
-        "specific number, or a domain fact into a worker file (that is cheating and is "
-        "rejected) — even though the evidence may show you expected values, they are for "
-        "diagnosis only.\n\n"
-        "Inspect files with read_file (and `ls tools/` / read the impl to find unbound "
-        "tools you can re-wire), then edit with the write_file (create/overwrite) or "
-        "replace (surgical) tools — NOT run_shell_command heredocs, which fumble on "
-        "multi-line YAML/Python. An edit only counts if it changes a file on disk; "
-        "re-read each file you changed to confirm before finishing.\n\n"
-        "SELF-TEST any tool code you WRITE or EDIT with the `run_code` tool before you "
-        "finish: import the module and call the function on a small sample input to prove "
-        "it imports and runs (`import tools.fab.research; print(research.some_fn(...))`). A "
-        "tool that raises SyntaxError/ImportError/TypeError is worse than none — fix it "
-        "before finishing. (A network error in the check is fine; a code error is not.)\n\n"
-        f"## NexAU modification reference\n{reference}\n"
-    )
-
-    if evidence_dir is not None:
-        evidence_dir = Path(evidence_dir).resolve()
-        overview = _read_first(evidence_dir / "overview.md")
-        history = _read_first(evidence_dir / "evolution_history.md", 6000)
-        evidence_block = (
-            "## Failure evidence (MANDATORY — read before editing)\n"
-            "The overview distills why tasks failed (failed criteria incl. expected values, "
-            "process, the worker's own deliverable). Use it to see WHAT the worker got wrong "
-            "vs expected — for diagnosis only, never to hard-code an answer. Raw per-task "
-            f"trajectories are on disk under `{evidence_dir / 'traces'}` — drill in with the "
-            "shell if you need more detail.\n\n"
-            f"### overview.md\n{overview}\n\n### evolution_history.md\n{history}\n\n"
-            f"## Diagnosis (root cause + suggested change)\n{diag_lines}"
-        )
-    else:
-        history_block = f"\nEDITS ALREADY TRIED (do not repeat):\n{edit_history}\n" if edit_history else ""
-        evidence_block = (
-            f"## Diagnosis (root cause + suggested change)\n"
-            f"{diag_lines}"
-            f"{history_block}"
-        )
-
-    tail = (
-        "\nEND your reply with a JSON object on its own line predicting the effect of "
-        'your edit, using ONLY task ids from the failing list above, e.g.:\n'
-        '{"predicted_fixes": ["<task_id>", ...], "risk_tasks": ["<task_id>", ...], '
-        '"rationale": "<one sentence>"}\n'
-    )
-    msg = head + evidence_block + tail
+    msg = _build_evolve_message(sanitized_diagnosis, edit_history=edit_history,
+                                evidence_dir=evidence_dir)
     ctx = {"working_directory": str(snap), "username": os.environ.get("USER", "kevin")}
     ctx["env_content"] = dict(ctx)
     resp = agent.run(message=msg, context=ctx)
