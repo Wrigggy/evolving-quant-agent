@@ -21,7 +21,7 @@ import shutil
 from pathlib import Path
 
 from .evolve_runtime import EVOLVE_DIR, _build_evolve_message
-from .worker_e2b import _sandbox_timeout, _template, _upload_dir
+from .worker_e2b import _sandbox_timeout, _template, _upload_dir, run_with_watchdog
 
 _ENTRY = Path(__file__).parent / "evolve_e2b_entry.py"
 _REMOTE_WORK = "/home/user/work"
@@ -43,7 +43,8 @@ def run_evolve_agent_e2b(snapshot_dir_path, sanitized_diagnosis: dict, run_dir,
                                 evidence_ref="/home/user/evidence/traces")
 
     sbx = Sandbox.create(template=_template(), timeout=_sandbox_timeout())
-    try:
+
+    def _interact() -> dict:
         _upload_dir(sbx, EVOLVE_DIR, "/home/user/evolve_agent")
         _upload_dir(sbx, snap, _REMOTE_WORK)
         if evidence_dir is not None and Path(evidence_dir).exists():
@@ -102,6 +103,11 @@ def run_evolve_agent_e2b(snapshot_dir_path, sanitized_diagnosis: dict, run_dir,
         except Exception:  # noqa: BLE001
             pass
         return {"final_text": final or "", "trace": trace, "prediction": prediction}
+
+    try:
+        # Same client-side hang guard as run_worker_e2b (streaming call with no read
+        # deadline); +300s so it can never race a legitimately slow in-VM edit session.
+        return run_with_watchdog(_interact, _sandbox_timeout() + 300, sbx.kill, "evolve")
     finally:
         try:
             sbx.kill()

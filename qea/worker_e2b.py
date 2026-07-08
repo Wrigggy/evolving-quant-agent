@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from pathlib import Path
 
 from .worker_runtime import WorkerRun, ensure_nexau_llm_env
@@ -33,6 +34,38 @@ def _sandbox_timeout() -> int:
     # Sandbox lifetime ceiling. A weak worker can flail to max_iterations (~15-20 min);
     # give generous headroom. Overridable for cheap tiers.
     return int(os.environ.get("QEA_E2B_SANDBOX_TIMEOUT", "1800"))
+
+
+def run_with_watchdog(fn, ceiling_secs: float, on_timeout, label: str):
+    """Run `fn()` on a daemon thread and join with a hard deadline. e2b's commands.run
+    is a streaming HTTP call with no client-side read deadline: when the local proxy
+    half-dies mid-stream, the read hangs FOREVER (observed: an eval silent for 1h46m,
+    far past the 1800s sandbox ceiling, because the server-side timeout can't reach a
+    dead connection). On expiry: call `on_timeout` (kill the sandbox so the VM stops
+    billing) and raise a `timeout`-keyed RuntimeError, which _is_transient_error
+    classifies as retryable — the task-level retry then starts a fresh sandbox. The
+    hung thread is daemon so it never blocks interpreter exit."""
+    result: dict = {}
+
+    def _target():
+        try:
+            result["value"] = fn()
+        except BaseException as exc:  # noqa: BLE001 - re-raised on the caller thread
+            result["error"] = exc
+
+    t = threading.Thread(target=_target, daemon=True, name=f"e2b-{label}")
+    t.start()
+    t.join(ceiling_secs)
+    if t.is_alive():
+        try:
+            on_timeout()
+        except Exception:  # noqa: BLE001
+            pass
+        raise RuntimeError(f"e2b watchdog timeout after {ceiling_secs:.0f}s ({label}); "
+                           "streaming call hung past the sandbox ceiling")
+    if "error" in result:
+        raise result["error"]
+    return result.get("value")
 
 
 def _upload_dir(sbx, local_root: Path, remote_root: str) -> int:
@@ -66,7 +99,8 @@ def run_worker_e2b(task, worker_dir, run_dir) -> WorkerRun:
     is_file_task = bool(ref_names) or bool(getattr(task, "deliverable_exts", None))
 
     sbx = Sandbox.create(template=_template(), timeout=_sandbox_timeout())
-    try:
+
+    def _interact() -> WorkerRun:
         # Upload agent dir, entry script, reference inputs, task spec.
         _upload_dir(sbx, worker_dir, "/home/user/agent")
         sbx.files.write("/home/user/entry.py", _ENTRY.read_bytes())
@@ -115,6 +149,12 @@ def run_worker_e2b(task, worker_dir, run_dir) -> WorkerRun:
         if run.exit_code != 0 and not deliverable:
             trace["error"] = f"entry exit={run.exit_code}: {(run.stderr or '')[:200]}"
         return WorkerRun(deliverable or "", produced, trace)
+
+    try:
+        # +300s over the in-VM command ceiling: the watchdog must only fire when the
+        # CLIENT-side stream is dead, never race a legitimately slow command.
+        return run_with_watchdog(_interact, _sandbox_timeout() + 300, sbx.kill,
+                                 f"worker:{task.task_id}")
     finally:
         try:
             sbx.kill()
