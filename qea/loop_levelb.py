@@ -70,6 +70,11 @@ class LevelBConfig:
     # (accurate but doubles the slow seed cost). >0 = use this fixed margin and SKIP the
     # 2nd eval (cheap; for expensive workers). e.g. 0.05.
     noise_margin: float = 0.0
+    # Cross-leg memory: path to a PRIOR run's results dir whose evolved worker this run
+    # continues from. Its iter manifests are prepended to the evolve agent's edit
+    # history so already-falsified edit directions aren't re-proposed. "" = auto-detect
+    # from seed_worker_dir (use its parent when that dir contains iter manifests).
+    prior_history_dir: str = ""
     concurrency: int = 1             # parallel worker runs per eval (essential for full FAB)
     # Worker execution backend. "local" = run the agent in the local Python process
     # (fast, but each run holds a large LLM context locally -> memory-bound at high
@@ -232,6 +237,26 @@ def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurren
     return evals, traces, deliverables, mean
 
 
+def _load_prior_history(prior_dir) -> str:
+    """Cross-leg memory: when a run continues evolution from a prior run's evolved
+    worker, the evolve agent must inherit that run's labeled edit history too —
+    otherwise it re-proposes edits the prior leg already falsified (observed: three
+    separate excel-reader-tool attempts across two legs, every one HARMFUL). Reads the
+    prior run's iter manifests; returns the same one-line-per-edit format as
+    _edit_history."""
+    lines = []
+    if not prior_dir:
+        return ""
+    for mf in sorted(Path(prior_dir).glob("iter_*/manifest.json")):
+        try:
+            m = json.loads(mf.read_text())
+            tag = "KEPT" if m.get("kept") else m.get("verdict", "?")
+            lines.append(f"- prior run {mf.parent.name}: {m.get('edit_summary', '')} -> {tag}")
+        except Exception:  # noqa: BLE001
+            continue
+    return "\n".join(lines)
+
+
 def _edit_history(records: list) -> str:
     """AFlow-style labeled edit history fed to the evolve agent so it does not
     re-propose falsified edits. One line per prior iteration: summary -> verdict."""
@@ -242,7 +267,8 @@ def _edit_history(records: list) -> str:
 
 
 def _build_evidence(evidence_dir: Path, diag: dict, evals: dict, traces: dict,
-                    deliverables: dict, tasks, records: list) -> Path:
+                    deliverables: dict, tasks, records: list,
+                    prior_history: str = "") -> Path:
     """AHE-style evidence corpus (firewall-OFF mode). overview.md distills per FAILING
     task: failed rubric criteria + process + the worker's OWN deliverable (truncated);
     evolution_history.md logs prior edits + verdicts; raw per-task traces stay on disk
@@ -272,7 +298,8 @@ def _build_evidence(evidence_dir: Path, diag: dict, evals: dict, traces: dict,
             "- worker deliverable (truncated):",
             (deliverables.get(tid, "") or "")[:1500], ""]
     (evidence_dir / "overview.md").write_text("\n".join(lines))
-    hist = "\n".join(f"- iter {r.iteration}: {r.edit_summary} -> {r.verdict}" for r in records) or "(none yet)"
+    this_run = "\n".join(f"- iter {r.iteration}: {r.edit_summary} -> {r.verdict}" for r in records)
+    hist = "\n".join(x for x in (prior_history, this_run) if x) or "(none yet)"
     (evidence_dir / "evolution_history.md").write_text("# Evolution history\n\n" + hist + "\n")
     return evidence_dir
 
@@ -327,6 +354,18 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
     records: list = []
     n_kept = n_rb = n_blocked = 0
 
+    # Cross-leg edit-history inheritance (explicit dir, or auto-detected when the seed
+    # worker is a prior run's evolved artifact — its parent dir holds iter manifests).
+    prior_dir = cfg.prior_history_dir
+    if not prior_dir:
+        seed_parent = Path(cfg.seed_worker_dir).resolve().parent
+        if any(seed_parent.glob("iter_*/manifest.json")):
+            prior_dir = str(seed_parent)
+    prior_history = _load_prior_history(prior_dir)
+    if prior_history:
+        print(f"[levelb] inherited {len(prior_history.splitlines())} prior edit-history "
+              f"line(s) from {prior_dir}", flush=True)
+
     for it in range(1, cfg.n_iters + 1):
         inc_eval = _eval_summary(evals, deliverables, tasks)
         # Phase markers: the diagnose step makes one critic (judge) call per failing task
@@ -348,7 +387,8 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             evidence_dir = None
             if cfg.evidence_mode == "ahe_corpus":
                 evidence_dir = _build_evidence(iterdir / "evidence", diag, evals, traces,
-                                               deliverables, tasks, records)
+                                               deliverables, tasks, records,
+                                               prior_history=prior_history)
             print(f"[iter {it}] evolve agent editing the worker dir...", flush=True)
             # Both sibling agents (worker + evolve) run in the cloud when execution=e2b_full,
             # so the local orchestrator stays memory-light (matters for GDPval's heavier local
@@ -357,8 +397,9 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
                 from .evolve_e2b import run_evolve_agent_e2b as _run_evolve
             else:
                 _run_evolve = run_evolve_agent
+            full_history = "\n".join(x for x in (prior_history, _edit_history(records)) if x)
             ev_out = _run_evolve(cand_dir, diag, iterdir,
-                                 edit_history=_edit_history(records), evidence_dir=evidence_dir)
+                                 edit_history=full_history, evidence_dir=evidence_dir)
             pred = ev_out.get("prediction") or {}
             iterdir.mkdir(parents=True, exist_ok=True)
             pred_file.write_text(json.dumps(pred))
