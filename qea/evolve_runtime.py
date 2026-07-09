@@ -181,16 +181,25 @@ def _build_evolve_message(sanitized_diagnosis: dict, *, edit_history: str = "",
     if evidence_dir is not None:
         evidence_dir = Path(evidence_dir).resolve()
         traces_ref = evidence_ref or str(evidence_dir / "traces")
+        # past_edits/ and traces/ are siblings under the evidence root, so derive the
+        # archive path from whichever traces ref applies (local dir or VM upload path).
+        past_ref = (evidence_ref.rsplit("/traces", 1)[0] + "/past_edits") if evidence_ref \
+            else str(evidence_dir / "past_edits")
         overview = _read_first(evidence_dir / "overview.md")
         history = _read_first(evidence_dir / "evolution_history.md", 6000)
+        scores = _read_first(evidence_dir / "archive_scores.md", 3000)
+        scores_block = f"### archive_scores.md\n{scores}\n\n" if scores else ""
         evidence_block = (
             "## Failure evidence (MANDATORY — read before editing)\n"
             "The overview distills why tasks failed (failed criteria incl. expected values, "
             "process, the worker's own deliverable). Use it to see WHAT the worker got wrong "
             "vs expected — for diagnosis only, never to hard-code an answer. Raw per-task "
             f"trajectories are on disk under `{traces_ref}` — drill in with the shell if you "
-            "need more detail.\n\n"
+            f"need more detail. Full diffs of every PRIOR attempt (with outcome + which "
+            f"tasks it helped/hurt) are under `{past_ref}` — read the relevant one before "
+            "trying anything similar to a listed attempt.\n\n"
             f"### overview.md\n{overview}\n\n### evolution_history.md\n{history}\n\n"
+            f"{scores_block}"
             f"## Diagnosis (root cause + suggested change)\n{diag_lines}"
         )
     else:

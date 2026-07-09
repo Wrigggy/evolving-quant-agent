@@ -182,6 +182,7 @@ class _FakeEval:
 
 def test_levelb_loop_keeps_improving_edit_offline(tmp_path, monkeypatch):
     import qea.loop_levelb as L
+    import qea.worker_runtime
     from qea.worker_runtime import WorkerRun
     from qea.tasks import BTask
 
@@ -197,7 +198,7 @@ def test_levelb_loop_keeps_improving_edit_offline(tmp_path, monkeypatch):
     def fake_run_worker(task, worker_dir, run_dir):
         improved = "IMPROVED" in (worker_dir / "systemprompt.md").read_text()
         return WorkerRun(f"deliverable improved={improved}", [], {"files": 1, "turns": 5, "tool_errors": 0})
-    monkeypatch.setattr(L, "run_worker", fake_run_worker)
+    monkeypatch.setattr(qea.worker_runtime, "run_worker", fake_run_worker)
 
     # evolve agent: appends the IMPROVED marker + predicts it fixes t1
     def fake_run_evolve(snapshot_dir_path, diag, run_dir, *, edit_history="", evidence_dir=None):
@@ -223,6 +224,7 @@ def test_levelb_loop_keeps_improving_edit_offline(tmp_path, monkeypatch):
 
 def test_levelb_loop_rolls_back_non_improving_edit(tmp_path, monkeypatch):
     import qea.loop_levelb as L
+    import qea.worker_runtime
     from qea.worker_runtime import WorkerRun
     from qea.tasks import BTask
 
@@ -234,7 +236,7 @@ def test_levelb_loop_rolls_back_non_improving_edit(tmp_path, monkeypatch):
             return ('{"root_cause_tag":"WrongStructure","target_slot":"prompt"}'
                     if "Classify" in prompt else "omits the required structure")
 
-    monkeypatch.setattr(L, "run_worker",
+    monkeypatch.setattr(qea.worker_runtime, "run_worker",
                         lambda task, wd, rd: WorkerRun("same", [], {"files": 1, "turns": 5, "tool_errors": 0}))
 
     # evolve makes a real (but useless) change so the diff is non-empty; predicts t1
@@ -390,12 +392,13 @@ def test_build_evidence_corpus_includes_failure_not_gold(tmp_path):
 
 def test_levelb_ahe_corpus_mode_passes_evidence_dir(tmp_path, monkeypatch):
     import qea.loop_levelb as L
+    import qea.worker_runtime
     from qea.worker_runtime import WorkerRun
     from qea.tasks import BTask
 
     tasks = [BTask(task_id="t1", subtype="x", prompt="p", rubric="",
                    rubric_items=[{"points": 1, "criterion": "c"}], gold="g")]
-    monkeypatch.setattr(L, "run_worker",
+    monkeypatch.setattr(qea.worker_runtime, "run_worker",
                         lambda task, wd, rd: WorkerRun("weak ans", [], {"files": 0, "turns": 2, "tool_errors": 0}))
 
     captured = {}
@@ -433,6 +436,7 @@ def test_evaluate_dir_tolerates_worker_failure(tmp_path, monkeypatch):
     # A crashing worker (e.g. NexAU empty-response after retries) must not kill the
     # run: the task scores 0, the error is recorded in the trace, the loop continues.
     import qea.loop_levelb as L
+    import qea.worker_runtime
     from qea.tasks import BTask
 
     tasks = [BTask(task_id="t1", subtype="x", prompt="p", rubric="",
@@ -445,7 +449,7 @@ def test_evaluate_dir_tolerates_worker_failure(tmp_path, monkeypatch):
             raise RuntimeError("Error in agent execution: No response content or tool calls")
         from qea.worker_runtime import WorkerRun
         return WorkerRun("ok answer", [], {"files": 0, "turns": 3, "tool_errors": 0})
-    monkeypatch.setattr(L, "run_worker", boom)
+    monkeypatch.setattr(qea.worker_runtime, "run_worker", boom)
 
     evals, traces, deliverables, mean = L.evaluate_dir(
         tmp_path / "w", tasks, _FakeEval(base=0.7, improved=0.7), tmp_path / "r")
@@ -470,3 +474,61 @@ def test_levelb_smoke_one_task_one_iter(tmp_path):
     assert len(res.mean_score_trajectory) >= 1
     assert Path(res.final_worker_dir).exists()
     assert (Path(cfg.results_dir) / "iter_001" / "manifest.json").exists()
+
+
+def test_build_evidence_attempt_archive_and_score_matrix(tmp_path):
+    """The anti-fixation archive: past attempt diffs land in past_edits/ labeled with
+    outcome + helped/hurt, the task x attempt score matrix is written, and the
+    directive tells the agent to merge components instead of retrying falsified
+    approaches."""
+    from qea.loop_levelb import _build_evidence
+    from qea.evaluator import TaskEval
+    from qea.tasks import BTask
+
+    tasks = [BTask(task_id="t1", subtype="x", prompt="p", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "c"}], gold="g")]
+    evals = {"t1": TaskEval(0.2, 0.2, False, "d", {"1": False}, 0.0)}
+    traces = {"t1": {"files": 0, "turns": 1, "tool_errors": 0}}
+    past = [{"name": "iter_001", "kept": False, "verdict": "MIXED",
+             "summary": "edit tools/excel.py (+40/-0)", "improved": ["taskA"],
+             "regressed": ["taskB"], "diff": "+++ b/tools/excel.py\n+def read_xlsx():"}]
+    scores = {"seed": {"t1": 0.2, "t2": 0.9}, "iter1": {"t1": 0.5, "t2": 0.4}}
+
+    ed = _build_evidence(tmp_path / "ev", {"root_cause_tag": "x", "overview": "o"}, evals,
+                         traces, {"t1": "d"}, tasks, [], attempt_scores=scores,
+                         past_edits=past)
+    pe = (ed / "past_edits" / "iter_001.diff").read_text()
+    assert "MIXED (rolled back)" in pe and "helped: taskA" in pe and "hurt: taskB" in pe
+    assert "def read_xlsx" in pe                       # the actual diff body
+    matrix = (ed / "archive_scores.md").read_text()
+    assert "| t1 | 0.20 | 0.50 |" in matrix            # per-task columns in order
+    hist = (ed / "evolution_history.md").read_text()
+    assert "Approach constraints" not in hist          # no attempts yet -> no directive
+
+    ed2 = _build_evidence(tmp_path / "ev2", {"root_cause_tag": "x", "overview": "o"}, evals,
+                          traces, {"t1": "d"}, tasks, [], prior_history="- prior run iter_001: e -> MIXED",
+                          attempt_scores=scores, past_edits=past)
+    hist2 = (ed2 / "evolution_history.md").read_text()
+    assert "Approach constraints" in hist2 and "MERGE" in hist2
+
+
+def test_edit_history_and_prior_manifests_carry_helped_hurt(tmp_path):
+    """History lines (in-run and cross-leg) expose WHICH tasks each falsified edit
+    helped/hurt — the opaque '-> MIXED' label alone did not stop re-proposals."""
+    import json as _json
+    from qea.loop_levelb import LevelBRecord, _edit_history, _load_prior_history, _load_prior_edits
+
+    r = LevelBRecord(1, False, "MIXED", False, "edit tools/excel.py", "tag", 0.5, 0.52,
+                     improved=["aaaa1111-x"], regressed=["bbbb2222-y"])
+    h = _edit_history([r])
+    assert "helped: aaaa1111" in h and "hurt: bbbb2222" in h and "-> MIXED" in h
+
+    it = tmp_path / "iter_001"; it.mkdir()
+    (it / "manifest.json").write_text(_json.dumps({
+        "kept": False, "verdict": "HARMFUL", "edit_summary": "edit x",
+        "improved": [], "regressed": ["cccc3333"]}))
+    (it / "edit.diff").write_text("+++ b/x\n+z")
+    ph = _load_prior_history(tmp_path)
+    assert "hurt: cccc3333" in ph
+    edits = _load_prior_edits(tmp_path)
+    assert edits[0]["name"] == "prior_iter_001" and edits[0]["diff"].startswith("+++")

@@ -251,28 +251,83 @@ def _load_prior_history(prior_dir) -> str:
         try:
             m = json.loads(mf.read_text())
             tag = "KEPT" if m.get("kept") else m.get("verdict", "?")
-            lines.append(f"- prior run {mf.parent.name}: {m.get('edit_summary', '')} -> {tag}")
+            lines.append(f"- prior run {mf.parent.name}: {m.get('edit_summary', '')} -> {tag}"
+                         + _helped_hurt(m.get("improved") or [], m.get("regressed") or []))
         except Exception:  # noqa: BLE001
             continue
     return "\n".join(lines)
 
 
+def _load_prior_edits(prior_dir) -> list:
+    """Cross-leg attempt archive: the prior run's per-iteration diffs + outcomes, so the
+    evidence corpus can expose WHAT each falsified attempt actually changed (observed:
+    one-line history alone did not stop the evolve agent re-proposing the same
+    excel-reader tool across legs — it judged each variant 'different'). Returns the
+    same entry dicts as the in-run `past_edits` list."""
+    out = []
+    if not prior_dir:
+        return out
+    for mf in sorted(Path(prior_dir).glob("iter_*/manifest.json")):
+        try:
+            m = json.loads(mf.read_text())
+            diff = (mf.parent / "edit.diff").read_text() if (mf.parent / "edit.diff").exists() else ""
+            if not diff:
+                continue
+            out.append({"name": f"prior_{mf.parent.name}", "kept": bool(m.get("kept")),
+                        "verdict": m.get("verdict", "?"), "summary": m.get("edit_summary", ""),
+                        "improved": m.get("improved") or [], "regressed": m.get("regressed") or [],
+                        "diff": diff})
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
+def _helped_hurt(improved, regressed) -> str:
+    """' (helped: a,b | hurt: c)' suffix for a history line — the per-task outcome is
+    what lets the evolve agent see WHY an edit was rolled back (whack-a-mole: it fixed
+    some tasks but broke others), instead of just an opaque verdict label."""
+    if not improved and not regressed:
+        return ""
+    fmt = lambda ts: ", ".join(str(t)[:8] for t in ts) or "-"  # noqa: E731
+    return f" (helped: {fmt(improved)} | hurt: {fmt(regressed)})"
+
+
 def _edit_history(records: list) -> str:
     """AFlow-style labeled edit history fed to the evolve agent so it does not
-    re-propose falsified edits. One line per prior iteration: summary -> verdict."""
+    re-propose falsified edits. One line per prior iteration: summary -> verdict,
+    plus which tasks the edit helped/hurt."""
     lines = []
     for r in records:
-        lines.append(f"- iter {r.iteration}: {r.edit_summary} -> {r.verdict}")
+        tag = "KEPT" if r.kept else r.verdict
+        lines.append(f"- iter {r.iteration}: {r.edit_summary} -> {tag}"
+                     + _helped_hurt(r.improved, r.regressed))
     return "\n".join(lines)
+
+
+_ANTI_FIXATION = """
+## Approach constraints (READ before choosing an edit)
+Every attempt above was EVALUATED on this exact task set. A rolled-back verdict means
+that approach — as implemented — was empirically falsified; re-submitting a variant of
+it is the most common wasted iteration (observed: four separate excel-reader tools,
+all rolled back). Before attempting anything similar to a listed edit, read its diff
+in `past_edits/` and state in your final message what SPECIFICALLY was wrong with the
+prior attempt and how yours differs. Most rolled-back edits helped 1-2 tasks while
+hurting 1-2 others (see helped/hurt above and archive_scores.md): the winning move is
+usually to MERGE — graft only the component that helped its tasks, and leave whatever
+the hurt tasks depend on untouched.
+"""
 
 
 def _build_evidence(evidence_dir: Path, diag: dict, evals: dict, traces: dict,
                     deliverables: dict, tasks, records: list,
-                    prior_history: str = "") -> Path:
+                    prior_history: str = "", attempt_scores: dict = None,
+                    past_edits: list = None) -> Path:
     """AHE-style evidence corpus (firewall-OFF mode). overview.md distills per FAILING
     task: failed rubric criteria + process + the worker's OWN deliverable (truncated);
-    evolution_history.md logs prior edits + verdicts; raw per-task traces stay on disk
-    for drill-down. The gold answer is NEVER written here."""
+    evolution_history.md logs prior edits + verdicts + an anti-fixation directive;
+    past_edits/ holds each prior attempt's full diff labeled with its outcome;
+    archive_scores.md is the task x attempt score matrix. The gold answer is NEVER
+    written here."""
     evidence_dir = Path(evidence_dir)
     (evidence_dir / "traces").mkdir(parents=True, exist_ok=True)
     by_id = {t.task_id: t for t in tasks}
@@ -298,9 +353,33 @@ def _build_evidence(evidence_dir: Path, diag: dict, evals: dict, traces: dict,
             "- worker deliverable (truncated):",
             (deliverables.get(tid, "") or "")[:1500], ""]
     (evidence_dir / "overview.md").write_text("\n".join(lines))
-    this_run = "\n".join(f"- iter {r.iteration}: {r.edit_summary} -> {r.verdict}" for r in records)
-    hist = "\n".join(x for x in (prior_history, this_run) if x) or "(none yet)"
-    (evidence_dir / "evolution_history.md").write_text("# Evolution history\n\n" + hist + "\n")
+    hist = "\n".join(x for x in (prior_history, _edit_history(records)) if x) or "(none yet)"
+    directive = _ANTI_FIXATION if (records or prior_history) else ""
+    (evidence_dir / "evolution_history.md").write_text(
+        "# Evolution history\n\n" + hist + "\n" + directive)
+    # Attempt archive: full diff of every prior attempt (this run + prior legs), headed
+    # by its outcome, so "was this already tried?" is answerable by reading the file.
+    if past_edits:
+        pe_dir = evidence_dir / "past_edits"
+        pe_dir.mkdir(parents=True, exist_ok=True)
+        for e in past_edits:
+            head = (f"# {e['name']}: {e.get('summary', '')}\n"
+                    f"# outcome: {'KEPT' if e.get('kept') else e.get('verdict', '?') + ' (rolled back)'}"
+                    f"{_helped_hurt(e.get('improved') or [], e.get('regressed') or [])}\n")
+            (pe_dir / f"{e['name']}.diff").write_text(head + e["diff"])
+    # Task x attempt score matrix — which attempt helped which task, at a glance.
+    if attempt_scores:
+        tids = sorted({tid for sc in attempt_scores.values() for tid in sc})
+        cols = list(attempt_scores)
+        rows = ["| task | " + " | ".join(cols) + " |",
+                "|---" * (len(cols) + 1) + "|"]
+        for tid in tids:
+            cells = [f"{attempt_scores[c].get(tid, float('nan')):.2f}" if tid in attempt_scores[c]
+                     else "-" for c in cols]
+            rows.append(f"| {str(tid)[:8]} | " + " | ".join(cells) + " |")
+        (evidence_dir / "archive_scores.md").write_text(
+            "# Gated score per task per attempt (KEPT = promoted to incumbent)\n\n"
+            + "\n".join(rows) + "\n")
     return evidence_dir
 
 
@@ -366,6 +445,11 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
         print(f"[levelb] inherited {len(prior_history.splitlines())} prior edit-history "
               f"line(s) from {prior_dir}", flush=True)
 
+    # Attempt archive fed to the evidence corpus: per-attempt diffs + per-task score
+    # columns, seeded with the prior leg's attempts when continuing an evolution.
+    past_edits = _load_prior_edits(prior_dir)
+    attempt_scores = {"seed": {str(t): round(e.gated_score, 4) for t, e in evals.items()}}
+
     for it in range(1, cfg.n_iters + 1):
         inc_eval = _eval_summary(evals, deliverables, tasks)
         # Phase markers: the diagnose step makes one critic (judge) call per failing task
@@ -388,7 +472,9 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             if cfg.evidence_mode == "ahe_corpus":
                 evidence_dir = _build_evidence(iterdir / "evidence", diag, evals, traces,
                                                deliverables, tasks, records,
-                                               prior_history=prior_history)
+                                               prior_history=prior_history,
+                                               attempt_scores=attempt_scores,
+                                               past_edits=past_edits)
             print(f"[iter {it}] evolve agent editing the worker dir...", flush=True)
             # Both sibling agents (worker + evolve) run in the cloud when execution=e2b_full,
             # so the local orchestrator stays memory-light (matters for GDPval's heavier local
@@ -409,6 +495,7 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
                        risk_tasks=pred.get("risk_tasks", []))
 
         improved = regressed = []
+        cand_scores = {}
         if not diff:
             verdict, kept, cand_mean = "NO_EDIT", False, inc_mean
             n_blocked += 1
@@ -455,13 +542,19 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             else:
                 n_rb += 1
                 buffer.add(edit, verdict, 0, 0, "no aggregate score gain beyond the noise floor")
+            cand_scores = {str(t): round(e.gated_score, 4) for t, e in cand_evals.items()}
+            attempt_scores[f"iter{it}" + (" KEPT" if kept else "")] = cand_scores
+            past_edits.append({"name": f"iter_{it:03d}", "kept": kept, "verdict": verdict,
+                               "summary": edit.summary, "improved": list(improved),
+                               "regressed": list(regressed), "diff": diff})
 
         records.append(LevelBRecord(
             it, verdict in ("NO_EDIT", LEAKAGE_BLOCKED, "BLOCKED"), verdict, kept,
             edit.summary, diag.get("root_cause_tag", ""), round(inc_mean, 4),
             round(cand_mean, 4), list(improved), list(regressed)))
         ms_traj.append(round(inc_mean, 4))
-        _persist(results_dir, it, verdict, kept, edit, diag, inc_mean)
+        _persist(results_dir, it, verdict, kept, edit, diag, inc_mean,
+                 cand_scores=cand_scores, improved=improved, regressed=regressed)
 
     return LevelBResult(
         n_tasks=len(tasks), mean_score_trajectory=ms_traj, records=records,
@@ -470,7 +563,8 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
         n_kept=n_kept, n_rolled_back=n_rb, n_blocked=n_blocked)
 
 
-def _persist(results_dir: Path, it: int, verdict: str, kept: bool, edit, diag: dict, inc_mean: float) -> None:
+def _persist(results_dir: Path, it: int, verdict: str, kept: bool, edit, diag: dict, inc_mean: float,
+             *, cand_scores: dict = None, improved=(), regressed=()) -> None:
     d = results_dir / f"iter_{it:03d}"
     d.mkdir(parents=True, exist_ok=True)
     (d / "manifest.json").write_text(json.dumps({
@@ -479,5 +573,9 @@ def _persist(results_dir: Path, it: int, verdict: str, kept: bool, edit, diag: d
         "predicted_fixes": list(getattr(edit, "predicted_fixes", [])),
         "risk_tasks": list(getattr(edit, "risk_tasks", [])),
         "diagnosis": diag, "inc_mean": round(inc_mean, 4),
+        # Per-task outcome of this attempt — consumed by _load_prior_history /
+        # _load_prior_edits when a later leg continues from this run's evolved worker.
+        "cand_scores": cand_scores or {}, "improved": [str(t) for t in improved],
+        "regressed": [str(t) for t in regressed],
     }, indent=2, default=str))
     (d / "edit.diff").write_text(edit.diff)
