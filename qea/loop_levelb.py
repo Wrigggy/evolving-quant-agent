@@ -83,6 +83,9 @@ class LevelBConfig:
     # confirm_band, the candidate is evaluated a SECOND time (fresh, cache-bypassed) and
     # kept only if the averaged gain still clears the floor. 0 = off.
     confirm_band: float = 0.0
+    # Worker samples per task per eval; the per-task score is the sample MEAN (see
+    # evaluate_dir). >1 is the variance-reduction knob for noisy weak workers.
+    n_samples: int = 1
     concurrency: int = 1             # parallel worker runs per eval (essential for full FAB)
     # Worker execution backend. "local" = run the agent in the local Python process
     # (fast, but each run holds a large LLM context locally -> memory-bound at high
@@ -155,7 +158,7 @@ def _worker_sig(worker_dir: Path) -> str:
 
 
 def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurrency: int = 1,
-                 cache_dir=None, execution: str = "local"):
+                 cache_dir=None, execution: str = "local", n_samples: int = 1):
     """Run the worker on every task with the given worker dir, then score each run
     through the benchmark's Evaluator (which owns render/grade/gate). Returns
     (evals, traces, deliverables, mean_gated_score). The loop imports no grader.
@@ -167,7 +170,16 @@ def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurren
     `cache_dir` enables RESUME: a completed task's result is persisted to
     `cache_dir/{worker_sig}__{task_id}.json`; on a later launch (after the environment
     reaps a long run) the cached result is loaded instead of re-running the worker, so
-    repeated launches ACCUMULATE to completion."""
+    repeated launches ACCUMULATE to completion.
+
+    `n_samples` > 1 runs the worker N INDEPENDENT times per task and averages the
+    gated/content scores (format_ok = majority; deliverable/verdicts/trace from the
+    best-scoring sample; variance = spread across samples). Measured on GDPval: a
+    single weak-worker run flips 0<->0.9 on some tasks (per-task repeat sd up to
+    ~0.29), so single-sample means are dominated by run-to-run stochasticity — the
+    per-task average is the variance-reduction that makes small deltas measurable.
+    Samples cache independently ({sig}__{tid}__s{i}.json; s0 keeps the legacy name,
+    so existing caches remain valid)."""
     from .evaluator import TaskEval
     worker_dir, run_dir = Path(worker_dir), Path(run_dir)
     # Backend select. "e2b_full" runs the whole agent in a cloud VM (worker_e2b), so the
@@ -182,11 +194,14 @@ def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurren
     if cache_dir:
         Path(cache_dir).mkdir(parents=True, exist_ok=True)
 
-    def _cache_file(task):
-        return Path(cache_dir) / f"{sig}__{task.task_id}.json" if cache_dir else None
+    def _cache_file(task, s=0):
+        if not cache_dir:
+            return None
+        suffix = f"__s{s}" if s else ""
+        return Path(cache_dir) / f"{sig}__{task.task_id}{suffix}.json"
 
-    def _one(task):
-        cf = _cache_file(task)
+    def _one(task, s=0):
+        cf = _cache_file(task, s)
         if cf is not None and cf.exists():
             try:
                 d = json.loads(cf.read_text())
@@ -204,10 +219,11 @@ def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurren
             return _is_transient_error(f"{type(exc).__name__}: {exc}")
         transient = False
         _MAX_ATTEMPTS = 4
+        rd = run_dir if s == 0 else run_dir / f"sample_{s}"  # samples must not clobber
         for _attempt in range(_MAX_ATTEMPTS):
             try:
-                wr = _run_worker(task, worker_dir, run_dir)
-                te = evaluator.evaluate(task, wr, run_dir / str(task.task_id))
+                wr = _run_worker(task, worker_dir, rd)
+                te = evaluator.evaluate(task, wr, rd / str(task.task_id))
                 tr = {**wr.trace, "content": round(te.content_score, 4), "format_ok": te.format_ok}
                 out = (task.task_id, te, tr, te.deliverable_text)
                 transient = False
@@ -232,15 +248,31 @@ def evaluate_dir(worker_dir: Path, tasks, evaluator, run_dir: Path, *, concurren
                 pass
         return out
 
-    if concurrency > 1 and len(tasks) > 1:
+    jobs = [(t, s) for t in tasks for s in range(max(1, n_samples))]
+    if concurrency > 1 and len(jobs) > 1:
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=concurrency) as pool:
-            results = list(pool.map(_one, tasks))
+            results = list(pool.map(lambda j: _one(*j), jobs))
     else:
-        results = [_one(t) for t in tasks]
+        results = [_one(t, s) for t, s in jobs]
 
-    for tid, te, tr, deliv in results:
-        evals[tid], traces[tid], deliverables[tid] = te, tr, deliv
+    if n_samples <= 1:
+        for tid, te, tr, deliv in results:
+            evals[tid], traces[tid], deliverables[tid] = te, tr, deliv
+    else:
+        from collections import defaultdict
+        by_task = defaultdict(list)
+        for tid, te, tr, deliv in results:
+            by_task[tid].append((te, tr, deliv))
+        for tid, ss in by_task.items():
+            gs = [te.gated_score for te, _, _ in ss]
+            best = max(ss, key=lambda x: x[0].gated_score)
+            agg = TaskEval(statistics.mean(te.content_score for te, _, _ in ss),
+                           statistics.mean(gs),
+                           sum(1 for te, _, _ in ss if te.format_ok) * 2 > len(ss),
+                           best[0].deliverable_text, best[0].verdicts,
+                           statistics.pstdev(gs) if len(gs) > 1 else 0.0)
+            evals[tid], traces[tid], deliverables[tid] = agg, best[1], best[2]
     mean = statistics.mean(e.gated_score for e in evals.values()) if evals else 0.0
     return evals, traces, deliverables, mean
 
@@ -438,11 +470,11 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
 
     # seed eval; noise floor either fixed (cfg.noise_margin>0, cheap) or measured via a
     # 2nd same-dir eval (cfg.noise_margin==0, accurate but doubles the slow seed cost).
-    evals, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache", execution=cfg.execution)
+    evals, traces, deliverables, inc_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache", execution=cfg.execution, n_samples=cfg.n_samples)
     if cfg.noise_margin > 0:
         noise_margin = cfg.noise_margin
     else:
-        _, _, _, noise_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed_noise", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache", execution=cfg.execution)
+        _, _, _, noise_mean = evaluate_dir(incumbent, tasks, evaluator, results_dir / "seed_noise", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache", execution=cfg.execution, n_samples=cfg.n_samples)
         noise_margin = max(0.01, abs(inc_mean - noise_mean))
 
     ms_traj = [round(inc_mean, 4)]
@@ -526,7 +558,7 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             verdict, kept, cand_mean = "BLOCKED", False, inc_mean
             n_blocked += 1
         else:
-            cand_evals, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache", execution=cfg.execution)
+            cand_evals, ct, cd, cand_mean = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade", concurrency=cfg.concurrency, cache_dir=results_dir / "_cache", execution=cfg.execution, n_samples=cfg.n_samples)
             # FAIR-SUBSET keep: exclude any task that hit a transient infra failure on the
             # incumbent OR the candidate side, so infra noise (429/sandbox/disconnect) can
             # never score a task 0 and mask a real edit at the noise-floor margin. In a clean
@@ -557,7 +589,7 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
                       f"{noise_margin + cfg.confirm_band:.4f}): running confirmation eval...", flush=True)
                 cand2, ct2, _, _ = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade_confirm",
                                                 concurrency=cfg.concurrency, cache_dir=None,
-                                                execution=cfg.execution)
+                                                execution=cfg.execution, n_samples=cfg.n_samples)
                 fair2 = [tid for tid in fair_tids if tid in cand2
                          and not _is_transient_error(ct2.get(tid, {}).get("error", ""))]
                 if fair2:

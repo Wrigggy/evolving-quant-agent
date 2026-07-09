@@ -609,3 +609,48 @@ def test_confirm_band_second_eval_gates_near_floor_keeps(tmp_path, monkeypatch):
                           confirm_band=0.10)
     res2 = L.run_levelb(cfg2, _tasks=tasks, _evaluator=StableEval(), _llm=StubLLM())
     assert res2.n_kept == 1                              # 0.70 twice -> confirmed
+
+
+def test_evaluate_dir_n_samples_averages_and_caches_per_sample(tmp_path, monkeypatch):
+    """n_samples > 1: per-task score is the mean over independent worker runs
+    (variance reduction for catastrophically-flippy weak workers — measured per-task
+    repeat sd up to ~0.29 on GDPval), samples cache under distinct keys, and the
+    best sample supplies the deliverable."""
+    import qea.loop_levelb as L
+    import qea.worker_runtime
+    from qea.worker_runtime import WorkerRun
+    from qea.tasks import BTask
+
+    tasks = [BTask(task_id="t1", subtype="x", prompt="p", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "c"}], gold="g")]
+    calls = {"n": 0}
+
+    def flippy(task, wd, rd):
+        calls["n"] += 1
+        return WorkerRun(f"answer-{calls['n']}", [], {"files": 0, "turns": 1, "tool_errors": 0})
+    monkeypatch.setattr(qea.worker_runtime, "run_worker", flippy)
+
+    class FlipEval:
+        """Scores alternate 0.9 / 0.1 by sample — a catastrophic-flip task."""
+        def evaluate(self, task, worker_run, out_dir=None):
+            from qea.evaluator import TaskEval
+            s = 0.9 if int(worker_run.deliverable_text.split("-")[1]) % 2 else 0.1
+            return TaskEval(s, s, True, worker_run.deliverable_text, {"1": True}, 0.0)
+
+    wd = tmp_path / "w"; (wd / "tool_descriptions").mkdir(parents=True)
+    (wd / "agent.yaml").write_text("name: w\n"); (wd / "systemprompt.md").write_text("do\n")
+    cache = tmp_path / "cache"
+    evals, traces, deliv, mean = L.evaluate_dir(
+        wd, tasks, FlipEval(), tmp_path / "run", cache_dir=cache, n_samples=2)
+    assert abs(evals["t1"].gated_score - 0.5) < 1e-9      # mean of 0.9 and 0.1
+    assert abs(evals["t1"].variance - 0.4) < 1e-9         # pstdev of [0.9, 0.1]
+    assert deliv["t1"] == "answer-1"                      # best sample (0.9) wins
+    names = sorted(f.name for f in cache.iterdir())
+    assert len(names) == 2 and names[1].endswith("__s1.json")  # s0 keeps legacy name
+    assert "__s" not in names[0]
+
+    # resume: a second call re-runs nothing (both samples cached)
+    calls["n"] = 0
+    evals2, _, _, _ = L.evaluate_dir(wd, tasks, FlipEval(), tmp_path / "run2",
+                                     cache_dir=cache, n_samples=2)
+    assert calls["n"] == 0 and abs(evals2["t1"].gated_score - 0.5) < 1e-9

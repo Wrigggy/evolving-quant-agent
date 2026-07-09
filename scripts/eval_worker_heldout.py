@@ -38,6 +38,8 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--execution", default="e2b_full", choices=["local", "e2b_full"])
+    ap.add_argument("--n-samples", type=int, default=1,
+                    help="worker samples per task; per-task score = sample mean")
     ap.add_argument("--results-dir", required=True)
     args = ap.parse_args()
 
@@ -58,7 +60,7 @@ def main() -> int:
         evals, traces, _, mean = evaluate_dir(
             Path(wd), tasks, bench.evaluator, out,
             concurrency=args.concurrency, cache_dir=results_dir / "_cache",
-            execution=args.execution)
+            execution=args.execution, n_samples=args.n_samples)
         # evals: dict task_id -> EvalSummary (attr gated_score), keyed like the loop
         per_task = {str(tid)[:8]: round(e.gated_score, 4) for tid, e in evals.items()}
         summary[name] = {"worker_dir": str(wd), "mean": round(mean, 4), "per_task": per_task}
