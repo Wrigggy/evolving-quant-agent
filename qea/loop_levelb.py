@@ -76,6 +76,13 @@ class LevelBConfig:
     # directions aren't re-proposed. "" = auto-detect the immediate prior leg from
     # seed_worker_dir (use its parent when that dir contains iter manifests).
     prior_history_dir: str = ""
+    # Second-confirmation eval for near-floor keeps. Measured on GDPval (two independent
+    # 8-task evals of the same workers): the sigma of a seed-vs-candidate mean DELTA is
+    # ~0.054 — LARGER than the 0.05 noise floor, so a single eval clearing the floor by
+    # a hair is ~1 sigma from noise. When a keep's fair gain is below noise_margin +
+    # confirm_band, the candidate is evaluated a SECOND time (fresh, cache-bypassed) and
+    # kept only if the averaged gain still clears the floor. 0 = off.
+    confirm_band: float = 0.0
     concurrency: int = 1             # parallel worker runs per eval (essential for full FAB)
     # Worker execution backend. "local" = run the agent in the local Python process
     # (fast, but each run holds a large LLM context locally -> memory-bound at high
@@ -538,6 +545,25 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
                       f"(fair inc={fair_inc:.4f} cand={fair_cand:.4f}, full cand={cand_mean:.4f})", flush=True)
             # promote iff a real aggregate gain beyond the noise floor AND not harmful
             kept = decide_keep_soft(fair_inc, fair_cand, noise_margin) and verdict != "HARMFUL"
+            if kept and cfg.confirm_band > 0 and (fair_cand - fair_inc) < noise_margin + cfg.confirm_band:
+                # Near-floor gain: one eval clearing the floor by a hair is within the
+                # measured eval noise. Confirm with a second INDEPENDENT candidate eval
+                # (cache_dir=None — the sig-keyed cache would just replay the first one)
+                # and require the two-eval average to still clear the floor.
+                print(f"[iter {it}] near-floor gain ({fair_cand - fair_inc:+.4f} < "
+                      f"{noise_margin + cfg.confirm_band:.4f}): running confirmation eval...", flush=True)
+                cand2, ct2, _, _ = evaluate_dir(cand_dir, tasks, evaluator, iterdir / "grade_confirm",
+                                                concurrency=cfg.concurrency, cache_dir=None,
+                                                execution=cfg.execution)
+                fair2 = [tid for tid in fair_tids if tid in cand2
+                         and not _is_transient_error(ct2.get(tid, {}).get("error", ""))]
+                if fair2:
+                    avg_cand = statistics.mean((cand_evals[tid].gated_score + cand2[tid].gated_score) / 2
+                                               for tid in fair2)
+                    avg_inc = statistics.mean(evals[tid].gated_score for tid in fair2)
+                    kept = decide_keep_soft(avg_inc, avg_cand, noise_margin)
+                    print(f"[iter {it}] confirmation: avg cand={avg_cand:.4f} vs inc={avg_inc:.4f} "
+                          f"on {len(fair2)} task(s) -> {'CONFIRMED' if kept else 'NOT CONFIRMED (rolled back)'}", flush=True)
             if kept:
                 n_kept += 1
                 # Materialize the kept state INTO the incumbent_worker dir (mirror copy)

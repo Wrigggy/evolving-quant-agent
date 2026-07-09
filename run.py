@@ -67,6 +67,9 @@ def main() -> int:
     ap.add_argument("--evidence-mode", default="sanitized", choices=["sanitized", "ahe_corpus"],
                     help="levelb: evolve-agent evidence — sanitized (firewall ON) or "
                          "ahe_corpus (traces+analysis, no gold; firewall relaxed)")
+    ap.add_argument("--confirm-band", type=float, default=0.0,
+                    help="levelb: when a keep's fair gain is below noise_margin+band, require a "
+                         "second independent candidate eval to confirm (0 = off)")
     ap.add_argument("--noise-margin", type=float, default=0.0,
                     help="levelb: fixed keep-floor margin (>0 skips the 2nd seed eval); "
                          "0 measures it via a 2nd same-dir eval (slower)")
@@ -93,7 +96,7 @@ def main() -> int:
                             benchmark=args.benchmark, seed_worker_dir=seed,
                             evidence_mode=args.evidence_mode, noise_margin=args.noise_margin,
                             concurrency=args.concurrency, execution=args.execution,
-                            prior_history_dir=args.prior_history_dir)
+                            prior_history_dir=args.prior_history_dir, confirm_band=args.confirm_band)
         print(f"[run] mode=LEVEL-B ({lcfg.benchmark} worker dir evolved by a file-editing evolve agent) "
               f"iters={lcfg.n_iters} k={lcfg.k} n_tasks={lcfg.n_tasks} seed={seed} "
               f"evidence={lcfg.evidence_mode} -> {lcfg.results_dir}")

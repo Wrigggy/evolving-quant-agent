@@ -543,3 +543,69 @@ def test_edit_history_and_prior_manifests_carry_helped_hurt(tmp_path):
     assert len(both) == 2 and both[1]["kept"]
     hist = _load_prior_history(f"{tmp_path},{tmp_path / 'leg2'}")
     assert "leg2/iter_001" in hist and "-> KEPT" in hist
+
+
+def test_confirm_band_second_eval_gates_near_floor_keeps(tmp_path, monkeypatch):
+    """decision-(2): a near-floor keep must survive a second independent candidate
+    eval (measured GDPval delta sigma ~0.054 > the 0.05 floor). Flaky gain -> the
+    confirmation eval disagrees and the edit is rolled back; stable gain -> kept."""
+    import qea.loop_levelb as L
+    import qea.worker_runtime
+    from qea.worker_runtime import WorkerRun
+    from qea.tasks import BTask
+
+    tasks = [BTask(task_id=f"t{i}", subtype="x", prompt="p", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "c"}], gold="g") for i in range(2)]
+    monkeypatch.setattr(qea.worker_runtime, "run_worker",
+                        lambda task, wd, rd: WorkerRun(
+                            "improved=True" if "MARKER" in (Path(wd) / "systemprompt.md").read_text()
+                            else "base", [], {"files": 0, "turns": 1, "tool_errors": 0}))
+
+    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None):
+        sp = Path(snap) / "systemprompt.md"
+        sp.write_text(sp.read_text() + "\nMARKER\n")
+        return {"final_text": "e", "trace": {},
+                "prediction": {"predicted_fixes": [t.task_id for t in tasks], "risk_tasks": []}}
+    monkeypatch.setattr(L, "run_evolve_agent", ev)
+
+    class StubLLM:
+        def complete(self, prompt, *, role="judge", **kw):
+            return ('{"root_cause_tag":"WrongStructure","target_slot":"prompt"}'
+                    if "Classify" in prompt else "weak")
+
+    class FlakyEval:
+        """Improved worker scores 0.58 on the first candidate eval (clears the 0.05
+        floor over base 0.50) but 0.50 on the confirmation -> average 0.54 misses."""
+        def __init__(self):
+            self.improved_evals = 0
+        def evaluate(self, task, worker_run, out_dir=None):
+            from qea.evaluator import TaskEval
+            if "improved=True" in worker_run.deliverable_text:
+                self.improved_evals += 1
+                s = 0.58 if self.improved_evals <= 2 else 0.50  # 2 tasks/eval
+            else:
+                s = 0.50
+            return TaskEval(s, s, True, worker_run.deliverable_text, {"1": s > 0.6}, 0.0)
+
+    def mkseed(d):
+        seed = d / "seed"; (seed / "tool_descriptions").mkdir(parents=True)
+        (seed / "agent.yaml").write_text("name: w\n"); (seed / "systemprompt.md").write_text("do\n")
+        return seed
+
+    cfg = L.LevelBConfig(n_iters=1, k=1, n_tasks=2, results_dir=str(tmp_path / "res1"),
+                         seed_worker_dir=str(mkseed(tmp_path / "a")), noise_margin=0.05,
+                         confirm_band=0.10)
+    res = L.run_levelb(cfg, _tasks=tasks, _evaluator=FlakyEval(), _llm=StubLLM())
+    assert res.n_kept == 0 and res.n_rolled_back == 1   # confirmation falsified the gain
+
+    class StableEval(FlakyEval):
+        def evaluate(self, task, worker_run, out_dir=None):
+            from qea.evaluator import TaskEval
+            s = 0.70 if "improved=True" in worker_run.deliverable_text else 0.50
+            return TaskEval(s, s, True, worker_run.deliverable_text, {"1": s > 0.6}, 0.0)
+
+    cfg2 = L.LevelBConfig(n_iters=1, k=1, n_tasks=2, results_dir=str(tmp_path / "res2"),
+                          seed_worker_dir=str(mkseed(tmp_path / "b")), noise_margin=0.05,
+                          confirm_band=0.10)
+    res2 = L.run_levelb(cfg2, _tasks=tasks, _evaluator=StableEval(), _llm=StubLLM())
+    assert res2.n_kept == 1                              # 0.70 twice -> confirmed
