@@ -505,6 +505,9 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             pred = ev_out.get("prediction") or {}
             iterdir.mkdir(parents=True, exist_ok=True)
             pred_file.write_text(json.dumps(pred))
+            # The final message is where the agent must justify a retry of a
+            # falsified approach (anti-fixation directive) — persist it for audit.
+            (iterdir / "evolve_final.txt").write_text(str(ev_out.get("final_text") or ""))
         print(f"[iter {it}] evaluating candidate on {len(tasks)} tasks...", flush=True)
         diff = dir_unified_diff(incumbent, cand_dir)
         edit = DirEdit(diff, predicted_fixes=pred.get("predicted_fixes", []),
