@@ -77,6 +77,10 @@ def main() -> int:
                          "'e2b_full' (whole agent in a per-task E2B VM; needs the "
                          "'qea-nexau-worker' template — build via scripts/build_e2b_template.py)")
     ap.add_argument("--results-dir", default="results/latest")
+    ap.add_argument("--prior-history-dir", default="",
+                    help="levelb: comma-separated PRIOR leg results dirs (oldest first) whose "
+                         "edit history + attempt diffs the evolve agent inherits; empty = "
+                         "auto-detect the immediate prior leg from the seed worker dir")
     args = ap.parse_args()
 
     _load_dotenv()
@@ -88,7 +92,8 @@ def main() -> int:
                             broad=not args.core, results_dir=args.results_dir,
                             benchmark=args.benchmark, seed_worker_dir=seed,
                             evidence_mode=args.evidence_mode, noise_margin=args.noise_margin,
-                            concurrency=args.concurrency, execution=args.execution)
+                            concurrency=args.concurrency, execution=args.execution,
+                            prior_history_dir=args.prior_history_dir)
         print(f"[run] mode=LEVEL-B ({lcfg.benchmark} worker dir evolved by a file-editing evolve agent) "
               f"iters={lcfg.n_iters} k={lcfg.k} n_tasks={lcfg.n_tasks} seed={seed} "
               f"evidence={lcfg.evidence_mode} -> {lcfg.results_dir}")

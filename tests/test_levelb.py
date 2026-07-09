@@ -531,4 +531,15 @@ def test_edit_history_and_prior_manifests_carry_helped_hurt(tmp_path):
     ph = _load_prior_history(tmp_path)
     assert "hurt: cccc3333" in ph
     edits = _load_prior_edits(tmp_path)
-    assert edits[0]["name"] == "prior_iter_001" and edits[0]["diff"].startswith("+++")
+    assert edits[0]["name"].startswith("prior_") and edits[0]["name"].endswith("_iter_001")
+    assert edits[0]["diff"].startswith("+++")
+
+    # multi-leg spec: comma-separated dirs are concatenated oldest-first
+    leg2 = tmp_path / "leg2" / "iter_001"; leg2.mkdir(parents=True)
+    (leg2 / "manifest.json").write_text(_json.dumps({
+        "kept": True, "verdict": "EXPECTED", "edit_summary": "edit y"}))
+    (leg2 / "edit.diff").write_text("+++ b/y\n+w")
+    both = _load_prior_edits(f"{tmp_path},{tmp_path / 'leg2'}")
+    assert len(both) == 2 and both[1]["kept"]
+    hist = _load_prior_history(f"{tmp_path},{tmp_path / 'leg2'}")
+    assert "leg2/iter_001" in hist and "-> KEPT" in hist

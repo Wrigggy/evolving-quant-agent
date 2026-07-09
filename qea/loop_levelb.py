@@ -70,10 +70,11 @@ class LevelBConfig:
     # (accurate but doubles the slow seed cost). >0 = use this fixed margin and SKIP the
     # 2nd eval (cheap; for expensive workers). e.g. 0.05.
     noise_margin: float = 0.0
-    # Cross-leg memory: path to a PRIOR run's results dir whose evolved worker this run
-    # continues from. Its iter manifests are prepended to the evolve agent's edit
-    # history so already-falsified edit directions aren't re-proposed. "" = auto-detect
-    # from seed_worker_dir (use its parent when that dir contains iter manifests).
+    # Cross-leg memory: results dir(s) of PRIOR runs this run's evolution continues
+    # from (comma-separated, oldest first). Their iter manifests + diffs are prepended
+    # to the evolve agent's edit history / attempt archive so already-falsified edit
+    # directions aren't re-proposed. "" = auto-detect the immediate prior leg from
+    # seed_worker_dir (use its parent when that dir contains iter manifests).
     prior_history_dir: str = ""
     concurrency: int = 1             # parallel worker runs per eval (essential for full FAB)
     # Worker execution backend. "local" = run the agent in the local Python process
@@ -245,40 +246,48 @@ def _load_prior_history(prior_dir) -> str:
     prior run's iter manifests; returns the same one-line-per-edit format as
     _edit_history."""
     lines = []
-    if not prior_dir:
-        return ""
-    for mf in sorted(Path(prior_dir).glob("iter_*/manifest.json")):
-        try:
-            m = json.loads(mf.read_text())
-            tag = "KEPT" if m.get("kept") else m.get("verdict", "?")
-            lines.append(f"- prior run {mf.parent.name}: {m.get('edit_summary', '')} -> {tag}"
-                         + _helped_hurt(m.get("improved") or [], m.get("regressed") or []))
-        except Exception:  # noqa: BLE001
-            continue
+    for d in _prior_dirs(prior_dir):
+        leg = Path(d).name
+        for mf in sorted(Path(d).glob("iter_*/manifest.json")):
+            try:
+                m = json.loads(mf.read_text())
+                tag = "KEPT" if m.get("kept") else m.get("verdict", "?")
+                lines.append(f"- prior run {leg}/{mf.parent.name}: {m.get('edit_summary', '')} -> {tag}"
+                             + _helped_hurt(m.get("improved") or [], m.get("regressed") or []))
+            except Exception:  # noqa: BLE001
+                continue
     return "\n".join(lines)
 
 
+def _prior_dirs(spec) -> list:
+    """Parse the prior_history_dir spec: comma-separated results dirs, oldest first
+    (an evolution can span several legs; each leg only auto-detects its immediate
+    parent, so a 3rd leg must be handed leg1,leg2 explicitly to keep the full
+    falsified-attempt record)."""
+    return [s.strip() for s in str(spec or "").split(",") if s.strip()]
+
+
 def _load_prior_edits(prior_dir) -> list:
-    """Cross-leg attempt archive: the prior run's per-iteration diffs + outcomes, so the
+    """Cross-leg attempt archive: prior runs' per-iteration diffs + outcomes, so the
     evidence corpus can expose WHAT each falsified attempt actually changed (observed:
     one-line history alone did not stop the evolve agent re-proposing the same
     excel-reader tool across legs — it judged each variant 'different'). Returns the
     same entry dicts as the in-run `past_edits` list."""
     out = []
-    if not prior_dir:
-        return out
-    for mf in sorted(Path(prior_dir).glob("iter_*/manifest.json")):
-        try:
-            m = json.loads(mf.read_text())
-            diff = (mf.parent / "edit.diff").read_text() if (mf.parent / "edit.diff").exists() else ""
-            if not diff:
+    for d in _prior_dirs(prior_dir):
+        leg = Path(d).name
+        for mf in sorted(Path(d).glob("iter_*/manifest.json")):
+            try:
+                m = json.loads(mf.read_text())
+                diff = (mf.parent / "edit.diff").read_text() if (mf.parent / "edit.diff").exists() else ""
+                if not diff:
+                    continue
+                out.append({"name": f"prior_{leg}_{mf.parent.name}", "kept": bool(m.get("kept")),
+                            "verdict": m.get("verdict", "?"), "summary": m.get("edit_summary", ""),
+                            "improved": m.get("improved") or [], "regressed": m.get("regressed") or [],
+                            "diff": diff})
+            except Exception:  # noqa: BLE001
                 continue
-            out.append({"name": f"prior_{mf.parent.name}", "kept": bool(m.get("kept")),
-                        "verdict": m.get("verdict", "?"), "summary": m.get("edit_summary", ""),
-                        "improved": m.get("improved") or [], "regressed": m.get("regressed") or [],
-                        "diff": diff})
-        except Exception:  # noqa: BLE001
-            continue
     return out
 
 
