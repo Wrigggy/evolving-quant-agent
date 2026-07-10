@@ -35,6 +35,9 @@ def main() -> int:
     ap.add_argument("--benchmark", default="gdpval")
     ap.add_argument("--offset", type=int, default=8, help="first task index of the held-out slice")
     ap.add_argument("--n", type=int, default=8, help="number of held-out tasks")
+    ap.add_argument("--task-ids", default="",
+                    help="comma-separated task ids (or @file containing them) to evaluate "
+                         "instead of the offset/n slice — for hand-picked subsets")
     ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--execution", default="e2b_full", choices=["local", "e2b_full"])
@@ -46,9 +49,21 @@ def main() -> int:
     _load_dotenv()
     llm = make_llm(False)
     bench = make_benchmark(args.benchmark, llm=llm, broad=True, k=args.k)
-    tasks = bench.tasks[args.offset:args.offset + args.n]
-    print(f"[heldout] {len(tasks)} tasks (index {args.offset}..{args.offset + len(tasks) - 1}): "
-          f"{[str(t.task_id)[:8] for t in tasks]}", flush=True)
+    if args.task_ids:
+        spec = args.task_ids
+        if spec.startswith("@"):
+            spec = Path(spec[1:]).read_text().strip()
+        wanted = [x.strip() for x in spec.split(",") if x.strip()]
+        by_id = {str(t.task_id): t for t in bench.tasks}
+        missing = [w for w in wanted if w not in by_id]
+        if missing:
+            raise SystemExit(f"[heldout] task ids not in benchmark: {missing}")
+        tasks = [by_id[w] for w in wanted]
+        print(f"[heldout] {len(tasks)} hand-picked tasks: {[str(t.task_id)[:8] for t in tasks]}", flush=True)
+    else:
+        tasks = bench.tasks[args.offset:args.offset + args.n]
+        print(f"[heldout] {len(tasks)} tasks (index {args.offset}..{args.offset + len(tasks) - 1}): "
+              f"{[str(t.task_id)[:8] for t in tasks]}", flush=True)
 
     results_dir = Path(args.results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
