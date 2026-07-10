@@ -481,7 +481,7 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True,
             else:
                 sel = df
             out: list[BTask] = []
-            skipped_render = 0
+            skipped_render = skipped_heavy = 0
             for _, row in sel.iterrows():
                 dexts = _gold_deliverable_exts(row.get("deliverable_files"))
                 # All-occupation mode spans media/production occupations whose gold
@@ -490,6 +490,14 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True,
                 if not stems and any(e not in _RENDERABLE_EXTS for e in dexts):
                     skipped_render += 1
                     continue
+                refs = _local_reference_files(row["task_id"], row.get("reference_files"))
+                # The E2B backend uploads every reference file into the per-task VM on
+                # EVERY eval; a handful of tasks ship hundreds of MB (up to 877MB) of
+                # media inputs, which makes each eval minutes of pure upload. Skip
+                # them in all-occupation mode (4/220 above 50MB).
+                if not stems and sum(Path(r).stat().st_size for r in refs) > 50 * 2**20:
+                    skipped_heavy += 1
+                    continue
                 out.append(
                     BTask(
                         task_id=str(row["task_id"]),
@@ -497,14 +505,17 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True,
                         prompt=str(row["prompt"]),
                         rubric=str(row.get("rubric_pretty", "")),
                         rubric_items=_parse_rubric_json(row.get("rubric_json")),
-                        reference_files=_local_reference_files(row["task_id"], row.get("reference_files")),
+                        reference_files=refs,
                         deliverable_exts=dexts,
                         gdpval_lineage=f"gdpval:{row['occupation']} (real, original task)",
                     )
                 )
             if out:
                 scope = "finance" if stems else "ALL-OCCUPATION"
-                extra = f", {skipped_render} skipped (unrenderable deliverable)" if skipped_render else ""
+                skips = [f"{skipped_render} unrenderable" if skipped_render else "",
+                         f"{skipped_heavy} heavy-refs" if skipped_heavy else ""]
+                skips = ", ".join(x for x in skips if x)
+                extra = f", skipped: {skips}" if skips else ""
                 print(f"[tasks] loaded {len(out)} ORIGINAL GDPval {scope} tasks "
                       f"({sel['occupation'].nunique()} occupations) from {src}{extra}")
                 return out
