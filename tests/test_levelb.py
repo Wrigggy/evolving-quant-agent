@@ -686,3 +686,51 @@ def test_decide_keep_paired_gate():
 
     # no common tasks -> safe reject
     assert not decide_keep_paired({"a": 1.0}, {"b": 1.0})["kept"]
+
+
+def test_confirm_tasks_heldout_gate_rejects_overfit_keep(tmp_path, monkeypatch):
+    """Regimes-style promote-time gate: an edit that wins on the optimize pool but
+    regresses on the held-out confirm batch is rolled back as overfit."""
+    import qea.loop_levelb as L
+    import qea.worker_runtime
+    from qea.worker_runtime import WorkerRun
+    from qea.tasks import BTask
+
+    # 2 optimize tasks + 1 confirm task
+    tasks = [BTask(task_id=f"t{i}", subtype="x", prompt="p", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "c"}], gold="g") for i in range(3)]
+    monkeypatch.setattr(qea.worker_runtime, "run_worker",
+                        lambda task, wd, rd: WorkerRun(
+                            f"{task.task_id}|improved={'MARKER' in (Path(wd) / 'systemprompt.md').read_text()}",
+                            [], {"files": 0, "turns": 1, "tool_errors": 0}))
+
+    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None):
+        sp = Path(snap) / "systemprompt.md"
+        sp.write_text(sp.read_text() + "\nMARKER\n")
+        return {"final_text": "e", "trace": {},
+                "prediction": {"predicted_fixes": ["t0", "t1"], "risk_tasks": []}}
+    monkeypatch.setattr(L, "run_evolve_agent", ev)
+
+    class StubLLM:
+        def complete(self, prompt, *, role="judge", **kw):
+            return ('{"root_cause_tag":"WrongStructure","target_slot":"prompt"}'
+                    if "Classify" in prompt else "weak")
+
+    class OverfitEval:
+        """Improved worker: big win on t0/t1 (optimize) but tanks on t2 (confirm)."""
+        def evaluate(self, task, worker_run, out_dir=None):
+            from qea.evaluator import TaskEval
+            tid = worker_run.deliverable_text.split("|")[0]
+            improved = "improved=True" in worker_run.deliverable_text
+            if improved:
+                s = 0.9 if tid in ("t0", "t1") else 0.1
+            else:
+                s = 0.5
+            return TaskEval(s, s, True, worker_run.deliverable_text, {"1": s > 0.6}, 0.0)
+
+    seed = tmp_path / "seed"; (seed / "tool_descriptions").mkdir(parents=True)
+    (seed / "agent.yaml").write_text("name: w\n"); (seed / "systemprompt.md").write_text("do\n")
+    cfg = L.LevelBConfig(n_iters=1, k=1, n_tasks=2, results_dir=str(tmp_path / "res"),
+                         seed_worker_dir=str(seed), noise_margin=0.05, confirm_tasks=1)
+    res = L.run_levelb(cfg, _tasks=tasks, _evaluator=OverfitEval(), _llm=StubLLM())
+    assert res.n_kept == 0 and res.n_rolled_back == 1   # confirm gate caught the overfit

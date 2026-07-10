@@ -86,6 +86,15 @@ class LevelBConfig:
     # Worker samples per task per eval; the per-task score is the sample MEAN (see
     # evaluate_dir). >1 is the variance-reduction knob for noisy weak workers.
     n_samples: int = 1
+    # Held-out CONFIRM gate (Regimes-style, arXiv 2606.10241): when > 0 and an edit
+    # is about to be promoted, BOTH incumbent and candidate are evaluated on the next
+    # `confirm_tasks` benchmark tasks AFTER the optimize pool (tasks[n_tasks:
+    # n_tasks+confirm_tasks], never seen by the loop) and the edit survives only if
+    # the candidate does not regress there by more than the noise floor. Guards
+    # against optimize-pool overfitting (measured: a train +0.16 edit pooled to
+    # +0.01 on unseen tasks); cost is only paid on keeps, and the incumbent side
+    # caches across iterations. 0 = off.
+    confirm_tasks: int = 0
     # Keep rule. "soft" = mean-vs-floor (decide_keep_soft, legacy). "paired" =
     # protocol-v2 paired bootstrap gate (decide_keep_paired): the gain must clear the
     # floor on the stability-penalized objective AND its per-task-delta bootstrap
@@ -460,13 +469,19 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
     (built here from cfg.benchmark unless one is passed) provides them."""
     llm = _llm if _llm is not None else make_llm(False)
     if _tasks is not None:
-        tasks, evaluator, answer_corpus = _tasks, _evaluator, []
+        pool = list(_tasks)
+        tasks = pool[: cfg.n_tasks] if cfg.confirm_tasks else pool
+        evaluator, answer_corpus = _evaluator, []
     else:
         if benchmark is None:
             benchmark = make_benchmark(cfg.benchmark, llm=llm, broad=cfg.broad, k=cfg.k)
-        tasks = benchmark.tasks[: cfg.n_tasks]
+        pool = benchmark.tasks
+        tasks = pool[: cfg.n_tasks]
         evaluator = benchmark.evaluator
         answer_corpus = benchmark.answer_corpus
+    # Held-out CONFIRM batch: the tasks right after the optimize pool; the loop only
+    # ever touches them inside the promote-time confirm gate below.
+    confirm_pool = pool[cfg.n_tasks: cfg.n_tasks + cfg.confirm_tasks] if cfg.confirm_tasks else []
     guard = LeakageGuard(answer_corpus)
     buffer = RejectedEditBuffer()
     results_dir = Path(cfg.results_dir)
@@ -619,6 +634,23 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
                     kept = decide_keep_soft(avg_inc, avg_cand, noise_margin)
                     print(f"[iter {it}] confirmation: avg cand={avg_cand:.4f} vs inc={avg_inc:.4f} "
                           f"on {len(fair2)} task(s) -> {'CONFIRMED' if kept else 'NOT CONFIRMED (rolled back)'}", flush=True)
+            if kept and confirm_pool:
+                # Held-out CONFIRM gate: the edit must not regress on tasks the loop
+                # never optimized on (overfit guard — cost paid only on keeps; the
+                # incumbent side is sig-cached so it re-runs only after a promotion).
+                print(f"[iter {it}] held-out CONFIRM gate on {len(confirm_pool)} unseen task(s)...", flush=True)
+                _, _, _, inc_cf = evaluate_dir(incumbent, confirm_pool, evaluator,
+                                               results_dir / "confirm_inc", concurrency=cfg.concurrency,
+                                               cache_dir=results_dir / "_cache", execution=cfg.execution,
+                                               n_samples=cfg.n_samples)
+                _, _, _, cand_cf = evaluate_dir(cand_dir, confirm_pool, evaluator,
+                                                iterdir / "confirm_cand", concurrency=cfg.concurrency,
+                                                cache_dir=results_dir / "_cache", execution=cfg.execution,
+                                                n_samples=cfg.n_samples)
+                kept = cand_cf >= inc_cf - noise_margin
+                print(f"[iter {it}] held-out confirm: cand={cand_cf:.4f} vs inc={inc_cf:.4f} "
+                      f"(tolerance {noise_margin:.3f}) -> "
+                      f"{'PASS' if kept else 'FAIL (rolled back as overfit)'}", flush=True)
             if kept:
                 n_kept += 1
                 # Materialize the kept state INTO the incumbent_worker dir (mirror copy)
