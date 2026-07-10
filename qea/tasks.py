@@ -454,6 +454,9 @@ _FIN_OCC_CORE = (
 )
 _FIN_OCC_BROAD = _FIN_OCC_CORE + ("Real Estate Brokers",)
 
+# Deliverable formats the evaluator can render + format-gate (text counts as "").
+_RENDERABLE_EXTS = {".xlsx", ".docx", ".pptx", ".pdf", ".csv", ".txt", ".md", ""}
+
 
 def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True,
                         occupations: tuple = None) -> list[BTask]:
@@ -478,7 +481,15 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True,
             else:
                 sel = df
             out: list[BTask] = []
+            skipped_render = 0
             for _, row in sel.iterrows():
+                dexts = _gold_deliverable_exts(row.get("deliverable_files"))
+                # All-occupation mode spans media/production occupations whose gold
+                # deliverable is a format the evaluator cannot render or gate
+                # (.mp4/.zip/...) — grading them would be meaningless; skip (12/220).
+                if not stems and any(e not in _RENDERABLE_EXTS for e in dexts):
+                    skipped_render += 1
+                    continue
                 out.append(
                     BTask(
                         task_id=str(row["task_id"]),
@@ -487,14 +498,15 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True,
                         rubric=str(row.get("rubric_pretty", "")),
                         rubric_items=_parse_rubric_json(row.get("rubric_json")),
                         reference_files=_local_reference_files(row["task_id"], row.get("reference_files")),
-                        deliverable_exts=_gold_deliverable_exts(row.get("deliverable_files")),
+                        deliverable_exts=dexts,
                         gdpval_lineage=f"gdpval:{row['occupation']} (real, original task)",
                     )
                 )
             if out:
                 scope = "finance" if stems else "ALL-OCCUPATION"
+                extra = f", {skipped_render} skipped (unrenderable deliverable)" if skipped_render else ""
                 print(f"[tasks] loaded {len(out)} ORIGINAL GDPval {scope} tasks "
-                      f"({sel['occupation'].nunique()} occupations) from {src}")
+                      f"({sel['occupation'].nunique()} occupations) from {src}{extra}")
                 return out
         except Exception as exc:  # noqa: BLE001
             print(f"[tasks] real GDPval finance load failed ({type(exc).__name__}: {exc}); using offline fixtures")
