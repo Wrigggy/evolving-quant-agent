@@ -5,9 +5,12 @@ needs them to do the task faithfully (instead of improvising data). Saves to
 data/gdpval/reference_files/<task_id>/<basename> so qea.tasks._local_reference_files
 can resolve them. Idempotent (skips existing). Uses httpx (SOCKS-proxy aware).
 
-    .venv312/bin/python scripts/fetch_gdpval_reference_files.py
+    .venv312/bin/python scripts/fetch_gdpval_reference_files.py          # finance only
+    .venv312/bin/python scripts/fetch_gdpval_reference_files.py --all    # all 220 tasks
 """
 from __future__ import annotations
+
+import sys
 
 from pathlib import Path
 from urllib.parse import unquote
@@ -27,7 +30,12 @@ FIN_OCC = (
 
 def main() -> None:
     df = pd.read_parquet(PARQUET)
-    sel = df[df["occupation"].apply(lambda o: any(s in str(o) for s in FIN_OCC))]
+    # --all fetches every occupation's reference files (protocol-v2 220-task pool);
+    # default stays finance-only for backward compatibility.
+    if "--all" in sys.argv[1:]:
+        sel = df
+    else:
+        sel = df[df["occupation"].apply(lambda o: any(s in str(o) for s in FIN_OCC))]
     client = httpx.Client(timeout=180, follow_redirects=True)
     got = skipped = failed = 0
     for _, row in sel.iterrows():
@@ -58,7 +66,7 @@ def main() -> None:
         v = r.get("reference_files")
         return v is not None and len(list(v)) > 0
     n_tasks_with_refs = sum(1 for _, r in sel.iterrows() if _has_ref(r))
-    print(f"finance tasks with >=1 reference file: {n_tasks_with_refs}/{len(sel)}")
+    print(f"selected tasks with >=1 reference file: {n_tasks_with_refs}/{len(sel)}")
 
 
 if __name__ == "__main__":

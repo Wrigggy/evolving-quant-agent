@@ -21,9 +21,12 @@ class Benchmark:
     evaluator: object = None  # benchmark-specific worker-run scorer (set by loaders)
 
 
-def gdpval_benchmark(*, broad: bool = True, allow_download: bool = True, llm=None) -> Benchmark:
-    tasks = load_gdpval_finance(broad=broad, allow_download=allow_download)
-    return Benchmark("gdpval_finance", tasks, SoftJudge(llm), rubric_corpus(tasks),
+def gdpval_benchmark(*, broad: bool = True, allow_download: bool = True, llm=None,
+                     occupations: tuple = None) -> Benchmark:
+    tasks = load_gdpval_finance(broad=broad, allow_download=allow_download,
+                                occupations=occupations)
+    name = "gdpval_all" if occupations == () else "gdpval_finance"
+    return Benchmark(name, tasks, SoftJudge(llm), rubric_corpus(tasks),
                      "b_pile", evaluator=MultimodalEvaluator(llm))
 
 
@@ -41,7 +44,10 @@ def make_benchmark(name: str, *, llm=None, broad: bool = True, k: int = 2) -> Be
         return fab_benchmark(llm=llm, k=k)
     if name in ("gdpval", "gdpval_finance"):
         return gdpval_benchmark(broad=broad, allow_download=True, llm=llm)
-    raise ValueError(f"unknown benchmark {name!r} (expected 'fab' or 'gdpval')")
+    if name == "gdpval_all":
+        # Protocol-v2 pool: the full open gold subset (220 tasks, 44 occupations).
+        return gdpval_benchmark(broad=broad, allow_download=True, llm=llm, occupations=())
+    raise ValueError(f"unknown benchmark {name!r} (expected 'fab', 'gdpval', or 'gdpval_all')")
 
 
 def synthetic_fixture_benchmark() -> Benchmark:

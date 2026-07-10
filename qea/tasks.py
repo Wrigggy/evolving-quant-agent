@@ -455,19 +455,28 @@ _FIN_OCC_CORE = (
 _FIN_OCC_BROAD = _FIN_OCC_CORE + ("Real Estate Brokers",)
 
 
-def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> list[BTask]:
-    """The ORIGINAL GDPval finance/accounting tasks (deliverable + rubric_json),
-    soft-graded per-criterion. ~30 broad / ~25 core, from the open gold subset.
+def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True,
+                        occupations: tuple = None) -> list[BTask]:
+    """ORIGINAL GDPval tasks (deliverable + rubric_json), soft-graded per-criterion.
+
+    Default = the finance/accounting slice (~30 broad / ~25 core). Pass
+    ``occupations=()`` to load the FULL open gold subset (220 tasks, 44
+    occupations) — the protocol-v2 pool: the ~30-task finance slice is too small
+    for the measured per-task noise (repeat sd up to ~0.29), so evolution needs
+    the whole cross-occupation pool plus per-task sampling to see real deltas.
 
     These are real open-ended deliverables with NO hard verifier, so the loop is
     driven by the soft rubric-% grader (the observation firewall, law 2, still
     holds)."""
-    stems = _FIN_OCC_BROAD if broad else _FIN_OCC_CORE
+    stems = occupations if occupations is not None else (_FIN_OCC_BROAD if broad else _FIN_OCC_CORE)
     if allow_download:
         try:
             df, src = _load_gdpval_df()
-            mask = df["occupation"].apply(lambda o: any(s in str(o) for s in stems))
-            sel = df[mask]
+            if stems:
+                mask = df["occupation"].apply(lambda o: any(s in str(o) for s in stems))
+                sel = df[mask]
+            else:
+                sel = df
             out: list[BTask] = []
             for _, row in sel.iterrows():
                 out.append(
@@ -483,7 +492,8 @@ def load_gdpval_finance(*, broad: bool = True, allow_download: bool = True) -> l
                     )
                 )
             if out:
-                print(f"[tasks] loaded {len(out)} ORIGINAL GDPval finance tasks "
+                scope = "finance" if stems else "ALL-OCCUPATION"
+                print(f"[tasks] loaded {len(out)} ORIGINAL GDPval {scope} tasks "
                       f"({sel['occupation'].nunique()} occupations) from {src}")
                 return out
         except Exception as exc:  # noqa: BLE001
