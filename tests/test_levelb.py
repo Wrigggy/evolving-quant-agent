@@ -654,3 +654,35 @@ def test_evaluate_dir_n_samples_averages_and_caches_per_sample(tmp_path, monkeyp
     evals2, _, _, _ = L.evaluate_dir(wd, tasks, FlipEval(), tmp_path / "run2",
                                      cache_dir=cache, n_samples=2)
     assert calls["n"] == 0 and abs(evals2["t1"].gated_score - 0.5) < 1e-9
+
+
+def test_decide_keep_paired_gate():
+    """Protocol-v2 keep gate: paired bootstrap + stability penalty."""
+    from qea.falsify import decide_keep_paired
+
+    # uniform genuine gain on every task -> kept (CI above 0, mean above floor)
+    inc = {f"t{i}": 0.5 for i in range(8)}
+    cand = {f"t{i}": 0.6 for i in range(8)}
+    d = decide_keep_paired(inc, cand, noise_margin=0.05)
+    assert d["kept"] and d["mean_delta"] == 0.1 and d["ci_lo"] > 0
+
+    # one big win, rest tiny losses: mean clears the floor but the direction does
+    # not survive resampling -> rolled back (this is the noise-driven keep the
+    # soft gate would have accepted)
+    inc2 = {f"t{i}": 0.5 for i in range(8)}
+    cand2 = {**{f"t{i}": 0.49 for i in range(8)}, "t0": 1.0}
+    from qea.falsify import decide_keep_soft
+    m2 = sum(cand2.values()) / 8
+    assert decide_keep_soft(0.5, m2, 0.05)          # legacy gate would keep
+    d2 = decide_keep_paired(inc2, cand2, noise_margin=0.05)
+    assert not d2["kept"] and d2["ci_lo"] <= 0      # paired gate rejects
+
+    # stability penalty: same means, candidate much noisier across samples -> rejected
+    vars_inc = {f"t{i}": 0.0 for i in range(8)}
+    vars_cand = {f"t{i}": 0.4 for i in range(8)}
+    d3 = decide_keep_paired(inc, cand, noise_margin=0.05, stability_lambda=0.5,
+                            inc_vars=vars_inc, cand_vars=vars_cand)
+    assert not d3["kept"] and d3["objective_delta"] < 0.05
+
+    # no common tasks -> safe reject
+    assert not decide_keep_paired({"a": 1.0}, {"b": 1.0})["kept"]

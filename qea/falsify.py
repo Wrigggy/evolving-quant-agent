@@ -138,6 +138,42 @@ def decide_keep_soft(inc_mean: float, cand_mean: float, noise_margin: float) -> 
     return cand_mean > inc_mean + noise_margin
 
 
+def decide_keep_paired(inc_scores: dict, cand_scores: dict, *, noise_margin: float = 0.0,
+                       stability_lambda: float = 0.0, inc_vars: dict = None,
+                       cand_vars: dict = None, n_resamples: int = 2000, seed: int = 7) -> dict:
+    """Protocol-v2 keep gate: a PAIRED test on per-task deltas instead of a bare
+    mean-vs-floor comparison (field norm — ADAS keeps by bootstrap CI; measured on
+    GDPval the mean-delta sigma exceeds the 0.05 floor, so a floor-only gate is ~1
+    sigma from noise). Keep iff BOTH:
+      (1) mean stability-penalized delta > noise_margin, where each side's objective
+          is mean(score) - stability_lambda * mean(per-task cross-sample spread) —
+          the "stable high output" objective (spreads need n_samples >= 2; with
+          lambda 0 or no variances this is the plain mean delta), AND
+      (2) the seeded-bootstrap 5th percentile of the mean per-task delta > 0
+          (one-sided 95%: the gain direction survives resampling).
+    Returns {kept, mean_delta, ci_lo, objective_delta, n} for the manifest."""
+    import random
+
+    common = sorted(set(inc_scores) & set(cand_scores))
+    if not common:
+        return {"kept": False, "mean_delta": 0.0, "ci_lo": 0.0, "objective_delta": 0.0, "n": 0}
+    deltas = [cand_scores[t] - inc_scores[t] for t in common]
+    n = len(deltas)
+    mean_delta = sum(deltas) / n
+    instab = 0.0
+    if stability_lambda and (inc_vars or cand_vars):
+        iv = sum((inc_vars or {}).get(t, 0.0) for t in common) / n
+        cv = sum((cand_vars or {}).get(t, 0.0) for t in common) / n
+        instab = stability_lambda * (cv - iv)   # candidate more unstable -> penalty
+    objective_delta = mean_delta - instab
+    rng = random.Random(seed)
+    means = sorted(sum(rng.choice(deltas) for _ in range(n)) / n for _ in range(n_resamples))
+    ci_lo = means[int(0.05 * n_resamples)]
+    kept = objective_delta > noise_margin and ci_lo > 0
+    return {"kept": kept, "mean_delta": round(mean_delta, 4), "ci_lo": round(ci_lo, 4),
+            "objective_delta": round(objective_delta, 4), "n": n}
+
+
 @dataclass
 class RejectedEditBuffer:
     """SkillOpt rejected-edit buffer. No embedding/semantic dedup — signature

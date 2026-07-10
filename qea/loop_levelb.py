@@ -27,7 +27,7 @@ from .benchmark import make_benchmark
 from .debugger import diagnose_b_pile
 from .evolve_runtime import DirEdit, dir_unified_diff, run_evolve_agent, snapshot_dir
 from .falsify import (EvalSummary, LEAKAGE_BLOCKED, RejectedEditBuffer,
-                      decide_keep_soft, evaluate_changes)
+                      decide_keep_paired, decide_keep_soft, evaluate_changes)
 from .llm import make_llm
 from .verifier import LeakageGuard, TaskResult
 
@@ -86,6 +86,14 @@ class LevelBConfig:
     # Worker samples per task per eval; the per-task score is the sample MEAN (see
     # evaluate_dir). >1 is the variance-reduction knob for noisy weak workers.
     n_samples: int = 1
+    # Keep rule. "soft" = mean-vs-floor (decide_keep_soft, legacy). "paired" =
+    # protocol-v2 paired bootstrap gate (decide_keep_paired): the gain must clear the
+    # floor on the stability-penalized objective AND its per-task-delta bootstrap
+    # 5th percentile must be > 0. Use with n_samples >= 2 for the stability term.
+    keep_rule: str = "soft"
+    # Weight of the instability penalty in the paired objective:
+    # objective = mean(score) - stability_lambda * mean(per-task cross-sample spread).
+    stability_lambda: float = 0.0
     concurrency: int = 1             # parallel worker runs per eval (essential for full FAB)
     # Worker execution backend. "local" = run the agent in the local Python process
     # (fast, but each run holds a large LLM context locally -> memory-bound at high
@@ -579,7 +587,19 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
                       f"excluded; decided on {len(fair_tids)}/{len(tasks)} "
                       f"(fair inc={fair_inc:.4f} cand={fair_cand:.4f}, full cand={cand_mean:.4f})", flush=True)
             # promote iff a real aggregate gain beyond the noise floor AND not harmful
-            kept = decide_keep_soft(fair_inc, fair_cand, noise_margin) and verdict != "HARMFUL"
+            if cfg.keep_rule == "paired":
+                dec = decide_keep_paired(
+                    {tid: evals[tid].gated_score for tid in fair_tids},
+                    {tid: cand_evals[tid].gated_score for tid in fair_tids},
+                    noise_margin=noise_margin, stability_lambda=cfg.stability_lambda,
+                    inc_vars={tid: evals[tid].variance for tid in fair_tids},
+                    cand_vars={tid: cand_evals[tid].variance for tid in fair_tids})
+                print(f"[iter {it}] paired keep gate: mean_delta={dec['mean_delta']:+.4f} "
+                      f"objective_delta={dec['objective_delta']:+.4f} ci_lo={dec['ci_lo']:+.4f} "
+                      f"(n={dec['n']}) -> {'KEEP' if dec['kept'] else 'ROLLBACK'}", flush=True)
+                kept = dec["kept"] and verdict != "HARMFUL"
+            else:
+                kept = decide_keep_soft(fair_inc, fair_cand, noise_margin) and verdict != "HARMFUL"
             if kept and cfg.confirm_band > 0 and (fair_cand - fair_inc) < noise_margin + cfg.confirm_band:
                 # Near-floor gain: one eval clearing the floor by a hair is within the
                 # measured eval noise. Confirm with a second INDEPENDENT candidate eval

@@ -67,6 +67,11 @@ def main() -> int:
     ap.add_argument("--evidence-mode", default="sanitized", choices=["sanitized", "ahe_corpus"],
                     help="levelb: evolve-agent evidence — sanitized (firewall ON) or "
                          "ahe_corpus (traces+analysis, no gold; firewall relaxed)")
+    ap.add_argument("--keep-rule", default="soft", choices=["soft", "paired"],
+                    help="levelb: keep gate — 'paired' = protocol-v2 bootstrap paired test "
+                         "with stability penalty (use with --n-samples >= 2)")
+    ap.add_argument("--stability-lambda", type=float, default=0.0,
+                    help="levelb: weight of the cross-sample instability penalty in the paired objective")
     ap.add_argument("--n-samples", type=int, default=1,
                     help="levelb: worker samples per task per eval (per-task score = sample mean)")
     ap.add_argument("--confirm-band", type=float, default=0.0,
@@ -99,7 +104,8 @@ def main() -> int:
                             evidence_mode=args.evidence_mode, noise_margin=args.noise_margin,
                             concurrency=args.concurrency, execution=args.execution,
                             prior_history_dir=args.prior_history_dir, confirm_band=args.confirm_band,
-                            n_samples=args.n_samples)
+                            n_samples=args.n_samples, keep_rule=args.keep_rule,
+                            stability_lambda=args.stability_lambda)
         print(f"[run] mode=LEVEL-B ({lcfg.benchmark} worker dir evolved by a file-editing evolve agent) "
               f"iters={lcfg.n_iters} k={lcfg.k} n_tasks={lcfg.n_tasks} seed={seed} "
               f"evidence={lcfg.evidence_mode} -> {lcfg.results_dir}")
