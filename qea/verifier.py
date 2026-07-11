@@ -50,6 +50,8 @@ def _parse_json_obj(txt: str) -> dict | None:
 
 
 def _truthy(v) -> bool:
+    if isinstance(v, dict):          # reason-mode verdict: {"pass": bool, "reason": str}
+        v = v.get("pass")
     if isinstance(v, bool):
         return v
     if isinstance(v, (int, float)):
@@ -58,19 +60,47 @@ def _truthy(v) -> bool:
         return v.strip().lower() in ("true", "yes", "1", "y", "satisfied")
     return False
 
-def build_rubric_prompt(task, deliverable: str, items: list, *, has_images: bool = False) -> str:
-    """Single source of truth for the per-criterion rubric prompt (text + multimodal)."""
+def build_rubric_prompt(task, deliverable: str, items: list, *, has_images: bool = False,
+                        with_reasons: bool = False) -> str:
+    """Single source of truth for the per-criterion rubric prompt (text + multimodal).
+
+    ``with_reasons`` asks the judge to justify each verdict in one sentence. The
+    reasons are a HUMAN DEBUG artifact only (judge_reasons.json next to the eval);
+    they must never be fed to the debugger/evolve agent — a reason can paraphrase
+    expected values, which would violate the observation firewall."""
     lines = [f"{i + 1}. (+{c['points']}) {c['criterion']}" for i, c in enumerate(items)]
     img_note = (" Rendered pages of the deliverable are attached as images; "
                 "its extracted text is included below." if has_images else "")
+    if with_reasons:
+        shape = ('Return ONLY a JSON object mapping each criterion number (as a string) to '
+                 'an object {"pass": true|false, "reason": "<ONE short sentence naming the '
+                 'specific evidence for the verdict>"}.')
+    else:
+        shape = ('Return ONLY a JSON object mapping each criterion number (as a string) to '
+                 "true or false.")
     return (
         "You are grading a finance deliverable against an itemized GDPval rubric. "
         "For EACH numbered criterion, decide whether the deliverable satisfies it. "
-        'Return ONLY a JSON object mapping each criterion number (as a string) to '
-        "true or false." + img_note + "\n\n"
+        + shape + img_note + "\n\n"
         f"TASK:\n{task.prompt}\n\nRUBRIC:\n" + "\n".join(lines) +
         f"\n\nDELIVERABLE:\n{deliverable}\n\nJSON:"
     )
+
+
+def rubric_reasons(txt: str, items: list) -> dict:
+    """Extract the judge's per-criterion reasons (reason-mode responses only) as
+    {criterion_number: {"pass": bool, "reason": str, "criterion": str}}. Debug-file
+    payload — keep OUT of TaskEval / the debugger evidence path."""
+    verdicts = _parse_json_obj(txt) or {}
+    out = {}
+    for i, c in enumerate(items):
+        v = verdicts.get(str(i + 1))
+        if v is None:
+            continue
+        out[str(i + 1)] = {"pass": _truthy(v),
+                           "reason": (v.get("reason", "") if isinstance(v, dict) else ""),
+                           "criterion": c["criterion"]}
+    return out
 
 
 def score_rubric(txt: str, items: list) -> tuple[float, dict]:
@@ -80,8 +110,12 @@ def score_rubric(txt: str, items: list) -> tuple[float, dict]:
     points of satisfied criteria (penalties subtract when their bad condition holds);
     the denominator is the POSITIVE-point total (max achievable), so a flawless
     deliverable scores 1.0 (not >1). Clamped to [0,1]."""
-    verdicts = _parse_json_obj(txt) or {}
-    earned = sum(c["points"] for i, c in enumerate(items) if _truthy(verdicts.get(str(i + 1))))
+    raw = _parse_json_obj(txt) or {}
+    # Normalize to plain bools: reason-mode responses carry {"pass": bool, "reason": str}
+    # objects, but TaskEval.verdicts consumers (debugger, evidence builder) test
+    # `is False` — reasons must never travel past this point (firewall).
+    verdicts = {k: _truthy(v) for k, v in raw.items()}
+    earned = sum(c["points"] for i, c in enumerate(items) if verdicts.get(str(i + 1)))
     pos_total = sum(c["points"] for c in items if c["points"] > 0) or 1.0
     return max(0.0, min(1.0, earned / pos_total)), verdicts
 

@@ -734,3 +734,42 @@ def test_confirm_tasks_heldout_gate_rejects_overfit_keep(tmp_path, monkeypatch):
                          seed_worker_dir=str(seed), noise_margin=0.05, confirm_tasks=1)
     res = L.run_levelb(cfg, _tasks=tasks, _evaluator=OverfitEval(), _llm=StubLLM())
     assert res.n_kept == 0 and res.n_rolled_back == 1   # confirm gate caught the overfit
+
+
+def test_judge_reason_mode_stays_out_of_verdicts(tmp_path):
+    """Reason-mode judge responses: verdicts normalize to plain bools (debugger
+    consumers test `is False`), reasons go to judge_reasons.json only."""
+    from qea.verifier import build_rubric_prompt, rubric_reasons, score_rubric
+    from qea.tasks import BTask
+
+    task = BTask(task_id="t", subtype="x", prompt="p", rubric="",
+                 rubric_items=[{"points": 2, "criterion": "sums to control total"},
+                               {"points": 1, "criterion": "lists assumptions"}], gold="g")
+    p = build_rubric_prompt(task, "d", task.rubric_items, with_reasons=True)
+    assert '"reason"' in p and "ONE short sentence" in p
+    p0 = build_rubric_prompt(task, "d", task.rubric_items)
+    assert '"reason"' not in p0                       # legacy shape unchanged
+
+    raw = ('{"1": {"pass": true, "reason": "total matches"}, '
+           '"2": {"pass": false, "reason": "no assumptions section"}}')
+    frac, verdicts = score_rubric(raw, task.rubric_items)
+    assert verdicts == {"1": True, "2": False}        # bools only, never dicts
+    assert abs(frac - 2 / 3) < 1e-9
+    rr = rubric_reasons(raw, task.rubric_items)
+    assert rr["2"]["reason"] == "no assumptions section"
+    assert rr["2"]["criterion"] == "lists assumptions"
+
+    # evaluator writes the debug file next to the eval outputs
+    from qea.evaluator import _write_judge_reasons
+    _write_judge_reasons(tmp_path / "task1", rr)
+    import json as _json
+    saved = _json.loads((tmp_path / "task1" / "judge_reasons.json").read_text())
+    assert saved["1"]["pass"] is True
+
+    # firewall check: the evidence builder never touches judge_reasons content
+    from qea.loop_levelb import _build_evidence
+    from qea.evaluator import TaskEval
+    evals = {"t": TaskEval(0.2, 0.2, False, "d", verdicts, 0.0)}
+    ed = _build_evidence(tmp_path / "ev", {"root_cause_tag": "x", "overview": "o"},
+                         evals, {"t": {}}, {"t": "d"}, [task], [])
+    assert "no assumptions section" not in (ed / "overview.md").read_text()

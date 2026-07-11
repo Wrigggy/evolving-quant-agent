@@ -15,6 +15,24 @@ from typing import Protocol
 from .grading.format_gate import apply_gate
 
 
+def _write_judge_reasons(out_dir, reasons) -> None:
+    """Persist the judge's per-criterion rationales to <out_dir>/judge_reasons.json.
+    HUMAN DEBUG ARTIFACT ONLY: the file sits next to the eval outputs for manual
+    failure triage and is read by nothing in the loop — reasons can paraphrase
+    expected values, so feeding them to the debugger/evolve agent would break the
+    observation firewall."""
+    if not reasons or out_dir is None:
+        return
+    import json
+    from pathlib import Path
+    try:
+        d = Path(out_dir)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "judge_reasons.json").write_text(json.dumps(reasons, indent=2, ensure_ascii=False))
+    except Exception:  # noqa: BLE001 - debug artifact must never fail an eval
+        pass
+
+
 @dataclass
 class TaskEval:
     content_score: float        # raw rubric/multimodal fraction in [0,1]
@@ -43,6 +61,7 @@ class MultimodalEvaluator:
         rendered = render(worker_run.deliverable_text, worker_run.produced_files, out_dir)
         g = self.judge.grade(task, rendered)
         gated, ok = apply_gate(g.multimodal_fraction, task, worker_run.produced_files)
+        _write_judge_reasons(out_dir, getattr(g, "reasons", None))
         return TaskEval(g.multimodal_fraction, gated, ok, rendered.text or "",
                         g.verdicts, g.variance)
 
@@ -57,17 +76,21 @@ class RubricTextEvaluator:
         self.k = k
 
     def evaluate(self, task, worker_run, out_dir=None) -> TaskEval:
-        from .verifier import build_rubric_prompt, score_rubric
+        from .verifier import build_rubric_prompt, rubric_reasons, score_rubric
         text = worker_run.deliverable_text or ""
         items = getattr(task, "rubric_items", None) or []
         if not items:
             return TaskEval(0.0, 0.0, True, text, {}, 0.0)
         fracs, verdicts = [], {}
-        for _ in range(self.k):
-            f, v = score_rubric(
-                self.llm.complete(build_rubric_prompt(task, text, items), role="judge"), items)
+        for i in range(self.k):
+            with_reasons = i == self.k - 1
+            raw = self.llm.complete(
+                build_rubric_prompt(task, text, items, with_reasons=with_reasons), role="judge")
+            f, v = score_rubric(raw, items)
             fracs.append(f)
             verdicts = v
+            if with_reasons:
+                _write_judge_reasons(out_dir, rubric_reasons(raw, items))
         content = statistics.median(fracs)
         gated, ok = apply_gate(content, task, worker_run.produced_files)
         var = statistics.pvariance(fracs) if len(fracs) > 1 else 0.0

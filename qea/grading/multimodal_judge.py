@@ -10,9 +10,9 @@ k-repeat median, matching the existing soft-judge denoising.
 from __future__ import annotations
 
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from ..verifier import build_rubric_prompt, score_rubric
+from ..verifier import build_rubric_prompt, rubric_reasons, score_rubric
 
 
 @dataclass
@@ -23,6 +23,10 @@ class GradeResult:
     verdicts: dict
     variance: float
     degraded: bool
+    # Per-criterion judge rationales (reason mode). HUMAN DEBUG ONLY: the evaluator
+    # writes these to judge_reasons.json and they must never reach TaskEval or the
+    # debugger/evolve evidence path (a reason can paraphrase expected values).
+    reasons: dict = field(default_factory=dict)
 
 
 class MultimodalJudge:
@@ -49,17 +53,24 @@ class MultimodalJudge:
             frac, _ = score_rubric(self.llm.complete(p, role="judge"), items)
             text_samples.append(frac)
 
-        # multimodal
+        # multimodal — the LAST sample runs in reason mode so every eval leaves a
+        # per-criterion "why" trail for humans (debug artifact; never fed onward).
         mm_samples = []
         last_verdicts: dict = {}
-        for _ in range(self.k):
-            p = build_rubric_prompt(task, deliverable_text, items, has_images=bool(rendered.images))
-            frac, verdicts = score_rubric(
-                self.llm.complete(p, role="judge", images=rendered.images or None), items)
+        reasons: dict = {}
+        for i in range(self.k):
+            with_reasons = i == self.k - 1
+            p = build_rubric_prompt(task, deliverable_text, items,
+                                    has_images=bool(rendered.images), with_reasons=with_reasons)
+            raw = self.llm.complete(p, role="judge", images=rendered.images or None)
+            frac, verdicts = score_rubric(raw, items)
             mm_samples.append(frac)
             last_verdicts = verdicts
+            if with_reasons:
+                reasons = rubric_reasons(raw, items)
 
         var = statistics.pvariance(mm_samples) if len(mm_samples) > 1 else 0.0
         degraded = bool(rendered.degraded) or not rendered.images
         return GradeResult(task.task_id, statistics.median(mm_samples),
-                           statistics.median(text_samples), last_verdicts, var, degraded)
+                           statistics.median(text_samples), last_verdicts, var, degraded,
+                           reasons=reasons)
