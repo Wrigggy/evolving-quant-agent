@@ -104,6 +104,23 @@ def run_worker_e2b(task, worker_dir, run_dir) -> WorkerRun:
         # Upload agent dir, entry script, reference inputs, task spec.
         _upload_dir(sbx, worker_dir, "/home/user/agent")
         sbx.files.write("/home/user/entry.py", _ENTRY.read_bytes())
+        # Benchmark-provided VM setup (e.g. APEX: download+extract the ~100-330MB
+        # world data room directly from HF inside the VM — far faster than pushing
+        # it through the local uplink, and it keeps the local process memory-flat).
+        setup_cmd = getattr(task, "vm_setup_cmd", "") or ""
+        if setup_cmd:
+            envs = {}
+            tok = os.environ.get("HF_TOKEN", "")
+            if not tok:
+                tok_file = Path.home() / ".cache" / "huggingface" / "token"
+                tok = tok_file.read_text().strip() if tok_file.exists() else ""
+            if tok:
+                envs["HF_TOKEN"] = tok
+            r = sbx.commands.run(f"mkdir -p /home/user/work && cd /home/user/work && {setup_cmd}",
+                                 envs=envs, timeout=600)
+            if r.exit_code != 0:
+                raise RuntimeError(f"vm_setup_cmd failed (exit={r.exit_code}): "
+                                   f"{(r.stderr or '')[:200]}")
         for rf in ref_files:
             sbx.files.write(f"/home/user/work/{rf.name}", rf.read_bytes())
         sbx.files.write("/home/user/task.json", json.dumps({

@@ -846,3 +846,34 @@ def test_dsbench_deterministic_match_and_evaluator(tmp_path):
     r2 = ev.evaluate(t, WorkerRun("maybe D, maybe B", [], {}))
     assert r2.gated_score == 1.0 and len(calls) == 1          # fell back to judge
     assert "The true answer is" in calls[0]                   # official prompt shape
+
+
+def test_apex_ib_loader_and_evaluator(tmp_path):
+    """APEX-IB: rubric conversion to {points, criterion}, world staged via
+    vm_setup_cmd (never as local reference uploads), xlsx dump reaches the judge."""
+    import openpyxl
+    from qea.bench_apex import APEXEvaluator, load_apex_ib
+    from qea.worker_runtime import WorkerRun
+
+    tasks = load_apex_ib()
+    assert len(tasks) == 160
+    assert sum(1 for t in tasks if t.deliverable_exts) == 27      # file deliverables
+    t = tasks[0]
+    assert t.rubric_items and set(t.rubric_items[0]) == {"points", "criterion"}
+    assert "world_files_zipped" in t.vm_setup_cmd and t.subtype in t.vm_setup_cmd
+    assert all("gold" not in r.lower() for r in t.reference_files)  # overlays only
+
+    seen = {}
+    class StubLLM:
+        def complete(self, prompt, *, role="judge", **kw):
+            seen["prompt"] = prompt
+            return '{"1": true}'
+
+    xl = tmp_path / "model.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active; ws["A1"] = "Net Income"; ws["B1"] = 1772
+    wb.save(xl)
+    answer_task = next(x for x in tasks if not x.deliverable_exts)
+    ev = APEXEvaluator(StubLLM(), k=1)
+    r = ev.evaluate(answer_task, WorkerRun("The value is 24.9x", [xl], {}))
+    assert r.gated_score > 0
+    assert "Net Income" in seen["prompt"] and "1772" in seen["prompt"]  # dump attached

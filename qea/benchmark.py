@@ -47,6 +47,14 @@ def make_benchmark(name: str, *, llm=None, broad: bool = True, k: int = 2) -> Be
     if name == "gdpval_all":
         # Protocol-v2 pool: the full open gold subset (220 tasks, 44 occupations).
         return gdpval_benchmark(broad=broad, allow_download=True, llm=llm, occupations=())
+    if name == "apex_ib":
+        # APEX-Agents Investment Banking (160 tasks, 10 worlds): rubric LLM judge
+        # (our shared scorer); worlds stage via in-VM HF download (vm_setup_cmd).
+        from .bench_apex import APEXEvaluator, load_apex_ib
+        tasks = load_apex_ib()
+        corpus = [c["criterion"] for t in tasks for c in (t.rubric_items or [])]
+        return Benchmark("apex_ib", tasks, SoftJudge(llm), corpus, "b_pile",
+                         evaluator=APEXEvaluator(llm, k=k))
     if name == "dsbench":
         # DSBench data-analysis (466 ModelOff finance questions): deterministic
         # letter/numeric matching + official LLM judge fallback — near-zero judge noise.
