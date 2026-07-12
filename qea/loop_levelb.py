@@ -609,10 +609,17 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
                     noise_margin=noise_margin, stability_lambda=cfg.stability_lambda,
                     inc_vars={tid: evals[tid].variance for tid in fair_tids},
                     cand_vars={tid: cand_evals[tid].variance for tid in fair_tids})
+                # No HARMFUL veto here: the 5-class verdict flags prediction mismatch
+                # (unattributed regressions), which was the whack-a-mole guard for the
+                # mean-vs-floor gate. Under the paired rule the statistics already
+                # price the regressions into the CI, and the held-out CONFIRM gate is
+                # the overfit/regression safety net — a net-positive 8-up-3-down edit
+                # must not be silently vetoed by a per-task prediction miss (observed:
+                # iter kept by CI, vetoed as HARMFUL, log said KEEP — a lie).
+                kept = dec["kept"]
                 print(f"[iter {it}] paired keep gate: mean_delta={dec['mean_delta']:+.4f} "
                       f"objective_delta={dec['objective_delta']:+.4f} ci_lo={dec['ci_lo']:+.4f} "
-                      f"(n={dec['n']}) -> {'KEEP' if dec['kept'] else 'ROLLBACK'}", flush=True)
-                kept = dec["kept"] and verdict != "HARMFUL"
+                      f"(n={dec['n']}, verdict={verdict}) -> {'KEEP' if kept else 'ROLLBACK'}", flush=True)
             else:
                 kept = decide_keep_soft(fair_inc, fair_cand, noise_margin) and verdict != "HARMFUL"
             if kept and cfg.confirm_band > 0 and (fair_cand - fair_inc) < noise_margin + cfg.confirm_band:
