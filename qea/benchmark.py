@@ -47,6 +47,13 @@ def make_benchmark(name: str, *, llm=None, broad: bool = True, k: int = 2) -> Be
     if name == "gdpval_all":
         # Protocol-v2 pool: the full open gold subset (220 tasks, 44 occupations).
         return gdpval_benchmark(broad=broad, allow_download=True, llm=llm, occupations=())
+    if name == "dsbench":
+        # DSBench data-analysis (466 ModelOff finance questions): deterministic
+        # letter/numeric matching + official LLM judge fallback — near-zero judge noise.
+        from .bench_dsbench import DSBenchEvaluator, load_dsbench
+        tasks = load_dsbench()
+        return Benchmark("dsbench_da", tasks, HardVerifier(), [], "b_pile",
+                         evaluator=DSBenchEvaluator(llm))
     if name.startswith("ssb"):
         # SpreadsheetBench: deterministic official checker — zero judge noise.
         # "ssb" / "ssb_912" = evolution pool; "ssb_verified" = held-out reporting.

@@ -817,3 +817,32 @@ def test_ssb_loader_and_evaluator_offline(tmp_path, monkeypatch):
     assert ev.evaluate(t1, WorkerRun("done", [bad], {})).gated_score == 0.0
     miss = ev.evaluate(t1, WorkerRun("done", [], {}))
     assert miss.gated_score == 0.0 and not miss.format_ok
+
+
+def test_dsbench_deterministic_match_and_evaluator(tmp_path):
+    """DSBench: letter/numeric golds grade deterministically; only free-form golds
+    reach the LLM judge; gold never appears in prompt or sandbox files."""
+    from qea.bench_dsbench import DSTask, DSBenchEvaluator, deterministic_match
+    from qea.worker_runtime import WorkerRun
+
+    assert deterministic_match("D", "blah\nFinal answer: D") is True
+    assert deterministic_match("D", "Final answer: B") is False
+    assert deterministic_match("D", "I think D or maybe B") is None      # ambiguous -> judge
+    assert deterministic_match("1661626", "Final answer: 1,661,626") is True
+    assert deterministic_match("1661626", "Final answer: $1,661,625") is False
+    assert deterministic_match("{'Q': 1}", "Final answer: whatever") is None  # dict -> judge
+
+    calls = []
+    class JudgeLLM:
+        def complete(self, prompt, *, role="judge", **kw):
+            calls.append(prompt)
+            return "True"
+
+    t = DSTask(task_id="c_q1", subtype="c", prompt="p", reference_files=[],
+               deliverable_exts=[], gold="D", question_text="q?")
+    ev = DSBenchEvaluator(JudgeLLM())
+    r = ev.evaluate(t, WorkerRun("Final answer: D", [], {}))
+    assert r.gated_score == 1.0 and not calls                 # deterministic, no judge call
+    r2 = ev.evaluate(t, WorkerRun("maybe D, maybe B", [], {}))
+    assert r2.gated_score == 1.0 and len(calls) == 1          # fell back to judge
+    assert "The true answer is" in calls[0]                   # official prompt shape
