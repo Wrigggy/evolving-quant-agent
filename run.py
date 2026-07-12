@@ -67,6 +67,10 @@ def main() -> int:
     ap.add_argument("--evidence-mode", default="sanitized", choices=["sanitized", "ahe_corpus"],
                     help="levelb: evolve-agent evidence — sanitized (firewall ON) or "
                          "ahe_corpus (traces+analysis, no gold; firewall relaxed)")
+    ap.add_argument("--task-ids", default="",
+                    help="levelb: comma-separated task ids (or @file) forming the optimize pool "
+                         "(reordered to the front; --n-tasks should equal their count; the "
+                         "remaining benchmark tasks follow, so --confirm-tasks draws from them)")
     ap.add_argument("--confirm-tasks", type=int, default=0,
                     help="levelb: held-out CONFIRM batch size — a keep must not regress on the "
                          "next N benchmark tasks after the optimize pool (0 = off)")
@@ -109,10 +113,32 @@ def main() -> int:
                             prior_history_dir=args.prior_history_dir, confirm_band=args.confirm_band,
                             n_samples=args.n_samples, keep_rule=args.keep_rule,
                             stability_lambda=args.stability_lambda, confirm_tasks=args.confirm_tasks)
+        bench = None
+        if args.task_ids:
+            # Hand-picked optimize pool: reorder the benchmark so the picked ids come
+            # first (tasks[:n_tasks] = the pool) and everything else follows (the
+            # confirm gate draws its held-out batch from the remainder).
+            from pathlib import Path as _P
+            from qea.benchmark import make_benchmark as _mk
+            from qea.llm import make_llm as _ml
+            spec = args.task_ids
+            if spec.startswith("@"):
+                spec = _P(spec[1:]).read_text().strip()
+            wanted = [x.strip() for x in spec.split(",") if x.strip()]
+            bench = _mk(args.benchmark, llm=_ml(False), broad=not args.core, k=args.k)
+            by_id = {str(t.task_id): t for t in bench.tasks}
+            missing = [w for w in wanted if w not in by_id]
+            if missing:
+                raise SystemExit(f"[run] --task-ids not in benchmark: {missing}")
+            rest = [t for t in bench.tasks if str(t.task_id) not in set(wanted)]
+            bench.tasks = [by_id[w] for w in wanted] + rest
+            lcfg.n_tasks = len(wanted)
+            print(f"[run] optimize pool = {len(wanted)} hand-picked task(s); "
+                  f"{len(rest)} remain for the confirm gate", flush=True)
         print(f"[run] mode=LEVEL-B ({lcfg.benchmark} worker dir evolved by a file-editing evolve agent) "
               f"iters={lcfg.n_iters} k={lcfg.k} n_tasks={lcfg.n_tasks} seed={seed} "
               f"evidence={lcfg.evidence_mode} -> {lcfg.results_dir}")
-        res = run_levelb(lcfg)
+        res = run_levelb(lcfg, benchmark=bench)
         _print_levelb(res)
         rose = res.mean_score_trajectory[-1] > res.mean_score_trajectory[0] + res.noise_margin
         print(f"\n  ==> LEVEL-B HEADROOM {'OBSERVED' if rose else 'NOT OBSERVED'}: "
