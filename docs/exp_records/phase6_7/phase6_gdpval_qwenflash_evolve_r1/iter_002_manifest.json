@@ -1,0 +1,31 @@
+{
+  "iteration": 2,
+  "verdict": "MIXED",
+  "kept": false,
+  "edit_summary": "edit agent.yaml, systemprompt.md, tool_descriptions/excel_read.tool.yaml, tools/fab/excel_read.py (+310/-14)",
+  "diff_signature": "699beaea43466cb5e5030be569ecc04b52c281e308b247366b5d1d9e4e91b571",
+  "predicted_fixes": [
+    "7b08cd4d-df60-41ae-9102-8aaa49306ba2",
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "risk_tasks": [
+    "43dc9778-450b-4b46-b77e-b6d82b202035"
+  ],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "3 failing task(s) across 1 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "7b08cd4d-df60-41ae-9102-8aaa49306ba2",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+    ],
+    "overview": "The worker consistently fails to accurately retrieve and parse data from source documents, resulting in hallucinated figures, misclassified line items, and omitted deliverables.",
+    "root_cause": "The worker consistently fails to accurately retrieve and parse data from source documents, resulting in hallucinated figures, misclassified line items, and omitted deliverables.",
+    "general_mechanism": "1. Bind a robust document parsing tool (e.g., PDF table extractor, Excel reader) that can reliably extract structured data from financial documents, and require the worker to use it to read all required source files before any calculations or form filling. 2. Add a verification prompt rule: after extracting data, the worker must cross-check sub-total categories against the source document's line-item details before final output.",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.5875
+}

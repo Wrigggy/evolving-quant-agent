@@ -1,0 +1,30 @@
+{
+  "iteration": 3,
+  "verdict": "HARMFUL",
+  "kept": false,
+  "edit_summary": "edit agent.yaml, systemprompt.md, tool_descriptions/excel_write.tool.yaml, tools/fab/excel_write.py (+207/-8)",
+  "diff_signature": "2711368c55dfca63c18a59073dba869dd8be81597231c5790b376d3041323c88",
+  "predicted_fixes": [
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "risk_tasks": [
+    "7b08cd4d-df60-41ae-9102-8aaa49306ba2",
+    "43dc9778-450b-4b46-b77e-b6d82b202035"
+  ],
+  "diagnosis": {
+    "root_cause_tag": "prompt",
+    "deficiency_category": "3 failing task(s) across 1 occupation(s)",
+    "suggested_target_slot": "prompt",
+    "predicted_fix_task_ids": [
+      "7b08cd4d-df60-41ae-9102-8aaa49306ba2",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+    ],
+    "overview": "The agent lacks explicit instructions to extract exact values from source documents, verify categorizations against original labels, and gracefully recover from file-generation failures, leading to misclassified figures, omitted required sections, and stalled Excel output.",
+    "root_cause": "The agent lacks explicit instructions to extract exact values from source documents, verify categorizations against original labels, and gracefully recover from file-generation failures, leading to misclassified figures, omitted required sections, and stalled Excel output.",
+    "general_mechanism": "1. Prompt rule: 'Extract all numerical values directly from the source documents without approximation; compare each line item's category to the document's field labels before summing. Cross-check final totals against the sum of their components. If a file must be created, always outline the full list of required sections first and confirm completeness before writing. If code fails more than 3 times, log the error, stop looping, and use a simpler alternative (e.g., a pre-built template write).' 2. Tool configuration: ensure the Python environment has openpyxl installed and provide a dedicated Excel\u2011writing utility that can accept a dictionary of sheet data and produce a workbook without manual loop coding, reducing the chance of tool errors and infinite loops.",
+    "mechanism_kind": "prompt",
+    "_b_pile": true
+  },
+  "inc_mean": 0.5875
+}

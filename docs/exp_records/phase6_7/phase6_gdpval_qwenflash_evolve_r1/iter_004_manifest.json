@@ -1,0 +1,29 @@
+{
+  "iteration": 4,
+  "verdict": "MIXED",
+  "kept": false,
+  "edit_summary": "edit agent.yaml, systemprompt.md, tool_descriptions/excel_read.tool.yaml, tool_descriptions/pdf_extract.tool.yaml, tools/fab/excel_read.py, tools/fab/pdf_extract.py (+487/-33)",
+  "diff_signature": "7aa8d5b5dbdf269cde62defd8d824e1ae82702339ad4e1a99f0cec599646aca2",
+  "predicted_fixes": [
+    "7b08cd4d-df60-41ae-9102-8aaa49306ba2",
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "risk_tasks": [],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "3 failing task(s) across 1 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "7b08cd4d-df60-41ae-9102-8aaa49306ba2",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+    ],
+    "overview": "The agent cannot reliably extract exact numeric values from source financial documents, causing hallucinations (e.g., 15.82% vs. 15.825% withholding rate, $1,008.19 interest vs. $1,116) and leading to incomplete or absent deliverables (missing schedules, no Excel workbook) due to retrieval failures and tool\u2011execution loops.",
+    "root_cause": "The agent cannot reliably extract exact numeric values from source financial documents, causing hallucinations (e.g., 15.82% vs. 15.825% withholding rate, $1,008.19 interest vs. $1,116) and leading to incomplete or absent deliverables (missing schedules, no Excel workbook) due to retrieval failures and tool\u2011execution loops.",
+    "general_mechanism": "Add a specialised financial\u2011document extraction tool (e.g., a PDF/Excel cell\u2011exact parser) and wire it into the agent's tool suite; complement with a system prompt rule that numeric values from source files must be extracted using this tool, never approximated from memory, and that all requested forms/schedules must be generated in full using precise extracted data.",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.5875
+}

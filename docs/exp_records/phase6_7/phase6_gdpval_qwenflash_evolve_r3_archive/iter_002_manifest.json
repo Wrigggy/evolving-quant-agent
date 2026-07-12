@@ -1,0 +1,48 @@
+{
+  "iteration": 2,
+  "verdict": "HARMFUL",
+  "kept": false,
+  "edit_summary": "edit agent.yaml, systemprompt.md, tool_descriptions/excel_read.tool.yaml, tools/fab/excel_read.py (+295/-2)",
+  "diff_signature": "3168da94b0631fed2e5dae1e618ab72732bdf355cbd64e67b08ee6d658cba762",
+  "predicted_fixes": [
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "risk_tasks": [
+    "43dc9778-450b-4b46-b77e-b6d82b202035"
+  ],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "3 failing task(s) across 1 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+    ],
+    "overview": "The agent lacks a reliable mechanism to extract precise numeric values and formatting details from source files, causing hallucinated data, computational omissions, and infinite file-verification loops.",
+    "root_cause": "The agent lacks a reliable mechanism to extract precise numeric values and formatting details from source files, causing hallucinated data, computational omissions, and infinite file-verification loops.",
+    "general_mechanism": "1) Add a robust file parsing tool (e.g., a Python-based CSV/Excel reader or a dedicated text extraction utility) that returns exact cell values and structural metadata without the tool errors observed; 2) Introduce a prompt rule requiring the agent to explicitly extract, display, and cross-check all critical numbers and formatting against the parsed source output before generating the deliverable, and to halt if extraction fails.",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.622,
+  "cand_scores": {
+    "83d10b06-26d1-4636-a32c-23f92c57f30b": 0.6667,
+    "7b08cd4d-df60-41ae-9102-8aaa49306ba2": 0.5169,
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f": 0.5263,
+    "43dc9778-450b-4b46-b77e-b6d82b202035": 0.0455,
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5": 0.4153,
+    "8079e27d-b6f3-4f75-a9b5-db27903c798d": 0.4364,
+    "e21cd746-404d-4602-b9d2-01d2812c5b87": 0.0,
+    "9e8607e7-a38a-491f-ace1-e5ea7dc477cb": 0.9348
+  },
+  "improved": [],
+  "regressed": [
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "7b08cd4d-df60-41ae-9102-8aaa49306ba2",
+    "8079e27d-b6f3-4f75-a9b5-db27903c798d",
+    "e21cd746-404d-4602-b9d2-01d2812c5b87",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ]
+}

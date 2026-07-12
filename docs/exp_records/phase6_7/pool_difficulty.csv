@@ -1,0 +1,209 @@
+tid,occ,dexts,n_rubric,n_refs,ref_exts,vis,score,prompt_head
+4d61a19a,General and Operations Managers,".pptx,.xlsx",43,0,,38,18.0,You are the Regional Director of a region of multiple grocery store meat departments. Each store has a meat de
+4b98ccce,Medical Secretaries and Administrative,".pdf,.xlsx",31,4,.pdf,10,17.2,"You are the Medical Administrative Assistant at Golden Hills Hospital System, a statewide network of hospital "
+3c19c6d1,Project Management Specialists,.pptx,41,4,".docx,.xlsx",57,17.2,You are a Project Manager at a UK-based tech start-up called Bridge Mind. Bridge Mind successfully obtained gr
+a73fbc98,Recreation Workers,".pdf,.xlsx",63,3,".pdf,.xlsx",54,16.9,"It is early 2025. You are a Senior Manager in the Recreation Department of a small city. In one month, your la"
+fe0d3941,"Sales Representatives, Wholesale and M",".pdf,.pptx",27,2,".docx,.jpg",17,16.6,You are an application manager for a global science and technology company. The company development team wants
+87da214f,Customer Service Representatives,.pptx,59,2,".docx,.xlsx",22,16.6,You've worked for six years as a reimbursement services representative for a digital security services company
+552b7dd0,"Shipping, Receiving, and Inventory Cle",.pptx,63,1,.xlsx,34,16.3,You are an Inventory Analyst on the inventory management team at a large warehouse. The inventory management t
+2ea2e5b5,Computer and Information Systems Manag,.pptx,60,1,.xlsx,40,16.3,"You are an IT manager in your company. The organization is a large enterprise, and your IT department supports"
+c6269101,Industrial Engineers,.pptx,31,1,.xlsx,11,16.3,You are an Industrial Engineer working for a large organization that operates multiple high-volume processing 
+be830ca0,Industrial Engineers,.pptx,55,1,.xlsx,49,16.3,You are an Industrial Engineer working for a large logistics company. You have been assigned to support the An
+3600de06,Personal Financial Advisors,.pptx,42,0,,21,16.0,You are a financial advisor working at a wealth management firm.  It has been brought to your attention that m
+ec591973,First-Line Supervisors of Non-Retail S,.pptx,68,0,,81,16.0,You are the Director of Strategy for a prestige cosmetic brand with distribution across multiple retail channe
+1b9ec237,Nurse Practitioners,.pptx,47,0,,24,16.0,You are a nurse practitioner and have been asked to prepare a lecture presentation on hypertension (HTN) for a
+a74ead3b,"Child, Family, and School Social Worke",.pptx,57,0,,26,16.0,You work as a home visitor for a nonprofit organization that provides home visiting and parenting programs for
+c657103b,Personal Financial Advisors,".pptx,.xlsx",36,1,.docx,7,15.9,"You are an independent financial planner in Columbus, Ohio advising a client who has a 401(k)-plan with an ant"
+c44e9b62,Administrative Services Managers,".docx,.pdf,.xlsx",44,3,".pdf,.xlsx",22,15.9,You are the Administrative Services Manager responsible for the Administrative Support Services Branch in the 
+403b9234,Recreation Workers,.pptx,17,0,,27,15.6,"You are the new Director of Parks & Recreation for a local US County, hired approximately six months ago. Sinc"
+a0552909,Medical Secretaries and Administrative,".docx,.xlsx",50,2,".pdf,.xlsx",32,15.6,"You work as the lead medical secretary for oncology testing center Reach Oncology, which specializes in geneti"
+a45bc83b,Computer and Information Systems Manag,".docx,.pdf",72,2,".docx,.pdf",25,15.6,You are a Solutions Architect assisting a customer in migrating and modernizing their on-premises application 
+4d1a8410,First-Line Supervisors of Office and A,.docx,64,8,".docx,.png",16,15.4,"Every year, Nu Arc Medical Center (NAMC) interviews applicants for a position in their Medical Training Progra"
+c9bf9801,Medical and Health Services Managers,".docx,.pdf",47,1,.docx,18,15.3,You are a Senior Advisor for Workforce Equity in DGHT. You have been asked to finalize a comprehensive and pro
+a46d5cd2,Private Detectives and Investigators,.pdf,56,4,".docx,.pdf,.zip",16,15.2,You are the supervisor in charge of the Fraudulent Claims Division at a respected private investigation firm. 
+41f6ef59,Medical Secretaries and Administrative,".docx,.xlsx",39,0,,13,15.0,"You work as a medical secretary for a weight loss clinic. The clinic operates on a subscription model, and pat"
+62f04c2f,First-Line Supervisors of Non-Retail S,".docx,.xlsx",53,0,,16,15.0,"Gravon Shoes manufactures, markets, and sells footwear to specialty independent retailers and department store"
+8077e700,Mechanical Engineers,.pdf,44,2,".pdf,.xlsx",11,14.6,You are a mechanical engineer assigned to the Materials Testing Laboratory. You have been asked to analyze the
+57b2cdf2,Private Detectives and Investigators,.pdf,45,2,".docx,.zip",15,14.6,You are a supervisor at a well established private investigation firm. Your firm received a request from a cli
+e4f664ea,Producers and Directors,.pdf,50,2,".jpg,.pdf",11,14.6,"You are an auteur, and you're now at the screenwriting phase for your next short film, ""SAINTLINESS,"" an origi"
+cecac8f9,First-Line Supervisors of Retail Sales,.pdf,55,2,.pdf,10,14.6,It is September 2024 and you are a Retail Sales Manager. The store you manage is located in the UK. You have b
+40a99a31,Industrial Engineers,".pdf,.xlsx",64,0,,8,14.4,"You are an Industrial Engineer tasked with identifying a solution to enhance safety, automation, and visibilit"
+f2986c1f,Pharmacists,.xlsx,77,1,.jpg,31,14.3,You are a pharmacist working in the emergency room and have received an image of a recently admitted patient's
+b5d2e6f1,Order Clerks,.xlsx,32,1,.xlsx,42,14.3,You are an Assistant Buyer at a large specialty retailer in the beauty department. Your responsibilities inclu
+a69be28f,Sales Managers,.pdf,54,1,.xlsx,46,14.3,"You are the U.S. Sales Manager at Best Jeans, a global premium denim brand sold through both retail and wholes"
+9e39df84,First-Line Supervisors of Production a,.xlsx,57,1,.xlsx,74,14.3,"You are a production supervisor overseeing a high-volume, two-shift operation (day and night) that runs five d"
+47ef842d,Order Clerks,.xlsx,58,1,.xlsx,12,14.3,"You are a Wholesale Sales Analyst for a fragrance company, supporting the Account Management team with the exe"
+d7cfae6f,"Sales Representatives, Wholesale and M",.xlsx,63,1,.xlsx,34,14.3,You are a Planning Manager for the national accounts team at a cosmetics brand. Your role involves analyzing r
+788d2bc6,Sales Managers,.pdf,48,1,.docx,90,14.3,"You are the Sales Manager of Agence Marquetia, a performance and influencer marketing agency. Your task is to "
+b9665ca1,Industrial Engineers,.pdf,59,1,.png,20,14.3,"You are an engineer at a custom automation equipment manufacturing firm. The firm is based in the US, and oper"
+3f821c2d,First-Line Supervisors of Non-Retail S,.xlsx,46,1,.xlsx,10,14.3,It is July 2025. You are a Divisional Merchandise Manager for a department store. You’ve been asked to build a
+e996036e,First-Line Supervisors of Non-Retail S,.xlsx,50,1,.xlsx,16,14.3,"You are the Senior Director of Sales for a mid-size cosmetic brand preparing to open a new retail account, Cos"
+61e7b9c6,Medical and Health Services Managers,.xlsx,19,1,.xlsx,12,14.2,You are the Medical Director of an online Women's Health clinic that is preparing to open a dedicated perimeno
+f5d428fd,Concierges,.pdf,39,0,,12,14.0,You are a Senior Lifestyle Manager at a luxury concierge company that serves ultra-high-net-worth individuals.
+81db15ff,Medical and Health Services Managers,.xlsx,58,0,,15,14.0,You are the director of telehealth expansion at a behavioral health company. Company leadership is considering
+0fad6023,General and Operations Managers,.xlsx,44,0,,12,14.0,You are the Regional Director of Meat and Seafood departments for a region of stores. Meat Department Team Lea
+46bc7238,Real Estate Brokers,.pdf,46,0,,13,14.0,You are the Senior Commercial Real Estate Leasing Broker leading a team of junior leasing agents in Florida. Y
+99ac6944,Audio and Video Technicians,.pdf,52,0,,24,14.0,You’ve been hired as an In Ear Monitor (IEM) Tech for a touring band playing mid-sized venues and festivals (3
+f9a1c16c,Audio and Video Technicians,.pdf,51,0,,16,14.0,You are the A/V and In-Ear Monitor (IEM) Tech for a nationally touring band. You are responsible for providing
+f9f82549,Private Detectives and Investigators,.pdf,26,0,,24,14.0,You are a Loss Prevention professional for a multi-store retailer. You need to develop general procedures for 
+9a8c8e28,Editors,.pdf,67,0,,34,14.0,You are the new editor of an online news outlet based in the UK. Your team are all experienced journalists and
+ee09d943,Accountants and Auditors,.xlsx,44,17,".txt,.xlsx",7,14.0,"As our Senior Staff Accountant in Financial Reporting & Assembly, you’ve been a critical part of the Aurisic t"
+6241e678,Producers and Directors,.pdf,60,0,,41,14.0,You’re a video producer for an advertising agency preparing to onboard a new project: A 60-second live-action 
+ab81b076,"Sales Representatives, Wholesale and M",.pdf,39,0,,10,14.0,You are an Automotive District Parts Manager working with several automotive dealers to improve the efficiency
+2696757c,Compliance Officers,.pdf,25,0,,14,14.0,You are a Regulatory Affairs Specialist working on standard monthly operational risk testing for December 2024
+e21cd746,Financial and Investment Analysts,.pdf,28,0,,15,14.0,It is April 2025 and you are a Managing Director at an investment banking firm covering the e-commerce / fulfi
+d025a41c,Customer Service Representatives,.docx,60,3,.docx,12,13.9,You are a customer service representative who works for a bank. You are on a team that provides assistance via
+3940b7e7,Mechanical Engineers,.pdf,55,2,".pdf,.step",9,13.8,You are a Mechanical Engineer at a small aerospace firm designing an experimental X-Wing assembly for a next-g
+b3573f20,Sales Managers,.pdf,17,0,,11,13.6,"You are a Sales Manager for a distribution company, and you have been asked to streamline the onboarding proce"
+19403010,"Sales Representatives, Wholesale and M",.xlsx,63,1,.xlsx,9,13.5,You are a national account director at a cosmetics brand. One of your accounts is XR retailer. It is January 2
+7d7fc9a7,Accountants and Auditors,.xlsx,56,6,".pdf,.xlsx",7,13.4,You are a Senior Staff Accountant at Aurisic. You have been tasked with preparing a detailed amortization sche
+61b0946a,Medical and Health Services Managers,.docx,50,1,.xlsx,11,13.3,You are the Health Manager of the Medical Education team in the General Surgery Department at Hope Hospital. E
+6436ff9e,General and Operations Managers,.docx,51,1,.docx,13,13.3,You work as a consultant for an art studio. In-person studio classes are one of the strongest income streams f
+8c8fc328,Film and Video Editors,.docx,30,1,.docx,13,13.3,You are a video editor at a video production company. You have been tasked with writing a basic script (not a 
+40a8c4b1,First-Line Supervisors of Office and A,.xlsx,72,3,".docx,.xlsx",8,13.3,You are the Medical Education Administrator for the Otolaryngology department in the School of Medicine. As pa
+05389f78,Buyers and Purchasing Agents,.docx,66,1,.docx,19,13.3,"You are the Banyan Crest Automotive, a leading automotive manufacturer headquartered in India. You oversee the"
+0ec25916,Registered Nurses,.pdf,42,0,,9,13.2,You are a Registered nurse working in an Emergency department (ED). Your nurse manager has been informed that 
+a99d85fc,"Property, Real Estate, and Community A",.xlsx,52,0,,9,13.2,You are a property manager for a building with a current vacancy that you are trying to lease. A prospective t
+6974adea,"News Analysts, Reporters, and Journali",text,69,7,.docx,11,13.1,"You are a technology journalist at a respected online news publisher, working for a section that deals with en"
+1752cb53,First-Line Supervisors of Production a,.xlsx,46,5,.xlsx,7,13.1,You are a production supervisor for a wire extrusion manufacturing facility.  Your facility recently purchased
+c2e8f271,Computer and Information Systems Manag,.docx,67,0,,13,13.0,You are an Engineering Manager responsible for four software teams at a Product Agency that is hired by client
+1b1ade2d,Buyers and Purchasing Agents,.docx,51,0,,12,13.0,"You’re the Senior Manager in the Purchase department at one of India’s largest automotive companies, responsib"
+476db143,Counter and Rental Clerks,.pdf,28,2,.pdf,8,13.0,"You are a leasing agent at Qyrevia Property Management, overseeing a community consisting of 98 units. Your ro"
+2fa8e956,Concierges,.docx,28,0,,10,13.0,"It is August 20, 2025 and you are a Senior Lifestyle Manager at a luxury concierge company for ultra-high-net-"
+aa071045,Counter and Rental Clerks,".docx,.xlsx",63,1,.xlsx,7,12.9,Today is September 18th and you are a Car Rental Clerk working at the ORD (Chicago O'Hare Airport) location. D
+7b08cd4d,Accountants and Auditors,.xlsx,59,1,.xlsx,8,12.7,You are the Finance Lead for an advisory client and are responsible for managing and controlling expenses rela
+5d0feb24,"News Analysts, Reporters, and Journali",.docx,46,1,.docx,9,12.5,"You are the senior science editor at AstronomyNews, a leading online publication known for in-depth, timely co"
+fccaa4a1,Concierges,.pdf,40,0,,8,12.4,You work as a Senior Lifestyle Manager at a luxury concierge company for ultra-high-net-worth individuals.  Yo
+a10ec48c,Concierges,.docx,22,0,,9,12.2,"You are a Concierge at a luxury residential property, focused on improving the quality of service. You are wor"
+9a0d8d36,Personal Financial Advisors,.pptx,40,0,,5,12.0,"You are a financial advisor at CrawBank located in Crawford, Missouri, providing investment advice to executiv"
+76d10872,"Child, Family, and School Social Worke",.pdf,74,4,.pdf,6,12.0,You are a Child Support Enforcement Investigator with a human services organization. Your job is an investigat
+c3525d4d,Order Clerks,".docx,.xlsx",52,3,".docx,.xlsx",5,11.9,"You are an Order Analyst at a wholesale accessories company. You support Sales, Demand Planning, and Productio"
+105f8ad0,"Sales Representatives, Wholesale and M",.xlsx,46,1,.xlsx,7,11.9,You are the Director of Sales at a wholesale company specializing in luxury men's fragrances. As part of a bro
+85d95ce5,"Child, Family, and School Social Worke",text,62,3,.docx,13,11.9,It is September 2024.  You are a school social worker serving grades K-5 in Hillsborough County Public Schools
+61717508,Customer Service Representatives,.pdf,42,1,.pdf,7,11.9,You’re a Senior Customer Service Representative who’s been asked to help train new hires at your financial ser
+76418a2c,"Shipping, Receiving, and Inventory Cle",.xlsx,56,3,.xlsx,6,11.7,You are a Shipping Clerk working for an automotive parts company that sells to major car manufacturers. These 
+1aecc095,First-Line Supervisors of Office and A,.docx,52,1,.docx,8,11.7,You are the Operations Manager for the Family Medicine Department at Calm River Health Center. The Health Cent
+bb499d9c,"Securities, Commodities, and Financial",.docx,61,1,.pdf,8,11.7,"As the newly hired VP of Sales & Growth at a fintech start-up, you'll oversee a two-sided marketplace that con"
+11dcc268,"Shipping, Receiving, and Inventory Cle",.xlsx,27,3,.xlsx,6,11.7,"You are an inventory clerk working for an automotive company. In this role, you are required to keep track of "
+e6429658,Nurse Practitioners,text,63,2,".docx,.png",11,11.6,You are a nurse practitioner in an outpatient clinic in May 2025 caring for a 65-year-old male patient with tr
+45c6237b,First-Line Supervisors of Retail Sales,text,33,2,".pdf,.xlsx",34,11.6,You are a Retail Sales Manager and Buyer for Crescent Pines Lodge & Spa. Your job is to oversee all retail sto
+6a900a40,"Sales Representatives, Wholesale and M",.xlsx,32,5,".pdf,.xlsx",5,11.5,"You are an account manager for an international medical wholesaler, Danish Wholesale & Co. Last week you submi"
+a97369c7,Lawyers,.docx,44,0,,8,11.4,"You are a U.S. lawyer.  A long-standing client of your law firm, Avalon Bancorp Inc. (""Avalon""), just reached "
+a079d38f,Producers and Directors,.xlsx,34,2,.pdf,6,11.4,You work as a video producer for an organization that supports musicians by helping them create and produce th
+fd6129bd,Project Management Specialists,".docx,.pdf",64,1,.docx,5,11.3,You are a project manager supporting nonclinical operations at a biotechnology company. You’ve been assigned t
+ec2fccc9,Editors,text,31,1,.docx,44,11.3,You work for a photo app that is looking to move into the photography NFT space. The app in question is a cura
+b1a79ce1,Producers and Directors,text,35,1,.pdf,37,11.3,"You are the Producer for an upcoming music video. You had many sessions of brainstorming with the artist, the "
+211d0093,First-Line Supervisors of Retail Sales,.pdf,40,1,.docx,6,11.1,"You are a department supervisor at a retail electronics store that sells a wide range of products, including T"
+90f37ff3,Real Estate Sales Agents,.pdf,30,1,.docx,6,11.1,You are a commercial real estate agent representing a landlord that owns a multi-tenant retail center in the M
+c357f0e2,Computer and Information Systems Manag,.xlsx,70,1,.xlsx,6,11.1,"You are an IT Manager at a large organization, overseeing its IT needs. Your department is primarily an IT org"
+d4525420,First-Line Supervisors of Retail Sales,text,18,1,.xlsx,10,11.0,You are a new salaried manager at a large-volume grocery store. The store manager has asked you to evaluate al
+91060ff0,Pharmacists,text,37,0,,18,11.0,You are a pharmacist with five years of retail experience and have been invited as a guest presenter at a regi
+a1963a68,Financial Managers,text,48,0,,24,11.0,It is May 2024 and you are the Head of Strategy for SuperK-Taxi (SuperK-T) Korea in South Korea. A new Korea C
+ce864f41,Project Management Specialists,.xlsx,39,3,.xlsx,5,10.9,"You are a project manager at a small business that employs 23 individuals, whose names, departments, positions"
+43dc9778,Accountants and Auditors,.pdf,67,15,.pdf,3,10.8,You are a mid-level Tax Preparer at an accounting firm. You have been given the task to complete an Individual
+bd72994f,First-Line Supervisors of Retail Sales,text,19,0,,22,10.8,"You are a senior client advisor at a luxury boutique. In this role, you manage client outreach and are respons"
+eb54f575,First-Line Supervisors of Police and D,.pdf,53,0,,6,10.8,You are a police department firearms training coordinator assigned to develop a formal report for the Chief of
+650adcb1,Recreation Workers,.xlsx,48,0,,6,10.8,"As the program coordinator at a local ski and snowboard school, you directly supervise three interns. The name"
+a941b6d8,Film and Video Editors,text,49,2,.mp4,9,10.8,You are a video editor and compositor for film and television productions. A filmmaker has approached you to c
+7151c60a,Registered Nurses,.docx,33,3,.docx,6,10.7,You are a registered nurse working at a new dialysis facility in Florida. The dialysis facility has started re
+cebf301e,Computer and Information Systems Manag,.docx,35,0,,7,10.6,You are a CTO at an early stage CleanTech startup that sells customized battery systems for households. Custom
+11593a50,Real Estate Sales Agents,.pdf,29,2,".webp,.xlsx",5,10.6,"It is June 24, 2025, and you are a Real Estate Sales Agent representing buyers.  Select homes to show them thi"
+664a42e5,Personal Financial Advisors,.pptx,42,0,,3,10.4,An irrevocable life insurance trust (ILIT) is a complex estate planning tool that helps protect an estate and 
+5a2d70da,Mechanical Engineers,.xlsx,64,4,".pdf,.pptx,.step,.xlsx",4,10.4,You are a Senior Mechanical Engineer with 20 years of experience in manufacturing and a substantial background
+1d4672c8,"Securities, Commodities, and Financial",".pdf,.xlsx",43,0,,3,10.4,"It is May 2025, and you are a financial analyst at NexVen Capital, a firm specializing in institutional portfo"
+4c4dc603,"Securities, Commodities, and Financial",.pdf,37,1,.pdf,5,10.3,"You are the Sales Director at LKK Capital, a top quartile fund advisory firm. Your firm sells innovative priva"
+24d1e93f,Buyers and Purchasing Agents,.xlsx,52,1,.docx,5,10.3,You're the category buyer for automotive electronics at LiIon Motors and are currently leading the sourcing pr
+58ac1cc5,Project Management Specialists,".docx,.pdf",41,3,".docx,.pdf",3,10.3,You are the project manager overseeing material readiness for an upcoming GMP manufacturing run involving a cl
+15d37511,"Sales Representatives, Wholesale and M",.xlsx,56,1,.docx,5,10.3,"You are the Enterprise Sales Director for VerteCleanUV, a manufacturer of UV (ultraviolet) light microbial red"
+efca245f,First-Line Supervisors of Production a,.xlsx,59,1,.xlsx,5,10.3,You are a Production Manager within a Manitoba automotive parts production facility that makes both OEM compon
+bf68f2ad,First-Line Supervisors of Production a,.xlsx,40,1,.xlsx,5,10.3,You are a supervisor at a company that produces welded parts using the metal inert gas (MIG) process.  The pla
+b78fd844,Financial Managers,.pdf,51,1,.pdf,5,10.3,"You are a Senior Finance Manager at Tiny-Rod Hit Inc., a well-established diversified technology firm, with co"
+575f8679,"Child, Family, and School Social Worke",text,50,0,,9,10.2,You are the Director of Family Well-Being Programs at a nonprofit organization serving Northwest Kansas. Your 
+27e8912c,Administrative Services Managers,".docx,.pdf",37,0,,4,10.2,You are the administrative services manager responsible for facilities within your division in government. Fol
+9e8607e7,Financial and Investment Analysts,text,14,0,,15,10.1,It is fall 2023 and you are a Managing Director at an investment banking firm working on cultivating a value-a
+1bff4551,Recreation Workers,.pdf,29,0,,5,10.0,"You are an interpretation professional with experience in designing and managing arts programs, and have contr"
+90edba97,Registered Nurses,.xlsx,71,5,".docx,.xlsx",3,9.9,"You are a registered nurse at a dialysis facility. At your dialysis facility, the nurses monitor and track the"
+93b336f3,Buyers and Purchasing Agents,.docx,53,0,,6,9.8,You are the Senior Manager for EV battery sourcing at a leading automotive company in India. Your company has 
+5ad0c554,Real Estate Sales Agents,.docx,60,0,,6,9.8,"You are a Real Estate Agent based in Sarasota, Florida. You are scheduled to meet with a couple who are first-"
+327fbc21,First-Line Supervisors of Non-Retail S,.xlsx,66,2,.xlsx,4,9.8,It is April Week 1 (P3 W1 per the retailer 4-5-4 calendar) and you are a Merchandise Planner at a candy store.
+4520f882,Financial Managers,.xlsx,88,2,".docx,.xlsx",4,9.8,You work for a theatre that employs local musicians for touring Broadway shows. Use the attached collective ba
+5f6c57dd,Financial Managers,text,137,1,.xlsx,8,9.7,"You are a Finance Manager of a company overseeing several company branches.  In this role, you are responsible"
+6074bba3,Real Estate Brokers,.pdf,48,1,.docx,4,9.5,You are a real estate broker representing an investor looking to sell their duplex property. You are to produc
+84322284,Private Detectives and Investigators,.pdf,51,3,".docx,.pdf",3,9.3,You are a senior private investigator working for a well-established PI firm. A major retail client (Saide’s F
+46b34f78,Financial and Investment Analysts,.docx,53,1,.docx,5,9.3,You are a quantitative analyst covering the energy desk within the Commodities division of a sell-side investm
+3a4c347c,Editors,.docx,54,1,.docx,5,9.3,"You are an editor at a respected online news publisher. Though the outlet is based in the UK, the audience is "
+8a7b6fca,Industrial Engineers,.pdf,31,0,,4,9.2,You are an Industrial Engineer at a logistics company that handles high-volume parcel processing. The Clearben
+116e791e,Registered Nurses,.pdf,46,0,,4,9.2,You are the PACU nurse caring for patient AB at a pediatric hospital. Your responsibilities include recovering
+045aba2e,Pharmacists,.pdf,34,0,,4,9.2,You are a licensed pharmacist who has recently acquired an independent pharmacy in California. The previous ow
+5349dd7b,"Shipping, Receiving, and Inventory Cle",.xlsx,94,0,,4,9.2,You are an Outbound Shipping Manager for a small merchandising company based in Nevada that ships small indivi
+17111c03,Administrative Services Managers,".pdf,.xlsx",44,1,.pdf,1,9.1,You are the Administrative Services Manager of a city environmental government agency. The community populatio
+1a78e076,Nurse Practitioners,.docx,63,0,,5,9.0,It is May 2025 and you have been tasked as a nurse practitioner to complete an evidence-based literature revie
+4c18ebae,Compliance Officers,".docx,.xlsx",50,1,.xlsx,2,8.9,You work in the Special Investigations Unit of The Golden Apple Bank as a Senior Investigator. Your responsibi
+6dcae3f5,First-Line Supervisors of Office and A,".docx,.xlsx",43,1,.xlsx,2,8.9,You are the residency program coordinator for the otolaryngology residency program at Silverview Hospital. As 
+94925f49,Real Estate Sales Agents,.pdf,56,1,.webp,3,8.7,It is July 2025. You are a Real Estate Sales Agent representing a residential buyer. The buyer is considering 
+83d10b06,Accountants and Auditors,.xlsx,38,1,.xlsx,3,8.7,"You are an auditor and as part of an audit engagement, you are tasked with reviewing and testing the accuracy "
+f841ddcf,Order Clerks,.xlsx,59,1,.xlsx,3,8.7,"You are a wholesale sales analyst for an apparel company, supporting the account management team with order ma"
+8c823e32,First-Line Supervisors of Police and D,text,32,0,,7,8.6,"You are a Sergeant assigned to a Policy Development Unit, in the year 2025. Your assignment is to create a new"
+74ed1dc7,Sales Managers,.docx,35,1,.docx,4,8.5,You are a Sales Manager who leads a team at an extremely fast-growing sportswear brand. Your team sells footwe
+a95a5829,First-Line Supervisors of Police and D,.pdf,29,0,,3,8.4,You are a Police Department Sergeant involved in training and recruitment. There is currently no formal policy
+3f625cb2,Lawyers,.pdf,64,0,,3,8.4,"You are an attorney at a small law firm based in California, X Privacy Law. A client, the father of a 10-year-"
+bbe0a93b,"Child, Family, and School Social Worke",.pdf,61,0,,3,8.4,"You are a social worker at a nonprofit agency in Kent County, Michigan. The majority of these individuals are "
+7bbfcfe9,Compliance Officers,.xlsx,40,0,,3,8.4,"You are a Regulatory Affairs Specialist at a large servicing company, working with a U.S. financial regulator "
+01d7e53e,Recreation Workers,.docx,65,3,.docx,3,8.3,"You are the Director of Parks and Recreation for the City of Recreare, North Carolina. As part of your departm"
+2d06bc0a,Real Estate Brokers,.docx,34,0,,4,8.2,"You are John Pederson, a real estate broker with CRECO Denver, and you handle complex real estate purchases an"
+0353ee0c,First-Line Supervisors of Office and A,.pdf,69,2,.pdf,2,8.2,You are the Director of Clinic Operations for a large healthcare system that serves U.S. veterans. Many of the
+68d8d901,First-Line Supervisors of Production a,.xlsx,61,2,.docx,2,8.2,"You are a First-Line Supervisor at Crispivore in Omaha, where raw pet food is freeze dried for animal consumpt"
+bb863dd9,"Sales Representatives, Wholesale and M",.xlsx,53,2,".pdf,.xlsx",2,8.2,"You are an account manager for the international medical wholesaler MedWholeGroup.  A new NGO client, Inter-Ai"
+0419f1c3,"Property, Real Estate, and Community A",.docx,52,2,".docx,.xlsx",3,8.0,You are a Property Manager of a portfolio of multi-family residential apartment buildings located in New York 
+7ed932dd,"Sales Representatives, Wholesale and M",.xlsx,55,1,.xlsx,2,7.9,"You are a current sales representative at a company that produces alcoholic beverages, where you maintain the "
+b7a5912e,Counter and Rental Clerks,.xlsx,59,1,.xlsx,2,7.9,"It is June 27, 2025, and you are a  Car Rental Clerk with over 5 years of experience, assigned for the second "
+afe56d05,Editors,text,83,0,,6,7.8,"You are a managing editor at an international broadcast organization. Your outlet, “WorldCast” has recently ex"
+69a8ef86,Sales Managers,.docx,47,1,.docx,3,7.7,"You are a Sales Manager at a fast-growing footwear company, which is focused on building the operational found"
+a328feea,Administrative Services Managers,.docx,16,0,,4,7.6,You are the Administrative Services Manager of the Administrative Support Branch. You are responsible for the 
+8384083a,Pharmacists,.pdf,47,0,,2,7.6,You are a pharmacist with 5 years of retail pharmacy experience and have recently acquired an independent phar
+0112fc9b,Nurse Practitioners,.pdf,55,0,,2,7.6,"You are a pediatric nurse practitioner working in a primary care office. On 3/1/2024, you see a 16-year-old ma"
+22c0809b,First-Line Supervisors of Police and D,.pdf,58,0,,2,7.6,You are the Unit Commander (Lieutenant) of the Homeland Security Unit of your Department. Your department is l
+02aa1805,Project Management Specialists,.xlsx,71,0,,2,7.6,You are a senior project manager at a green hydrogen producer in Illinois. You are in the process of planning 
+11e1b169,First-Line Supervisors of Police and D,.pdf,60,0,,2,7.6,You are located in the state of Kentucky and are a Platoon Sergeant for a large police agency. As a Platoon Se
+ffed32d8,Pharmacists,.pdf,46,2,.pdf,1,7.4,"As a retail pharmacist and owner of an independent pharmacy generating approximately $800,000 in annual revenu"
+1e5a1d7f,"Property, Real Estate, and Community A",.docx,18,1,.pdf,3,7.4,You are the Vice President of Operations for a property management company. You will need to create a weekly s
+1137e2bb,Order Clerks,".docx,.xlsx",62,1,.xlsx,0,7.3,"You are a Wholesale Sales Analyst for an accessories company, supporting the Order Management team. The Financ"
+ed2bc14c,"Property, Real Estate, and Community A",.docx,36,2,".docx,.xlsx",2,7.2,"You are the Property Manager for Harborview Flats, a 200-unit apartment complex in Stamford, Connecticut. The "
+0ed38524,Customer Service Representatives,.pdf,28,1,.xlsx,1,7.1,You are a customer service representative working at the Enterprise County Improvement District (ECID). ECID i
+b39a5aa7,Financial Managers,.xlsx,32,1,.xlsx,1,7.1,You work for the Renaissance Popular Orchestra where the musicians are newly operating under a collective barg
+401a07f1,Editors,text,21,0,,5,7.0,You are an editor at a well-regarded international science magazine with weekly publications. The magazine's a
+f3351922,Customer Service Representatives,text,74,0,,5,7.0,"You are a dedicated service representative at a government agency. In this role, you are responsible for helpi"
+60221cd0,"News Analysts, Reporters, and Journali",.pdf,20,0,,1,6.8,"You are a journalist at a local newspaper in Virginia. It's May 30, 2025, and the state of Virginia is prepari"
+aad21e4c,Lawyers,.docx,84,0,,2,6.6,"You are a U.S.-based attorney.  One of your clients, Alan Gane, founded and owns a very successful manufacturi"
+a0ef404e,Counter and Rental Clerks,.docx,41,0,,2,6.6,You are a car rental clerk with five years of experience at an international airport. Due to the high volume o
+8f9e8bcd,General and Operations Managers,.docx,33,0,,2,6.6,You are a retail general manager at a bridal store. You need to teach your entire bridal sales team how to ove
+8314d1b1,Lawyers,.docx,43,0,,2,6.6,"You are an attorney who just secured a new client, Elias Veynor, a serial entrepreneur.  Elias is the founder "
+f1be6436,Medical Secretaries and Administrative,.docx,47,0,,2,6.6,You are the medical secretary for the department of internal medicine at Sacred Health Hospital located in Chi
+61f546a8,Counter and Rental Clerks,text,79,3,.pdf,3,6.3,You are a leasing agent at TR Apartments. There were 4 move outs on 6/30/25. Since your manager is on vacation
+fd3ad420,Real Estate Brokers,.pdf,21,1,.docx,0,6.3,You are a Real Estate Broker who contracts with other real estate firms to provide your license as a Qualifyin
+ff85ee58,Audio and Video Technicians,text,36,3,".mp3,.wav",3,6.3,"You are a sound engineer who writes, records, and plays music for an experimental rock band.  The band include"
+dfb4e0cd,Compliance Officers,.xlsx,26,1,.xlsx,0,6.3,You are a grants management specialist in the public sector whose roles and responsibilities are to apply laws
+772e7524,Nurse Practitioners,text,65,0,,4,6.2,"You work as a nurse practitioner and a 45-year-old Caucasian female presents with sudden onset of shaking, chi"
+b57efde3,"Sales Representatives, Wholesale and M",.xlsx,62,0,,0,6.0,"You are the newly hired OEM Sales Representative for HiTech H20 Industries., a company that manufactures water"
+4b894ae3,Audio and Video Technicians,text,17,6,".docx,.wav",2,6.0,You’re an audio mix engineer working at a reputable recording studio. A new artist has brought in a demo song 
+dd724c67,Registered Nurses,.xlsx,31,0,,0,6.0,"You are a registered nurse case manager supporting a large, busy Accountable Care Organization (ACO) that serv"
+6d2c8e55,Medical Secretaries and Administrative,text,50,2,".docx,.xlsx",3,6.0,It’s 2025 and you are a medical secretary for the Department of Internal Medicine. As part of your responsibil
+02314fc6,General and Operations Managers,.pdf,28,0,,0,6.0,"As the Safety Coordinator in the Store Operations Department for a General Merchandise, Fresh Foods and Grocer"
+ae0c1093,Private Detectives and Investigators,.pdf,14,0,,1,5.9,"You are an experienced Private Investigator, hired at a new Private Investigations company located in Columbia"
+e14e32ba,Producers and Directors,text,15,1,.docx,4,5.8,"You are a video producer, and a condiment company is interested in filming a digital video at an iconic NYC Je"
+f84ea6ac,Administrative Services Managers,.docx,30,0,,1,5.8,You are an administrative operations lead in a government department responsible for citizen-facing services. 
+a4a9195c,"Shipping, Receiving, and Inventory Cle",.docx,55,0,,1,5.8,You are a Warehouse Manager responsible for developing processes and procedures for the team members to utiliz
+feb5eefc,Personal Financial Advisors,text,83,0,,3,5.4,"You are a wealth advisor (CFP®) at a registered investment advisory firm. A 62‑year‑old client, married with t"
+ef8719da,"News Analysts, Reporters, and Journali",text,40,0,,3,5.4,You are a senior reporter at a leading digital science news outlet known for covering emerging debates and dev
+9efbcd35,"Securities, Commodities, and Financial",text,46,0,,3,5.4,It is April 2025 and you are an institutional client services professional for an asset manager that invests i
+cd9efc18,Lawyers,text,67,0,,3,5.4,"You work at a new estate planning law firm in Texas. It is April 2023, and your supervising attorney has asked"
+0e4fe8cd,Concierges,text,50,0,,3,5.4,You are the Chief of Staff and Head of Concierge for an ultra-high net worth individual. He is a visionary fou
+36d567ba,Compliance Officers,.docx,27,0,,0,5.0,You are a grants management specialist with the federal government whose roles and responsibilities are to app
+15ddd28d,Buyers and Purchasing Agents,.docx,46,0,,0,5.0,You are the senior category buyer for automotive electronics—specifically headlamps and tail lamps— at LiIon M
+74d6e8b0,Medical and Health Services Managers,.docx,54,0,,0,5.0,"You are the medical director of a startup that is building a virtual menopause care platform called ""MenoHelp"""
+55ddb773,"Property, Real Estate, and Community A",text,41,1,.pdf,2,4.9,You are the community association manager of a master association with 7 sub associations that are a mix of si
+0818571f,Real Estate Brokers,text,32,1,.pdf,2,4.9,You are a Real Estate Broker licensed in the state of Florida specializing in retail shopping centers. You are
+8079e27d,Financial and Investment Analysts,text,40,0,,2,4.6,"It is April 11, 2025 and you are an Investment Banking Analyst in the Equity Capital Markets group. Given rece"
+c94452e4,Film and Video Editors,text,28,2,".pdf,.psd",1,4.4,You are a video editor in California and one of your clients is an agency specializing in progressive social/p
+4de6a529,"Securities, Commodities, and Financial",text,44,1,.pdf,0,3.3,"It is April 2025, you are the lead Portfolio Strategist for Stanton Capital, one of the world's largest asset "
+d3d255b2,Real Estate Sales Agents,text,29,1,.pdf,0,3.3,You are the listing real estate agent representing a seller client that wants to sell their home as quickly as

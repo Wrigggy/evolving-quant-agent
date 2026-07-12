@@ -1,0 +1,48 @@
+{
+  "iteration": 4,
+  "verdict": "EFFECTIVE",
+  "kept": true,
+  "edit_summary": "edit systemprompt.md (+9/-1)",
+  "diff_signature": "6934b8be2208a6f21dba1d6f2e164d839c537d90160d1557ceab665d0fcacedd",
+  "predicted_fixes": [
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "risk_tasks": [],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "3 failing task(s) across 1 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+    ],
+    "overview": "The agent lacked a reliable mechanism to precisely extract numeric data from source documents, forcing it to generate generic approximations, miss required data points, and exhaust iteration limits without producing complete outputs.",
+    "root_cause": "The agent lacked a reliable mechanism to precisely extract numeric data from source documents, forcing it to generate generic approximations, miss required data points, and exhaust iteration limits without producing complete outputs.",
+    "general_mechanism": "Wire in a dedicated PDF/table extraction tool (e.g., pdfplumber) with bindings to extract exact values from financial documents; add a mandatory prompt rule that requires all specified data fields and formatting elements be explicitly extracted and populated before any verification step; implement an early-abort middleware that halts if required data points remain missing after the first extraction attempt.",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.6953,
+  "cand_scores": {
+    "83d10b06-26d1-4636-a32c-23f92c57f30b": 0.7063,
+    "7b08cd4d-df60-41ae-9102-8aaa49306ba2": 0.8596,
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f": 0.5737,
+    "43dc9778-450b-4b46-b77e-b6d82b202035": 0.2397,
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5": 0.5593,
+    "8079e27d-b6f3-4f75-a9b5-db27903c798d": 0.8136,
+    "e21cd746-404d-4602-b9d2-01d2812c5b87": 0.8974,
+    "9e8607e7-a38a-491f-ace1-e5ea7dc477cb": 0.913
+  },
+  "improved": [
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "7b08cd4d-df60-41ae-9102-8aaa49306ba2",
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "8079e27d-b6f3-4f75-a9b5-db27903c798d",
+    "e21cd746-404d-4602-b9d2-01d2812c5b87",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "regressed": []
+}

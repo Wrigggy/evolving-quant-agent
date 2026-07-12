@@ -1,0 +1,31 @@
+{
+  "iteration": 3,
+  "verdict": "HARMFUL",
+  "kept": false,
+  "edit_summary": "edit agent.yaml, systemprompt.md, tool_descriptions/read_excel.tool.yaml, tools/fab/read_excel.py (+190/-2)",
+  "diff_signature": "64c87f7784c85ba93f410c07b3affd98865e32be8198c3cfff1bf886d221463f",
+  "predicted_fixes": [
+    "83d10b06-26d1-4636-a32c-23f92c57f30b",
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "risk_tasks": [],
+  "diagnosis": {
+    "root_cause_tag": "prompt",
+    "deficiency_category": "4 failing task(s) across 1 occupation(s)",
+    "suggested_target_slot": "prompt",
+    "predicted_fix_task_ids": [
+      "83d10b06-26d1-4636-a32c-23f92c57f30b",
+      "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+    ],
+    "overview": "The agent lacks a systematic verification step against the full task specification, causing repeated omissions (missing rollforward, issues capture, TOC), format errors (wrong tab name, column swaps), computation mistakes (FPC, net profit derivation), and uncorrected tool errors (8\u201315 per task) to persist in final deliverables.",
+    "root_cause": "The agent lacks a systematic verification step against the full task specification, causing repeated omissions (missing rollforward, issues capture, TOC), format errors (wrong tab name, column swaps), computation mistakes (FPC, net profit derivation), and uncorrected tool errors (8\u201315 per task) to persist in final deliverables.",
+    "general_mechanism": "1. Add a prompt rule: after generating any deliverable and before final output, the agent must generate a checklist from the task\u2019s explicit requirements, audit its work, and fix every discrepancy found. 2. Enhance tool error recovery middleware to require that the agent logs the error, explains the failure, and attempts a reasoned alternative call before advancing, avoiding silent continuation.",
+    "mechanism_kind": "prompt",
+    "_b_pile": true
+  },
+  "inc_mean": 0.5986
+}

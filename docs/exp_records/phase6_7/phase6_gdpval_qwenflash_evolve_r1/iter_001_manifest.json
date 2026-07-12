@@ -1,0 +1,32 @@
+{
+  "iteration": 1,
+  "verdict": "MIXED",
+  "kept": true,
+  "edit_summary": "edit agent.yaml, systemprompt.md, tool_descriptions/pdf_extract.tool.yaml, tool_descriptions/read_file.tool.yaml, tool_descriptions/web_fetch.tool.yaml, tool_descriptions/write_file.tool.yaml, tools/fab/pdf_extract.py (+227/-1)",
+  "diff_signature": "70fdcb6757216490c0d4cb5ab2b09f1eae6ada2b4a9a081cf0d2a94109bb9136",
+  "predicted_fixes": [
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "8079e27d-b6f3-4f75-a9b5-db27903c798d"
+  ],
+  "risk_tasks": [
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "4 failing task(s) across 2 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5",
+      "8079e27d-b6f3-4f75-a9b5-db27903c798d"
+    ],
+    "overview": "The agent lacks reliable access to the true content of image-based and paginated source documents, causing retrieval gaps (e.g., approximating $1,116 taxable interest, missing 56 S&P 500 companies) that cascade into compute, omission, and format failures.",
+    "root_cause": "The agent lacks reliable access to the true content of image-based and paginated source documents, causing retrieval gaps (e.g., approximating $1,116 taxable interest, missing 56 S&P 500 companies) that cascade into compute, omission, and format failures.",
+    "general_mechanism": "['Add an OCR-capable PDF-to-text tool to the harness, ensuring image-based PDFs (like scanned 1099-INT forms) are fully parsed rather than approximated.', 'Implement automatic pagination handling in all data-fetching endpoints so the agent can collect complete datasets (e.g., all 500 S&P 500 constituents) without manual loop failures.', 'Introduce a planning prompt rule that instructs the agent to deep-read entire source documents, verify extracted values against document structures, and cross-check deliverable requirements (sections, columns, aggregations) before output.']",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.5875
+}

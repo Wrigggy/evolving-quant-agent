@@ -1,0 +1,31 @@
+{
+  "iteration": 4,
+  "verdict": "MIXED",
+  "kept": false,
+  "edit_summary": "edit agent.yaml, systemprompt.md, tool_descriptions/read_excel.tool.yaml, tools/fab/read_excel.py (+225/-8)",
+  "diff_signature": "b84cdd8322b774ce9ed9058e23423d80613ee5962290c772ba9b97766821d7a9",
+  "predicted_fixes": [
+    "83d10b06-26d1-4636-a32c-23f92c57f30b",
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "risk_tasks": [],
+  "diagnosis": {
+    "root_cause_tag": "prompt",
+    "deficiency_category": "4 failing task(s) across 1 occupation(s)",
+    "suggested_target_slot": "prompt",
+    "predicted_fix_task_ids": [
+      "83d10b06-26d1-4636-a32c-23f92c57f30b",
+      "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+    ],
+    "overview": "The worker fails to systematically deconstruct multi-part task instructions into a verifiable checklist of required deliverables and source data, resulting in repeated omission of tabs/summaries/flags and reliance on hallucinated generic numbers instead of extracting precise values.",
+    "root_cause": "The worker fails to systematically deconstruct multi-part task instructions into a verifiable checklist of required deliverables and source data, resulting in repeated omission of tabs/summaries/flags and reliance on hallucinated generic numbers instead of extracting precise values.",
+    "general_mechanism": "1. PROMPT RULE: Enforce a mandatory planning phase where the agent first parses the task prompt, explicitly lists all required outputs (sheets, columns, summary cells, formatting rules, threshold flags), then performs a final verification pass against that checklist before delivering the workbook. 2. TOOL BINDING: Wire a structured PDF/table-extraction utility to precisely pull invoice details, financial schedules, and numeric criteria from source documents, eliminating guesswork and blanket assumptions.",
+    "mechanism_kind": "prompt",
+    "_b_pile": true
+  },
+  "inc_mean": 0.5986
+}

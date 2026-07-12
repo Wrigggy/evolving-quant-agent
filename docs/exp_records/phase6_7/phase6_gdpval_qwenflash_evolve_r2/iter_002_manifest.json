@@ -1,0 +1,35 @@
+{
+  "iteration": 2,
+  "verdict": "MIXED",
+  "kept": true,
+  "edit_summary": "edit systemprompt.md (+75/-14)",
+  "diff_signature": "dba051419c6b34a8686c3f39c4fd68687807dd8bfb0b5985111e326d9f62bef2",
+  "predicted_fixes": [
+    "83d10b06-26d1-4636-a32c-23f92c57f30b",
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5",
+    "8079e27d-b6f3-4f75-a9b5-db27903c798d"
+  ],
+  "risk_tasks": [
+    "43dc9778-450b-4b46-b77e-b6d82b202035"
+  ],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "5 failing task(s) across 2 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "83d10b06-26d1-4636-a32c-23f92c57f30b",
+      "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5",
+      "8079e27d-b6f3-4f75-a9b5-db27903c798d"
+    ],
+    "overview": "The agent lacked a reliable tool to extract exact structured data (tables, key financial figures) from source files (PDF/Excel), leading it to hallucinate values, miss entire required schedules, and then compound the error with formula mistakes and omissions.",
+    "root_cause": "The agent lacked a reliable tool to extract exact structured data (tables, key financial figures) from source files (PDF/Excel), leading it to hallucinate values, miss entire required schedules, and then compound the error with formula mistakes and omissions.",
+    "general_mechanism": "['Add a dedicated document\u2011parsing tool (e.g., pdfplumber for PDFs, openpyxl for Excel) capable of returning structured tables and numeric data; bind it as the only allowed method for reading source files.', 'Add a prompt rule that requires the agent to: (1) extract all required numbers and labels verbatim using the parsing tool, (2) log the extracted values and their cell/section locations before any computation, (3) explicitly check extraction completeness against the task template, and (4) refuse to guess if any required value cannot be retrieved.', 'Add a computation\u2011check prompt rule requiring the agent to state the formula, substitute extracted values, verify any statistical assumptions (e.g., population size for finite population correction), and reconcile computed results back to the extracted source data.']",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.5986
+}

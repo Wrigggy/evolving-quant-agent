@@ -1,0 +1,42 @@
+{
+  "iteration": 1,
+  "verdict": "HARMFUL",
+  "kept": false,
+  "edit_summary": "edit agent.yaml, systemprompt.md, tool_descriptions/excel_read.tool.yaml, tools/fab/excel_read.py, tools/fab/pdf_extract.py (+579/-48)",
+  "diff_signature": "d5a7904e5aa095a9d0461fad9f1a796084fcc222aac41d640957781fa07e710b",
+  "predicted_fixes": [],
+  "risk_tasks": [],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "3 failing task(s) across 1 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+    ],
+    "overview": "The agent's retrieval tooling is unable to reliably extract precise structured data (exact dates, line-item dollar amounts, key financial figures) from source PDFs and trial balances, causing it to rely on generic assumptions or omit required content entirely.",
+    "root_cause": "The agent's retrieval tooling is unable to reliably extract precise structured data (exact dates, line-item dollar amounts, key financial figures) from source PDFs and trial balances, causing it to rely on generic assumptions or omit required content entirely.",
+    "general_mechanism": "Integrate a purpose-built PDF table and structured-data extraction tool (e.g., camelot, tabula, or a specialized accounting file parser) and enforce a mandatory prompt rule: before any downstream calculation or writing, the agent must extract and log all required source values, and halt with a clear error if any value cannot be retrieved, preventing assumption cascades.",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.622,
+  "cand_scores": {
+    "83d10b06-26d1-4636-a32c-23f92c57f30b": 0.5317,
+    "7b08cd4d-df60-41ae-9102-8aaa49306ba2": 0.6966,
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f": 0.4,
+    "43dc9778-450b-4b46-b77e-b6d82b202035": 0.0826,
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5": 0.5085,
+    "8079e27d-b6f3-4f75-a9b5-db27903c798d": 0.3727,
+    "e21cd746-404d-4602-b9d2-01d2812c5b87": 0.7949,
+    "9e8607e7-a38a-491f-ace1-e5ea7dc477cb": 0.9565
+  },
+  "improved": [],
+  "regressed": [
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "8079e27d-b6f3-4f75-a9b5-db27903c798d",
+    "83d10b06-26d1-4636-a32c-23f92c57f30b"
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "iteration": 5,
+  "verdict": "MIXED",
+  "kept": false,
+  "edit_summary": "edit systemprompt.md, tool_descriptions/pdf_extract.tool.yaml, tools/fab/pdf_extract.py (+161/-29)",
+  "diff_signature": "0a9f1e28816703f379c36c1539e50bb9536ed539cfb3b5f3689c90a6af2d9646",
+  "predicted_fixes": [
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "risk_tasks": [],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "3 failing task(s) across 1 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+    ],
+    "overview": "The agent fails to reliably retrieve and process all required data from multi-format source files, resulting in pervasive omission, approximation of values (e.g., interest $1,008.19 vs $1,116), and missing structural elements (tabs, columns, forms, hyperlinks).",
+    "root_cause": "The agent fails to reliably retrieve and process all required data from multi-format source files, resulting in pervasive omission, approximation of values (e.g., interest $1,008.19 vs $1,116), and missing structural elements (tabs, columns, forms, hyperlinks).",
+    "general_mechanism": "1. Wire in a robust multi-format file ingestion tool (PDF extraction, all Excel sheets, structured table extraction) that the agent can use for comprehensive source-file parsing; ensure it is bound in agent.yaml. 2. Add a prompt rule that mandates a pre-output verification checklist: after parsing every provided source file, the agent must inventory all deliverable requirements (columns, sheets, forms, formulas, internal hyperlinks) listed in the task and confirm they are fully extracted and included before generating the final output.",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.6953,
+  "cand_scores": {
+    "83d10b06-26d1-4636-a32c-23f92c57f30b": 0.4444,
+    "7b08cd4d-df60-41ae-9102-8aaa49306ba2": 0.6966,
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f": 0.6105,
+    "43dc9778-450b-4b46-b77e-b6d82b202035": 0.0992,
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5": 0.6441,
+    "8079e27d-b6f3-4f75-a9b5-db27903c798d": 0.6864,
+    "e21cd746-404d-4602-b9d2-01d2812c5b87": 0.8462,
+    "9e8607e7-a38a-491f-ace1-e5ea7dc477cb": 0.913
+  },
+  "improved": [
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "regressed": [
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "7b08cd4d-df60-41ae-9102-8aaa49306ba2",
+    "8079e27d-b6f3-4f75-a9b5-db27903c798d",
+    "83d10b06-26d1-4636-a32c-23f92c57f30b",
+    "e21cd746-404d-4602-b9d2-01d2812c5b87"
+  ]
+}
