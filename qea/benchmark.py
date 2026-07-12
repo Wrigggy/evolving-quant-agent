@@ -47,7 +47,16 @@ def make_benchmark(name: str, *, llm=None, broad: bool = True, k: int = 2) -> Be
     if name == "gdpval_all":
         # Protocol-v2 pool: the full open gold subset (220 tasks, 44 occupations).
         return gdpval_benchmark(broad=broad, allow_download=True, llm=llm, occupations=())
-    raise ValueError(f"unknown benchmark {name!r} (expected 'fab', 'gdpval', or 'gdpval_all')")
+    if name.startswith("ssb"):
+        # SpreadsheetBench: deterministic official checker — zero judge noise.
+        # "ssb" / "ssb_912" = evolution pool; "ssb_verified" = held-out reporting.
+        from .bench_ssb import SSBEvaluator, load_ssb
+        split = {"ssb": "912", "ssb_912": "912", "ssb_verified": "verified",
+                 "ssb_sample": "sample"}[name]
+        tasks = load_ssb(split=split)
+        return Benchmark(f"ssb_{split}", tasks, HardVerifier(), [], "b_pile",
+                         evaluator=SSBEvaluator())
+    raise ValueError(f"unknown benchmark {name!r} (expected 'fab', 'gdpval', 'gdpval_all', or 'ssb*')")
 
 
 def synthetic_fixture_benchmark() -> Benchmark:

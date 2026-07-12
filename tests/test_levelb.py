@@ -773,3 +773,47 @@ def test_judge_reason_mode_stays_out_of_verdicts(tmp_path):
     ed = _build_evidence(tmp_path / "ev", {"root_cause_tag": "x", "overview": "o"},
                          evals, {"t": {}}, {"t": "d"}, [task], [])
     assert "no assumptions section" not in (ed / "overview.md").read_text()
+
+
+def test_ssb_loader_and_evaluator_offline(tmp_path, monkeypatch):
+    """SpreadsheetBench integration: per-case tasks, answer file never in the task
+    surface, official checker drives a binary TaskEval."""
+    import json
+    import openpyxl
+    import qea.bench_ssb as B
+
+    # fabricate a mini split: 1 task, 2 test cases
+    base = tmp_path / "raw" / "all_data_912_v0.1"
+    sp = base / "spreadsheet" / "77"
+    sp.mkdir(parents=True)
+    for k in (1, 2):
+        wb = openpyxl.Workbook(); ws = wb.active
+        ws["A1"] = 10 * k; wb.save(sp / f"{k}_77_input.xlsx")
+        wb2 = openpyxl.Workbook(); ws2 = wb2.active
+        ws2["A1"] = 10 * k; ws2["B1"] = 10 * k + 1   # answer: B1 = A1 + 1
+        wb2.save(sp / f"{k}_77_answer.xlsx")
+    (base / "dataset.json").write_text(json.dumps([{
+        "id": "77", "instruction": "Put A1+1 into B1.",
+        "instruction_type": "Cell-Level Manipulation", "answer_position": "B1"}]))
+    monkeypatch.setattr(B, "_ROOT", tmp_path)
+
+    tasks = B.load_ssb(split="912")
+    assert [t.task_id for t in tasks] == ["77_tc1", "77_tc2"]
+    t1 = tasks[0]
+    assert t1.reference_files[0].endswith("1_77_input.xlsx")
+    assert "answer.xlsx" not in t1.prompt and "answer" not in str(t1.reference_files)  # leakage
+    assert t1.deliverable_exts == [".xlsx"] and "1_77_output.xlsx" in t1.prompt
+
+    # evaluator: correct output -> 1.0; wrong -> 0.0; missing -> 0.0 + format fail
+    from qea.worker_runtime import WorkerRun
+    ev = B.SSBEvaluator(recalc=False)
+    good = tmp_path / "1_77_output.xlsx"
+    wb = openpyxl.Workbook(); ws = wb.active; ws["A1"] = 10; ws["B1"] = 11; wb.save(good)
+    r = ev.evaluate(t1, WorkerRun("done", [good], {}))
+    assert r.gated_score == 1.0 and r.format_ok
+
+    bad = tmp_path / "bad" / "1_77_output.xlsx"; bad.parent.mkdir()
+    wb = openpyxl.Workbook(); ws = wb.active; ws["A1"] = 10; ws["B1"] = 99; wb.save(bad)
+    assert ev.evaluate(t1, WorkerRun("done", [bad], {})).gated_score == 0.0
+    miss = ev.evaluate(t1, WorkerRun("done", [], {}))
+    assert miss.gated_score == 0.0 and not miss.format_ok
