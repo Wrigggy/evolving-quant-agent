@@ -77,7 +77,8 @@ def main() -> int:
             concurrency=args.concurrency, cache_dir=results_dir / "_cache",
             execution=args.execution, n_samples=args.n_samples)
         # evals: dict task_id -> EvalSummary (attr gated_score), keyed like the loop
-        per_task = {str(tid)[:8]: round(e.gated_score, 4) for tid, e in evals.items()}
+        # full ids: 8-char truncation collides on SSB-style ids ("17-35_tc1"/"tc2")
+        per_task = {str(tid): round(e.gated_score, 4) for tid, e in evals.items()}
         summary[name] = {"worker_dir": str(wd), "mean": round(mean, 4), "per_task": per_task}
         print(f"[heldout] {name}: mean={mean:.4f} per_task={per_task}", flush=True)
 
