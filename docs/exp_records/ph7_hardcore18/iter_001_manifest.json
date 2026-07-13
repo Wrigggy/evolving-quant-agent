@@ -1,0 +1,88 @@
+{
+  "iteration": 1,
+  "verdict": "MIXED",
+  "kept": false,
+  "edit_summary": "edit systemprompt.md, tools/fab/pdf_extract.py (+208/-36)",
+  "diff_signature": "cdd23aa0b2dff9c2997b632a5fcf824189c2833bf399bb42aabffbc917088291",
+  "predicted_fixes": [
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "4520f882-715a-482d-8e87-1cb3cbdfe975",
+    "61e7b9c6-0051-429f-a341-fda9b6578a84",
+    "a73fbc98-90d4-4134-a54f-2b1d0c838791",
+    "b5d2e6f1-62a2-433a-bcdd-95b260cdd860",
+    "d7cfae6f-4a82-4289-955e-c799dfe1e0f4"
+  ],
+  "risk_tasks": [
+    "0818571f-5ff7-4d39-9d2c-ced5ae44299e",
+    "87da214f-fd92-4c58-9854-f4d0d10adce0"
+  ],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "11 failing task(s) across 10 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "0818571f-5ff7-4d39-9d2c-ced5ae44299e",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "4520f882-715a-482d-8e87-1cb3cbdfe975",
+      "61e7b9c6-0051-429f-a341-fda9b6578a84",
+      "87da214f-fd92-4c58-9854-f4d0d10adce0",
+      "a73fbc98-90d4-4134-a54f-2b1d0c838791",
+      "b5d2e6f1-62a2-433a-bcdd-95b260cdd860",
+      "d7cfae6f-4a82-4289-955e-c799dfe1e0f4",
+      "ec591973-04d5-48c0-981c-1ab2fcec2dc1",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5",
+      "f2986c1f-2bbf-4b83-bc93-624a9d617f45"
+    ],
+    "overview": "The worker consistently fails due to a retrieval gap: it cannot reliably extract exact, structured data from the source documents (PDFs, images, live web listings), leading to approximate or mock data, omissions of required sections, and calculation errors based on incorrect input values (e.g., CBA base wage $251.06 vs. $252.06, bank balance $419,460.93 vs. $6,610,926.80).",
+    "root_cause": "The worker consistently fails due to a retrieval gap: it cannot reliably extract exact, structured data from the source documents (PDFs, images, live web listings), leading to approximate or mock data, omissions of required sections, and calculation errors based on incorrect input values (e.g., CBA base wage $251.06 vs. $252.06, bank balance $419,460.93 vs. $6,610,926.80).",
+    "general_mechanism": "1) Wire in an OCR-capable document-parsing and web-scraping tool that accurately extracts text, tables, and numerical values from PDFs, images, and live listing pages, so the worker can retrieve the true source data. 2) Add a prompt rule strictly prohibiting the generation of sample/mock data and requiring that every numerical value and textual detail be pulled directly from the source; if extraction fails, the worker must abort with an explicit failure message rather than fabricating output. 3) Configure the harness to detect repeated retrieval failures early and terminate the task to avoid wasteful loops and complete omissions.",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.4877,
+  "cand_scores": {
+    "0818571f-5ff7-4d39-9d2c-ced5ae44299e": 0.3333,
+    "2ea2e5b5-257f-42e6-a7dc-93763f28b19d": 0.9294,
+    "3600de06-3f71-4e48-9480-e4828c579924": 0.6981,
+    "43dc9778-450b-4b46-b77e-b6d82b202035": 0.1074,
+    "4520f882-715a-482d-8e87-1cb3cbdfe975": 0.2629,
+    "61e7b9c6-0051-429f-a341-fda9b6578a84": 0.4921,
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f": 0.5921,
+    "87da214f-fd92-4c58-9854-f4d0d10adce0": 0.6655,
+    "a73fbc98-90d4-4134-a54f-2b1d0c838791": 0.3879,
+    "b5d2e6f1-62a2-433a-bcdd-95b260cdd860": 0.0462,
+    "b9665ca1-4da4-4ff9-86f2-40b9a8683048": 0.8438,
+    "cecac8f9-8203-4ebd-ad49-54436a8c4171": 0.6933,
+    "d7cfae6f-4a82-4289-955e-c799dfe1e0f4": 0.6607,
+    "e4f664ea-0e5c-4e4e-a0d3-a87a33da947a": 0.6901,
+    "e996036e-8287-4e7f-8d0a-90a57cb53c45": 0.7143,
+    "ec591973-04d5-48c0-981c-1ab2fcec2dc1": 0.5974,
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5": 0.4873,
+    "f2986c1f-2bbf-4b83-bc93-624a9d617f45": 0.0
+  },
+  "improved": [
+    "4520f882-715a-482d-8e87-1cb3cbdfe975",
+    "87da214f-fd92-4c58-9854-f4d0d10adce0",
+    "a73fbc98-90d4-4134-a54f-2b1d0c838791",
+    "b9665ca1-4da4-4ff9-86f2-40b9a8683048",
+    "d7cfae6f-4a82-4289-955e-c799dfe1e0f4",
+    "ec591973-04d5-48c0-981c-1ab2fcec2dc1"
+  ],
+  "regressed": [
+    "61e7b9c6-0051-429f-a341-fda9b6578a84",
+    "e4f664ea-0e5c-4e4e-a0d3-a87a33da947a",
+    "f2986c1f-2bbf-4b83-bc93-624a9d617f45"
+  ],
+  "task_notes": {
+    "4520f882": "turns=35 tool_errors=7 tools: run_shell_command x29, write_file x5",
+    "87da214f": "turns=34 tool_errors=8 tools: run_shell_command x31, read_file x2",
+    "a73fbc98": "turns=39 tool_errors=7 tools: run_shell_command x30, write_file x4, pdf_extract x2, unknown x1, read_file x1",
+    "b9665ca1": "turns=21 tool_errors=6 tools: run_shell_command x16, write_file x3, read_visual_file x1, web_fetch x1, pdf_extract x1",
+    "d7cfae6f": "turns=18 tool_errors=6 tools: run_shell_command x17",
+    "ec591973": "turns=31 tool_errors=12 tools: run_shell_command x19, write_file x11",
+    "61e7b9c6": "turns=34 tool_errors=21 tools: web_fetch x19, run_shell_command x14",
+    "e4f664ea": "turns=29 tool_errors=7 tools: run_shell_command x23, write_file x3, pdf_extract x1, read_file x1",
+    "f2986c1f": "turns=29 tool_errors=11 tools: run_shell_command x21, web_fetch x6, read_file x1"
+  },
+  "confirm": {}
+}

@@ -1,0 +1,100 @@
+{
+  "iteration": 2,
+  "verdict": "HARMFUL",
+  "kept": false,
+  "edit_summary": "edit agent.yaml, systemprompt.md, tool_descriptions/web_search.tool.yaml, tools/fab/web_search.py (+151/-3)",
+  "diff_signature": "82bfef43cdfb4e9e822db0f573a2d7a3526b0d8f8174df83aae8253bcb0f5f15",
+  "predicted_fixes": [],
+  "risk_tasks": [],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "11 failing task(s) across 10 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "0818571f-5ff7-4d39-9d2c-ced5ae44299e",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "4520f882-715a-482d-8e87-1cb3cbdfe975",
+      "61e7b9c6-0051-429f-a341-fda9b6578a84",
+      "87da214f-fd92-4c58-9854-f4d0d10adce0",
+      "a73fbc98-90d4-4134-a54f-2b1d0c838791",
+      "b5d2e6f1-62a2-433a-bcdd-95b260cdd860",
+      "d7cfae6f-4a82-4289-955e-c799dfe1e0f4",
+      "ec591973-04d5-48c0-981c-1ab2fcec2dc1",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5",
+      "f2986c1f-2bbf-4b83-bc93-624a9d617f45"
+    ],
+    "overview": "The agent lacks reliable tools for live data retrieval (property listings, image OCR, accurate document extraction), forcing it to fabricate generic or incorrect values, and lacks prompt-enforced verification against source documents, leading to widespread retrieval and omission failures.",
+    "root_cause": "The agent lacks reliable tools for live data retrieval (property listings, image OCR, accurate document extraction), forcing it to fabricate generic or incorrect values, and lacks prompt-enforced verification against source documents, leading to widespread retrieval and omission failures.",
+    "general_mechanism": "1) Wire in web-scraping/API tools for fetching actual listings from Crexi, LoopNet, and similar platforms; 2) Wire in a robust OCR tool for extracting text from images; 3) Add a prompt rule that requires cross-checking all extracted figures and content against original source documents, and that explicitly flags any placeholder or generic data as incomplete before final output.",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.4877,
+  "cand_scores": {
+    "0818571f-5ff7-4d39-9d2c-ced5ae44299e": 0.0,
+    "2ea2e5b5-257f-42e6-a7dc-93763f28b19d": 0.8853,
+    "3600de06-3f71-4e48-9480-e4828c579924": 0.7075,
+    "43dc9778-450b-4b46-b77e-b6d82b202035": 0.124,
+    "4520f882-715a-482d-8e87-1cb3cbdfe975": 0.1943,
+    "61e7b9c6-0051-429f-a341-fda9b6578a84": 0.7262,
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f": 0.7816,
+    "87da214f-fd92-4c58-9854-f4d0d10adce0": 0.6791,
+    "a73fbc98-90d4-4134-a54f-2b1d0c838791": 0.4684,
+    "b5d2e6f1-62a2-433a-bcdd-95b260cdd860": 0.0462,
+    "b9665ca1-4da4-4ff9-86f2-40b9a8683048": 0.9344,
+    "cecac8f9-8203-4ebd-ad49-54436a8c4171": 0.6867,
+    "d7cfae6f-4a82-4289-955e-c799dfe1e0f4": 0.8651,
+    "e4f664ea-0e5c-4e4e-a0d3-a87a33da947a": 0.8947,
+    "e996036e-8287-4e7f-8d0a-90a57cb53c45": 0.6753,
+    "ec591973-04d5-48c0-981c-1ab2fcec2dc1": 0.4838,
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5": 0.5551,
+    "f2986c1f-2bbf-4b83-bc93-624a9d617f45": 0.0717
+  },
+  "improved": [
+    "61e7b9c6-0051-429f-a341-fda9b6578a84",
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "87da214f-fd92-4c58-9854-f4d0d10adce0",
+    "a73fbc98-90d4-4134-a54f-2b1d0c838791",
+    "b9665ca1-4da4-4ff9-86f2-40b9a8683048",
+    "d7cfae6f-4a82-4289-955e-c799dfe1e0f4",
+    "e4f664ea-0e5c-4e4e-a0d3-a87a33da947a",
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5"
+  ],
+  "regressed": [
+    "0818571f-5ff7-4d39-9d2c-ced5ae44299e",
+    "ec591973-04d5-48c0-981c-1ab2fcec2dc1",
+    "f2986c1f-2bbf-4b83-bc93-624a9d617f45"
+  ],
+  "task_notes": {
+    "61e7b9c6": "turns=58 tool_errors=7 tools: web_search x29, run_shell_command x14, web_fetch x10, write_file x4",
+    "7d7fc9a7": "turns=33 tool_errors=17 tools: run_shell_command x30, pdf_extract x5, read_file x2",
+    "87da214f": "turns=27 tool_errors=9 tools: run_shell_command x19, write_file x6, read_file x2",
+    "a73fbc98": "turns=29 tool_errors=4 tools: run_shell_command x28, pdf_extract x4",
+    "b9665ca1": "turns=32 tool_errors=12 tools: run_shell_command x20, write_file x6, web_fetch x2, pdf_extract x2, read_file x1",
+    "d7cfae6f": "turns=20 tool_errors=3 tools: run_shell_command x19",
+    "e4f664ea": "turns=33 tool_errors=6 tools: run_shell_command x24, write_file x13, read_file x1, pdf_extract x1, web_search x1",
+    "ee09d943": "turns=56 tool_errors=3 tools: run_shell_command x49, write_file x5, read_file x1",
+    "0818571f": "turns=59 tool_errors=8 tools: web_search x46, run_shell_command x7, web_fetch x3, read_file x1, pdf_extract x1",
+    "ec591973": "turns=9 tool_errors=3 tools: run_shell_command x8",
+    "f2986c1f": "turns=59 tool_errors=11 tools: run_shell_command x39, web_search x13, web_fetch x4, write_file x2, read_file x1"
+  },
+  "confirm": {
+    "inc": 0.7835,
+    "cand": 0.7092,
+    "passed": false,
+    "worst": {
+      "f84ea6ac": {
+        "delta": -0.797,
+        "behavior": "turns=59 tool_errors=6 tools: web_search x63, web_fetch x7, run_shell_command x1"
+      },
+      "15ddd28d": {
+        "delta": -0.412,
+        "behavior": "turns=14 tool_errors=4 tools: run_shell_command x13"
+      },
+      "93b336f3": {
+        "delta": -0.161,
+        "behavior": "turns=14 tool_errors=3 tools: run_shell_command x11, write_file x1, read_file x1"
+      }
+    }
+  }
+}

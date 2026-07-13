@@ -1,0 +1,93 @@
+{
+  "iteration": 3,
+  "verdict": "MIXED",
+  "kept": false,
+  "edit_summary": "edit systemprompt.md (+23/-1)",
+  "diff_signature": "45f25687eaf79521f6a756f59e75b72ece8eaac746c5ab5f38c1e75b622b9927",
+  "predicted_fixes": [
+    "a73fbc98-90d4-4134-a54f-2b1d0c838791",
+    "b5d2e6f1-62a2-433a-bcdd-95b260cdd860",
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "0818571f-5ff7-4d39-9d2c-ced5ae44299e",
+    "4520f882-715a-482d-8e87-1cb3cbdfe975"
+  ],
+  "risk_tasks": [
+    "61e7b9c6-0051-429f-a341-fda9b6578a84",
+    "d7cfae6f-4a82-4289-955e-c799dfe1e0f4"
+  ],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "11 failing task(s) across 10 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "0818571f-5ff7-4d39-9d2c-ced5ae44299e",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "4520f882-715a-482d-8e87-1cb3cbdfe975",
+      "61e7b9c6-0051-429f-a341-fda9b6578a84",
+      "87da214f-fd92-4c58-9854-f4d0d10adce0",
+      "a73fbc98-90d4-4134-a54f-2b1d0c838791",
+      "b5d2e6f1-62a2-433a-bcdd-95b260cdd860",
+      "d7cfae6f-4a82-4289-955e-c799dfe1e0f4",
+      "ec591973-04d5-48c0-981c-1ab2fcec2dc1",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5",
+      "f2986c1f-2bbf-4b83-bc93-624a9d617f45"
+    ],
+    "overview": "The agent lacks reliable tools for extracting real data from web pages, PDFs, and images, leading to pervasive retrieval failures, synthetic placeholders (e.g., 'Sample Shopping Center #1' for live listings), misread CBA rates ($251.06 vs $252.06), and omissions like pill imprint 'NA' and missing MedlinePlus links.",
+    "root_cause": "The agent lacks reliable tools for extracting real data from web pages, PDFs, and images, leading to pervasive retrieval failures, synthetic placeholders (e.g., 'Sample Shopping Center #1' for live listings), misread CBA rates ($251.06 vs $252.06), and omissions like pill imprint 'NA' and missing MedlinePlus links.",
+    "general_mechanism": "1) Add a headless browser tool (e.g., Playwright) to access live CRE platforms and retrieve real listings; 2) Add an OCR/image-reading tool (e.g., Tesseract) to extract text and imprints from medication images; 3) Add a robust PDF parser and form-filling tool to handle tax forms, reference layouts, and bank statements; 4) Enforce a prompt rule that prohibits synthetic/placeholder data and requires verification of every extracted figure against the source before writing.",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.4877,
+  "cand_scores": {
+    "0818571f-5ff7-4d39-9d2c-ced5ae44299e": 0.0,
+    "2ea2e5b5-257f-42e6-a7dc-93763f28b19d": 0.8059,
+    "3600de06-3f71-4e48-9480-e4828c579924": 0.6981,
+    "43dc9778-450b-4b46-b77e-b6d82b202035": 0.1694,
+    "4520f882-715a-482d-8e87-1cb3cbdfe975": 0.2357,
+    "61e7b9c6-0051-429f-a341-fda9b6578a84": 0.381,
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f": 0.5342,
+    "87da214f-fd92-4c58-9854-f4d0d10adce0": 0.6453,
+    "a73fbc98-90d4-4134-a54f-2b1d0c838791": 0.1466,
+    "b5d2e6f1-62a2-433a-bcdd-95b260cdd860": 0.0462,
+    "b9665ca1-4da4-4ff9-86f2-40b9a8683048": 0.8469,
+    "cecac8f9-8203-4ebd-ad49-54436a8c4171": 0.7267,
+    "d7cfae6f-4a82-4289-955e-c799dfe1e0f4": 0.8492,
+    "e4f664ea-0e5c-4e4e-a0d3-a87a33da947a": 0.8582,
+    "e996036e-8287-4e7f-8d0a-90a57cb53c45": 0.6623,
+    "ec591973-04d5-48c0-981c-1ab2fcec2dc1": 0.4058,
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5": 0.5254,
+    "f2986c1f-2bbf-4b83-bc93-624a9d617f45": 0.0
+  },
+  "improved": [
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "b9665ca1-4da4-4ff9-86f2-40b9a8683048",
+    "cecac8f9-8203-4ebd-ad49-54436a8c4171",
+    "d7cfae6f-4a82-4289-955e-c799dfe1e0f4",
+    "e4f664ea-0e5c-4e4e-a0d3-a87a33da947a"
+  ],
+  "regressed": [
+    "0818571f-5ff7-4d39-9d2c-ced5ae44299e",
+    "2ea2e5b5-257f-42e6-a7dc-93763f28b19d",
+    "61e7b9c6-0051-429f-a341-fda9b6578a84",
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "a73fbc98-90d4-4134-a54f-2b1d0c838791",
+    "ec591973-04d5-48c0-981c-1ab2fcec2dc1",
+    "f2986c1f-2bbf-4b83-bc93-624a9d617f45"
+  ],
+  "task_notes": {
+    "43dc9778": "turns=43 tool_errors=7 tools: run_shell_command x32, write_file x7, read_file x6, pdf_extract x5",
+    "b9665ca1": "turns=21 tool_errors=3 tools: run_shell_command x17, write_file x2, read_visual_file x1, web_fetch x1",
+    "cecac8f9": "turns=25 tool_errors=9 tools: run_shell_command x19, write_file x4, pdf_extract x2",
+    "d7cfae6f": "turns=28 tool_errors=9 tools: run_shell_command x27",
+    "e4f664ea": "turns=38 tool_errors=9 tools: run_shell_command x22, write_file x13, read_file x3, pdf_extract x1",
+    "0818571f": "turns=59 tool_errors=42 tools: web_fetch x53, run_shell_command x4, pdf_extract x1, write_file x1",
+    "2ea2e5b5": "turns=20 tool_errors=6 tools: run_shell_command x16, write_file x3",
+    "61e7b9c6": "turns=44 tool_errors=24 tools: web_fetch x28, run_shell_command x12, write_file x2, read_file x1",
+    "7d7fc9a7": "turns=28 tool_errors=16 tools: run_shell_command x20, pdf_extract x5, write_file x5, read_file x2",
+    "a73fbc98": "turns=21 tool_errors=4 tools: run_shell_command x19, pdf_extract x4",
+    "ec591973": "turns=13 tool_errors=4 tools: run_shell_command x9, write_file x3",
+    "f2986c1f": "turns=47 tool_errors=15 tools: run_shell_command x31, web_fetch x14, read_file x1"
+  },
+  "confirm": {}
+}

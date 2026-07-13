@@ -1,0 +1,85 @@
+{
+  "iteration": 5,
+  "verdict": "HARMFUL",
+  "kept": false,
+  "edit_summary": "edit agent.yaml, systemprompt.md, tool_descriptions/read_visual_file.tool.yaml, tool_descriptions/web_search.tool.yaml (+93/-5)",
+  "diff_signature": "e073ec65bd5163d142684e88e5d6f61efeecc26f64f494fcaae37669a2f9323e",
+  "predicted_fixes": [
+    "a73fbc98-90d4-4134-a54f-2b1d0c838791",
+    "61e7b9c6-0051-429f-a341-fda9b6578a84",
+    "0818571f-5ff7-4d39-9d2c-ced5ae44299e",
+    "87da214f-fd92-4c58-9854-f4d0d10adce0"
+  ],
+  "risk_tasks": [
+    "43dc9778-450b-4b46-b77e-b6d82b202035",
+    "b5d2e6f1-62a2-433a-bcdd-95b260cdd860",
+    "d7cfae6f-4a82-4289-955e-c799dfe1e0f4"
+  ],
+  "diagnosis": {
+    "root_cause_tag": "tool",
+    "deficiency_category": "11 failing task(s) across 10 occupation(s)",
+    "suggested_target_slot": "tool",
+    "predicted_fix_task_ids": [
+      "0818571f-5ff7-4d39-9d2c-ced5ae44299e",
+      "43dc9778-450b-4b46-b77e-b6d82b202035",
+      "4520f882-715a-482d-8e87-1cb3cbdfe975",
+      "61e7b9c6-0051-429f-a341-fda9b6578a84",
+      "87da214f-fd92-4c58-9854-f4d0d10adce0",
+      "a73fbc98-90d4-4134-a54f-2b1d0c838791",
+      "b5d2e6f1-62a2-433a-bcdd-95b260cdd860",
+      "d7cfae6f-4a82-4289-955e-c799dfe1e0f4",
+      "ec591973-04d5-48c0-981c-1ab2fcec2dc1",
+      "ee09d943-5a11-430a-b7a2-971b4e9b01b5",
+      "f2986c1f-2bbf-4b83-bc93-624a9d617f45"
+    ],
+    "overview": "The agent lacks reliable retrieval and deep-read tools to access exact source data from real websites, spreadsheets, images, and documents, leading to generic or approximated outputs, close-but-wrong values, and incomplete deliverables across tasks.",
+    "root_cause": "The agent lacks reliable retrieval and deep-read tools to access exact source data from real websites, spreadsheets, images, and documents, leading to generic or approximated outputs, close-but-wrong values, and incomplete deliverables across tasks.",
+    "general_mechanism": "1) Wire in a robust retrieval and deep-read tool (full web browser with JavaScript rendering, OCR, PDF/spreadsheet parsers) to ensure exact source data extraction, replacing any inadequate existing tools that cause repeated errors. 2) Add a harness prompt rule that forbids generating sample/placeholder data and requires cross-checking all required outputs (files, sections, pivot tables, formatting, word limits) against the task specification before final submission.",
+    "mechanism_kind": "tool",
+    "_b_pile": true
+  },
+  "inc_mean": 0.4877,
+  "cand_scores": {
+    "0818571f-5ff7-4d39-9d2c-ced5ae44299e": 0.0,
+    "2ea2e5b5-257f-42e6-a7dc-93763f28b19d": 0.8382,
+    "3600de06-3f71-4e48-9480-e4828c579924": 0.7453,
+    "43dc9778-450b-4b46-b77e-b6d82b202035": 0.0,
+    "4520f882-715a-482d-8e87-1cb3cbdfe975": 0.2057,
+    "61e7b9c6-0051-429f-a341-fda9b6578a84": 0.4762,
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f": 0.65,
+    "87da214f-fd92-4c58-9854-f4d0d10adce0": 0.3446,
+    "a73fbc98-90d4-4134-a54f-2b1d0c838791": 0.0,
+    "b5d2e6f1-62a2-433a-bcdd-95b260cdd860": 0.0462,
+    "b9665ca1-4da4-4ff9-86f2-40b9a8683048": 0.0,
+    "cecac8f9-8203-4ebd-ad49-54436a8c4171": 0.0,
+    "d7cfae6f-4a82-4289-955e-c799dfe1e0f4": 0.8651,
+    "e4f664ea-0e5c-4e4e-a0d3-a87a33da947a": 0.0,
+    "e996036e-8287-4e7f-8d0a-90a57cb53c45": 0.7435,
+    "ec591973-04d5-48c0-981c-1ab2fcec2dc1": 0.4545,
+    "ee09d943-5a11-430a-b7a2-971b4e9b01b5": 0.5339,
+    "f2986c1f-2bbf-4b83-bc93-624a9d617f45": 0.0
+  },
+  "improved": [
+    "7d7fc9a7-21a7-4b83-906f-416dea5ad04f",
+    "d7cfae6f-4a82-4289-955e-c799dfe1e0f4",
+    "e996036e-8287-4e7f-8d0a-90a57cb53c45"
+  ],
+  "regressed": [
+    "0818571f-5ff7-4d39-9d2c-ced5ae44299e",
+    "2ea2e5b5-257f-42e6-a7dc-93763f28b19d",
+    "61e7b9c6-0051-429f-a341-fda9b6578a84",
+    "87da214f-fd92-4c58-9854-f4d0d10adce0",
+    "ec591973-04d5-48c0-981c-1ab2fcec2dc1"
+  ],
+  "task_notes": {
+    "7d7fc9a7": "turns=22 tool_errors=4 tools: run_shell_command x15, pdf_extract x5, write_file x4, read_file x1",
+    "d7cfae6f": "turns=38 tool_errors=13 tools: run_shell_command x32, write_file x5",
+    "e996036e": "turns=11 tool_errors=2 tools: run_shell_command x10",
+    "0818571f": "turns=59 tool_errors=45 tools: web_fetch x53, run_shell_command x3, web_search x2, pdf_extract x1",
+    "2ea2e5b5": "turns=22 tool_errors=7 tools: run_shell_command x21",
+    "61e7b9c6": "turns=35 tool_errors=18 tools: web_fetch x17, run_shell_command x14, read_file x1, web_search x1, write_file x1",
+    "87da214f": "turns=18 tool_errors=4 tools: run_shell_command x16, write_file x1",
+    "ec591973": "turns=15 tool_errors=6 tools: run_shell_command x10, write_file x4"
+  },
+  "confirm": {}
+}
