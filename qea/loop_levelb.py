@@ -347,6 +347,28 @@ def _load_prior_edits(prior_dir) -> list:
     return out
 
 
+def _task_process_note(trace: dict) -> str:
+    """One-line behavioral autopsy of a candidate run for the attempt archive:
+    turns/tool_errors plus a tool-call histogram parsed from the full trajectory.
+    This is what makes a rollback ACTIONABLE for the next iteration — 'hurt:
+    f84ea6ac' alone hides that the worker called web_search 63 times and produced
+    nothing (observed); with the histogram the pathology is one glance away."""
+    import re
+    from collections import Counter
+    bits = [f"turns={trace.get('turns', '?')}", f"tool_errors={trace.get('tool_errors', '?')}"]
+    if trace.get("error"):
+        bits.append(f"ERROR={str(trace['error'])[:80]}")
+    tp = trace.get("trace_path") or ""
+    try:
+        txt = Path(tp).read_text() if tp and Path(tp).exists() else ""
+        calls = Counter(re.findall(r"<tool_call ([a-z_]+)>", txt))
+        if calls:
+            bits.append("tools: " + ", ".join(f"{n} x{c}" for n, c in calls.most_common(5)))
+    except Exception:  # noqa: BLE001
+        pass
+    return " ".join(bits)
+
+
 def _helped_hurt(improved, regressed) -> str:
     """' (helped: a,b | hurt: c)' suffix for a history line — the per-task outcome is
     what lets the evolve agent see WHY an edit was rolled back (whack-a-mole: it fixed
@@ -431,6 +453,14 @@ def _build_evidence(evidence_dir: Path, diag: dict, evals: dict, traces: dict,
             head = (f"# {e['name']}: {e.get('summary', '')}\n"
                     f"# outcome: {'KEPT' if e.get('kept') else e.get('verdict', '?') + ' (rolled back)'}"
                     f"{_helped_hurt(e.get('improved') or [], e.get('regressed') or [])}\n")
+            for tid8, note in (e.get("task_notes") or {}).items():
+                head += f"# behavior {tid8}: {note}\n"
+            cf = e.get("confirm") or {}
+            if cf:
+                head += (f"# held-out confirm: cand={cf.get('cand')} vs inc={cf.get('inc')} -> "
+                         f"{'PASS' if cf.get('passed') else 'FAIL (overfit: optimize-pool gain did not generalize)'}\n")
+                for tid8, w in (cf.get("worst") or {}).items():
+                    head += f"# confirm-collapse {tid8}: delta={w.get('delta')} {w.get('behavior', '')}\n"
             (pe_dir / f"{e['name']}.diff").write_text(head + e["diff"])
     # Task x attempt score matrix — which attempt helped which task, at a glance.
     if attempt_scores:
@@ -570,6 +600,7 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
 
         improved = regressed = []
         cand_scores = {}
+        confirm_note = {}
         if not diff:
             verdict, kept, cand_mean = "NO_EDIT", False, inc_mean
             n_blocked += 1
@@ -641,20 +672,31 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
                     kept = decide_keep_soft(avg_inc, avg_cand, noise_margin)
                     print(f"[iter {it}] confirmation: avg cand={avg_cand:.4f} vs inc={avg_inc:.4f} "
                           f"on {len(fair2)} task(s) -> {'CONFIRMED' if kept else 'NOT CONFIRMED (rolled back)'}", flush=True)
+            confirm_note = {}
             if kept and confirm_pool:
                 # Held-out CONFIRM gate: the edit must not regress on tasks the loop
                 # never optimized on (overfit guard — cost paid only on keeps; the
                 # incumbent side is sig-cached so it re-runs only after a promotion).
                 print(f"[iter {it}] held-out CONFIRM gate on {len(confirm_pool)} unseen task(s)...", flush=True)
-                _, _, _, inc_cf = evaluate_dir(incumbent, confirm_pool, evaluator,
+                cf_inc_evals, _, _, inc_cf = evaluate_dir(incumbent, confirm_pool, evaluator,
                                                results_dir / "confirm_inc", concurrency=cfg.concurrency,
                                                cache_dir=results_dir / "_cache", execution=cfg.execution,
                                                n_samples=cfg.n_samples)
-                _, _, _, cand_cf = evaluate_dir(cand_dir, confirm_pool, evaluator,
+                cf_cand_evals, cf_ct, _, cand_cf = evaluate_dir(cand_dir, confirm_pool, evaluator,
                                                 iterdir / "confirm_cand", concurrency=cfg.concurrency,
                                                 cache_dir=results_dir / "_cache", execution=cfg.execution,
                                                 n_samples=cfg.n_samples)
                 kept = cand_cf >= inc_cf - noise_margin
+                # Archive the WHY, not just the verdict: which held-out tasks collapsed
+                # and what the candidate was doing there (tool histogram) — otherwise
+                # the next iteration only sees an opaque rollback.
+                worst = sorted(((cf_cand_evals[t].gated_score - cf_inc_evals[t].gated_score, t)
+                                for t in cf_cand_evals if t in cf_inc_evals))[:3]
+                confirm_note = {"inc": round(inc_cf, 4), "cand": round(cand_cf, 4),
+                                "passed": bool(kept),
+                                "worst": {str(t)[:8]: {"delta": round(d, 3),
+                                                       "behavior": _task_process_note(cf_ct.get(t, {}))}
+                                          for d, t in worst if d < -noise_margin}}
                 print(f"[iter {it}] held-out confirm: cand={cand_cf:.4f} vs inc={inc_cf:.4f} "
                       f"(tolerance {noise_margin:.3f}) -> "
                       f"{'PASS' if kept else 'FAIL (rolled back as overfit)'}", flush=True)
@@ -673,9 +715,12 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
                 buffer.add(edit, verdict, 0, 0, "no aggregate score gain beyond the noise floor")
             cand_scores = {str(t): round(e.gated_score, 4) for t, e in cand_evals.items()}
             attempt_scores[f"iter{it}" + (" KEPT" if kept else "")] = cand_scores
+            task_notes = {str(t)[:8]: _task_process_note(ct.get(t, {}))
+                          for t in list(improved) + list(regressed)}
             past_edits.append({"name": f"iter_{it:03d}", "kept": kept, "verdict": verdict,
                                "summary": edit.summary, "improved": list(improved),
-                               "regressed": list(regressed), "diff": diff})
+                               "regressed": list(regressed), "task_notes": task_notes,
+                               "confirm": confirm_note, "diff": diff})
 
         records.append(LevelBRecord(
             it, verdict in ("NO_EDIT", LEAKAGE_BLOCKED, "BLOCKED"), verdict, kept,
@@ -683,7 +728,9 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             round(cand_mean, 4), list(improved), list(regressed)))
         ms_traj.append(round(inc_mean, 4))
         _persist(results_dir, it, verdict, kept, edit, diag, inc_mean,
-                 cand_scores=cand_scores, improved=improved, regressed=regressed)
+                 cand_scores=cand_scores, improved=improved, regressed=regressed,
+                 task_notes=past_edits[-1].get("task_notes", {}) if past_edits else {},
+                 confirm=confirm_note)
 
     return LevelBResult(
         n_tasks=len(tasks), mean_score_trajectory=ms_traj, records=records,
@@ -693,7 +740,8 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
 
 
 def _persist(results_dir: Path, it: int, verdict: str, kept: bool, edit, diag: dict, inc_mean: float,
-             *, cand_scores: dict = None, improved=(), regressed=()) -> None:
+             *, cand_scores: dict = None, improved=(), regressed=(),
+             task_notes: dict = None, confirm: dict = None) -> None:
     d = results_dir / f"iter_{it:03d}"
     d.mkdir(parents=True, exist_ok=True)
     (d / "manifest.json").write_text(json.dumps({
@@ -706,5 +754,8 @@ def _persist(results_dir: Path, it: int, verdict: str, kept: bool, edit, diag: d
         # _load_prior_edits when a later leg continues from this run's evolved worker.
         "cand_scores": cand_scores or {}, "improved": [str(t) for t in improved],
         "regressed": [str(t) for t in regressed],
+        # Behavioral autopsy per improved/hurt task + the held-out confirm outcome —
+        # so a later leg inherits the WHY of a rollback, not just the label.
+        "task_notes": task_notes or {}, "confirm": confirm or {},
     }, indent=2, default=str))
     (d / "edit.diff").write_text(edit.diff)
