@@ -104,3 +104,11 @@ changes the file on disk — re-read the file to confirm before finishing.
 
 Improve HOW the worker works (prompt, tools, bindings, budget) — never WHAT it answers.
 Do not embed task-specific answers, numbers, or domain facts into any file.
+
+## HARD RULE: every tool you write MUST enforce a real timeout
+An in-process `exec()`/`eval()` tool without an enforced wall-clock limit hangs the
+ENTIRE agent the first time the model writes an infinite loop or a blocking call
+(observed: a synthesized `run_python` with `timeout: (unused)` froze every task for
+an hour). Use `subprocess.run([...], timeout=N)` (never in-process exec), or wrap
+in-process work with `signal.alarm`/a watchdog thread that raises. A tool that can
+hang is worse than no tool.
