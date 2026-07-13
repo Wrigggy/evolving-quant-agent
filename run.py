@@ -60,7 +60,9 @@ def main() -> int:
     ap.add_argument("--core", action="store_true", help="real mode: ~25 core finance occupations instead of ~30 broad")
     ap.add_argument("--resume", action="store_true", help="real mode: continue a prior gdpval_soft run from its checkpoint")
     ap.add_argument("--n-tasks", type=int, default=5, help="levelb: number of tasks per iteration")
-    ap.add_argument("--benchmark", default="fab", choices=["fab", "gdpval", "gdpval_all"],
+    ap.add_argument("--benchmark", default="fab",
+                    choices=["fab", "gdpval", "gdpval_all", "ssb", "ssb_912", "ssb_verified",
+                             "ssb_sample", "dsbench", "apex_ib"],
                     help="levelb: which benchmark to evolve on (default fab)")
     ap.add_argument("--seed-worker", default=None,
                     help="levelb: seed worker dir (defaults per benchmark)")
