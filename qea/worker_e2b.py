@@ -164,7 +164,13 @@ def run_worker_e2b(task, worker_dir, run_dir) -> WorkerRun:
             trace["trace_path"] = ""
         trace.setdefault("backend", "e2b_full")
         if run.exit_code != 0 and not deliverable:
-            trace["error"] = f"entry exit={run.exit_code}: {(run.stderr or '')[:200]}"
+            # Skip the benign NexAU import warnings that crowd the head of stderr
+            # ("E2B SDK not installed...", "Sandbox is not running...") so the REAL
+            # exception is visible in the retry logs.
+            err_lines = [l for l in (run.stderr or "").splitlines()
+                         if l.strip() and "E2B SDK not installed" not in l
+                         and "Sandbox is not running" not in l]
+            trace["error"] = f"entry exit={run.exit_code}: " + " | ".join(err_lines)[-500:]
         return WorkerRun(deliverable or "", produced, trace)
 
     try:
