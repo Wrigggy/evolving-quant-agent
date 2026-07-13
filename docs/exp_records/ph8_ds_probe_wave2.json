@@ -1,0 +1,38 @@
+{
+  "worker_base_generic": {
+    "worker_dir": "qea/worker_base_generic",
+    "mean": 0.7,
+    "per_task": {
+      "00000001_question7": 1.0,
+      "00000002_question4": 1.0,
+      "00000002_question19": 1.0,
+      "00000004_question46": 0.0,
+      "00000006_question17": 0.0,
+      "00000007_question6": 0.0,
+      "00000007_question21": 0.0,
+      "00000009_question4": 1.0,
+      "00000010_question4": 1.0,
+      "00000010_question19": 1.0,
+      "00000012_question6": 1.0,
+      "00000013_question24": 0.0,
+      "00000016_question10": 0.0,
+      "00000018_question17": 1.0,
+      "00000019_question10": 1.0,
+      "00000020_question37": 1.0,
+      "00000025_question36": 1.0,
+      "00000026_question10": 0.0,
+      "00000027_question14": 1.0,
+      "00000029_question4": 0.0,
+      "00000031_question2": 1.0,
+      "00000033_question5": 0.0,
+      "00000034_question12": 1.0,
+      "00000036_question2": 1.0,
+      "00000037_question2": 1.0,
+      "00000037_question17": 1.0,
+      "00000041_question1": 1.0,
+      "00000042_question11": 1.0,
+      "00000042_question26": 1.0,
+      "00000042_question41": 1.0
+    }
+  }
+}

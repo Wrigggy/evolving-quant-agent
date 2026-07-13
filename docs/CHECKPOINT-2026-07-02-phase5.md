@@ -1,5 +1,7 @@
 # Checkpoint / Roadmap — Phase 5 Level-B mechanism (2026-07-02)
 
+> **SUPERSEDED by `CHECKPOINT-2026-07-13-phase7-8.md`.** Kept as a point-in-time record.
+
 Supersedes `CHECKPOINT-2026-06-30-phase5.md`. Captures current state + forward plan so
 work resumes cleanly after a context clear.
 
