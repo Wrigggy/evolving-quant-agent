@@ -66,7 +66,7 @@ def main() -> int:
                     help="levelb: which benchmark to evolve on (default fab)")
     ap.add_argument("--seed-worker", default=None,
                     help="levelb: seed worker dir (defaults per benchmark)")
-    ap.add_argument("--evidence-mode", default="sanitized", choices=["sanitized", "ahe_corpus"],
+    ap.add_argument("--evidence-mode", default="sanitized", choices=["sanitized", "ahe_corpus", "self_corpus"],
                     help="levelb: evolve-agent evidence — sanitized (firewall ON) or "
                          "ahe_corpus (traces+analysis, no gold; firewall relaxed)")
     ap.add_argument("--task-ids", default="",

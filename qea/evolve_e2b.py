@@ -28,7 +28,8 @@ _REMOTE_WORK = "/home/user/work"
 
 
 def run_evolve_agent_e2b(snapshot_dir_path, sanitized_diagnosis: dict, run_dir,
-                         *, edit_history: str = "", evidence_dir=None) -> dict:
+                         *, edit_history: str = "", evidence_dir=None,
+                         self_diagnose: bool = False, notes: str = "") -> dict:
     from e2b import Sandbox
     from .worker_runtime import ensure_nexau_llm_env
     ensure_nexau_llm_env()
@@ -40,7 +41,8 @@ def run_evolve_agent_e2b(snapshot_dir_path, sanitized_diagnosis: dict, run_dir,
     # drill-down path at the VM location where we upload the evidence.
     msg = _build_evolve_message(sanitized_diagnosis, edit_history=edit_history,
                                 evidence_dir=evidence_dir,
-                                evidence_ref="/home/user/evidence/traces")
+                                evidence_ref="/home/user/evidence/traces",
+                                self_diagnose=self_diagnose, notes=notes)
 
     sbx = Sandbox.create(template=_template(), timeout=_sandbox_timeout())
 

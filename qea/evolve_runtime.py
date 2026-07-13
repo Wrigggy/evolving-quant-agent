@@ -137,7 +137,9 @@ def _read_first(path: Path, limit: int = 20000) -> str:
 
 
 def _build_evolve_message(sanitized_diagnosis: dict, *, edit_history: str = "",
-                          evidence_dir=None, evidence_ref: str = None) -> str:
+                          evidence_dir=None, evidence_ref: str = None,
+                          self_diagnose: bool = False, notes: str = "",
+                          query_tool_ref: str = "/home/user/evolve_agent/query_evidence.py") -> str:
     """Build the evolve-agent prompt (diagnosis + optional AHE evidence + reference +
     predict-JSON tail). Shared by the local (run_evolve_agent) and E2B (run_evolve_agent_e2b)
     paths. `evidence_dir` is where overview.md/history are READ from (local); `evidence_ref`
@@ -145,14 +147,43 @@ def _build_evolve_message(sanitized_diagnosis: dict, *, edit_history: str = "",
     defaults to the local evidence_dir/traces)."""
     reference = _read_reference()
     task_ids = sanitized_diagnosis.get("predicted_fix_task_ids") or []
-    rc = sanitized_diagnosis.get("root_cause") or sanitized_diagnosis.get("overview") or ""
-    mech = sanitized_diagnosis.get("general_mechanism") or ""
-    kind = sanitized_diagnosis.get("mechanism_kind") or sanitized_diagnosis.get("root_cause_tag") or ""
-    diag_lines = (
-        f"- ROOT CAUSE: {rc}\n"
-        f"- SUGGESTED HARNESS CHANGE ({kind}): {mech}\n"
-        f"- tasks currently failing: {task_ids}\n"
-    )
+    if self_diagnose:
+        # v3 architecture: no separate debugger — the SAME agent diagnoses from the
+        # raw evidence and edits with that full context (no lossy second-hand
+        # summary between the investigator and the editor).
+        diag_lines = (
+            f"- tasks currently failing: {task_ids}\n"
+            "- There is NO pre-written diagnosis. YOU are the investigator: before "
+            "editing, form your own root-cause hypothesis from the evidence and state "
+            "it in one sentence in your final message.\n"
+            f"- Evidence query tool (run via the shell): `python3 {query_tool_ref} "
+            "list|trace|tools|attempts|matrix` — `list` shows every failing task's "
+            "score/process; `trace <task> --grep <pat>` drills into one trajectory; "
+            "`tools <task>` shows its tool-call histogram; `attempts` shows every "
+            "prior attempt's outcome+behavior. Investigate at least the 2-3 highest-"
+            "impact failures before choosing an edit.\n"
+        )
+    else:
+        rc = sanitized_diagnosis.get("root_cause") or sanitized_diagnosis.get("overview") or ""
+        mech = sanitized_diagnosis.get("general_mechanism") or ""
+        kind = sanitized_diagnosis.get("mechanism_kind") or sanitized_diagnosis.get("root_cause_tag") or ""
+        diag_lines = (
+            f"- ROOT CAUSE: {rc}\n"
+            f"- SUGGESTED HARNESS CHANGE ({kind}): {mech}\n"
+            f"- tasks currently failing: {task_ids}\n"
+        )
+    notes_block = ""
+    if notes or self_diagnose:
+        notes_block = (
+            "\n## Your persistent memory (survives across iterations and runs)\n"
+            "The file `_evolve_notes.md` in your working directory is YOUR notebook — "
+            "it is never graded and never shown to the worker. Current content is "
+            "inlined below. Before finishing, REWRITE that file (write_file) with "
+            "distilled durable knowledge: environment facts (installed packages, tool "
+            "quirks, crash classes), falsified edit directions with the reason, and "
+            "playbook rules that worked. Keep it under 150 lines; prune stale entries.\n\n"
+            f"### _evolve_notes.md\n{(notes or '(empty — first iteration)')[:4000]}\n"
+        )
     head = (
         "Your working directory contains a worker agent defined as files (agent.yaml, "
         "systemprompt.md, tool_descriptions/, and possibly tools/). Make the harness "
@@ -213,11 +244,12 @@ def _build_evolve_message(sanitized_diagnosis: dict, *, edit_history: str = "",
         '{"predicted_fixes": ["<task_id>", ...], "risk_tasks": ["<task_id>", ...], '
         '"rationale": "<one sentence>"}\n'
     )
-    return head + evidence_block + tail
+    return head + evidence_block + notes_block + tail
 
 
 def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir: Path,
-                     *, edit_history: str = "", evidence_dir=None) -> dict:
+                     *, edit_history: str = "", evidence_dir=None,
+                     self_diagnose: bool = False, notes: str = "") -> dict:
     """Invoke the file-editing NexAU evolve agent against the snapshot. The agent may
     edit ANY file in the worker dir (prompt, tool descriptions, agent.yaml bindings, or
     new tool code) and is always handed the answer-free NexAU-modification reference (b).
@@ -258,7 +290,8 @@ def run_evolve_agent(snapshot_dir_path: Path, sanitized_diagnosis: dict, run_dir
     except Exception:  # noqa: BLE001
         pass
     msg = _build_evolve_message(sanitized_diagnosis, edit_history=edit_history,
-                                evidence_dir=evidence_dir)
+                                evidence_dir=evidence_dir, self_diagnose=self_diagnose,
+                                notes=notes, query_tool_ref=str(EVOLVE_DIR / "query_evidence.py"))
     ctx = {"working_directory": str(snap), "username": os.environ.get("USER", "kevin")}
     ctx["env_content"] = dict(ctx)
     resp = agent.run(message=msg, context=ctx)

@@ -201,7 +201,7 @@ def test_levelb_loop_keeps_improving_edit_offline(tmp_path, monkeypatch):
     monkeypatch.setattr(qea.worker_runtime, "run_worker", fake_run_worker)
 
     # evolve agent: appends the IMPROVED marker + predicts it fixes t1
-    def fake_run_evolve(snapshot_dir_path, diag, run_dir, *, edit_history="", evidence_dir=None):
+    def fake_run_evolve(snapshot_dir_path, diag, run_dir, *, edit_history="", evidence_dir=None, **kw):
         sp = snapshot_dir_path / "systemprompt.md"
         sp.write_text(sp.read_text() + "\nIMPROVED: verify the file before finishing.\n")
         return {"final_text": "added verify guidance", "trace": {"turns": 2},
@@ -240,7 +240,7 @@ def test_levelb_loop_rolls_back_non_improving_edit(tmp_path, monkeypatch):
                         lambda task, wd, rd: WorkerRun("same", [], {"files": 1, "turns": 5, "tool_errors": 0}))
 
     # evolve makes a real (but useless) change so the diff is non-empty; predicts t1
-    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None):
+    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None, **kw):
         sp = snap / "systemprompt.md"; sp.write_text(sp.read_text() + "\nnoise edit\n")
         return {"final_text": "x", "trace": {}, "prediction": {"predicted_fixes": ["t1"], "risk_tasks": []}}
     monkeypatch.setattr(L, "run_evolve_agent", ev)
@@ -402,7 +402,7 @@ def test_levelb_ahe_corpus_mode_passes_evidence_dir(tmp_path, monkeypatch):
                         lambda task, wd, rd: WorkerRun("weak ans", [], {"files": 0, "turns": 2, "tool_errors": 0}))
 
     captured = {}
-    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None):
+    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None, **kw):
         captured["evidence_dir"] = evidence_dir
         return {"final_text": "x", "trace": {}, "prediction": {"predicted_fixes": [], "risk_tasks": []}}
     monkeypatch.setattr(L, "run_evolve_agent", ev)
@@ -561,7 +561,7 @@ def test_confirm_band_second_eval_gates_near_floor_keeps(tmp_path, monkeypatch):
                             "improved=True" if "MARKER" in (Path(wd) / "systemprompt.md").read_text()
                             else "base", [], {"files": 0, "turns": 1, "tool_errors": 0}))
 
-    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None):
+    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None, **kw):
         sp = Path(snap) / "systemprompt.md"
         sp.write_text(sp.read_text() + "\nMARKER\n")
         return {"final_text": "e", "trace": {},
@@ -704,7 +704,7 @@ def test_confirm_tasks_heldout_gate_rejects_overfit_keep(tmp_path, monkeypatch):
                             f"{task.task_id}|improved={'MARKER' in (Path(wd) / 'systemprompt.md').read_text()}",
                             [], {"files": 0, "turns": 1, "tool_errors": 0}))
 
-    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None):
+    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None, **kw):
         sp = Path(snap) / "systemprompt.md"
         sp.write_text(sp.read_text() + "\nMARKER\n")
         return {"final_text": "e", "trace": {},
@@ -877,3 +877,63 @@ def test_apex_ib_loader_and_evaluator(tmp_path):
     r = ev.evaluate(answer_task, WorkerRun("The value is 24.9x", [xl], {}))
     assert r.gated_score > 0
     assert "Net Income" in seen["prompt"] and "1772" in seen["prompt"]  # dump attached
+
+
+def test_self_corpus_mode_skips_debugger_and_roundtrips_memory(tmp_path, monkeypatch):
+    """v3 architecture: no debugger LLM calls, the evolve agent self-diagnoses with
+    a query tool + persistent notebook that round-trips outside the graded surface."""
+    import qea.loop_levelb as L
+    import qea.worker_runtime
+    from qea.worker_runtime import WorkerRun
+    from qea.tasks import BTask
+
+    tasks = [BTask(task_id="t1", subtype="x", prompt="p", rubric="",
+                   rubric_items=[{"points": 1, "criterion": "c"}], gold="g")]
+    monkeypatch.setattr(qea.worker_runtime, "run_worker",
+                        lambda task, wd, rd: WorkerRun("weak", [], {"files": 0, "turns": 1, "tool_errors": 0}))
+
+    captured = {}
+    def ev(snap, diag, rd, *, edit_history="", evidence_dir=None,
+           self_diagnose=False, notes=""):
+        captured.update(diag=diag, self_diagnose=self_diagnose, notes=notes,
+                        evidence_dir=evidence_dir)
+        # the agent rewrites its notebook inside the snapshot + makes an edit
+        (Path(snap) / "_evolve_notes.md").write_text("LESSON: env lacks openpyxl\n")
+        sp = Path(snap) / "systemprompt.md"
+        sp.write_text(sp.read_text() + "\nEDIT\n")
+        return {"final_text": "e", "trace": {}, "prediction": {"predicted_fixes": [], "risk_tasks": []}}
+    monkeypatch.setattr(L, "run_evolve_agent", ev)
+
+    class BoomLLM:  # debugger must NEVER be called in self_corpus mode
+        def complete(self, *a, **k):
+            raise AssertionError("debugger called in self_corpus mode")
+
+    seed = tmp_path / "seed"; (seed / "tool_descriptions").mkdir(parents=True)
+    (seed / "agent.yaml").write_text("name: w\n"); (seed / "systemprompt.md").write_text("do\n")
+    cfg = L.LevelBConfig(n_iters=1, k=1, n_tasks=1, results_dir=str(tmp_path / "res"),
+                         seed_worker_dir=str(seed), noise_margin=0.05,
+                         evidence_mode="self_corpus")
+    L.run_levelb(cfg, _tasks=tasks, _evaluator=_FakeEval(base=0.3, improved=0.3), _llm=BoomLLM())
+
+    assert captured["self_diagnose"] is True
+    assert captured["diag"]["root_cause_tag"] == "self_diagnosed"
+    assert captured["diag"]["predicted_fix_task_ids"] == ["t1"]
+    assert captured["evidence_dir"] is not None            # corpus still built
+    # notebook extracted OUT of the graded surface and persisted
+    res = Path(cfg.results_dir)
+    assert (res / "evolve_memory.md").read_text().startswith("LESSON")
+    assert not (res / "iter_001" / "worker" / "_evolve_notes.md").exists()
+    # and the manifest diff must not mention the notebook
+    assert "_evolve_notes" not in (res / "iter_001" / "edit.diff").read_text()
+
+
+def test_evolve_prompt_self_diagnose_and_notes_block(tmp_path):
+    from qea.evolve_runtime import _build_evolve_message
+    msg = _build_evolve_message({"predicted_fix_task_ids": ["a", "b"]},
+                                evidence_dir=tmp_path, self_diagnose=True,
+                                notes="ENV: no openpyxl")
+    assert "query_evidence.py" in msg and "YOU are the investigator" in msg
+    assert "ENV: no openpyxl" in msg and "_evolve_notes.md" in msg
+    msg2 = _build_evolve_message({"root_cause": "r", "predicted_fix_task_ids": []},
+                                 evidence_dir=tmp_path)
+    assert "YOU are the investigator" not in msg2          # legacy modes unchanged

@@ -65,6 +65,11 @@ class LevelBConfig:
     # "sanitized" = iron-law-2 firewall ON (evolve agent sees only the answer-free
     # diagnosis). "ahe_corpus" = AHE-style evidence corpus (traces + per-task failure
     # analysis + edit history); firewall relaxed, but the gold answer is NEVER included.
+    # "self_corpus" = v3 architecture: NO separate debugger — the evolve agent gets the
+    # corpus + an evidence QUERY tool and diagnoses in ITS OWN context (one decision-
+    # maker, no lossy hand-off), plus a persistent _evolve_notes.md memory that
+    # round-trips across iterations and legs. Anti-cheat stays at the OUTPUT (leakage
+    # guard on the diff) — observation is free, acceptance is disciplined.
     evidence_mode: str = "sanitized"
     # noise floor for decide_keep_soft. 0.0 = MEASURE it via a 2nd same-dir seed eval
     # (accurate but doubles the slow seed cost). >0 = use this fixed margin and SKIP the
@@ -551,13 +556,30 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
     past_edits = _load_prior_edits(prior_dir)
     attempt_scores = {"seed": {str(t): round(e.gated_score, 4) for t, e in evals.items()}}
 
+    # v3 persistent evolve memory: seed this leg's notebook from the newest prior leg.
+    mem_file = results_dir / "evolve_memory.md"
+    if not mem_file.exists():
+        for d in reversed(_prior_dirs(prior_dir)):
+            pm = Path(d) / "evolve_memory.md"
+            if pm.exists():
+                mem_file.write_text(pm.read_text())
+                print(f"[levelb] inherited evolve memory from {d}", flush=True)
+                break
+
     for it in range(1, cfg.n_iters + 1):
         inc_eval = _eval_summary(evals, deliverables, tasks)
         # Phase markers: the diagnose step makes one critic (judge) call per failing task
         # (~n sequential calls) then one evolve-agent call, so it can legitimately take
         # minutes — without a marker a slow diagnose is indistinguishable from a hang.
-        print(f"[iter {it}] diagnosing ({sum(1 for r in inc_eval.results.values() if r.pile=='B' and not r.oos_pass)} failing B tasks)...", flush=True)
-        diag = diagnose_b_pile(inc_eval, tasks, llm=llm, traces=traces).proposer_payload()
+        if cfg.evidence_mode == "self_corpus":
+            failing = [str(t.task_id) for t in tasks
+                       if t.task_id in evals and evals[t.task_id].gated_score < 0.60]
+            diag = {"root_cause_tag": "self_diagnosed", "predicted_fix_task_ids": failing}
+            print(f"[iter {it}] self-diagnose mode: {len(failing)} failing tasks, "
+                  "no debugger (v3)", flush=True)
+        else:
+            print(f"[iter {it}] diagnosing ({sum(1 for r in inc_eval.results.values() if r.pile=='B' and not r.oos_pass)} failing B tasks)...", flush=True)
+            diag = diagnose_b_pile(inc_eval, tasks, llm=llm, traces=traces).proposer_payload()
 
         iterdir = results_dir / f"iter_{it:03d}"
         cand_dir = iterdir / "worker"
@@ -570,7 +592,7 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
         else:
             snapshot_dir(incumbent, cand_dir)
             evidence_dir = None
-            if cfg.evidence_mode == "ahe_corpus":
+            if cfg.evidence_mode in ("ahe_corpus", "self_corpus"):
                 evidence_dir = _build_evidence(iterdir / "evidence", diag, evals, traces,
                                                deliverables, tasks, records,
                                                prior_history=prior_history,
@@ -585,14 +607,28 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             else:
                 _run_evolve = run_evolve_agent
             full_history = "\n".join(x for x in (prior_history, _edit_history(records)) if x)
+            notes = mem_file.read_text() if mem_file.exists() else ""
+            if cfg.evidence_mode == "self_corpus":
+                # The notebook rides INSIDE the snapshot so the agent edits it with its
+                # normal file tools; it is extracted right back out below (never graded,
+                # never diffed).
+                (cand_dir / "_evolve_notes.md").write_text(notes or "(empty)\n")
             ev_out = _run_evolve(cand_dir, diag, iterdir,
-                                 edit_history=full_history, evidence_dir=evidence_dir)
+                                 edit_history=full_history, evidence_dir=evidence_dir,
+                                 self_diagnose=cfg.evidence_mode == "self_corpus",
+                                 notes=notes)
             pred = ev_out.get("prediction") or {}
             iterdir.mkdir(parents=True, exist_ok=True)
             pred_file.write_text(json.dumps(pred))
             # The final message is where the agent must justify a retry of a
             # falsified approach (anti-fixation directive) — persist it for audit.
             (iterdir / "evolve_final.txt").write_text(str(ev_out.get("final_text") or ""))
+        # v3 memory roundtrip: pull the agent's rewritten notebook OUT of the snapshot
+        # before diff/sig/eval (also covers RESUME launches that interrupted here).
+        nf = cand_dir / "_evolve_notes.md"
+        if nf.exists():
+            mem_file.write_text(nf.read_text())
+            nf.unlink()
         print(f"[iter {it}] evaluating candidate on {len(tasks)} tasks...", flush=True)
         diff = dir_unified_diff(incumbent, cand_dir)
         edit = DirEdit(diff, predicted_fixes=pred.get("predicted_fixes", []),
