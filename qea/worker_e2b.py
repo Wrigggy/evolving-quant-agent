@@ -128,14 +128,31 @@ def run_worker_e2b(task, worker_dir, run_dir) -> WorkerRun:
             "is_file_task": is_file_task, "ref_names": ref_names,
         }))
 
-        run = sbx.commands.run(
-            "cd /home/user && python3 entry.py",
-            envs={"OPENROUTER_API_KEY": key,
-                  "LLM_MODEL": os.environ.get("LLM_MODEL", "deepseek/deepseek-v4-pro"),
-                  # capability gate for gap experiments (see e2b_entry): block in-VM pip
-                  "QEA_E2B_BLOCK_PIP": os.environ.get("QEA_E2B_BLOCK_PIP", "")},
-            timeout=_sandbox_timeout(),
-        )
+        try:
+            run = sbx.commands.run(
+                "cd /home/user && python3 entry.py",
+                envs={"OPENROUTER_API_KEY": key,
+                      "LLM_MODEL": os.environ.get("LLM_MODEL", "deepseek/deepseek-v4-pro"),
+                      # capability gate for gap experiments (see e2b_entry): block in-VM pip
+                      "QEA_E2B_BLOCK_PIP": os.environ.get("QEA_E2B_BLOCK_PIP", "")},
+                timeout=_sandbox_timeout(),
+            )
+        except Exception as exc:  # noqa: BLE001
+            if type(exc).__name__ != "CommandExitException":
+                raise
+            # Entry crash: e2b RAISES on nonzero exit, so the cleaned-error branch
+            # below never sees it. The raw message starts with NexAU's benign import
+            # warnings — one of which ("Sandbox is not running") matches the "sandbox"
+            # transient key, so DETERMINISTIC crashes (e.g. the long-context empty-
+            # model-response class) were retried 4x and infra-masked = invisible to
+            # evolution. Strip the benign lines and re-raise with the REAL exception
+            # text so classification and the evidence see the true failure.
+            lines = [l for l in str(exc).splitlines()
+                     if l.strip() and "E2B SDK not installed" not in l
+                     and "Sandbox is not running" not in l
+                     and "Command exited with code" not in l]
+            raise RuntimeError("worker entry crashed: "
+                               + (" | ".join(lines)[-500:] or "no stderr")) from None
 
         deliverable = sbx.files.read("/home/user/output/deliverable.txt")
         trace = json.loads(sbx.files.read("/home/user/output/trace.json"))
