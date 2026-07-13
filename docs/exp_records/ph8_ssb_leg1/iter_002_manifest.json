@@ -34,9 +34,9 @@
     "55085_tc1"
   ],
   "diagnosis": {
-    "root_cause_tag": "tool",
+    "root_cause_tag": "prompt",
     "deficiency_category": "24 failing task(s) across 2 occupation(s)",
-    "suggested_target_slot": "tool",
+    "suggested_target_slot": "prompt",
     "predicted_fix_task_ids": [
       "269-44_tc1",
       "269-44_tc2",
@@ -63,16 +63,16 @@
       "47827_tc1",
       "47827_tc2"
     ],
-    "overview": "The agent systematically fails to ground its work in the actual source file contents, instead operating on hallucinated data, default sheet names, or incomplete read results \u2014 caused by a lack of a dedicated, reliable spreadsheet-reading tool and a habit of skipping or failing file inspection.",
-    "root_cause": "The agent systematically fails to ground its work in the actual source file contents, instead operating on hallucinated data, default sheet names, or incomplete read results \u2014 caused by a lack of a dedicated, reliable spreadsheet-reading tool and a habit of skipping or failing file inspection.",
-    "general_mechanism": "1) Wire in a dedicated spreadsheet-inspection tool (e.g., `read_workbook`) that returns all sheet names, dimensions, and raw cell values in a structured form, and enforce a mandatory first-step call to this tool for any spreadsheet task. 2) Add a prompt rule requiring the agent to quote actual retrieved values and verify that output shape, sheet names, and data types match the task\u2019s explicit constraints (range, sheet name, numeric vs. string) before finalizing.",
-    "mechanism_kind": "tool",
+    "overview": "The worker frequently fails to reliably read source data from input files, hallucinating values or getting stuck in repeat read\u2011loops (e.g., identical 'event_type=\"BUSINESS\"' across many rows, and tasks that produced no deliverable after many retrying file reads), and when it does produce output it often writes Excel formula strings instead of Python\u2011computed values, leaving cells empty.",
+    "root_cause": "The worker frequently fails to reliably read source data from input files, hallucinating values or getting stuck in repeat read\u2011loops (e.g., identical 'event_type=\"BUSINESS\"' across many rows, and tasks that produced no deliverable after many retrying file reads), and when it does produce output it often writes Excel formula strings instead of Python\u2011computed values, leaving cells empty.",
+    "general_mechanism": "1. Prompt rule: Before any processing, read the entire source file using the dedicated file\u2011reading tool, verify that the returned data is non\u2011empty and matches the expected structure; if reading fails, stop and report the error instead of guessing or re\u2011attempting endlessly. 2. Tool binding: ensure the Excel reading tool (openpyxl / equivalent) is correctly bound, resolves file paths, and includes a short retry with an exit condition to prevent infinite read\u2011loops. 3. Prompt rule: never write formula strings (e.g., `=\u2026`) to cells; always compute the required result in Python and write the raw value. 4. Formatting rule: strictly match the target output range dimensions, shape, and placement; when deduplicating, modify the sheet in place and do not add extra headers or content outside the specified cells.",
+    "mechanism_kind": "prompt",
     "_b_pile": true
   },
   "inc_mean": 0.1786,
   "cand_scores": {
     "13-1_tc1": 1.0,
-    "13-1_tc2": 0.5,
+    "13-1_tc2": 1.0,
     "269-44_tc1": 0.0,
     "269-44_tc2": 0.0,
     "230-16_tc1": 0.0,
@@ -104,12 +104,10 @@
     "55085_tc2"
   ],
   "regressed": [
-    "13-1_tc2",
     "55085_tc1"
   ],
   "task_notes": {
-    "55085_tc": "turns=9 tool_errors=2 tools: worker_base_generic x6, read_workbook x2",
-    "13-1_tc2": "turns=12 tool_errors=4 tools: worker_base_generic x9, read_workbook x2"
+    "55085_tc": "turns=9 tool_errors=2 tools: worker_base_generic x6, read_workbook x2"
   },
   "confirm": {}
 }

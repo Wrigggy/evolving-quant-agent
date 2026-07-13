@@ -64,9 +64,9 @@
       "47827_tc1",
       "47827_tc2"
     ],
-    "overview": "The agent cannot reliably read Excel file content; `readFile` and code-execution attempts often fail or are skipped, causing the worker to hallucinate data (e.g., generic placeholders, copied example strings) instead of processing the real spreadsheets.",
-    "root_cause": "The agent cannot reliably read Excel file content; `readFile` and code-execution attempts often fail or are skipped, causing the worker to hallucinate data (e.g., generic placeholders, copied example strings) instead of processing the real spreadsheets.",
-    "general_mechanism": "Add a dedicated, bound tool (e.g., `readExcel`) that robustly parses .xlsx files and returns structured cell values, and add a post-write verification step to ensure output files are actually saved and modified.",
+    "overview": "The agent lacks a reliable tool to read Excel input files, causing it to hallucinate input data (e.g., synthetic names like 'Bruce B. Wayne' instead of real file contents) and derive incorrect dimensions/shapes, which propagates into format and compute failures.",
+    "root_cause": "The agent lacks a reliable tool to read Excel input files, causing it to hallucinate input data (e.g., synthetic names like 'Bruce B. Wayne' instead of real file contents) and derive incorrect dimensions/shapes, which propagates into format and compute failures.",
+    "general_mechanism": "1) Wire in a missing Excel reader tool (e.g., a `read_excel` function that wraps `pandas` or `openpyxl`) to reliably extract raw values and dimensions from .xlsx source files. 2) Add a prompt rule that forces the agent to first read the source file, log its structure (rows, columns, sheet names) and the exact content of the cells it will use, and then explicitly check that output dimensions match the specification before writing any output.",
     "mechanism_kind": "tool",
     "_b_pile": true
   },
