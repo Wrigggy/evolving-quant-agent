@@ -98,7 +98,13 @@ def run_worker_e2b(task, worker_dir, run_dir) -> WorkerRun:
     ref_names = sorted(rf.name for rf in ref_files)
     is_file_task = bool(ref_names) or bool(getattr(task, "deliverable_exts", None))
 
-    sbx = Sandbox.create(template=_template(), timeout=_sandbox_timeout())
+    # Sandbox.create was the one blocking call OUTSIDE the watchdog: during a brief
+    # E2B outage its internal HTTP client blocked forever (observed: eval threads
+    # silent for 1h, zero watchdog fires, 'Response 404' spam). Give creation its own
+    # short watchdog so a wedged create becomes a retryable timeout.
+    sbx = run_with_watchdog(
+        lambda: Sandbox.create(template=_template(), timeout=_sandbox_timeout()),
+        180, lambda: None, f"create:{task.task_id}")
 
     def _interact() -> WorkerRun:
         # Upload agent dir, entry script, reference inputs, task spec.

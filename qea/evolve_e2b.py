@@ -44,7 +44,9 @@ def run_evolve_agent_e2b(snapshot_dir_path, sanitized_diagnosis: dict, run_dir,
                                 evidence_ref="/home/user/evidence/traces",
                                 self_diagnose=self_diagnose, notes=notes)
 
-    sbx = Sandbox.create(template=_template(), timeout=_sandbox_timeout())
+    sbx = run_with_watchdog(
+        lambda: Sandbox.create(template=_template(), timeout=_sandbox_timeout()),
+        180, lambda: None, "create:evolve")
 
     def _interact() -> dict:
         _upload_dir(sbx, EVOLVE_DIR, "/home/user/evolve_agent")
