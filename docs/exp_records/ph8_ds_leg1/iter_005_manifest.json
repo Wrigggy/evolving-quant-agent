@@ -1,0 +1,91 @@
+{
+  "iteration": 5,
+  "verdict": "MIXED",
+  "kept": false,
+  "edit_summary": "edit systemprompt.md, tool_descriptions/run_shell_command.tool.yaml (+38/-2)",
+  "diff_signature": "836cd8d4c38771d8075c2d122189a4bcf9ad34c561f3ae83e54fce8bc2f457bf",
+  "predicted_fixes": [
+    "00000004_question45",
+    "00000006_question17",
+    "00000007_question20",
+    "00000007_question21",
+    "00000007_question5",
+    "00000007_question6",
+    "00000010_question18",
+    "00000013_question23",
+    "00000013_question24",
+    "00000016_question10",
+    "00000020_question36",
+    "00000026_question10",
+    "00000027_question13",
+    "00000029_question3",
+    "00000029_question4",
+    "00000039_question6"
+  ],
+  "risk_tasks": [],
+  "diagnosis": {
+    "root_cause_tag": "prompt",
+    "deficiency_category": "17 failing task(s) across 11 occupation(s)",
+    "suggested_target_slot": "prompt",
+    "predicted_fix_task_ids": [
+      "00000004_question45",
+      "00000004_question46",
+      "00000006_question17",
+      "00000007_question20",
+      "00000007_question21",
+      "00000007_question5",
+      "00000007_question6",
+      "00000010_question18",
+      "00000013_question23",
+      "00000013_question24",
+      "00000016_question10",
+      "00000020_question36",
+      "00000026_question10",
+      "00000027_question13",
+      "00000029_question3",
+      "00000029_question4",
+      "00000039_question6"
+    ],
+    "overview": "The worker consistently bypasses actual retrieval from provided source files (Excel, .xlsb, large CSVs), fabricating plausible but incorrect numbers (e.g., hallucinated 115 voters, 30,761.89 equity, 42-minute trip) instead of reading and computing on real data.",
+    "root_cause": "The worker consistently bypasses actual retrieval from provided source files (Excel, .xlsb, large CSVs), fabricating plausible but incorrect numbers (e.g., hallucinated 115 voters, 30,761.89 equity, 42-minute trip) instead of reading and computing on real data.",
+    "general_mechanism": "1. Insert a mandatory pre-computation guardrail in the system prompt: 'Before any calculation, read the source file values explicitly and print the extracted numbers. If reading fails, report the error and do not proceed with guessed data.' 2. Wire up a robust file reader tool (or bind the existing library) that can handle .xlsb, large Excel files, and multi-sheet workbooks without truncation or corruption, so retrieval never silently fails. 3. Add middleware that imposes a hard iteration/time limit on computational loops and, on breach, forces the agent to switch to a closed-form or simpler approximation instead of infinite looping.",
+    "mechanism_kind": "prompt",
+    "_b_pile": true
+  },
+  "inc_mean": 0.1944,
+  "cand_scores": {
+    "00000004_question45": 0.0,
+    "00000004_question46": 0.0,
+    "00000006_question17": 0.5,
+    "00000007_question20": 0.0,
+    "00000007_question21": 0.0,
+    "00000007_question5": 0.0,
+    "00000007_question6": 0.0,
+    "00000010_question18": 0.0,
+    "00000013_question23": 0.5,
+    "00000013_question24": 0.0,
+    "00000016_question10": 0.0,
+    "00000020_question36": 0.0,
+    "00000026_question10": 0.5,
+    "00000027_question13": 0.0,
+    "00000029_question3": 0.0,
+    "00000029_question4": 0.0,
+    "00000033_question5": 0.0,
+    "00000039_question6": 0.5
+  },
+  "improved": [
+    "00000026_question10"
+  ],
+  "regressed": [
+    "00000013_question24",
+    "00000027_question13",
+    "00000033_question5"
+  ],
+  "task_notes": {
+    "00000026": "turns=11 tool_errors=1 tools: worker_base_generic x10",
+    "00000013": "turns=19 tool_errors=2 tools: worker_base_generic x18",
+    "00000027": "turns=20 tool_errors=2 tools: worker_base_generic x19",
+    "00000033": "turns=6 tool_errors=1 tools: worker_base_generic x5"
+  },
+  "confirm": {}
+}

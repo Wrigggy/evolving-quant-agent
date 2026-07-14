@@ -1,0 +1,93 @@
+{
+  "iteration": 4,
+  "verdict": "MIXED",
+  "kept": false,
+  "edit_summary": "edit systemprompt.md, tool_descriptions/run_shell_command.tool.yaml (+48/-2)",
+  "diff_signature": "8cbe8eaf53fee7083643cc4de3170a3366e2372b0f3821d928ec8a69f668add5",
+  "predicted_fixes": [
+    "00000004_question45",
+    "00000006_question17",
+    "00000013_question23",
+    "00000013_question24",
+    "00000016_question10",
+    "00000020_question36",
+    "00000026_question10",
+    "00000027_question13",
+    "00000029_question4",
+    "00000039_question6"
+  ],
+  "risk_tasks": [
+    "00000004_question46",
+    "00000007_question20",
+    "00000007_question21",
+    "00000007_question5",
+    "00000007_question6",
+    "00000010_question18",
+    "00000029_question3"
+  ],
+  "diagnosis": {
+    "root_cause_tag": "prompt",
+    "deficiency_category": "17 failing task(s) across 11 occupation(s)",
+    "suggested_target_slot": "prompt",
+    "predicted_fix_task_ids": [
+      "00000004_question45",
+      "00000004_question46",
+      "00000006_question17",
+      "00000007_question20",
+      "00000007_question21",
+      "00000007_question5",
+      "00000007_question6",
+      "00000010_question18",
+      "00000013_question23",
+      "00000013_question24",
+      "00000016_question10",
+      "00000020_question36",
+      "00000026_question10",
+      "00000027_question13",
+      "00000029_question3",
+      "00000029_question4",
+      "00000039_question6"
+    ],
+    "overview": "The agent consistently falls back to hallucinated approximations and internal arithmetic when facing tool errors or complex data, instead of robustly retrieving and computing precise values from source files.",
+    "root_cause": "The agent consistently falls back to hallucinated approximations and internal arithmetic when facing tool errors or complex data, instead of robustly retrieving and computing precise values from source files.",
+    "general_mechanism": "1. Add a system prompt rule: 'All quantitative data extraction and calculations must be performed by executing Python code; never guess or use mental arithmetic. If a tool fails, retry or use an alternative code-based approach, and never submit an answer without successful verification.' 2. Ensure a Python code interpreter tool is bound in agent.yaml for all numeric and data-retrieval tasks. 3. Implement middleware to block final answer delivery if any tool call ended in error without a confirmed successful retry, forcing the agent to resolve or explicitly mark the task as incomplete.",
+    "mechanism_kind": "prompt",
+    "_b_pile": true
+  },
+  "inc_mean": 0.1944,
+  "cand_scores": {
+    "00000004_question45": 0.5,
+    "00000004_question46": 0.0,
+    "00000006_question17": 1.0,
+    "00000007_question20": 0.0,
+    "00000007_question21": 0.0,
+    "00000007_question5": 0.0,
+    "00000007_question6": 0.0,
+    "00000010_question18": 0.0,
+    "00000013_question23": 0.5,
+    "00000013_question24": 0.5,
+    "00000016_question10": 0.0,
+    "00000020_question36": 0.0,
+    "00000026_question10": 0.5,
+    "00000027_question13": 0.5,
+    "00000029_question3": 0.0,
+    "00000029_question4": 0.0,
+    "00000033_question5": 0.5,
+    "00000039_question6": 0.5
+  },
+  "improved": [
+    "00000004_question45",
+    "00000006_question17",
+    "00000026_question10"
+  ],
+  "regressed": [
+    "00000033_question5"
+  ],
+  "task_notes": {
+    "00000004": "turns=28 tool_errors=6 tools: worker_base_generic x26, run_shell_command x1",
+    "00000006": "turns=24 tool_errors=12 tools: worker_base_generic x22, run_shell_command x1",
+    "00000026": "turns=15 tool_errors=2 tools: worker_base_generic x13, run_shell_command x1",
+    "00000033": "turns=8 tool_errors=1 tools: worker_base_generic x6, run_shell_command x1"
+  },
+  "confirm": {}
+}
