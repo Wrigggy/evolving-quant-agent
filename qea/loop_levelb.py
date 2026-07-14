@@ -571,7 +571,17 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
         # Phase markers: the diagnose step makes one critic (judge) call per failing task
         # (~n sequential calls) then one evolve-agent call, so it can legitimately take
         # minutes — without a marker a slow diagnose is indistinguishable from a hang.
-        if cfg.evidence_mode == "self_corpus":
+        iterdir = results_dir / f"iter_{it:03d}"
+        cand_dir = iterdir / "worker"
+        pred_file = iterdir / "prediction.json"
+        manifest_file = iterdir / "manifest.json"
+        if cand_dir.exists() and pred_file.exists() and manifest_file.exists():
+            # FULL RESUME: this iteration already completed once — reuse its persisted
+            # diagnosis instead of re-running the debugger (a replayed diagnose costs
+            # ~n_failing critic calls AND re-exposes the replay to LLM-path hangs;
+            # observed: a wedged proxy connection froze a replay's diagnose 40+ min).
+            diag = json.loads(manifest_file.read_text()).get("diagnosis") or {}
+        elif cfg.evidence_mode == "self_corpus":
             failing = [str(t.task_id) for t in tasks
                        if t.task_id in evals and evals[t.task_id].gated_score < 0.60]
             diag = {"root_cause_tag": "self_diagnosed", "predicted_fix_task_ids": failing}
@@ -581,9 +591,6 @@ def run_levelb(cfg: LevelBConfig, benchmark=None, *, _tasks=None, _evaluator=Non
             print(f"[iter {it}] diagnosing ({sum(1 for r in inc_eval.results.values() if r.pile=='B' and not r.oos_pass)} failing B tasks)...", flush=True)
             diag = diagnose_b_pile(inc_eval, tasks, llm=llm, traces=traces).proposer_payload()
 
-        iterdir = results_dir / f"iter_{it:03d}"
-        cand_dir = iterdir / "worker"
-        pred_file = iterdir / "prediction.json"
         if cand_dir.exists() and pred_file.exists():
             # RESUME: a prior (reaped) launch already produced this iteration's edit —
             # reuse it verbatim instead of re-running the evolve agent, so the candidate
