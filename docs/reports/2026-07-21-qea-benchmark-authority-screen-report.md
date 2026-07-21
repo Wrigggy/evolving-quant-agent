@@ -96,7 +96,7 @@ GDPval 现在拥有本候选集中最强的 publication authority 之一，但 Q
 | full | **0.797 / 0.772** | 与 weak 几乎相同 |
 | recoverable gap | **约 0** | 没有足够可恢复差距供 evolver 证明升级 |
 
-相反，FAB 删除 SEC retrieval bindings 后从 full **0.618** 降到 weak **0.388**，出现 **0.230** 的真实工具能力 gap（本地证据见 [`docs/BASELINES.md`](../BASELINES.md)）。
+相反，FAB 删除 SEC retrieval bindings 后从 full **0.618** 降到 weak **0.388**，出现 **0.230** 的真实工具能力 gap（本地证据见 [`BASELINES`](../BASELINES.md)）。
 
 这个对照证明：**benchmark 的论文权威性回答“值得信吗”，headroom 回答“能演化吗”；两者必须分别验证。** 因此 GDPval 被保留为 frozen transfer，而不是被淘汰。这里仅声称 FAB 存在 headroom；完整 scored evolution 当时在 candidate evaluation 前暂停，尚不能声称已自动恢复该 gap。
 
