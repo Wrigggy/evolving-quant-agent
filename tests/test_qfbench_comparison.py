@@ -73,7 +73,10 @@ def test_compare_qfbench_results_reports_shared_tasks_and_paired_deltas():
     assert comparison["baseline"]["n_kept"] == 1
     assert comparison["candidate"]["n_kept"] == 2
     assert comparison["candidate"]["held_out_delta"] == (2 / 3) - 0.5
-    assert comparison["candidate"]["held_out_single_binary_sensitivity"] == 1 / 3
+    assert (
+        comparison["candidate"]["held_out_task_mean_single_binary_sensitivity"]
+        == 1 / 3
+    )
     assert comparison["shared_optimize_seed"] == [
         {
             "task_id": "shared-opt",
@@ -125,6 +128,7 @@ def test_render_qfbench_comparison_markdown_contains_core_tables():
     assert "candidate-5" in markdown
     assert "Shared Optimize Seed Tasks" in markdown
     assert "Shared Held-Out Tasks" in markdown
+    assert "One binary held-out task (task mean)" in markdown
 
 
 def test_qfbench_comparison_script_is_directly_invokable():
