@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "repository_url": "https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+  "commit": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+  "inventory": {
+    "tasks": 86,
+    "binary_reward_tasks": 72,
+    "partial_reward_tasks": 14,
+    "input_bytes": 168210760
+  },
+  "copy_oracle_tasks": [
+    "barrier-garch-var",
+    "cta-basel-capital",
+    "kelly-var-sizing",
+    "regime-cta-vol-target",
+    "regime-riskparity-cvar",
+    "sec-10k-report-long",
+    "sentiment-factor-alpha",
+    "structured-note-risk"
+  ],
+  "inoperable_tasks": [
+    {
+      "task_id": "sec-8k-event-alpha",
+      "reason": "official verifier raises before writing reward.txt at the pinned commit"
+    }
+  ],
+  "pilot": {
+    "optimize": [
+      {
+        "task_id": "historical-var-data-prep",
+        "domain": "risk_credit",
+        "lineage": "historical_var_data_pipeline",
+        "difficulty": "easy",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "evt-pot-var",
+        "domain": "risk_credit",
+        "lineage": "evt_tail_risk",
+        "difficulty": "medium",
+        "reward_kind": "partial"
+      },
+      {
+        "task_id": "credit-migration-matrix",
+        "domain": "risk_credit",
+        "lineage": "credit_transition_markov",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "credit-spread-decomposition",
+        "domain": "risk_credit",
+        "lineage": "macro_credit_spread_decomposition",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "momentum-backtest",
+        "domain": "systematic_strategy",
+        "lineage": "ema_momentum_backtest",
+        "difficulty": "easy",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "bollinger-backtest-aapl",
+        "domain": "systematic_strategy",
+        "lineage": "bollinger_mean_reversion_backtest",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "brinson-sector-attribution",
+        "domain": "systematic_strategy",
+        "lineage": "brinson_sector_attribution",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "etf-cross-asset-lead-lag",
+        "domain": "systematic_strategy",
+        "lineage": "etf_lead_lag_regression",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "cme-hdd-option-pricing",
+        "domain": "derivatives",
+        "lineage": "weather_option_hdd_pricing",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "delta-hedging-pnl-simulation",
+        "domain": "derivatives",
+        "lineage": "discrete_delta_hedging_simulation",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "localvol-barrier",
+        "domain": "derivatives",
+        "lineage": "localvol_barrier_pricing",
+        "difficulty": "hard",
+        "reward_kind": "partial"
+      },
+      {
+        "task_id": "fomc-tone-event-study",
+        "domain": "rates_fx_macro",
+        "lineage": "fomc_tone_treasury_event_study",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "swap-curve-bootstrap-ois",
+        "domain": "rates_fx_macro",
+        "lineage": "ois_libor_dual_curve_bootstrap",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "yield-curve-bond-immunization",
+        "domain": "rates_fx_macro",
+        "lineage": "key_rate_duration_immunization",
+        "difficulty": "hard",
+        "reward_kind": "partial"
+      },
+      {
+        "task_id": "zero-coupon-bootstrapping",
+        "domain": "rates_fx_macro",
+        "lineage": "par_to_zero_curve_bootstrap",
+        "difficulty": "hard",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "crypto-funding-rate-basis-carry",
+        "domain": "execution_microstructure",
+        "lineage": "crypto_funding_basis_carry",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "prediction-markets-cross-venue-dislocation",
+        "domain": "execution_microstructure",
+        "lineage": "prediction_market_cross_venue_execution",
+        "difficulty": "hard",
+        "reward_kind": "partial"
+      },
+      {
+        "task_id": "13f-amendment-aware-crowding",
+        "domain": "data_engineering",
+        "lineage": "amendment_aware_13f_crowding",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "corporate-action-adjustment",
+        "domain": "data_engineering",
+        "lineage": "corporate_action_price_adjustment",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "earnings-surprise-calculator",
+        "domain": "data_engineering",
+        "lineage": "earnings_surprise_sue_pipeline",
+        "difficulty": "medium",
+        "reward_kind": "binary"
+      }
+    ],
+    "held_out": [
+      {
+        "task_id": "dcc-garch-portfolio-var",
+        "domain": "risk_credit",
+        "lineage": "dcc_garch_portfolio_var",
+        "difficulty": "hard",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "fft-compound-poisson",
+        "domain": "risk_credit",
+        "lineage": "fft_compound_poisson_loss",
+        "difficulty": "hard",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "pca-factor-portfolio",
+        "domain": "systematic_strategy",
+        "lineage": "pca_factor_neutral_portfolio",
+        "difficulty": "hard",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "bl-regime-hmm",
+        "domain": "systematic_strategy",
+        "lineage": "hmm_black_litterman_allocation",
+        "difficulty": "hard",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "option-put-call-parity-forward-audit",
+        "domain": "derivatives",
+        "lineage": "option_parity_forward_audit",
+        "difficulty": "hard",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "interest-rate-cap-floor",
+        "domain": "derivatives",
+        "lineage": "black_cap_floor_aggregation",
+        "difficulty": "hard",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "fx-forward-cross-rate",
+        "domain": "rates_fx_macro",
+        "lineage": "fx_forward_cross_rate",
+        "difficulty": "easy",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "cir-bond-pricing",
+        "domain": "rates_fx_macro",
+        "lineage": "cir_term_structure_pricing",
+        "difficulty": "hard",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "intraday-volume-fitting-and-execution-scheduling",
+        "domain": "execution_microstructure",
+        "lineage": "intraday_volume_execution_schedule",
+        "difficulty": "hard",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "form4-cross-sectional-sale-pressure",
+        "domain": "data_engineering",
+        "lineage": "form4_sale_pressure_reconstruction",
+        "difficulty": "hard",
+        "reward_kind": "binary"
+      }
+    ]
+  }
+}
