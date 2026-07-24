@@ -299,6 +299,98 @@ def test_materializer_can_fetch_a_pilot_sparse_snapshot(tmp_path):
     ]
 
 
+def test_git_blob_oid_matches_git_hash_object():
+    from qea.benchmarks.qfbench import git_blob_oid
+
+    payload = b"hello pinned QFBench\n"
+    proc = subprocess.run(
+        ["git", "hash-object", "--stdin"],
+        input=payload,
+        check=True,
+        capture_output=True,
+    )
+
+    assert git_blob_oid(payload) == proc.stdout.decode().strip()
+
+
+def _write_raw_materializer_source(tmp_path: Path) -> tuple[Path, str]:
+    source = tmp_path / "raw-source"
+    source.mkdir()
+    _git(source, "init")
+    _git(source, "config", "user.email", "qfbench-test@example.invalid")
+    _git(source, "config", "user.name", "QFBench Test")
+    (source / "docker").mkdir()
+    (source / "docker" / "sandbox.Dockerfile").write_text("FROM python:3.11-slim\n")
+    for task_id in ("task-a", "task-b"):
+        task = source / "tasks" / task_id
+        (task / "environment").mkdir(parents=True)
+        (task / "solution").mkdir()
+        (task / "instruction.md").write_text(task_id + "\n")
+        (task / "environment" / "Dockerfile").write_text(
+            "FROM finance-bench-sandbox:latest\n"
+        )
+        solve = task / "solution" / "solve.sh"
+        solve.write_text("#!/bin/sh\nexit 0\n")
+        solve.chmod(0o755)
+    _git(source, "add", ".")
+    _git(source, "commit", "-m", "raw materializer fixture")
+    return source, _git(source, "rev-parse", "HEAD")
+
+
+def test_raw_snapshot_materializer_verifies_blobs_and_promotes_atomically(tmp_path):
+    from qea.benchmarks.qfbench import materialize_qfbench_raw_snapshot
+
+    source, commit = _write_raw_materializer_source(tmp_path)
+    destination = tmp_path / "materialized"
+
+    result = materialize_qfbench_raw_snapshot(
+        source,
+        destination,
+        repository_url="https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+        commit=commit,
+        task_ids=("task-a", "task-b"),
+        fetch_blob=lambda path: (source / path).read_bytes(),
+    )
+
+    assert result == destination.resolve()
+    assert (destination / "docker/sandbox.Dockerfile").is_file()
+    assert (destination / "tasks/task-a/instruction.md").read_text() == "task-a\n"
+    assert (destination / "tasks/task-a/solution/solve.sh").stat().st_mode & 0o111
+    assert (destination / ".qfbench-revision").read_text() == commit + "\n"
+    assert json.loads((destination / ".qfbench-sparse-tasks.json").read_text()) == [
+        "task-a",
+        "task-b",
+    ]
+    assert not destination.with_name(destination.name + ".partial").exists()
+
+
+def test_raw_snapshot_materializer_rejects_wrong_blob_before_promotion(tmp_path):
+    from qea.benchmarks.qfbench import (
+        QFBenchConfigError,
+        materialize_qfbench_raw_snapshot,
+    )
+
+    source, commit = _write_raw_materializer_source(tmp_path)
+    destination = tmp_path / "materialized"
+
+    with pytest.raises(QFBenchConfigError, match="Git blob hash mismatch"):
+        materialize_qfbench_raw_snapshot(
+            source,
+            destination,
+            repository_url="https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+            commit=commit,
+            task_ids=("task-a",),
+            fetch_blob=lambda path: (
+                b"corrupt\n" if path.endswith("instruction.md") else (source / path).read_bytes()
+            ),
+        )
+
+    assert not destination.exists()
+    partial = destination.with_name(destination.name + ".partial")
+    assert partial.is_dir()
+    assert not (partial / ".qfbench-revision").exists()
+
+
 def test_fetch_script_is_directly_invokable_from_repository_root():
     repository = Path(__file__).resolve().parents[1]
     proc = subprocess.run(
@@ -311,3 +403,18 @@ def test_fetch_script_is_directly_invokable_from_repository_root():
     assert proc.returncode == 0, proc.stderr
     assert "dedicated QFBench cache directory" in proc.stdout
     assert "--full" in proc.stdout
+
+
+def test_raw_materializer_script_is_directly_invokable_from_repository_root():
+    repository = Path(__file__).resolve().parents[1]
+    proc = subprocess.run(
+        [sys.executable, "scripts/materialize_qfbench_raw_snapshot.py", "--help"],
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "--source-tree" in proc.stdout
+    assert "--manifest" in proc.stdout
+    assert "--destination" in proc.stdout

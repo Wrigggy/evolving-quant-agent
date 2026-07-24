@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
+import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 _TASK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_GITHUB_REPOSITORY_RE = re.compile(
+    r"^https://github\.com/(?P<owner>[A-Za-z0-9_.-]+)/"
+    r"(?P<repository>[A-Za-z0-9_.-]+?)(?:\.git)?$"
+)
 _REQUIRED_TASK_PATHS = (
     "instruction.md",
     "task.toml",
@@ -23,6 +31,13 @@ _REQUIRED_TASK_PATHS = (
 
 class QFBenchConfigError(ValueError):
     """The pinned snapshot, manifest, or pilot split is unsafe or inconsistent."""
+
+
+@dataclass(frozen=True)
+class PinnedBlob:
+    mode: str
+    oid: str
+    path: str
 
 
 @dataclass(frozen=True)
@@ -181,6 +196,169 @@ def materialize_qfbench_snapshot(
     elif sparse_marker.exists():
         sparse_marker.unlink()
     return destination_path
+
+
+def git_blob_oid(payload: bytes) -> str:
+    """Return the SHA-1 object ID Git assigns to one blob payload."""
+
+    header = f"blob {len(payload)}\0".encode()
+    return hashlib.sha1(header + payload).hexdigest()
+
+
+def list_qfbench_tree_blobs(
+    source_repo: str | Path,
+    commit: str,
+    task_ids: Iterable[str],
+) -> tuple[PinnedBlob, ...]:
+    """List exact selected blob identities from an already-fetched Git tree."""
+
+    revision = commit.strip().lower()
+    if not _COMMIT_RE.fullmatch(revision):
+        raise QFBenchConfigError("QFBench commit must be a full 40-character SHA")
+    selected = tuple(sorted(set(str(task_id) for task_id in task_ids)))
+    if not selected:
+        raise QFBenchConfigError("raw QFBench snapshot needs at least one task")
+    invalid = [task_id for task_id in selected if not _TASK_ID_RE.fullmatch(task_id)]
+    if invalid:
+        raise QFBenchConfigError(f"invalid QFBench task IDs for raw fetch: {invalid}")
+
+    repository = Path(source_repo).expanduser().resolve()
+    if not (repository / ".git").exists():
+        raise QFBenchConfigError(f"QFBench source tree has no Git metadata: {repository}")
+    output = _run_git([
+        "-C",
+        str(repository),
+        "ls-tree",
+        "-r",
+        revision,
+        "--",
+        "docker",
+        *(f"tasks/{task_id}" for task_id in selected),
+    ])
+    blobs: list[PinnedBlob] = []
+    task_hits = {task_id: 0 for task_id in selected}
+    for line in output.splitlines():
+        identity, separator, path = line.partition("\t")
+        fields = identity.split()
+        if not separator or len(fields) != 3:
+            raise QFBenchConfigError(f"cannot parse QFBench Git tree entry: {line!r}")
+        mode, object_type, oid = fields
+        if object_type != "blob" or not re.fullmatch(r"[0-9a-f]{40}", oid):
+            raise QFBenchConfigError(f"invalid QFBench Git blob entry: {line!r}")
+        relative = Path(path)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise QFBenchConfigError(f"unsafe QFBench Git tree path: {path!r}")
+        if path.startswith("tasks/"):
+            parts = relative.parts
+            if len(parts) < 3 or parts[1] not in task_hits:
+                raise QFBenchConfigError(f"unexpected QFBench task tree path: {path!r}")
+            task_hits[parts[1]] += 1
+        elif not path.startswith("docker/"):
+            raise QFBenchConfigError(f"unexpected QFBench tree path: {path!r}")
+        blobs.append(PinnedBlob(mode=mode, oid=oid, path=relative.as_posix()))
+    missing_tasks = [task_id for task_id, count in task_hits.items() if count == 0]
+    if missing_tasks:
+        raise QFBenchConfigError(
+            f"QFBench Git tree is missing selected tasks: {missing_tasks}"
+        )
+    if not any(blob.path.startswith("docker/") for blob in blobs):
+        raise QFBenchConfigError("QFBench Git tree is missing docker files")
+    return tuple(sorted(blobs, key=lambda blob: blob.path))
+
+
+def _github_raw_fetcher(
+    repository_url: str,
+    commit: str,
+) -> Callable[[str], bytes]:
+    match = _GITHUB_REPOSITORY_RE.fullmatch(repository_url.strip())
+    if match is None:
+        raise QFBenchConfigError(
+            "raw snapshot materialization requires an official GitHub repository URL"
+        )
+    base_url = (
+        "https://raw.githubusercontent.com/"
+        f"{match.group('owner')}/{match.group('repository')}/{commit}/"
+    )
+
+    def fetch(path: str) -> bytes:
+        request = urllib.request.Request(
+            base_url + path,
+            headers={"User-Agent": "qea-qfbench-materializer/1"},
+        )
+        last_error: Exception | None = None
+        for attempt in range(4):
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    return response.read()
+            except (
+                urllib.error.HTTPError,
+                urllib.error.URLError,
+                TimeoutError,
+                OSError,
+            ) as exc:
+                last_error = exc
+                if attempt < 3:
+                    time.sleep(2 ** attempt)
+        raise QFBenchConfigError(
+            f"cannot fetch pinned QFBench blob {path!r}: {last_error}"
+        )
+
+    return fetch
+
+
+def materialize_qfbench_raw_snapshot(
+    source_repo: str | Path,
+    destination: str | Path,
+    *,
+    repository_url: str,
+    commit: str,
+    task_ids: Iterable[str],
+    fetch_blob: Callable[[str], bytes] | None = None,
+) -> Path:
+    """Download selected pinned files, verify Git blob IDs, and promote atomically."""
+
+    revision = commit.strip().lower()
+    selected = tuple(sorted(set(str(task_id) for task_id in task_ids)))
+    blobs = list_qfbench_tree_blobs(source_repo, revision, selected)
+    target = Path(destination).expanduser().resolve()
+    if target.exists():
+        raise QFBenchConfigError(f"refusing existing raw QFBench destination {target}")
+    staging = target.with_name(target.name + ".partial")
+    staging.mkdir(parents=True, exist_ok=True)
+    fetch = fetch_blob or _github_raw_fetcher(repository_url, revision)
+
+    for blob in blobs:
+        path = staging / blob.path
+        if path.is_file() and git_blob_oid(path.read_bytes()) == blob.oid:
+            path.chmod(0o755 if blob.mode == "100755" else 0o644)
+            continue
+        payload = fetch(blob.path)
+        if not isinstance(payload, bytes):
+            raise QFBenchConfigError(
+                f"raw QFBench fetcher returned non-bytes for {blob.path!r}"
+            )
+        actual = git_blob_oid(payload)
+        if actual != blob.oid:
+            raise QFBenchConfigError(
+                f"Git blob hash mismatch for {blob.path}: "
+                f"expected {blob.oid}, found {actual}"
+            )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + ".download")
+        temporary.write_bytes(payload)
+        temporary.chmod(0o755 if blob.mode == "100755" else 0o644)
+        os.replace(temporary, path)
+
+    (staging / ".qfbench-cache").write_text(
+        "Dedicated raw QFBench cache; every file verified against the pinned Git tree.\n"
+    )
+    (staging / ".qfbench-revision").write_text(revision + "\n")
+    (staging / ".qfbench-sparse-tasks.json").write_text(
+        json.dumps(list(selected), indent=2) + "\n"
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(staging, target)
+    return target
 
 
 def _snapshot_revision(root: Path) -> str:
