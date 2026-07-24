@@ -12,11 +12,124 @@ no headroom claim — it deterministically exercises evolve->falsify->rollback.
 from __future__ import annotations
 
 import argparse
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from qea.loop import Config, acceptance_signals, run_synthetic_fixture, run_gdpval_soft
 from qea.loop_levelb import LevelBConfig, run_gdpval_levelb
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(description="QEA v0 — evolving quant agent")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--mock", action="store_true", help="offline scripted smoke test (default)")
+    mode.add_argument("--real", action="store_true", help="real OpenRouter run (needs .env)")
+    mode.add_argument("--levelb", action="store_true",
+                      help="real mode: Level-B evolution (file-editing evolve agent edits the NexAU worker dir)")
+    ap.add_argument("--benchmark", choices=("qfbench",), help="run a benchmark-specific evolution path")
+    ap.add_argument("--executor", choices=("e2b",), default="e2b")
+    ap.add_argument("--qfbench-root", type=Path)
+    ap.add_argument("--qfbench-manifest", type=Path, default=Path("data/qfbench/MANIFEST.json"))
+    ap.add_argument("--template-manifest-dir", type=Path)
+    ap.add_argument("--run-id", help="stable run ID; required to resume a QFBench run")
+    ap.add_argument("--concurrency", type=int, default=3,
+                    help="QFBench task attempts evaluated concurrently")
+    ap.add_argument("--global-e2b-cap", type=int, default=12,
+                    help="shared worker+verifier sandbox lease cap")
+    ap.add_argument("--approve-external-run", action="store_true",
+                    help="acknowledge paid E2B use and public-task/model-provider data egress")
+    ap.add_argument("--allow-verifier-network", action="store_true",
+                    help="canary only: allow verifier network while dependencies are not yet baked")
+    ap.add_argument("--worker-no-internet", action="store_true",
+                    help="disable all worker network (requires an in-sandbox/local model endpoint)")
+    ap.add_argument("--iters", type=int, default=None)
+    ap.add_argument("--k", type=int, default=2)
+    ap.add_argument("--core", action="store_true", help="real mode: ~25 core finance occupations instead of ~30 broad")
+    ap.add_argument("--resume", action="store_true", help="continue a prior run from its checkpoint")
+    ap.add_argument("--n-tasks", type=int, default=5, help="levelb: number of GDPval tasks per iteration")
+    ap.add_argument("--results-dir", default="results/latest")
+    return ap
+
+
+def resolve_iterations(args) -> int:
+    if args.benchmark == "qfbench":
+        iterations = 3 if args.iters is None else args.iters
+        if iterations not in {3, 5}:
+            raise ValueError("QFBench pilot --iters must be 3 or 5")
+        return iterations
+    return 4 if args.iters is None else args.iters
+
+
+def estimate_qfbench_attempts(
+    optimize_count: int,
+    held_out_count: int,
+    iterations: int,
+) -> int:
+    if optimize_count < 1 or held_out_count < 1 or iterations not in {3, 5}:
+        raise ValueError("invalid QFBench attempt schedule")
+    return optimize_count * (iterations + 1) + held_out_count * 2
+
+
+def load_template_ids(
+    manifest_dir: str | Path,
+    tasks,
+    *,
+    benchmark_commit: str,
+) -> tuple[dict[str, str], dict[str, str]]:
+    root = Path(manifest_dir).resolve()
+    by_role: dict[str, dict[str, str]] = {"worker": {}, "verifier": {}}
+    for task in tasks:
+        for role in ("worker", "verifier"):
+            path = root / f"{task.task_id}.{role}.image.json"
+            if not path.is_file():
+                raise ValueError(f"missing template manifest {path}")
+            payload = json.loads(path.read_text())
+            expected = (benchmark_commit, task.task_id, role)
+            actual = (
+                payload.get("benchmark_commit"), payload.get("task_id"), payload.get("role")
+            )
+            if actual != expected:
+                raise ValueError(f"template manifest identity mismatch in {path}")
+            if all(
+                hasattr(task, attribute)
+                for attribute in ("cpus", "memory_mb", "build_timeout_seconds")
+            ):
+                expected_resources = (
+                    task.cpus,
+                    task.memory_mb,
+                    task.build_timeout_seconds,
+                )
+                actual_resources = (
+                    payload.get("cpu_count"),
+                    payload.get("memory_mb"),
+                    payload.get("build_timeout_seconds"),
+                )
+                if actual_resources != expected_resources:
+                    raise ValueError(
+                        f"template manifest resource mismatch in {path}: "
+                        f"expected {expected_resources}, found {actual_resources}"
+                    )
+            base_image = str(payload.get("base_image", ""))
+            base_template_id = payload.get("base_template_id")
+            base_build_id = payload.get("base_build_id")
+            registry_pinned = "@sha256:" in base_image
+            e2b_base_pinned = all(
+                isinstance(value, str) and value
+                for value in (base_template_id, base_build_id)
+            )
+            if not registry_pinned and not e2b_base_pinned:
+                raise ValueError(f"template manifest has no immutable base in {path}")
+            template_id = payload.get("published_template_id")
+            if not isinstance(template_id, str) or not template_id:
+                raise ValueError(f"template manifest is not published: {path}")
+            if e2b_base_pinned:
+                build_id = payload.get("published_build_id")
+                if not isinstance(build_id, str) or not build_id:
+                    raise ValueError(f"template manifest has no published build ID: {path}")
+            by_role[role][task.task_id] = template_id
+    return by_role["worker"], by_role["verifier"]
 
 
 def _load_dotenv(path: str = ".env") -> None:
@@ -48,25 +161,19 @@ def _print_arm(arm) -> None:
     print(f"  kept/rolledback/blocked: {arm.n_kept}/{arm.n_rolled_back}/{arm.n_blocked}")
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="QEA v0 — evolving quant agent")
-    mode = ap.add_mutually_exclusive_group()
-    mode.add_argument("--mock", action="store_true", help="offline scripted smoke test (default)")
-    mode.add_argument("--real", action="store_true", help="real OpenRouter run (needs .env)")
-    mode.add_argument("--levelb", action="store_true",
-                      help="real mode: Level-B evolution (file-editing evolve agent edits the NexAU worker dir)")
-    ap.add_argument("--iters", type=int, default=4)
-    ap.add_argument("--k", type=int, default=2)
-    ap.add_argument("--core", action="store_true", help="real mode: ~25 core finance occupations instead of ~30 broad")
-    ap.add_argument("--resume", action="store_true", help="real mode: continue a prior gdpval_soft run from its checkpoint")
-    ap.add_argument("--n-tasks", type=int, default=5, help="levelb: number of GDPval tasks per iteration")
-    ap.add_argument("--results-dir", default="results/latest")
-    args = ap.parse_args()
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
 
     _load_dotenv()
 
+    if args.benchmark == "qfbench":
+        return _run_qfbench(args)
+
+    iterations = resolve_iterations(args)
+
     if args.levelb:
-        lcfg = LevelBConfig(n_iters=args.iters, k=args.k, n_tasks=args.n_tasks,
+        lcfg = LevelBConfig(n_iters=iterations, k=args.k, n_tasks=args.n_tasks,
                             broad=not args.core, results_dir=args.results_dir)
         print(f"[run] mode=LEVEL-B (NexAU worker dir evolved by a file-editing evolve agent) "
               f"iters={lcfg.n_iters} k={lcfg.k} n_tasks={lcfg.n_tasks} -> {lcfg.results_dir}")
@@ -80,7 +187,7 @@ def main() -> int:
     mock = not args.real  # mock is the default
     if mock:
         os.environ["MOCK_LLM"] = "1"
-    cfg = Config(mock=mock, n_iters=args.iters, k=args.k,
+    cfg = Config(mock=mock, n_iters=iterations, k=args.k,
                  gdpval_broad=not args.core, resume=args.resume, results_dir=args.results_dir)
 
     # MOCK = offline synthetic plumbing fixture (deterministic, no API key).
@@ -107,6 +214,118 @@ def main() -> int:
           f"(noise floor {res.noise_margin:.3f}), {res.n_kept} edit(s) kept. "
           f"NOTE: soft signal (no hard verifier) — treat as indicative, not proof.")
     return 0 if rose else 1
+
+
+def _run_qfbench(args) -> int:
+    from qea.benchmarks.qfbench import load_qfbench_snapshot
+    from qea.e2b_lease import E2BLeasePool
+    from qea.executors.e2b_nexau import E2BNexAUConfig, E2BNexAUExecutor, E2BQFBenchVerifier
+    from qea.loop_benchmark import (
+        BenchmarkEvolutionConfig,
+        QFBenchE2BEvaluator,
+        run_benchmark_evolution,
+    )
+
+    if args.mock or args.real or args.levelb:
+        raise ValueError("--benchmark qfbench cannot be combined with legacy mode flags")
+    if args.qfbench_root is None:
+        raise ValueError("--qfbench-root is required for QFBench")
+    if args.template_manifest_dir is None:
+        raise ValueError("--template-manifest-dir is required for QFBench E2B")
+    if args.resume and not args.run_id:
+        raise ValueError("--run-id is required with --resume")
+    iterations = resolve_iterations(args)
+    if args.concurrency < 1 or args.global_e2b_cap < 1:
+        raise ValueError("QFBench concurrency and global E2B cap must be positive")
+
+    snapshot = load_qfbench_snapshot(
+        args.qfbench_root, manifest_path=args.qfbench_manifest
+    )
+    run_id = args.run_id or datetime.now(timezone.utc).strftime("qfbench-%Y%m%dT%H%M%SZ")
+    estimated_attempts = estimate_qfbench_attempts(
+        len(snapshot.optimize.tasks),
+        len(snapshot.held_out.tasks),
+        iterations,
+    )
+    print("[qfbench] resolved pilot")
+    print(f"  commit: {snapshot.commit}")
+    print(f"  optimize: {', '.join(snapshot.optimize.task_ids)}")
+    print(f"  promotion held-out (seed/final only): {', '.join(snapshot.held_out.task_ids)}")
+    print(f"  iterations: {iterations}; estimated task attempts: {estimated_attempts}")
+    print(f"  verifier network: {'CANARY ENABLED' if args.allow_verifier_network else 'disabled'}")
+    if not args.approve_external_run:
+        print("  NOT STARTED: pass --approve-external-run to authorize paid E2B and model-provider egress")
+        return 2
+
+    worker_templates, verifier_templates = load_template_ids(
+        args.template_manifest_dir,
+        snapshot.tasks,
+        benchmark_commit=snapshot.commit,
+    )
+    model_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+    if not model_key:
+        raise ValueError("LLM_API_KEY or OPENROUTER_API_KEY is required for QFBench E2B")
+    model_env = {
+        "LLM_API_KEY": model_key,
+        "LLM_BASE_URL": os.environ.get(
+            "LLM_BASE_URL", os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        ),
+        "LLM_MODEL": os.environ.get("LLM_MODEL", "deepseek/deepseek-v4-pro"),
+    }
+
+    results_root = Path(args.results_dir).resolve()
+    leases = E2BLeasePool(
+        results_root / ".e2b-leases",
+        max_leases=args.global_e2b_cap,
+    )
+    e2b_config = E2BNexAUConfig(
+        worker_templates=worker_templates,
+        verifier_templates=verifier_templates,
+        worker_allow_internet=not args.worker_no_internet,
+        verifier_allow_internet=args.allow_verifier_network,
+    )
+    executor = E2BNexAUExecutor(e2b_config, lease_pool=leases)
+    verifier = E2BQFBenchVerifier(e2b_config, lease_pool=leases)
+    evaluator = QFBenchE2BEvaluator(
+        benchmark_commit=snapshot.commit,
+        run_id=run_id,
+        executor=executor,
+        verifier=verifier,
+        model_env=model_env,
+        max_workers=args.concurrency,
+    )
+    result = run_benchmark_evolution(
+        BenchmarkEvolutionConfig(
+            run_id=run_id,
+            n_iters=iterations,
+            results_dir=results_root,
+            seed_worker_dir=Path("qea/worker_gdpval_weak"),
+            concurrency=args.concurrency,
+            resume=args.resume,
+        ),
+        optimize_tasks=snapshot.optimize.tasks,
+        held_out_tasks=snapshot.held_out.tasks,
+        benchmark_commit=snapshot.commit,
+        evaluator=evaluator,
+    )
+    _print_qfbench(result)
+    return 0
+
+
+def _print_qfbench(result) -> None:
+    print(f"\n=== QFBench E2B evolution: {result.run_id} ===")
+    print(f"  optimize domain-macro trajectory: {result.optimize_trajectory}")
+    print(
+        f"  promotion held-out: {result.held_out_seed.overall:.4f} -> "
+        f"{result.held_out_final.overall:.4f} (not used for mutation selection)"
+    )
+    for record in result.records:
+        print(
+            f"  iter {record.iteration}: {'keep' if record.kept else 'rollback'} "
+            f"{record.incumbent_before:.4f}->{record.candidate_overall:.4f} | {record.reason}"
+        )
+    print(f"  final worker: {result.final_worker_dir}")
+    print(f"  artifacts: {result.run_dir}")
 
 
 def _print_soft(res) -> None:
