@@ -230,6 +230,7 @@ def test_evolver_uses_secure_header_injected_network_and_candidate_only_output(t
     )
     assert "sk-live-secret" not in result.command_log_uri.read_text()
     lifecycle = json.loads(result.lifecycle_uri.read_text())
+    assert result.lifecycle_uri.name.endswith("-sandbox-lifecycle.json")
     assert lifecycle["sandbox_id"] == "sandbox-evolver-1"
     assert lifecycle["cleaned_up"] is True
     uploaded = sandbox.files.data["/tmp/qea-evolver.tar"]
@@ -263,11 +264,41 @@ def test_evolver_failure_still_kills_and_records_cleanup(tmp_path):
         )
     _, sandbox = factory.created[0]
     assert sandbox.killed is True
-    lifecycle = json.loads(next((tmp_path / "run").rglob("lifecycle.json")).read_text())
+    lifecycle = json.loads(next(
+        (tmp_path / "run").rglob("*-sandbox-lifecycle.json")
+    ).read_text())
     assert lifecycle["cleaned_up"] is True
     command = json.loads(next((tmp_path / "run").rglob("command.json")).read_text())
     assert "sk-live-secret" not in json.dumps(command)
     assert "[REDACTED]" in command["stderr"]
+
+
+def test_completed_evolver_proposal_resumes_without_second_model_sandbox(tmp_path):
+    candidate, evidence, evolver = _roots(tmp_path)
+    factory = FakeFactory()
+    executor = _executor(tmp_path, factory)
+    kwargs = {
+        "candidate_dir": candidate,
+        "evidence_dir": evidence,
+        "evolver_dir": evolver,
+        "diagnosis": "Improve artifact validation.",
+        "iteration": 1,
+        "run_id": "qfbench-rich",
+        "run_dir": tmp_path / "run",
+        "model_env": {
+            "LLM_API_KEY": "sk-live-secret",
+            "LLM_BASE_URL": "https://model.example/v1",
+            "LLM_MODEL": "example/model",
+        },
+    }
+
+    first = executor.propose(**kwargs)
+    second = executor.propose(**kwargs)
+
+    assert len(factory.created) == 1
+    assert second.candidate_digest == first.candidate_digest
+    assert second.input_bundle_sha256 == first.input_bundle_sha256
+    assert second.lifecycle_uri == first.lifecycle_uri
 
 
 def test_remote_evolver_inserts_asset_root_and_archives_only_candidate(

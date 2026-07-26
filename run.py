@@ -12,6 +12,7 @@ no headroom claim — it deterministically exercises evolve->falsify->rollback.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -31,10 +32,18 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--benchmark", choices=("qfbench",), help="run a benchmark-specific evolution path")
     ap.add_argument("--executor", choices=("e2b",), default="e2b")
     ap.add_argument("--qfbench-root", type=Path)
-    ap.add_argument("--qfbench-manifest", type=Path, default=Path("data/qfbench/MANIFEST.json"))
+    ap.add_argument(
+        "--qfbench-manifest",
+        type=Path,
+        default=Path("data/qfbench/MANIFEST_30.json"),
+    )
     ap.add_argument("--template-manifest-dir", type=Path)
+    ap.add_argument("--evolver-template-manifest", type=Path)
+    ap.add_argument("--feedback-mode", choices=("control", "rich"))
+    ap.add_argument("--feedback-manifest", type=Path)
+    ap.add_argument("--verifier-criteria-map", type=Path)
     ap.add_argument("--run-id", help="stable run ID; required to resume a QFBench run")
-    ap.add_argument("--concurrency", type=int, default=3,
+    ap.add_argument("--concurrency", type=int, default=8,
                     help="QFBench task attempts evaluated concurrently")
     ap.add_argument("--global-e2b-cap", type=int, default=12,
                     help="shared worker+verifier sandbox lease cap")
@@ -132,6 +141,89 @@ def load_template_ids(
     return by_role["worker"], by_role["verifier"]
 
 
+def load_evolver_template(
+    manifest_path: str | Path,
+    *,
+    benchmark_commit: str,
+) -> tuple[str, str]:
+    path = Path(manifest_path).resolve()
+    if not path.is_file():
+        raise ValueError(f"missing evolver template manifest {path}")
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid evolver template manifest {path}: {exc}") from exc
+    if (
+        payload.get("role") != "evolver"
+        or payload.get("benchmark_commit") != benchmark_commit
+    ):
+        raise ValueError(f"evolver template manifest identity mismatch in {path}")
+    if not all(
+        isinstance(payload.get(name), str) and payload.get(name)
+        for name in (
+            "base_template_id",
+            "base_build_id",
+            "published_template_id",
+            "published_build_id",
+        )
+    ):
+        raise ValueError(f"evolver template manifest is not immutably published: {path}")
+    identity = payload.get("identity_sha256")
+    if (
+        not isinstance(identity, str)
+        or len(identity) != 64
+        or any(character not in "0123456789abcdef" for character in identity)
+    ):
+        raise ValueError(f"evolver template manifest has no SHA-256 identity: {path}")
+    return str(payload["published_template_id"]), identity
+
+
+def template_set_identity_digest(
+    manifest_dir: str | Path,
+    tasks,
+    evolver_manifest: str | Path,
+) -> str:
+    root = Path(manifest_dir).resolve()
+    records = []
+    for task in sorted(tasks, key=lambda item: item.task_id):
+        for role in ("worker", "verifier"):
+            path = root / f"{task.task_id}.{role}.image.json"
+            payload = json.loads(path.read_text())
+            records.append({
+                "task_id": task.task_id,
+                "role": role,
+                "identity_sha256": payload.get("identity_sha256"),
+                "published_template_id": payload.get("published_template_id"),
+                "published_build_id": payload.get("published_build_id"),
+            })
+    evolver = json.loads(Path(evolver_manifest).resolve().read_text())
+    records.append({
+        "role": "evolver",
+        "identity_sha256": evolver.get("identity_sha256"),
+        "published_template_id": evolver.get("published_template_id"),
+        "published_build_id": evolver.get("published_build_id"),
+    })
+    return hashlib.sha256(
+        json.dumps(records, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def validate_qfbench_full_harness_args(args) -> None:
+    if args.benchmark != "qfbench":
+        return
+    required = (
+        ("feedback_mode", "--feedback-mode"),
+        ("evolver_template_manifest", "--evolver-template-manifest"),
+        ("feedback_manifest", "--feedback-manifest"),
+        ("verifier_criteria_map", "--verifier-criteria-map"),
+    )
+    for attribute, flag in required:
+        if getattr(args, attribute, None) is None:
+            raise ValueError(f"{flag} is required for QFBench full-harness evolution")
+    if args.executor != "e2b":
+        raise ValueError("QFBench full-harness evolver must run in E2B")
+
+
 def _load_dotenv(path: str = ".env") -> None:
     """Minimal .env loader (no dependency). Does not override already-set vars."""
     p = Path(path)
@@ -218,7 +310,13 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run_qfbench(args) -> int:
     from qea.benchmarks.qfbench import load_qfbench_snapshot
+    from qea.candidate_admission import AdmissionPolicy
     from qea.e2b_lease import E2BLeasePool
+    from qea.evolution_feedback import feedback_contract_digest
+    from qea.executors.e2b_evolver import (
+        E2BEvolverConfig,
+        E2BFullHarnessProposer,
+    )
     from qea.executors.e2b_nexau import E2BNexAUConfig, E2BNexAUExecutor, E2BQFBenchVerifier
     from qea.loop_benchmark import (
         BenchmarkEvolutionConfig,
@@ -228,6 +326,7 @@ def _run_qfbench(args) -> int:
 
     if args.mock or args.real or args.levelb:
         raise ValueError("--benchmark qfbench cannot be combined with legacy mode flags")
+    validate_qfbench_full_harness_args(args)
     if args.qfbench_root is None:
         raise ValueError("--qfbench-root is required for QFBench")
     if args.template_manifest_dir is None:
@@ -247,20 +346,50 @@ def _run_qfbench(args) -> int:
         len(snapshot.held_out.tasks),
         iterations,
     )
-    print("[qfbench] resolved pilot")
-    print(f"  commit: {snapshot.commit}")
-    print(f"  optimize: {', '.join(snapshot.optimize.task_ids)}")
-    print(f"  promotion held-out (seed/final only): {', '.join(snapshot.held_out.task_ids)}")
-    print(f"  iterations: {iterations}; estimated task attempts: {estimated_attempts}")
-    print(f"  verifier network: {'CANARY ENABLED' if args.allow_verifier_network else 'disabled'}")
-    if not args.approve_external_run:
-        print("  NOT STARTED: pass --approve-external-run to authorize paid E2B and model-provider egress")
-        return 2
-
     worker_templates, verifier_templates = load_template_ids(
         args.template_manifest_dir,
         snapshot.tasks,
         benchmark_commit=snapshot.commit,
+    )
+    evolver_template, evolver_identity = load_evolver_template(
+        args.evolver_template_manifest,
+        benchmark_commit=snapshot.commit,
+    )
+    contract_digest = feedback_contract_digest(
+        args.feedback_mode, args.feedback_manifest
+    )
+    admission_digest = AdmissionPolicy.qfbench_full(
+        forbidden_content=sorted(snapshot.held_out.task_ids)
+    ).digest()
+    task_manifest_digest = hashlib.sha256(
+        Path(args.qfbench_manifest).resolve().read_bytes()
+    ).hexdigest()
+    template_identity = template_set_identity_digest(
+        args.template_manifest_dir,
+        snapshot.tasks,
+        args.evolver_template_manifest,
+    )
+    max_lifecycles = estimated_attempts * 2 + iterations
+    print("[qfbench] resolved pilot")
+    print(f"  feedback arm: {args.feedback_mode}")
+    print(f"  commit: {snapshot.commit}")
+    print(f"  optimize: {', '.join(snapshot.optimize.task_ids)}")
+    print(f"  promotion held-out (seed/final only): {', '.join(snapshot.held_out.task_ids)}")
+    print(f"  iterations: {iterations}; estimated task attempts: {estimated_attempts}")
+    print(f"  maximum worker/verifier/evolver lifecycles: {max_lifecycles}")
+    print(f"  feedback contract: {contract_digest}")
+    print(f"  admission policy: {admission_digest}")
+    print(f"  evolver template: {evolver_template} ({evolver_identity})")
+    print(f"  task templates: {len(worker_templates)} worker + {len(verifier_templates)} verifier")
+    print(f"  output: {(Path(args.results_dir).resolve() / run_id)}")
+    print(f"  verifier network: {'CANARY ENABLED' if args.allow_verifier_network else 'disabled'}")
+    auto_approved = os.environ.get("QEA_PAID_EVAL_AUTO_APPROVE") == "1"
+    if not (args.approve_external_run or auto_approved):
+        print("  NOT STARTED: pass --approve-external-run to authorize paid E2B and model-provider egress")
+        return 2
+    print(
+        "  paid execution approval: "
+        + ("standing auto-approval" if auto_approved else "explicit CLI approval")
     )
     model_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
     if not model_key:
@@ -294,6 +423,25 @@ def _run_qfbench(args) -> int:
         model_env=model_env,
         max_workers=args.concurrency,
     )
+    evolver = E2BFullHarnessProposer(
+        E2BEvolverConfig(template=evolver_template),
+        lease_pool=leases,
+    )
+
+    def secure_proposer(context):
+        return evolver.propose(
+            candidate_dir=context.candidate_dir,
+            evidence_dir=context.evidence.root,
+            evolver_dir=Path("qea/evolve_agent_full").resolve(),
+            diagnosis=json.dumps(
+                context.diagnosis, sort_keys=True, separators=(",", ":")
+            ),
+            iteration=context.iteration,
+            run_id=run_id,
+            run_dir=context.run_dir,
+            model_env=model_env,
+        )
+
     result = run_benchmark_evolution(
         BenchmarkEvolutionConfig(
             run_id=run_id,
@@ -302,11 +450,20 @@ def _run_qfbench(args) -> int:
             seed_worker_dir=Path("qea/worker_gdpval_weak"),
             concurrency=args.concurrency,
             resume=args.resume,
+            feedback_mode=args.feedback_mode,
+            feedback_contract_digest=contract_digest,
+            public_rubric_path=args.feedback_manifest,
+            verifier_mapping_path=args.verifier_criteria_map,
+            admission_policy_digest=admission_digest,
+            task_manifest_digest=task_manifest_digest,
+            model_identity=model_env["LLM_MODEL"],
+            template_identity_digest=template_identity,
         ),
         optimize_tasks=snapshot.optimize.tasks,
         held_out_tasks=snapshot.held_out.tasks,
         benchmark_commit=snapshot.commit,
         evaluator=evaluator,
+        proposer=secure_proposer,
     )
     _print_qfbench(result)
     return 0

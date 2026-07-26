@@ -11,6 +11,10 @@ def test_qfbench_cli_parses_e2b_three_iteration_pilot():
         "--executor", "e2b",
         "--qfbench-root", "/tmp/qfbench",
         "--template-manifest-dir", "/tmp/templates",
+        "--evolver-template-manifest", "/tmp/evolver.image.json",
+        "--feedback-mode", "rich",
+        "--feedback-manifest", "/tmp/feedback.json",
+        "--verifier-criteria-map", "/tmp/criteria.json",
         "--iters", "3",
         "--concurrency", "4",
         "--run-id", "pilot-003",
@@ -23,6 +27,7 @@ def test_qfbench_cli_parses_e2b_three_iteration_pilot():
     assert args.iters == 3
     assert args.concurrency == 4
     assert args.approve_external_run is True
+    assert args.feedback_mode == "rich"
     assert run.resolve_iterations(args) == 3
 
 
@@ -41,6 +46,62 @@ def test_qfbench_30x5_estimates_140_official_attempts():
     import run
 
     assert run.estimate_qfbench_attempts(20, 10, 5) == 140
+
+
+@pytest.mark.parametrize(
+    ("omitted", "message"),
+    [
+        ("--feedback-mode", "feedback-mode"),
+        ("--evolver-template-manifest", "evolver-template-manifest"),
+        ("--feedback-manifest", "feedback-manifest"),
+        ("--verifier-criteria-map", "verifier-criteria-map"),
+    ],
+)
+def test_qfbench_full_harness_requires_explicit_arm_and_contract_files(
+    omitted, message
+):
+    import run
+
+    values = {
+        "--feedback-mode": "control",
+        "--evolver-template-manifest": "/tmp/evolver.json",
+        "--feedback-manifest": "/tmp/feedback.json",
+        "--verifier-criteria-map": "/tmp/mapping.json",
+    }
+    argv = ["--benchmark", "qfbench"]
+    for flag, value in values.items():
+        if flag != omitted:
+            argv.extend([flag, value])
+    args = run.build_parser().parse_args(argv)
+
+    with pytest.raises(ValueError, match=message):
+        run.validate_qfbench_full_harness_args(args)
+
+
+def test_load_evolver_template_requires_published_matching_identity(tmp_path):
+    import json
+    import run
+
+    manifest = tmp_path / "evolver.image.json"
+    manifest.write_text(json.dumps({
+        "role": "evolver",
+        "benchmark_commit": "0" * 40,
+        "base_template_id": "base-template",
+        "base_build_id": "base-build",
+        "identity_sha256": "a" * 64,
+        "published_template_id": "evolver-template",
+        "published_build_id": "evolver-build",
+    }))
+
+    assert run.load_evolver_template(
+        manifest, benchmark_commit="0" * 40
+    ) == ("evolver-template", "a" * 64)
+
+    payload = json.loads(manifest.read_text())
+    payload["benchmark_commit"] = "1" * 40
+    manifest.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="identity mismatch"):
+        run.load_evolver_template(manifest, benchmark_commit="0" * 40)
 
 
 def test_load_template_ids_requires_published_role_manifests(tmp_path):

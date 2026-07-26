@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -107,6 +107,64 @@ def _lifecycle(
     _write_json(path, payload)
 
 
+def _load_completed(
+    evolution_dir: Path,
+    *,
+    iteration: int,
+    input_bundle_sha256: str,
+) -> E2BEvolverResult | None:
+    manifest_path = evolution_dir / "result.json"
+    if not manifest_path.is_file():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise E2BEvolverError(f"invalid completed evolver result: {exc}") from exc
+    expected = (iteration, input_bundle_sha256, "candidate", True)
+    actual = (
+        payload.get("iteration"),
+        payload.get("input_bundle_sha256"),
+        payload.get("candidate_dir"),
+        payload.get("cleaned_up"),
+    )
+    if actual != expected:
+        raise E2BEvolverError(
+            f"completed evolver result identity mismatch: expected {expected}, found {actual}"
+        )
+    candidate_dir = evolution_dir / "candidate"
+    candidate_digest = _digest_tree(candidate_dir)
+    if candidate_digest != payload.get("candidate_digest"):
+        raise E2BEvolverError("completed evolver candidate digest mismatch")
+    lifecycle_name = payload.get("lifecycle_file")
+    if not isinstance(lifecycle_name, str) or Path(lifecycle_name).name != lifecycle_name:
+        raise E2BEvolverError("completed evolver lifecycle identity is unsafe")
+    paths = {
+        "trace_uri": evolution_dir / "raw_trace.jsonl",
+        "final_uri": evolution_dir / "final.txt",
+        "prediction_uri": evolution_dir / "prediction.json",
+        "access_summary_uri": evolution_dir / "access-summary.json",
+        "summary_uri": evolution_dir / "summary.json",
+        "command_log_uri": evolution_dir / "command.json",
+        "lifecycle_uri": evolution_dir / lifecycle_name,
+        "dependency_lock_uri": evolution_dir / "nexau-requirements.lock",
+    }
+    missing = [name for name, path in paths.items() if not path.is_file()]
+    if missing:
+        raise E2BEvolverError(f"completed evolver result files are missing: {missing}")
+    lifecycle = json.loads(paths["lifecycle_uri"].read_text())
+    if lifecycle.get("cleaned_up") is not True:
+        raise E2BEvolverError("completed evolver sandbox was not cleaned up")
+    return E2BEvolverResult(
+        iteration=iteration,
+        candidate_dir=candidate_dir,
+        candidate_digest=candidate_digest,
+        input_bundle_sha256=input_bundle_sha256,
+        sandbox_id=str(payload.get("sandbox_id", "")),
+        cleaned_up=True,
+        **paths,
+    )
+
+
 class E2BFullHarnessProposer:
     """Run exactly one evidence-driven candidate edit in a secure sandbox."""
 
@@ -160,9 +218,33 @@ class E2BFullHarnessProposer:
         access_summary_path = evolution_dir / "access-summary.json"
         summary_path = evolution_dir / "summary.json"
         output_dir = evolution_dir / "candidate"
+        completed = _load_completed(
+            evolution_dir,
+            iteration=iteration,
+            input_bundle_sha256=input_bundle.sha256,
+        )
+        if completed is not None:
+            return completed
+        for lifecycle in sorted(
+            evolution_dir.glob("*-sandbox-lifecycle.json")
+        ):
+            try:
+                lifecycle_payload = json.loads(lifecycle.read_text())
+            except (OSError, json.JSONDecodeError) as exc:
+                raise E2BEvolverError(
+                    f"invalid prior evolver lifecycle {lifecycle}: {exc}"
+                ) from exc
+            if lifecycle_payload.get("cleaned_up") is not True:
+                raise E2BEvolverError(
+                    "unfinished evolver sandbox requires exact-ID reaper before resume: "
+                    f"{lifecycle_payload.get('sandbox_id')}"
+                )
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
         sandbox = None
         sandbox_id = ""
         cleanup_ok = False
+        lifecycle_path: Path | None = None
         sandbox_timeout = self.config.timeout_seconds + 180
 
         with self.lease_pool.acquire(
@@ -184,6 +266,11 @@ class E2BFullHarnessProposer:
                     network=network,
                 )
                 sandbox_id = str(sandbox.sandbox_id)
+                lifecycle_token = hashlib.sha256(sandbox_id.encode()).hexdigest()[:12]
+                lifecycle_path = (
+                    evolution_dir
+                    / f"evolver-{lifecycle_token}-sandbox-lifecycle.json"
+                )
                 _lifecycle(
                     lifecycle_path,
                     run_id=run_id,
@@ -268,7 +355,7 @@ class E2BFullHarnessProposer:
                         cleanup_ok = True
                     except Exception as exc:  # noqa: BLE001
                         cleanup_error = f"{type(exc).__name__}: {_scrub(str(exc), model_env)}"
-                if sandbox_id:
+                if sandbox_id and lifecycle_path is not None:
                     _lifecycle(
                         lifecycle_path,
                         run_id=run_id,
@@ -312,6 +399,7 @@ class E2BFullHarnessProposer:
                 "input_bundle_sha256": result.input_bundle_sha256,
                 "sandbox_id": result.sandbox_id,
                 "cleaned_up": result.cleaned_up,
+                "lifecycle_file": result.lifecycle_uri.name,
             },
         )
         return result

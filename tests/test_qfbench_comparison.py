@@ -1,147 +1,211 @@
+import json
 from pathlib import Path
 import subprocess
 import sys
 
+import pytest
 
-def _summary(rewards, domains, overall):
-    return {
+
+def _write(path: Path, payload) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload))
+
+
+def _make_completed_run(
+    root: Path,
+    *,
+    arm: str,
+    optimize_final: float,
+    attempt_limit: int = 140,
+    admission_digest: str = "admission-same",
+) -> Path:
+    run = root / f"run-{arm}"
+    final_worker = run / "workers" / "iteration-05-candidate"
+    final_worker.mkdir(parents=True)
+    (final_worker / "systemprompt.md").write_text("final worker\n")
+    identity = {
+        "arm": arm,
+        "benchmark_commit": "0" * 40,
+        "task_manifest_digest": "manifest-same",
+        "feedback_contract_digest": f"feedback-{arm}",
+        "public_rubric_digest": "rubric-same",
+        "verifier_mapping_digest": "mapping-same",
+        "admission_policy_digest": admission_digest,
+        "model_identity": "model-same",
+        "seed_digest": "seed-same",
+        "template_identity_digest": "templates-same",
+    }
+    records = [
+        {
+            "iteration": index,
+            "edit_signature": f"edit-{index}",
+            "candidate_worker_digest": f"candidate-{index}",
+            "incumbent_before": 0.2 + (index - 1) * 0.02,
+            "candidate_overall": 0.2 + index * 0.02,
+            "incumbent_after": 0.2 + index * 0.02,
+            "kept": True,
+            "reason": "gain",
+            "domain_deltas": {"risk": 0.02},
+            "admitted": True,
+            "admission_failure": None,
+            "evidence_digest": f"evidence-{index}",
+        }
+        for index in range(1, 6)
+    ]
+    task_rewards = {f"opt-{index:02d}": optimize_final for index in range(20)}
+    summary = {
         "scores": [],
-        "task_rewards": rewards,
-        "domain_scores": domains,
-        "task_mean": sum(rewards.values()) / len(rewards),
-        "overall": overall,
+        "task_rewards": task_rewards,
+        "domain_scores": {"risk": optimize_final},
+        "task_mean": optimize_final,
+        "overall": optimize_final,
     }
-
-
-def _result(run_id, n_iters, optimize, held_seed, held_final, records):
-    return {
-        "schema_version": 1,
+    _write(run / "resume.json", {
+        "schema_version": 2,
+        "run_id": run.name,
+        "arm": arm,
+        "n_iters": 5,
+        "benchmark_commit": "0" * 40,
+        "identity": identity,
         "phase": "complete",
-        "run_id": run_id,
-        "n_iters": n_iters,
-        "seed_optimize": optimize,
-        "incumbent_summary": optimize,
-        "held_out_seed": held_seed,
-        "held_out_final": held_final,
+        "next_iteration": 6,
+        "incumbent_worker": "workers/iteration-05-candidate",
         "records": records,
-    }
+        "pending_candidate": None,
+        "costs": [{"iteration": index, "model_usage": {"total_tokens": 1000}}
+                  for index in range(1, 6)],
+    })
+    _write(run / "result.json", {
+        "schema_version": 2,
+        "run_id": run.name,
+        "arm": arm,
+        "identity": identity,
+        "records": records,
+        "optimize_trajectory": [0.2, 0.22, 0.24, 0.26, 0.28, optimize_final],
+        "optimize_final": summary,
+        "held_out_seed": {**summary, "overall": 0.5},
+        "held_out_final": {**summary, "overall": 0.51},
+        "final_worker_dir": str(final_worker.resolve()),
+    })
+
+    attempts = []
+    for task_index in range(20):
+        attempts.append((f"opt-{task_index:02d}", "optimize", "seed-optimize"))
+    for iteration in range(1, 6):
+        for task_index in range(20):
+            attempts.append((
+                f"opt-{task_index:02d}",
+                "optimize",
+                f"iteration-{iteration}-candidate",
+            ))
+    for checkpoint in ("seed-held-out", "final-held-out"):
+        for task_index in range(10):
+            attempts.append((f"hold-{task_index:02d}", "held_out", checkpoint))
+    for attempt_index, (task_id, split, checkpoint) in enumerate(
+        attempts[:attempt_limit]
+    ):
+        attempt_id = f"attempt-{attempt_index:03d}"
+        attempt = run / "attempts" / attempt_id
+        _write(attempt / "attempt.json", {
+            "attempt_id": attempt_id,
+            "task_id": task_id,
+            "split": split,
+            "checkpoint": checkpoint,
+        })
+        _write(attempt / "completed-score.json", {
+            "task_id": task_id,
+            "domain": "risk" if split == "optimize" else "fx",
+            "reward": optimize_final if split == "optimize" else 0.5,
+            "diagnostic_tags": [],
+        })
+        for role, path in (
+            ("worker", attempt / "worker-sandbox-lifecycle.json"),
+            ("verifier", attempt / "verifier" / "verifier-sandbox-lifecycle.json"),
+        ):
+            _write(path, {
+                "schema_version": 1,
+                "role": role,
+                "sandbox_id": f"{role}-{attempt_id}",
+                "cleaned_up": True,
+            })
+    for iteration in range(1, 6):
+        evolution = run / "evolutions" / f"iteration-{iteration:04d}"
+        _write(evolution / f"evolver-{iteration}-sandbox-lifecycle.json", {
+            "schema_version": 1,
+            "role": "evolver",
+            "sandbox_id": f"evolver-{iteration}",
+            "cleaned_up": True,
+        })
+        _write(evolution / "access-summary.json", {
+            "records": iteration,
+            "operations": {"read": iteration},
+            "evidence_paths": ["contract.json"],
+        })
+        _write(evolution / "summary.json", {
+            "tool_errors": 0,
+            "model_usage": {"total_tokens": 1000},
+        })
+        edit = run / f"iteration-{iteration:02d}" / "edit.diff"
+        edit.parent.mkdir(parents=True)
+        edit.write_text("+++ b/systemprompt.md\n+validate artifacts\n")
+    return run
 
 
-def test_compare_qfbench_results_reports_shared_tasks_and_paired_deltas():
-    from qea.qfbench_comparison import compare_qfbench_results
+def test_comparison_audits_30x5_and_computes_rich_feedback_gain(tmp_path):
+    from scripts.compare_qfbench_feedback_ab import compare_runs
 
-    baseline = _result(
-        "baseline-3",
-        3,
-        _summary({"shared-opt": 1.0, "old-only": 0.5}, {"risk": 0.75}, 0.75),
-        _summary({"shared-held": 1.0, "old-held": 0.0}, {"fx": 0.5}, 0.5),
-        _summary({"shared-held": 0.0, "old-held": 1.0}, {"fx": 0.5}, 0.5),
-        [
-            {"iteration": 1, "kept": False, "candidate_overall": 0.7},
-            {"iteration": 2, "kept": True, "candidate_overall": 0.8},
-            {"iteration": 3, "kept": False, "candidate_overall": 0.75},
-        ],
+    control = _make_completed_run(
+        tmp_path, arm="control", optimize_final=0.30
     )
-    candidate = _result(
-        "candidate-5",
-        5,
-        _summary(
-            {"shared-opt": 0.8, "new-a": 0.4, "new-b": 0.6},
-            {"risk_credit": 0.6},
-            0.6,
-        ),
-        _summary(
-            {"shared-held": 0.5, "new-held-a": 1.0, "new-held-b": 0.0},
-            {"rates_fx_macro": 0.5},
-            0.5,
-        ),
-        _summary(
-            {"shared-held": 1.0, "new-held-a": 1.0, "new-held-b": 0.0},
-            {"rates_fx_macro": 2 / 3},
-            2 / 3,
-        ),
-        [
-            {"iteration": index, "kept": index in {2, 5}, "candidate_overall": 0.6 + index / 100}
-            for index in range(1, 6)
-        ],
+    rich = _make_completed_run(tmp_path, arm="rich", optimize_final=0.38)
+
+    comparison = compare_runs(control, rich)
+
+    assert comparison["completion"]["control"]["official_scores"] == 140
+    assert comparison["completion"]["rich"]["official_scores"] == 140
+    assert comparison["primary"]["RichFeedbackGain"] == pytest.approx(0.08)
+    assert comparison["arms"]["rich"]["evidence_read_records"] == 15
+    assert comparison["arms"]["control"]["edit_categories"]["prompt"] == 5
+    assert comparison["causal_comparison"] is True
+
+
+def test_comparison_refuses_incomplete_or_identity_mismatched_runs(tmp_path):
+    from scripts.compare_qfbench_feedback_ab import ComparisonError, compare_runs
+
+    incomplete = _make_completed_run(
+        tmp_path / "incomplete",
+        arm="control",
+        optimize_final=0.30,
+        attempt_limit=139,
     )
-
-    comparison = compare_qfbench_results(baseline, candidate)
-
-    assert comparison["baseline"]["run_id"] == "baseline-3"
-    assert comparison["candidate"]["run_id"] == "candidate-5"
-    assert comparison["baseline"]["n_kept"] == 1
-    assert comparison["candidate"]["n_kept"] == 2
-    assert comparison["candidate"]["held_out_delta"] == (2 / 3) - 0.5
-    assert (
-        comparison["candidate"]["held_out_task_mean_single_binary_sensitivity"]
-        == 1 / 3
+    rich = _make_completed_run(
+        tmp_path / "incomplete", arm="rich", optimize_final=0.38
     )
-    assert comparison["shared_optimize_seed"] == [
-        {
-            "task_id": "shared-opt",
-            "baseline_reward": 1.0,
-            "candidate_reward": 0.8,
-            "delta": -0.2,
-        }
-    ]
-    assert comparison["shared_held_out"] == [
-        {
-            "task_id": "shared-held",
-            "baseline_seed": 1.0,
-            "baseline_final": 0.0,
-            "candidate_seed": 0.5,
-            "candidate_final": 1.0,
-        }
-    ]
+    with pytest.raises(ComparisonError, match="140"):
+        compare_runs(incomplete, rich)
 
-
-def test_render_qfbench_comparison_markdown_contains_core_tables():
-    from qea.qfbench_comparison import (
-        compare_qfbench_results,
-        render_qfbench_comparison_markdown,
+    control = _make_completed_run(
+        tmp_path / "mismatch", arm="control", optimize_final=0.30
     )
-
-    baseline = _result(
-        "baseline-3",
-        3,
-        _summary({"task-a": 1.0}, {"risk": 1.0}, 1.0),
-        _summary({"held-a": 1.0}, {"fx": 1.0}, 1.0),
-        _summary({"held-a": 0.0}, {"fx": 0.0}, 0.0),
-        [],
+    mismatched = _make_completed_run(
+        tmp_path / "mismatch",
+        arm="rich",
+        optimize_final=0.38,
+        admission_digest="different-policy",
     )
-    candidate = _result(
-        "candidate-5",
-        5,
-        _summary({"task-a": 0.5}, {"risk_credit": 0.5}, 0.5),
-        _summary({"held-a": 0.5}, {"rates_fx_macro": 0.5}, 0.5),
-        _summary({"held-a": 1.0}, {"rates_fx_macro": 1.0}, 1.0),
-        [],
-    )
-
-    markdown = render_qfbench_comparison_markdown(
-        compare_qfbench_results(baseline, candidate)
-    )
-
-    assert "# QFBench Run Comparison" in markdown
-    assert "baseline-3" in markdown
-    assert "candidate-5" in markdown
-    assert "Shared Optimize Seed Tasks" in markdown
-    assert "Shared Held-Out Tasks" in markdown
-    assert "One binary held-out task (task mean)" in markdown
+    with pytest.raises(ComparisonError, match="identity mismatch"):
+        compare_runs(control, mismatched)
 
 
-def test_qfbench_comparison_script_is_directly_invokable():
-    repository = Path(__file__).resolve().parents[1]
+def test_comparison_script_is_directly_invokable():
     proc = subprocess.run(
-        [sys.executable, "scripts/compare_qfbench_runs.py", "--help"],
-        cwd=repository,
-        check=False,
+        [sys.executable, "scripts/compare_qfbench_feedback_ab.py", "--help"],
+        cwd=Path(__file__).resolve().parents[1],
         capture_output=True,
         text=True,
+        check=False,
     )
     assert proc.returncode == 0, proc.stderr
-    assert "--baseline" in proc.stdout
-    assert "--candidate" in proc.stdout
-    assert "--json-output" in proc.stdout
-    assert "--markdown-output" in proc.stdout
+    assert "--control" in proc.stdout
+    assert "--rich" in proc.stdout
+    assert "--historical" in proc.stdout
