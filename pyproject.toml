@@ -33,9 +33,23 @@ fab = [
     "beautifulsoup4>=4.12", "lxml>=5.0", "ddgs>=9.0",
 ]
 
+# QFBench coordinator: NexAU runs inside each E2B task sandbox, while the local
+# coordinator owns evolution, checkpointing, leases, and official-score summaries.
+qfbench = [
+    "nexau @ git+https://github.com/nex-agi/NexAU.git@35ee1861546db3cb280a6e17e38a74060d7c96c3",
+    "e2b==2.30.0",
+]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["qea", "qea.grading", "qea.workers"]
+packages = [
+    "qea",
+    "qea.benchmarks",
+    "qea.executors",
+    "qea.grading",
+    "qea.verifiers",
+    "qea.workers",
+]

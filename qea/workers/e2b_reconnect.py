@@ -11,8 +11,17 @@ from __future__ import annotations
 import asyncio
 
 import httpx
-from e2b_code_interpreter import AsyncSandbox
-from stirrup.tools.code_backends.e2b import E2BCodeExecToolProvider
+
+try:
+    from stirrup.tools.code_backends.e2b import E2BCodeExecToolProvider
+except ModuleNotFoundError as _stirrup_import_error:
+    class E2BCodeExecToolProvider:  # type: ignore[no-redef]
+        """Import-time shim so the standalone reconnect helper stays testable."""
+
+        def __init__(self, *args, **kwargs) -> None:
+            raise ModuleNotFoundError(
+                "ReconnectingE2BCodeExecToolProvider requires the optional stirrup extra"
+            ) from _stirrup_import_error
 
 # Connection drops we saw through the SOCKS proxy: RemoteProtocolError ("Server
 # disconnected"), ReadError, WriteError, ConnectError -- all httpx.TransportError.
@@ -58,6 +67,8 @@ class ReconnectingE2BCodeExecToolProvider(E2BCodeExecToolProvider):
         if not self._sid:
             return
         try:
+            from e2b_code_interpreter import AsyncSandbox
+
             self._sbx = await AsyncSandbox.connect(self._sid)
         except Exception:  # noqa: BLE001 - reconnect failed; caller exhausts + raises original
             pass
