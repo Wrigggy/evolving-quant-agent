@@ -223,6 +223,46 @@ uvx \\
     assert lock.endswith(" > /opt/qea/verifier-requirements.lock")
 
 
+def test_uvx_warm_command_accepts_official_if_uvx_wrapper():
+    from qea.qfbench_images import (
+        verifier_dependency_lock_command,
+        verifier_uvx_warm_command,
+    )
+
+    script = """#!/bin/bash
+if uvx \\
+  -p 3.11 \\
+  -w pytest==8.4.1 \\
+  -w pytest-json-ctrf==0.3.5 \\
+  -w numpy==1.26.4 \\
+  pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA; then
+  echo 1 > /logs/verifier/reward.txt
+else
+  echo 0 > /logs/verifier/reward.txt
+fi
+"""
+
+    assert verifier_uvx_warm_command(script) == (
+        "uvx -p 3.11 -w pytest==8.4.1 -w pytest-json-ctrf==0.3.5 "
+        "-w numpy==1.26.4 pytest --version"
+    )
+    assert verifier_dependency_lock_command(script).startswith(
+        "uvx -p 3.11 -w pytest==8.4.1 -w pytest-json-ctrf==0.3.5 "
+        "-w numpy==1.26.4 python -c "
+    )
+
+
+def test_uvx_warm_command_fails_closed_on_unknown_wrapper():
+    import pytest
+
+    from qea.qfbench_images import ImageConfigError, verifier_uvx_warm_command
+
+    with pytest.raises(ImageConfigError, match="cannot locate official uvx command"):
+        verifier_uvx_warm_command(
+            "command uvx -p 3.11 -w pytest==8.4.1 pytest /tests/test_outputs.py\n"
+        )
+
+
 def test_verifier_overlay_warms_official_uvx_environment_for_offline_reuse():
     from qea.qfbench_images import generate_qfbench_overlay
 

@@ -185,6 +185,8 @@ def _verifier_uvx_tokens(test_script: str) -> tuple[list[str], int] | None:
     logical = re.sub(r"\\\s*\n", " ", test_script)
     for line in logical.splitlines():
         stripped = line.strip()
+        if stripped.startswith("if uvx "):
+            stripped = stripped.removeprefix("if ")
         if not stripped.startswith("uvx "):
             continue
         try:
@@ -196,6 +198,8 @@ def _verifier_uvx_tokens(test_script: str) -> tuple[list[str], int] | None:
         except ValueError as exc:
             raise ImageConfigError("official uvx command does not invoke pytest") from exc
         return tokens, pytest_index
+    if re.search(r"\buvx\b", logical):
+        raise ImageConfigError("cannot locate official uvx command for offline warming")
     return None
 
 
