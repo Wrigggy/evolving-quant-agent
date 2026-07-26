@@ -11,11 +11,23 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Mapping, Protocol
 
+from .candidate_admission import (
+    AdmissionPolicy,
+    CandidateAdmissionError,
+    admit_candidate,
+)
 from .evaluation import (
     EvaluationSummary,
     OfficialTaskScore,
     TaskAttempt,
     aggregate_domain_macro,
+)
+from .evolution_evidence import EvidenceRecord, build_evolution_evidence
+from .evolution_feedback import (
+    FeedbackMode,
+    feedback_contract_digest as compute_feedback_contract_digest,
+    load_feedback_manifest,
+    load_verifier_mapping,
 )
 from .evolve_runtime import diff_signature, dir_unified_diff, run_evolve_agent, snapshot_dir
 
@@ -31,7 +43,20 @@ class BenchmarkEvaluator(Protocol):
     def evaluate(self, *, worker_dir, tasks, split, checkpoint, run_dir) -> EvaluationSummary: ...
 
 
-Proposer = Callable[[Path, dict, int, Path], dict]
+LegacyProposer = Callable[[Path, dict, int, Path], dict]
+
+
+@dataclass(frozen=True)
+class EvolutionProposalContext:
+    candidate_dir: Path
+    evidence: EvidenceRecord
+    diagnosis: dict
+    iteration: int
+    run_dir: Path
+    history: tuple[dict, ...]
+
+
+FullHarnessProposer = Callable[[EvolutionProposalContext], object]
 
 
 @dataclass(frozen=True)
@@ -44,6 +69,14 @@ class BenchmarkEvolutionConfig:
     max_domain_regression: float = 0.0
     concurrency: int = 3
     resume: bool = True
+    feedback_mode: FeedbackMode | str = FeedbackMode.CONTROL
+    feedback_contract_digest: str = ""
+    public_rubric_path: Path | str | None = None
+    verifier_mapping_path: Path | str | None = None
+    admission_policy_digest: str = ""
+    task_manifest_digest: str = ""
+    model_identity: str = "unspecified"
+    template_identity_digest: str = "unspecified"
 
     def __post_init__(self) -> None:
         if self.n_iters not in {3, 5}:
@@ -54,6 +87,20 @@ class BenchmarkEvolutionConfig:
             raise EvolutionConfigError("noise and domain regression limits must be non-negative")
         if self.concurrency < 1:
             raise EvolutionConfigError("concurrency must be positive")
+        try:
+            FeedbackMode(self.feedback_mode)
+        except ValueError as exc:
+            raise EvolutionConfigError(
+                f"unknown feedback mode {self.feedback_mode!r}"
+            ) from exc
+        if (self.public_rubric_path is None) != (self.verifier_mapping_path is None):
+            raise EvolutionConfigError(
+                "public rubric and verifier mapping must be configured together"
+            )
+
+    @property
+    def full_harness(self) -> bool:
+        return self.public_rubric_path is not None
 
 
 @dataclass(frozen=True)
@@ -67,6 +114,9 @@ class BenchmarkIterationRecord:
     kept: bool
     reason: str
     domain_deltas: dict[str, float]
+    admitted: bool = True
+    admission_failure: str | None = None
+    evidence_digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -90,9 +140,20 @@ def hash_worker_directory(root: str | Path) -> str:
     if not directory.is_dir():
         raise EvolutionConfigError(f"worker directory does not exist: {directory}")
     digest = hashlib.sha256()
+    members = tuple(directory.rglob("*"))
+    symlinks = [path.relative_to(directory) for path in members if path.is_symlink()]
+    if symlinks:
+        raise EvolutionConfigError(
+            f"worker directory contains forbidden symlinks: {symlinks[:3]}"
+        )
     files = sorted(
-        (path for path in directory.rglob("*")
-         if path.is_file() and ".git" not in path.parts and "__pycache__" not in path.parts),
+        (
+            path
+            for path in members
+            if path.is_file()
+            and ".git" not in path.parts
+            and "__pycache__" not in path.parts
+        ),
         key=lambda path: path.relative_to(directory).as_posix(),
     )
     for path in files:
@@ -103,6 +164,111 @@ def hash_worker_directory(root: str | Path) -> str:
         digest.update(len(payload).to_bytes(8, "big"))
         digest.update(payload)
     return digest.hexdigest()
+
+
+def _sha256_file(path: str | Path) -> str:
+    return hashlib.sha256(Path(path).resolve().read_bytes()).hexdigest()
+
+
+def _task_manifest_digest(
+    benchmark_commit: str,
+    optimize: tuple,
+    held_out: tuple,
+) -> str:
+    payload = {
+        "benchmark_commit": benchmark_commit,
+        "optimize": [
+            {
+                "task_id": task.task_id,
+                "domain": task.domain,
+                "lineage": task.lineage,
+            }
+            for task in optimize
+        ],
+        "held_out": [
+            {
+                "task_id": task.task_id,
+                "domain": task.domain,
+                "lineage": task.lineage,
+            }
+            for task in held_out
+        ],
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _relative_artifact(path: Path, run_dir: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(run_dir).as_posix()
+    except ValueError:
+        return str(resolved)
+
+
+def _json_safe(value, run_dir: Path):
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, Path):
+        return _relative_artifact(value, run_dir)
+    if isinstance(value, Mapping):
+        return {
+            str(key): _json_safe(item, run_dir)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item, run_dir) for item in value]
+    return str(value)
+
+
+def _proposal_metadata(proposal: object, run_dir: Path) -> dict:
+    if proposal is None:
+        return {}
+    if isinstance(proposal, dict):
+        return _json_safe(proposal, run_dir)
+    payload: dict = {}
+    for name in (
+        "iteration",
+        "candidate_digest",
+        "input_bundle_sha256",
+        "sandbox_id",
+        "cleaned_up",
+    ):
+        if hasattr(proposal, name):
+            payload[name] = getattr(proposal, name)
+    for name in (
+        "trace_uri",
+        "final_uri",
+        "prediction_uri",
+        "access_summary_uri",
+        "summary_uri",
+        "command_log_uri",
+        "lifecycle_uri",
+        "dependency_lock_uri",
+    ):
+        value = getattr(proposal, name, None)
+        if value is not None:
+            payload[name] = _relative_artifact(Path(value), run_dir)
+    return payload
+
+
+def _failed_admission(
+    *,
+    policy_digest: str,
+    edit_signature: str,
+    failure: str,
+) -> dict:
+    return {
+        "admitted": False,
+        "candidate_digest": hashlib.sha256(
+            f"unadmitted:{edit_signature}".encode()
+        ).hexdigest(),
+        "policy_digest": policy_digest,
+        "files": [],
+        "checks": [],
+        "failure": failure,
+    }
 
 
 def _atomic_json(path: Path, payload: dict) -> None:
@@ -359,13 +525,88 @@ def run_benchmark_evolution(
     held_out_tasks: Iterable,
     benchmark_commit: str,
     evaluator: BenchmarkEvaluator,
-    proposer: Proposer = nexau_process_proposer,
+    proposer: LegacyProposer | FullHarnessProposer = nexau_process_proposer,
 ) -> BenchmarkEvolutionResult:
     optimize = tuple(optimize_tasks)
     held_out = tuple(held_out_tasks)
     _validate_task_sets(optimize, held_out)
     if not re.fullmatch(r"[0-9a-f]{40}", benchmark_commit):
         raise EvolutionConfigError("benchmark_commit must be a full SHA")
+
+    seed_source = Path(config.seed_worker_dir).resolve()
+    if not seed_source.is_dir():
+        raise EvolutionConfigError(
+            f"seed worker directory does not exist: {seed_source}"
+        )
+    feedback_mode = FeedbackMode(config.feedback_mode)
+    held_out_ids = {task.task_id for task in held_out}
+    policy = AdmissionPolicy.qfbench_full(
+        forbidden_content=sorted(held_out_ids)
+    )
+    feedback_manifest = {}
+    verifier_mapping = {}
+    if config.full_harness:
+        assert config.public_rubric_path is not None
+        assert config.verifier_mapping_path is not None
+        feedback_manifest = load_feedback_manifest(
+            config.public_rubric_path,
+            expected_task_ids={task.task_id for task in optimize},
+            forbidden_task_ids=held_out_ids,
+        )
+        public_criteria = {
+            task_id: {item.criterion_id for item in rubric.criteria}
+            for task_id, rubric in feedback_manifest.items()
+        }
+        verifier_mapping = load_verifier_mapping(
+            config.verifier_mapping_path,
+            public_criteria=public_criteria,
+        )
+        computed_feedback_digest = compute_feedback_contract_digest(
+            feedback_mode, config.public_rubric_path
+        )
+        if (
+            config.feedback_contract_digest
+            and config.feedback_contract_digest != computed_feedback_digest
+        ):
+            raise EvolutionConfigError(
+                "configured feedback contract digest does not match mode/rubric"
+            )
+        if (
+            config.admission_policy_digest
+            and config.admission_policy_digest != policy.digest()
+        ):
+            raise EvolutionConfigError(
+                "configured admission policy digest does not match active policy"
+            )
+        rubric_digest = _sha256_file(config.public_rubric_path)
+        verifier_mapping_digest = _sha256_file(config.verifier_mapping_path)
+        active_feedback_digest = computed_feedback_digest
+        active_admission_digest = policy.digest()
+    else:
+        rubric_digest = "legacy-answer-free"
+        verifier_mapping_digest = "legacy-answer-free"
+        active_feedback_digest = (
+            config.feedback_contract_digest or "legacy-answer-free-v1"
+        )
+        active_admission_digest = (
+            config.admission_policy_digest or "legacy-process-only"
+        )
+
+    identity = {
+        "arm": feedback_mode.value,
+        "benchmark_commit": benchmark_commit,
+        "task_manifest_digest": (
+            config.task_manifest_digest
+            or _task_manifest_digest(benchmark_commit, optimize, held_out)
+        ),
+        "feedback_contract_digest": active_feedback_digest,
+        "public_rubric_digest": rubric_digest,
+        "verifier_mapping_digest": verifier_mapping_digest,
+        "admission_policy_digest": active_admission_digest,
+        "model_identity": config.model_identity,
+        "seed_digest": hash_worker_directory(seed_source),
+        "template_identity_digest": config.template_identity_digest,
+    }
 
     run_dir = Path(config.results_dir).resolve() / config.run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -374,28 +615,46 @@ def run_benchmark_evolution(
         if not config.resume:
             raise EvolutionConfigError(f"run {config.run_id} already has a checkpoint")
         state = json.loads(resume_path.read_text())
+        if state.get("schema_version") != 2:
+            raise EvolutionConfigError(
+                f"resume checkpoint schema mismatch: expected 2, "
+                f"found {state.get('schema_version')}"
+            )
         expected = (config.run_id, config.n_iters, benchmark_commit)
         actual = (state.get("run_id"), state.get("n_iters"), state.get("benchmark_commit"))
         if actual != expected:
             raise EvolutionConfigError(f"resume checkpoint mismatch: expected {expected}, found {actual}")
+        if state.get("identity") != identity:
+            changed = sorted(
+                key
+                for key in set(identity) | set(state.get("identity", {}))
+                if identity.get(key) != state.get("identity", {}).get(key)
+            )
+            raise EvolutionConfigError(
+                f"resume immutable identity mismatch: {changed}"
+            )
         if state.get("phase") == "complete":
             return _result_from_state(run_dir, state)
     else:
-        seed_source = Path(config.seed_worker_dir).resolve()
-        if not seed_source.is_dir():
-            raise EvolutionConfigError(f"seed worker directory does not exist: {seed_source}")
         seed_target = run_dir / "workers" / "seed"
         snapshot_dir(seed_source, seed_target)
         state = {
-            "schema_version": 1,
+            "schema_version": 2,
             "run_id": config.run_id,
+            "arm": feedback_mode.value,
             "n_iters": config.n_iters,
             "benchmark_commit": benchmark_commit,
+            "identity": identity,
             "phase": "seed",
             "next_iteration": 1,
             "incumbent_worker": seed_target.relative_to(run_dir).as_posix(),
             "records": [],
+            "history": [],
             "rejected_edit_signatures": [],
+            "candidate_admissions": [],
+            "proposals": [],
+            "costs": [],
+            "lifecycles": [],
             "pending_candidate": None,
         }
         _atomic_json(resume_path, state)
@@ -433,20 +692,122 @@ def run_benchmark_evolution(
             candidate = run_dir / "workers" / f"iteration-{iteration:02d}-candidate"
             snapshot_dir(incumbent_worker, candidate)
             diagnosis = _answer_free_diagnosis(incumbent_summary)
-            proposal = proposer(candidate, diagnosis, iteration, run_dir) or {}
-            edit = dir_unified_diff(incumbent_worker, candidate)
-            signature = diff_signature(edit)
+            evidence: EvidenceRecord | None = None
+            if config.full_harness:
+                evidence = build_evolution_evidence(
+                    mode=feedback_mode,
+                    optimize_tasks=optimize,
+                    held_out_task_ids=held_out_ids,
+                    run_dir=run_dir,
+                    destination=(
+                        run_dir
+                        / "evidence"
+                        / f"iteration-{iteration:02d}-{feedback_mode.value}"
+                    ),
+                    feedback_manifest=feedback_manifest,
+                    verifier_mapping=verifier_mapping,
+                    history=tuple(state["history"]),
+                )
+                proposal_context = EvolutionProposalContext(
+                    candidate_dir=candidate,
+                    evidence=evidence,
+                    diagnosis=diagnosis,
+                    iteration=iteration,
+                    run_dir=run_dir,
+                    history=tuple(state["history"]),
+                )
+                proposal_raw = proposer(proposal_context)
+                proposed_candidate = getattr(
+                    proposal_raw, "candidate_dir", candidate
+                )
+                if isinstance(proposal_raw, dict) and proposal_raw.get("candidate_dir"):
+                    proposed_candidate = Path(proposal_raw["candidate_dir"])
+                proposed_path = Path(proposed_candidate).resolve()
+                if proposed_path != candidate.resolve():
+                    try:
+                        proposed_path.relative_to(run_dir)
+                    except ValueError as exc:
+                        raise EvolutionConfigError(
+                            "proposer candidate output is outside the run directory"
+                        ) from exc
+                    snapshot_dir(proposed_path, candidate)
+            else:
+                proposal_raw = proposer(candidate, diagnosis, iteration, run_dir)
+            proposal = _proposal_metadata(proposal_raw, run_dir)
+            if config.full_harness:
+                try:
+                    admission_record = admit_candidate(
+                        run_dir / "workers" / "seed",
+                        candidate,
+                        policy,
+                    )
+                    admission = asdict(admission_record)
+                    edit = dir_unified_diff(incumbent_worker, candidate)
+                    signature = diff_signature(edit)
+                except CandidateAdmissionError as exc:
+                    failure = f"{type(exc).__name__}: {exc}"
+                    edit = ""
+                    signature = hashlib.sha256(
+                        f"admission-rejected:{failure}".encode()
+                    ).hexdigest()
+                    admission = _failed_admission(
+                        policy_digest=active_admission_digest,
+                        edit_signature=signature,
+                        failure=failure,
+                    )
+            else:
+                edit = dir_unified_diff(incumbent_worker, candidate)
+                signature = diff_signature(edit)
+                admission = {
+                    "admitted": True,
+                    "candidate_digest": hash_worker_directory(candidate),
+                    "policy_digest": active_admission_digest,
+                    "files": [],
+                    "checks": ["legacy_process_only"],
+                    "failure": None,
+                }
             edit_path = run_dir / f"iteration-{iteration:02d}" / "edit.diff"
             edit_path.parent.mkdir(parents=True, exist_ok=True)
             edit_path.write_text(edit)
+            admission_path = edit_path.parent / "admission.json"
+            _atomic_json(admission_path, admission)
+            proposal.update({
+                "iteration": iteration,
+                "evidence_digest": evidence.sha256 if evidence else None,
+                "evidence_members": list(evidence.members) if evidence else [],
+                "admission_path": admission_path.relative_to(run_dir).as_posix(),
+            })
+            proposal_path = edit_path.parent / "proposal.json"
+            _atomic_json(proposal_path, proposal)
             pending = {
                 "iteration": iteration,
                 "candidate_worker": candidate.relative_to(run_dir).as_posix(),
-                "candidate_worker_digest": hash_worker_directory(candidate),
+                "candidate_worker_digest": admission["candidate_digest"],
                 "edit_signature": signature,
                 "edit_path": edit_path.relative_to(run_dir).as_posix(),
                 "proposal_trace": dict(proposal.get("trace", {})),
+                "proposal_path": proposal_path.relative_to(run_dir).as_posix(),
+                "evidence_digest": evidence.sha256 if evidence else None,
+                "admission": admission,
             }
+            state["proposals"].append(proposal)
+            state["candidate_admissions"].append(admission)
+            if proposal.get("lifecycle_uri"):
+                state["lifecycles"].append(proposal["lifecycle_uri"])
+            if proposal.get("summary_uri"):
+                summary_file = run_dir / str(proposal["summary_uri"])
+                if summary_file.is_file():
+                    try:
+                        usage = json.loads(summary_file.read_text()).get(
+                            "model_usage"
+                        )
+                    except (OSError, json.JSONDecodeError):
+                        usage = None
+                    state["costs"].append({
+                        "iteration": iteration,
+                        "model_usage": usage,
+                        "reason": None if usage else "usage unavailable",
+                    })
             state["pending_candidate"] = pending
             state["phase"] = "evaluate_candidate"
             _atomic_json(resume_path, state)
@@ -455,7 +816,17 @@ def run_benchmark_evolution(
 
         candidate = (run_dir / pending["candidate_worker"]).resolve()
         signature = pending["edit_signature"]
-        if not (run_dir / pending["edit_path"]).read_text():
+        admission = dict(pending.get("admission", {}))
+        admitted = bool(admission.get("admitted", not config.full_harness))
+        admission_failure = admission.get("failure")
+        if not admitted:
+            kept, reason, deltas = (
+                False,
+                f"candidate admission rejected: {admission_failure}",
+                {domain: 0.0 for domain in incumbent_summary.domain_scores},
+            )
+            candidate_summary = incumbent_summary
+        elif not (run_dir / pending["edit_path"]).read_text():
             kept, reason, deltas = False, "candidate made no change", {
                 domain: 0.0 for domain in incumbent_summary.domain_scores
             }
@@ -492,8 +863,24 @@ def run_benchmark_evolution(
             kept=kept,
             reason=reason,
             domain_deltas=deltas,
+            admitted=admitted,
+            admission_failure=admission_failure,
+            evidence_digest=pending.get("evidence_digest"),
         )
         state["records"].append(asdict(record))
+        state["history"].append({
+            "iteration": iteration,
+            "edit_signature": signature,
+            "candidate_worker_digest": pending["candidate_worker_digest"],
+            "admitted": admitted,
+            "admission_failure": admission_failure,
+            "kept": kept,
+            "reason": reason,
+            "incumbent_before": incumbent_summary.overall,
+            "candidate_overall": candidate_summary.overall,
+            "incumbent_after": incumbent_after,
+            "evidence_digest": pending.get("evidence_digest"),
+        })
         state["pending_candidate"] = None
         state["next_iteration"] = iteration + 1
         state["phase"] = "propose" if iteration < config.n_iters else "final_held_out"
@@ -514,7 +901,10 @@ def run_benchmark_evolution(
 
     result = _result_from_state(run_dir, state)
     _atomic_json(run_dir / "result.json", {
+        "schema_version": 2,
         "run_id": result.run_id,
+        "arm": state["arm"],
+        "identity": state["identity"],
         "records": [asdict(record) for record in result.records],
         "optimize_trajectory": result.optimize_trajectory,
         "optimize_final": _summary_dict(result.optimize_final),

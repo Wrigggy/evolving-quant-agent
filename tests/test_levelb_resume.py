@@ -1,3 +1,5 @@
+import json
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -18,7 +20,11 @@ def _summary(tasks, reward):
 
 
 def test_resume_reuses_completed_proposal_after_candidate_evaluation_interrupt(tmp_path):
-    from qea.loop_benchmark import BenchmarkEvolutionConfig, run_benchmark_evolution
+    from qea.loop_benchmark import (
+        BenchmarkEvolutionConfig,
+        EvolutionConfigError,
+        run_benchmark_evolution,
+    )
 
     optimize = (SimpleNamespace(task_id="train", domain="risk", lineage="train-lineage"),)
     held_out = (SimpleNamespace(task_id="hold", domain="fx", lineage="hold-lineage"),)
@@ -79,3 +85,28 @@ def test_resume_reuses_completed_proposal_after_candidate_evaluation_interrupt(t
     assert result.n_kept == 3
     resume = result.run_dir / "resume.json"
     assert '"phase": "complete"' in resume.read_text()
+    checkpoint = json.loads(resume.read_text())
+    assert checkpoint["schema_version"] == 2
+    assert set(checkpoint["identity"]) >= {
+        "feedback_contract_digest",
+        "admission_policy_digest",
+        "task_manifest_digest",
+        "seed_digest",
+        "template_identity_digest",
+    }
+
+    for changed in (
+        replace(config, feedback_contract_digest="changed-feedback"),
+        replace(config, admission_policy_digest="changed-admission"),
+    ):
+        with pytest.raises(
+            EvolutionConfigError, match="resume immutable identity mismatch"
+        ):
+            run_benchmark_evolution(
+                changed,
+                optimize_tasks=optimize,
+                held_out_tasks=held_out,
+                benchmark_commit="0" * 40,
+                evaluator=evaluator,
+                proposer=proposer,
+            )
