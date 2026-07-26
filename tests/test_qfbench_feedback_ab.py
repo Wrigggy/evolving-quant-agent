@@ -270,6 +270,106 @@ def test_control_and_rich_use_same_calls_and_policy_but_different_evidence(tmp_p
     )
 
 
+def test_full_harness_scores_admitted_no_change_candidates_on_fixed_schedule(tmp_path):
+    from qea.loop_benchmark import run_benchmark_evolution
+
+    optimize, held_out = _tasks(tmp_path)
+    rubric, mapping = _contracts(tmp_path, optimize)
+    evaluator = RecordingEvaluator()
+
+    def no_change_proposer(context):
+        return {"trace": {"turns": 1}, "prediction": "keep current worker"}
+
+    result = run_benchmark_evolution(
+        _config(
+            tmp_path,
+            run_id="fixed-no-change-schedule",
+            seed=_seed_worker(tmp_path),
+            rubric=rubric,
+            mapping=mapping,
+            mode="control",
+        ),
+        optimize_tasks=optimize,
+        held_out_tasks=held_out,
+        benchmark_commit="0" * 40,
+        evaluator=evaluator,
+        proposer=no_change_proposer,
+    )
+
+    optimize_calls = [call for call in evaluator.calls if call[0] == "optimize"]
+    assert [call[1] for call in optimize_calls] == [
+        "seed-optimize",
+        "iteration-1-candidate",
+        "iteration-2-candidate",
+        "iteration-3-candidate",
+    ]
+    assert all(record.reason == "candidate made no change" for record in result.records)
+    assert all(record.official_evaluated for record in result.records)
+
+
+def test_resume_backfills_legacy_admitted_no_change_schedule(tmp_path):
+    from qea.loop_benchmark import run_benchmark_evolution
+
+    optimize, held_out = _tasks(tmp_path)
+    rubric, mapping = _contracts(tmp_path, optimize)
+    seed = _seed_worker(tmp_path)
+    config = _config(
+        tmp_path,
+        run_id="legacy-no-change-backfill",
+        seed=seed,
+        rubric=rubric,
+        mapping=mapping,
+        mode="control",
+    )
+
+    def no_change_proposer(context):
+        return {"trace": {"turns": 1}}
+
+    first_evaluator = RecordingEvaluator()
+    first = run_benchmark_evolution(
+        config,
+        optimize_tasks=optimize,
+        held_out_tasks=held_out,
+        benchmark_commit="0" * 40,
+        evaluator=first_evaluator,
+        proposer=no_change_proposer,
+    )
+    state_path = first.run_dir / "resume.json"
+    state = json.loads(state_path.read_text())
+    for record in state["records"]:
+        record.pop("official_evaluated", None)
+    for item in state["history"]:
+        item.pop("official_evaluated", None)
+    state.pop("schedule_backfills", None)
+    state_path.write_text(json.dumps(state))
+
+    resumed_evaluator = RecordingEvaluator()
+    resumed = run_benchmark_evolution(
+        _config(
+            tmp_path,
+            run_id="legacy-no-change-backfill",
+            seed=seed,
+            rubric=rubric,
+            mapping=mapping,
+            mode="control",
+        ),
+        optimize_tasks=optimize,
+        held_out_tasks=held_out,
+        benchmark_commit="0" * 40,
+        evaluator=resumed_evaluator,
+        proposer=lambda context: pytest.fail("completed resume must not propose"),
+    )
+
+    assert [call[1] for call in resumed_evaluator.calls] == [
+        "iteration-1-candidate",
+        "iteration-2-candidate",
+        "iteration-3-candidate",
+    ]
+    assert all(record.official_evaluated for record in resumed.records)
+    repaired = json.loads(state_path.read_text())
+    assert [item["iteration"] for item in repaired["schedule_backfills"]] == [1, 2, 3]
+
+
 def test_admission_failure_skips_candidate_scoring_and_enters_next_history(tmp_path):
     from qea.loop_benchmark import run_benchmark_evolution
 

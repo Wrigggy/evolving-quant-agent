@@ -117,6 +117,7 @@ class BenchmarkIterationRecord:
     admitted: bool = True
     admission_failure: str | None = None
     evidence_digest: str | None = None
+    official_evaluated: bool = True
 
 
 @dataclass(frozen=True)
@@ -501,6 +502,60 @@ def _accept_candidate(
     return True, f"gain {gain:.6f} with no domain regression", deltas
 
 
+def _backfill_legacy_fixed_schedule(
+    *,
+    run_dir: Path,
+    state: dict,
+    evaluator: BenchmarkEvaluator,
+    optimize_tasks: tuple,
+) -> None:
+    """Score admitted legacy no-op records that skipped the fixed schedule."""
+
+    skipped_reasons = {
+        "candidate made no change",
+        "candidate repeats a rejected edit",
+    }
+    history_by_iteration = {
+        int(item["iteration"]): item for item in state.get("history", [])
+    }
+    backfilled = {
+        int(item["iteration"]) for item in state.get("schedule_backfills", [])
+    }
+    for record in state.get("records", []):
+        iteration = int(record["iteration"])
+        legacy_skipped = (
+            "official_evaluated" not in record
+            and bool(record.get("admitted", True))
+            and record.get("reason") in skipped_reasons
+        )
+        if not legacy_skipped or iteration in backfilled:
+            continue
+        candidate = run_dir / "workers" / f"iteration-{iteration:02d}-candidate"
+        if not candidate.is_dir():
+            raise EvolutionConfigError(
+                f"fixed-schedule backfill candidate is missing: {candidate}"
+            )
+        checkpoint = f"iteration-{iteration}-candidate"
+        summary = evaluator.evaluate(
+            worker_dir=candidate,
+            tasks=optimize_tasks,
+            split="optimize",
+            checkpoint=checkpoint,
+            run_dir=run_dir,
+        )
+        record["official_evaluated"] = True
+        history = history_by_iteration.get(iteration)
+        if history is not None:
+            history["official_evaluated"] = True
+        state.setdefault("schedule_backfills", []).append({
+            "iteration": iteration,
+            "checkpoint": checkpoint,
+            "candidate_worker": candidate.relative_to(run_dir).as_posix(),
+            "summary": _summary_dict(summary),
+        })
+        _atomic_json(run_dir / "resume.json", state)
+
+
 def _result_from_state(run_dir: Path, state: dict) -> BenchmarkEvolutionResult:
     records = tuple(BenchmarkIterationRecord(**record) for record in state["records"])
     seed_optimize = _summary_from_dict(state["seed_optimize"])
@@ -634,6 +689,13 @@ def run_benchmark_evolution(
                 f"resume immutable identity mismatch: {changed}"
             )
         if state.get("phase") == "complete":
+            if config.full_harness:
+                _backfill_legacy_fixed_schedule(
+                    run_dir=run_dir,
+                    state=state,
+                    evaluator=evaluator,
+                    optimize_tasks=optimize,
+                )
             return _result_from_state(run_dir, state)
     else:
         seed_target = run_dir / "workers" / "seed"
@@ -819,6 +881,7 @@ def run_benchmark_evolution(
         admission = dict(pending.get("admission", {}))
         admitted = bool(admission.get("admitted", not config.full_harness))
         admission_failure = admission.get("failure")
+        official_evaluated = False
         if not admitted:
             kept, reason, deltas = (
                 False,
@@ -827,15 +890,31 @@ def run_benchmark_evolution(
             )
             candidate_summary = incumbent_summary
         elif not (run_dir / pending["edit_path"]).read_text():
-            kept, reason, deltas = False, "candidate made no change", {
-                domain: 0.0 for domain in incumbent_summary.domain_scores
-            }
-            candidate_summary = incumbent_summary
+            candidate_summary = evaluator.evaluate(
+                worker_dir=candidate,
+                tasks=optimize,
+                split="optimize",
+                checkpoint=f"iteration-{iteration}-candidate",
+                run_dir=run_dir,
+            )
+            _, _, deltas = _accept_candidate(
+                incumbent_summary, candidate_summary, config
+            )
+            kept, reason = False, "candidate made no change"
+            official_evaluated = True
         elif signature in set(state["rejected_edit_signatures"]):
-            kept, reason, deltas = False, "candidate repeats a rejected edit", {
-                domain: 0.0 for domain in incumbent_summary.domain_scores
-            }
-            candidate_summary = incumbent_summary
+            candidate_summary = evaluator.evaluate(
+                worker_dir=candidate,
+                tasks=optimize,
+                split="optimize",
+                checkpoint=f"iteration-{iteration}-candidate",
+                run_dir=run_dir,
+            )
+            _, _, deltas = _accept_candidate(
+                incumbent_summary, candidate_summary, config
+            )
+            kept, reason = False, "candidate repeats a rejected edit"
+            official_evaluated = True
         else:
             candidate_summary = evaluator.evaluate(
                 worker_dir=candidate,
@@ -845,6 +924,7 @@ def run_benchmark_evolution(
                 run_dir=run_dir,
             )
             kept, reason, deltas = _accept_candidate(incumbent_summary, candidate_summary, config)
+            official_evaluated = True
 
         if kept:
             state["incumbent_worker"] = pending["candidate_worker"]
@@ -866,6 +946,7 @@ def run_benchmark_evolution(
             admitted=admitted,
             admission_failure=admission_failure,
             evidence_digest=pending.get("evidence_digest"),
+            official_evaluated=official_evaluated,
         )
         state["records"].append(asdict(record))
         state["history"].append({
@@ -880,6 +961,7 @@ def run_benchmark_evolution(
             "candidate_overall": candidate_summary.overall,
             "incumbent_after": incumbent_after,
             "evidence_digest": pending.get("evidence_digest"),
+            "official_evaluated": official_evaluated,
         })
         state["pending_candidate"] = None
         state["next_iteration"] = iteration + 1
