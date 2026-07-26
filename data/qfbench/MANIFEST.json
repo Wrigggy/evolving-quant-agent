@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "repository_url": "https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+  "commit": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+  "inventory": {
+    "tasks": 86,
+    "binary_reward_tasks": 72,
+    "partial_reward_tasks": 14,
+    "input_bytes": 168210760
+  },
+  "copy_oracle_tasks": [
+    "barrier-garch-var",
+    "cta-basel-capital",
+    "kelly-var-sizing",
+    "regime-cta-vol-target",
+    "regime-riskparity-cvar",
+    "sec-10k-report-long",
+    "sentiment-factor-alpha",
+    "structured-note-risk"
+  ],
+  "inoperable_tasks": [
+    {
+      "task_id": "sec-8k-event-alpha",
+      "reason": "official verifier raises before writing reward.txt at the pinned commit"
+    }
+  ],
+  "pilot": {
+    "optimize": [
+      {
+        "task_id": "historical-var-data-prep",
+        "domain": "risk",
+        "lineage": "historical_var_data_pipeline",
+        "difficulty": "easy",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "momentum-backtest",
+        "domain": "systematic_strategy",
+        "lineage": "ema_momentum_backtest",
+        "difficulty": "easy",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "evt-pot-var",
+        "domain": "risk",
+        "lineage": "evt_tail_risk",
+        "difficulty": "medium",
+        "reward_kind": "partial"
+      }
+    ],
+    "held_out": [
+      {
+        "task_id": "fx-forward-cross-rate",
+        "domain": "fx",
+        "lineage": "fx_forward_cross_rate",
+        "difficulty": "easy",
+        "reward_kind": "binary"
+      },
+      {
+        "task_id": "option-put-call-parity-forward-audit",
+        "domain": "derivatives",
+        "lineage": "option_parity_forward_audit",
+        "difficulty": "hard",
+        "reward_kind": "binary"
+      }
+    ]
+  }
+}
