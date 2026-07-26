@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -30,6 +31,9 @@ def run(task_dir: Path, worker_dir: Path, work_dir: Path, output_dir: Path, resu
     started = time.time()
     output_dir.mkdir(parents=True, exist_ok=True)
     result_dir.mkdir(parents=True, exist_ok=True)
+    worker_dir = worker_dir.resolve()
+    if str(worker_dir) not in sys.path:
+        sys.path.insert(0, str(worker_dir))
     config = AgentConfig.from_yaml(config_path=worker_dir / "agent.yaml")
     for name in ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL"):
         os.environ.pop(name, None)

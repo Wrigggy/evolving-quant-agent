@@ -268,6 +268,26 @@ def add(left, right):
     assert "subprocess_timeouts" in record.checks
 
 
+def test_accepts_worker_tool_using_uploaded_runtime_bridge(tmp_path):
+    from qea.candidate_admission import AdmissionPolicy, admit_candidate
+
+    seed, candidate = _seed_candidate(tmp_path)
+    _add_local_tool(candidate, code="""\
+from runtime_bridge import task_python
+
+def add(left, right):
+    return task_python(
+        ["-c", f"print({left} + {right})"],
+        cwd="/app",
+        timeout_seconds=5,
+    )
+""")
+
+    record = admit_candidate(seed, candidate, AdmissionPolicy.qfbench_full())
+
+    assert record.admitted is True
+
+
 def test_rejects_forbidden_answer_canary_before_paid_scoring(tmp_path):
     from qea.candidate_admission import (
         AdmissionPolicy,

@@ -82,6 +82,7 @@ class AdmissionPolicy:
             "numpy",
             "pandas",
             "pydantic",
+            "runtime_bridge",
             "yaml",
         }
         return cls(

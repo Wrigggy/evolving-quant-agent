@@ -310,6 +310,7 @@ def test_worker_runs_nexau_inside_e2b_collects_generic_outputs_and_cleans_up(tmp
     )
     assert worker_command[1]["timeout"] == 90
     assert b"from nexau import Agent" in sandbox.files.data["/qea/remote_nexau_worker.py"]
+    assert b"def task_python(" in sandbox.files.data["/qea/runtime_bridge.py"]
     assert {record.path for record in result.artifacts} == {
         "chart.png", "memo.pdf", "report.html", "results.json", "solve.py", "table.csv",
     }

@@ -27,6 +27,7 @@ from .e2b_protocol import E2BSandboxFactory, SDKSandboxFactory
 _MODEL_ENV_ALLOWLIST = frozenset({"LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL"})
 _SYSTEM_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
 _REMOTE_RUNNER = Path(__file__).with_name("remote_nexau_worker.py")
+_RUNTIME_BRIDGE = Path(__file__).parents[1] / "runtime_bridge.py"
 
 
 class E2BExecutionError(RuntimeError):
@@ -442,6 +443,11 @@ class E2BNexAUExecutor:
                     sandbox,
                     "/qea/remote_nexau_worker.py",
                     _REMOTE_RUNNER.read_bytes(),
+                )
+                _write_sandbox_file(
+                    sandbox,
+                    "/qea/runtime_bridge.py",
+                    _RUNTIME_BRIDGE.read_bytes(),
                 )
                 _run_checked(
                     sandbox,
