@@ -1,0 +1,13 @@
+type: tool
+name: replace_candidate
+description: Replace an exact expected number of literal occurrences in a candidate text file.
+input_schema:
+  type: object
+  properties:
+    file_path: {type: string, description: "Safe path relative to the candidate root."}
+    old_string: {type: string}
+    new_string: {type: string}
+    expected_replacements: {type: integer, minimum: 1, default: 1}
+  required: [file_path, old_string, new_string]
+  additionalProperties: false
+

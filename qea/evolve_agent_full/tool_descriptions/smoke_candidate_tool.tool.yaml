@@ -1,0 +1,13 @@
+type: tool
+name: smoke_candidate_tool
+description: Import and call one public candidate tools.* function in an isolated, timed Python process with JSON arguments.
+input_schema:
+  type: object
+  properties:
+    module: {type: string, description: "Dotted module below tools, for example tools.validate."}
+    function: {type: string, description: "Public function name."}
+    args_json: {type: string, default: "{}", description: "JSON object passed as keyword arguments."}
+    timeout_seconds: {type: integer, minimum: 1, maximum: 120, default: 20}
+  required: [module, function]
+  additionalProperties: false
+

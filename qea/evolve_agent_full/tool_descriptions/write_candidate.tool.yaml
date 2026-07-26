@@ -1,0 +1,11 @@
+type: tool
+name: write_candidate
+description: Atomically write one UTF-8 text file below the candidate workspace; evidence is never writable.
+input_schema:
+  type: object
+  properties:
+    file_path: {type: string, description: "Safe path relative to the candidate root."}
+    content: {type: string, description: "Complete UTF-8 file content."}
+  required: [file_path, content]
+  additionalProperties: false
+

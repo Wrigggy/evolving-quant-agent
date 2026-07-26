@@ -1,0 +1,41 @@
+type: agent
+name: qea_full_harness_evolver
+max_context_tokens: 200000
+system_prompt: ./systemprompt.md
+system_prompt_type: jinja
+tool_call_mode: openai
+max_iterations: 30
+
+llm_config:
+  model: ${env.LLM_MODEL}
+  base_url: ${env.LLM_BASE_URL}
+  api_key: ${env.LLM_API_KEY}
+  max_tokens: 32000
+  temperature: 0.2
+  stream: true
+  api_type: openai_chat_completion
+  timeout: 180
+
+tools:
+  - name: list_workspace
+    yaml_path: ./tool_descriptions/list_workspace.tool.yaml
+    binding: qea.evolve_agent_full.tools.guarded_workspace:list_workspace
+  - name: read_workspace
+    yaml_path: ./tool_descriptions/read_workspace.tool.yaml
+    binding: qea.evolve_agent_full.tools.guarded_workspace:read_workspace
+  - name: search_evidence
+    yaml_path: ./tool_descriptions/search_evidence.tool.yaml
+    binding: qea.evolve_agent_full.tools.guarded_workspace:search_evidence
+  - name: write_candidate
+    yaml_path: ./tool_descriptions/write_candidate.tool.yaml
+    binding: qea.evolve_agent_full.tools.guarded_workspace:write_candidate
+  - name: replace_candidate
+    yaml_path: ./tool_descriptions/replace_candidate.tool.yaml
+    binding: qea.evolve_agent_full.tools.guarded_workspace:replace_candidate
+  - name: smoke_candidate_tool
+    yaml_path: ./tool_descriptions/smoke_candidate_tool.tool.yaml
+    binding: qea.evolve_agent_full.tools.guarded_workspace:smoke_candidate_tool
+
+tracers:
+  - import: nexau.archs.tracer.adapters.in_memory:InMemoryTracer
+
