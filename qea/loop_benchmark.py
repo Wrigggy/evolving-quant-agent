@@ -217,6 +217,10 @@ class QFBenchE2BEvaluator:
             checkpoint=checkpoint,
             worker_digest=worker_digest,
         )
+        _atomic_json(
+            run_dir / "attempts" / attempt.attempt_id / "attempt.json",
+            asdict(attempt),
+        )
         completed = self._load_score(run_dir, attempt, task)
         if completed is not None:
             return completed

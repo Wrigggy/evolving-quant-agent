@@ -254,3 +254,9 @@ def test_e2b_evaluator_records_worker_command_timeout_as_zero_reward(tmp_path):
     completed = tuple((run_dir / "attempts").glob("*/completed-score.json"))
     assert len(completed) == 1
     assert json.loads(completed[0].read_text())["reward"] == 0.0
+    attempt_identity = completed[0].with_name("attempt.json")
+    payload = json.loads(attempt_identity.read_text())
+    assert payload["task_id"] == "slow-task"
+    assert payload["split"] == "optimize"
+    assert payload["checkpoint"] == "seed-optimize"
+    assert payload["attempt_id"] == completed[0].parent.name
