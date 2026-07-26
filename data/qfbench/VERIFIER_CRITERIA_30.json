@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "benchmark_commit": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+  "visibility": "trusted coordinator only; never bundle to worker or evolver",
+  "tasks": {
+    "historical-var-data-prep": [
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*clean*", "criterion_id": "data_preparation"},
+      {"pattern": "*", "criterion_id": "risk_calculation"}
+    ],
+    "evt-pot-var": [
+      {"pattern": "*exists*", "criterion_id": "deliverables"},
+      {"pattern": "*backtest*", "criterion_id": "risk_and_backtest"},
+      {"pattern": "*", "criterion_id": "tail_model"}
+    ],
+    "credit-migration-matrix": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*consistent*", "criterion_id": "consistency"},
+      {"pattern": "*", "criterion_id": "transition_analysis"}
+    ],
+    "credit-spread-decomposition": [
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*pipeline*", "criterion_id": "pipeline_and_regimes"},
+      {"pattern": "*regime*", "criterion_id": "pipeline_and_regimes"},
+      {"pattern": "*", "criterion_id": "decomposition"}
+    ],
+    "momentum-backtest": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*signal*", "criterion_id": "signal_and_execution"},
+      {"pattern": "*position*", "criterion_id": "signal_and_execution"},
+      {"pattern": "*", "criterion_id": "performance"}
+    ],
+    "bollinger-backtest-aapl": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*signal*", "criterion_id": "signal_and_execution"},
+      {"pattern": "*trade*", "criterion_id": "signal_and_execution"},
+      {"pattern": "*", "criterion_id": "performance"}
+    ],
+    "brinson-sector-attribution": [
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*sum*", "criterion_id": "aggregation"},
+      {"pattern": "*total*", "criterion_id": "aggregation"},
+      {"pattern": "*", "criterion_id": "attribution"}
+    ],
+    "etf-cross-asset-lead-lag": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*split*", "criterion_id": "sample_and_model"},
+      {"pattern": "*dimension*", "criterion_id": "sample_and_model"},
+      {"pattern": "*", "criterion_id": "diagnostics"}
+    ],
+    "cme-hdd-option-pricing": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*json*", "criterion_id": "deliverables"},
+      {"pattern": "*clean*", "criterion_id": "weather_and_model"},
+      {"pattern": "*hdd*", "criterion_id": "weather_and_model"},
+      {"pattern": "*ou_*", "criterion_id": "weather_and_model"},
+      {"pattern": "*", "criterion_id": "pricing_and_risk"}
+    ],
+    "delta-hedging-pnl-simulation": [
+      {"pattern": "*structure*", "criterion_id": "deliverables"},
+      {"pattern": "*price*", "criterion_id": "option_and_hedge"},
+      {"pattern": "*delta*", "criterion_id": "option_and_hedge"},
+      {"pattern": "*payoff*", "criterion_id": "option_and_hedge"},
+      {"pattern": "*", "criterion_id": "pnl_and_cost"}
+    ],
+    "localvol-barrier": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*quote*", "criterion_id": "surface_construction"},
+      {"pattern": "*surface*", "criterion_id": "surface_construction"},
+      {"pattern": "*local*vol*", "criterion_id": "surface_construction"},
+      {"pattern": "*", "criterion_id": "barrier_pricing"}
+    ],
+    "fomc-tone-event-study": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*event*", "criterion_id": "event_pipeline"},
+      {"pattern": "*text*", "criterion_id": "event_pipeline"},
+      {"pattern": "*prior*", "criterion_id": "event_pipeline"},
+      {"pattern": "*", "criterion_id": "inference"}
+    ],
+    "swap-curve-bootstrap-ois": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*reprice*", "criterion_id": "repricing"},
+      {"pattern": "*residual*", "criterion_id": "repricing"},
+      {"pattern": "*", "criterion_id": "curve_bootstrap"}
+    ],
+    "yield-curve-bond-immunization": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*duration*", "criterion_id": "bond_and_duration"},
+      {"pattern": "*bond*", "criterion_id": "bond_and_duration"},
+      {"pattern": "*", "criterion_id": "immunization"}
+    ],
+    "zero-coupon-bootstrapping": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*maturit*", "criterion_id": "deliverables"},
+      {"pattern": "*consistent*", "criterion_id": "curve_consistency"},
+      {"pattern": "*reprice*", "criterion_id": "curve_consistency"},
+      {"pattern": "*decreasing*", "criterion_id": "curve_consistency"},
+      {"pattern": "*increasing*", "criterion_id": "curve_consistency"},
+      {"pattern": "*", "criterion_id": "bootstrap"}
+    ],
+    "crypto-funding-rate-basis-carry": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*structure*", "criterion_id": "deliverables"},
+      {"pattern": "*funding*", "criterion_id": "data_and_model"},
+      {"pattern": "*regime*", "criterion_id": "data_and_model"},
+      {"pattern": "*ou_*", "criterion_id": "data_and_model"},
+      {"pattern": "*", "criterion_id": "carry_risk"}
+    ],
+    "prediction-markets-cross-venue-dislocation": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*clean*", "criterion_id": "market_pipeline"},
+      {"pattern": "*synchron*", "criterion_id": "market_pipeline"},
+      {"pattern": "*snapshot*", "criterion_id": "market_pipeline"},
+      {"pattern": "*", "criterion_id": "trading_and_risk"}
+    ],
+    "13f-amendment-aware-crowding": [
+      {"pattern": "*output*", "criterion_id": "deliverables"},
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*filing*", "criterion_id": "filing_pipeline"},
+      {"pattern": "*holding*", "criterion_id": "filing_pipeline"},
+      {"pattern": "*", "criterion_id": "crowding_analytics"}
+    ],
+    "corporate-action-adjustment": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*consistent*", "criterion_id": "consistency"},
+      {"pattern": "*reconcile*", "criterion_id": "consistency"},
+      {"pattern": "*", "criterion_id": "adjustment_pipeline"}
+    ],
+    "earnings-surprise-calculator": [
+      {"pattern": "*file*", "criterion_id": "deliverables"},
+      {"pattern": "*schema*", "criterion_id": "deliverables"},
+      {"pattern": "*clean*", "criterion_id": "earnings_pipeline"},
+      {"pattern": "*align*", "criterion_id": "earnings_pipeline"},
+      {"pattern": "*", "criterion_id": "surprise_metrics"}
+    ]
+  }
+}
