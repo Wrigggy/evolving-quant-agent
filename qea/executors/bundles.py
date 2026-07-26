@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -193,3 +194,105 @@ def build_oracle_bundle(
         relative = source.relative_to(solution_root)
         entries.append((source, f"solution/{relative.as_posix()}"))
     return _build_bundle(entries, destination, max_files=max_files, max_bytes=max_bytes)
+
+
+def build_evolver_input_bundle(
+    candidate_dir: str | Path,
+    evidence_dir: str | Path,
+    evolver_dir: str | Path,
+    destination: str | Path,
+    *,
+    forbidden_values: Iterable[str] = (),
+    max_files: int = DEFAULT_MAX_FILES,
+    max_bytes: int = DEFAULT_MAX_BYTES,
+) -> BundleRecord:
+    """Archive only the candidate, authorized evidence, and evolver assets."""
+
+    roots = (
+        (Path(candidate_dir).resolve(), "candidate"),
+        (Path(evidence_dir).resolve(), "evidence"),
+        (Path(evolver_dir).resolve(), "evolve_agent"),
+    )
+    entries: list[tuple[Path, str]] = []
+    forbidden = tuple(
+        value.encode() for value in forbidden_values if isinstance(value, str) and value
+    )
+    for root, prefix in roots:
+        for source in _tree_files(root):
+            relative = source.relative_to(root)
+            payload = source.read_bytes()
+            if any(secret in payload for secret in forbidden):
+                raise BundleError(
+                    f"forbidden value found in evolver bundle member: "
+                    f"{prefix}/{relative.as_posix()}"
+                )
+            entries.append((source, f"{prefix}/{relative.as_posix()}"))
+    return _build_bundle(
+        entries,
+        destination,
+        max_files=max_files,
+        max_bytes=max_bytes,
+    )
+
+
+def extract_candidate_archive(
+    payload: bytes,
+    destination: str | Path,
+    *,
+    max_files: int = DEFAULT_MAX_FILES,
+    max_bytes: int = 64 * 1024 * 1024,
+) -> tuple[Path, ...]:
+    """Extract regular candidate files without traversal, links, or secrets."""
+
+    root = Path(destination).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    if any(root.iterdir()):
+        raise BundleError(f"candidate output directory is not empty: {root}")
+    try:
+        archive = tarfile.open(fileobj=io.BytesIO(payload), mode="r:*")
+    except tarfile.TarError as exc:
+        raise BundleError(f"invalid candidate archive: {exc}") from exc
+    extracted: list[Path] = []
+    total_bytes = 0
+    seen: set[str] = set()
+    with archive:
+        for member in archive.getmembers():
+            if member.isdir():
+                continue
+            try:
+                name = _safe_name(member.name)
+            except BundleError as exc:
+                raise BundleError(
+                    f"unsafe candidate member {member.name!r}"
+                ) from exc
+            if not member.isfile():
+                raise BundleError(f"unsafe candidate member {member.name!r}")
+            if name in seen:
+                raise BundleError(f"duplicate candidate member {name!r}")
+            seen.add(name)
+            if len(seen) > max_files:
+                raise BundleError(
+                    f"candidate file limit exceeded: {len(seen)} > {max_files}"
+                )
+            total_bytes += member.size
+            if total_bytes > max_bytes:
+                raise BundleError(
+                    f"candidate byte limit exceeded: {total_bytes} > {max_bytes}"
+                )
+            target = (root / Path(*PurePosixPath(name).parts)).resolve()
+            try:
+                target.relative_to(root)
+            except ValueError as exc:
+                raise BundleError(
+                    f"unsafe candidate member {member.name!r}"
+                ) from exc
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = archive.extractfile(member)
+            if source is None:
+                raise BundleError(f"cannot read candidate member {name!r}")
+            with target.open("wb") as handle:
+                handle.write(source.read())
+            extracted.append(target)
+    return tuple(
+        sorted(extracted, key=lambda path: path.relative_to(root).as_posix())
+    )

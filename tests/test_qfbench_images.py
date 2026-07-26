@@ -445,6 +445,52 @@ def test_base_template_build_script_is_directly_invokable():
     assert "--publish" in proc.stdout
 
 
+def test_prepare_evolver_template_is_identity_pinned_and_reusable(tmp_path):
+    from qea.qfbench_images import (
+        NEXAU_WORKER_DEPENDENCY,
+        prepare_qfbench_evolver_template,
+        record_published_template,
+    )
+
+    kwargs = {
+        "output_dir": tmp_path,
+        "base_template_id": "base-template-id",
+        "base_build_id": "base-build-id",
+        "benchmark_commit": "0" * 40,
+        "cpu_count": 2,
+        "memory_mb": 4096,
+        "build_timeout_seconds": 1800,
+    }
+    spec = prepare_qfbench_evolver_template(**kwargs)
+    payload = json.loads(spec.manifest_path.read_text())
+
+    assert spec.dependencies == (NEXAU_WORKER_DEPENDENCY,)
+    assert spec.template_name.startswith("qea-qfbench-evolver-")
+    assert payload["base_template_id"] == "base-template-id"
+    assert payload["base_build_id"] == "base-build-id"
+    assert payload["published_template_id"] is None
+    assert any("nexau-requirements.lock" in command for command in spec.install_commands)
+
+    record_published_template(spec, template_id="evolver-template", build_id="build-1")
+    same = prepare_qfbench_evolver_template(**kwargs)
+    republished = json.loads(same.manifest_path.read_text())
+    assert republished["published_template_id"] == "evolver-template"
+    assert republished["published_build_id"] == "build-1"
+
+
+def test_evolver_template_build_script_is_directly_invokable():
+    proc = subprocess.run(
+        [sys.executable, "scripts/build_qfbench_e2b_evolver.py", "--help"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "--base-manifest" in proc.stdout
+    assert "--publish" in proc.stdout
+
+
 def test_base_build_context_contains_only_official_docker_inputs(tmp_path):
     from qea.qfbench_images import prepare_qfbench_base_build_context
 

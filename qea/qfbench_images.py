@@ -92,6 +92,20 @@ class QFBenchBaseTemplateOverlaySpec:
     build_timeout_seconds: int
 
 
+@dataclass(frozen=True)
+class QFBenchEvolverTemplateSpec:
+    benchmark_commit: str
+    base_template_id: str
+    base_build_id: str
+    dependencies: tuple[str, ...]
+    install_commands: tuple[str, ...]
+    manifest_path: Path
+    template_name: str
+    cpu_count: int
+    memory_mb: int
+    build_timeout_seconds: int
+
+
 def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
@@ -626,8 +640,90 @@ def apply_qfbench_e2b_task_overlay(builder, spec: QFBenchBaseTemplateOverlaySpec
     return builder
 
 
+def prepare_qfbench_evolver_template(
+    *,
+    output_dir: str | Path,
+    base_template_id: str,
+    base_build_id: str,
+    benchmark_commit: str,
+    cpu_count: int,
+    memory_mb: int,
+    build_timeout_seconds: int,
+) -> QFBenchEvolverTemplateSpec:
+    """Describe one immutable generic NexAU evolver rooted in the shared base."""
+
+    if not base_template_id.strip() or not base_build_id.strip():
+        raise ImageConfigError("base template ID and build ID must be non-empty")
+    commit = benchmark_commit.strip().lower()
+    if not _COMMIT_RE.fullmatch(commit):
+        raise ImageConfigError("benchmark_commit must be a full 40-character SHA")
+    dependencies = _validate_dependencies((NEXAU_WORKER_DEPENDENCY,))
+    install_commands = _dependency_install_commands(dependencies)
+    resources = _validate_resources(
+        cpu_count, memory_mb, build_timeout_seconds
+    )
+    identity_payload = {
+        "role": "evolver",
+        "benchmark_commit": commit,
+        "base_template_id": base_template_id.strip(),
+        "base_build_id": base_build_id.strip(),
+        "dependencies": dependencies,
+        "install_commands": install_commands,
+        "cpu_count": resources[0],
+        "memory_mb": resources[1],
+        "build_timeout_seconds": resources[2],
+    }
+    identity = _sha256(
+        json.dumps(
+            identity_payload, sort_keys=True, separators=(",", ":")
+        ).encode()
+    )
+    target = Path(output_dir).resolve()
+    target.mkdir(parents=True, exist_ok=True)
+    manifest_path = target / "evolver.image.json"
+    spec = QFBenchEvolverTemplateSpec(
+        benchmark_commit=commit,
+        base_template_id=base_template_id.strip(),
+        base_build_id=base_build_id.strip(),
+        dependencies=dependencies,
+        install_commands=install_commands,
+        manifest_path=manifest_path,
+        template_name=f"qea-qfbench-evolver-{commit[:8]}-{identity[:12]}",
+        cpu_count=resources[0],
+        memory_mb=resources[1],
+        build_timeout_seconds=resources[2],
+    )
+    payload = {
+        **identity_payload,
+        "dependencies": list(spec.dependencies),
+        "install_commands": list(spec.install_commands),
+        "manifest_path": str(spec.manifest_path),
+        "template_name": spec.template_name,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "identity_sha256": identity,
+        "published_template_id": None,
+        "published_build_id": None,
+    }
+    _write_publishable_manifest(manifest_path, payload)
+    return spec
+
+
+def apply_qfbench_evolver_template(builder, spec: QFBenchEvolverTemplateSpec):
+    """Install the pinned NexAU runtime in the generic shared-base template."""
+
+    builder.set_user("root")
+    for command in spec.install_commands:
+        builder.run_cmd(command, user="root")
+    builder.run_cmd("mkdir -p /qea", user="root")
+    return builder
+
+
 def record_published_template(
-    spec: QFBenchOverlaySpec | QFBenchBaseTemplateOverlaySpec,
+    spec: (
+        QFBenchOverlaySpec
+        | QFBenchBaseTemplateOverlaySpec
+        | QFBenchEvolverTemplateSpec
+    ),
     *,
     template_id: str,
     build_id: str,
