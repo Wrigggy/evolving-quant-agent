@@ -1,0 +1,28 @@
+{
+  "base_build_id": "b82873ce-db6e-4269-a689-ecb9354bf207",
+  "base_template_id": "h4d9iarzjjts2z472o8d",
+  "benchmark_commit": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+  "build_timeout_seconds": 1800,
+  "cpu_count": 2,
+  "dependencies": [
+    "git+https://github.com/nex-agi/NexAU.git@35ee1861546db3cb280a6e17e38a74060d7c96c3"
+  ],
+  "generated_at": "2026-07-26T18:32:26.013328+00:00",
+  "identity_sha256": "32498d90267ca6f87c53b0c8b158acc3b08520c344eff479c155b37d93db20f6",
+  "install_commands": [
+    "python -m pip install --no-cache-dir uv==0.9.5",
+    "mkdir -p /opt/qea/nexau-uv-cache /opt/qea/nexau-python /opt/qea/nexau-bin",
+    "UV_CACHE_DIR=/opt/qea/nexau-uv-cache UV_PYTHON_INSTALL_DIR=/opt/qea/nexau-python UV_PYTHON_BIN_DIR=/opt/qea/nexau-bin UV_NO_PROGRESS=1 uv python install 3.12",
+    "UV_CACHE_DIR=/opt/qea/nexau-uv-cache UV_PYTHON_INSTALL_DIR=/opt/qea/nexau-python UV_PYTHON_BIN_DIR=/opt/qea/nexau-bin UV_NO_PROGRESS=1 uv venv --python 3.12 /opt/qea/nexau-venv",
+    "UV_CACHE_DIR=/opt/qea/nexau-uv-cache UV_PYTHON_INSTALL_DIR=/opt/qea/nexau-python UV_PYTHON_BIN_DIR=/opt/qea/nexau-bin UV_NO_PROGRESS=1 uv pip install --python /opt/qea/nexau-venv/bin/python git+https://github.com/nex-agi/NexAU.git@35ee1861546db3cb280a6e17e38a74060d7c96c3",
+    "UV_CACHE_DIR=/opt/qea/nexau-uv-cache UV_PYTHON_INSTALL_DIR=/opt/qea/nexau-python UV_PYTHON_BIN_DIR=/opt/qea/nexau-bin UV_NO_PROGRESS=1 uv pip freeze --python /opt/qea/nexau-venv/bin/python | LC_ALL=C sort > /opt/qea/nexau-requirements.lock",
+    "/opt/qea/nexau-venv/bin/python -c \"import importlib.metadata as m, sys; import nexau; assert sys.version_info[:2] == (3, 12); assert m.version('nexau') == '0.3.9'\""
+  ],
+  "manifest_path": "/Users/kevinwu/Coding/evolving-quant-agent/.claude/worktrees/qfbench-full-harness-feedback/output/qfbench-e2b-images/20260727_full_harness_024921eb/evolver.image.json",
+  "memory_mb": 4096,
+  "published_at": "2026-07-26T18:33:08.830660+00:00",
+  "published_build_id": "b32b4943-a57d-4c9a-a3c5-5b1f458a0d63",
+  "published_template_id": "k4oeqxtuqv8jpmvy9rny",
+  "role": "evolver",
+  "template_name": "qea-qfbench-evolver-024921eb-32498d90267c"
+}
