@@ -126,9 +126,21 @@ def _copy_rich_attempt(
     rubric: PublicTaskRubric,
     verifier_rules: Iterable[VerifierCriterionRule],
 ) -> None:
-    execution = _read_json(
-        attempt_dir / "worker-execution.json", "worker execution manifest"
-    )
+    score = _read_json(attempt_dir / "completed-score.json", "completed score")
+    if score.get("task_id") != attempt.get("task_id"):
+        raise EvidenceContractError("completed score task identity mismatch")
+
+    execution_path = attempt_dir / "worker-execution.json"
+    if not execution_path.is_file():
+        diagnostic_tags = {str(tag) for tag in score.get("diagnostic_tags", ())}
+        if "timeout" not in diagnostic_tags or float(score["reward"]) != 0.0:
+            _read_json(execution_path, "worker execution manifest")
+        public_evaluation = _public_score(score)
+        public_evaluation["criterion_results"] = []
+        _write_json(destination / "public_evaluation.json", public_evaluation)
+        return
+
+    execution = _read_json(execution_path, "worker execution manifest")
     if execution.get("attempt_id") != attempt.get("attempt_id"):
         raise EvidenceContractError("worker execution attempt identity mismatch")
     trace_path = (attempt_dir / str(execution["trace_uri"])).resolve()
@@ -149,9 +161,6 @@ def _copy_rich_attempt(
     _write_json(destination / "process_summary.json", dict(execution.get("summary", {})))
     _copy_artifacts(artifact_root, destination / "artifacts")
 
-    score = _read_json(attempt_dir / "completed-score.json", "completed score")
-    if score.get("task_id") != attempt.get("task_id"):
-        raise EvidenceContractError("completed score task identity mismatch")
     criteria = {item.criterion_id: item for item in rubric.criteria}
     ctrf_path = attempt_dir / "verifier" / "ctrf.json"
     criterion_results = (

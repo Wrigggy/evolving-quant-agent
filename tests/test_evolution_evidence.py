@@ -158,6 +158,53 @@ def test_rich_corpus_contains_optimize_trace_artifacts_and_public_feedback(tmp_p
     assert record.members == tuple(sorted(record.members))
 
 
+def test_rich_corpus_records_completed_worker_timeout_without_execution_manifest(
+    tmp_path,
+):
+    from qea.evolution_evidence import build_evolution_evidence
+    from qea.evolution_feedback import FeedbackMode
+
+    run_dir = tmp_path / "run"
+    optimize = _task(tmp_path, "optimize-1")
+    attempt_dir = _attempt(
+        run_dir,
+        task_id="optimize-1",
+        split="optimize",
+        checkpoint="seed-optimize",
+    )
+    (attempt_dir / "worker-execution.json").unlink()
+    (attempt_dir / "completed-score.json").write_text(json.dumps({
+        "task_id": "optimize-1",
+        "domain": "risk",
+        "reward": 0.0,
+        "diagnostic_tags": ["timeout"],
+        "tests_passed": None,
+        "tests_failed": None,
+    }))
+    feedback, mapping = _contracts()
+
+    record = build_evolution_evidence(
+        mode=FeedbackMode.RICH,
+        optimize_tasks=(optimize,),
+        held_out_task_ids={"holdout-secret"},
+        run_dir=run_dir,
+        destination=tmp_path / "evidence",
+        feedback_manifest=feedback,
+        verifier_mapping=mapping,
+        history=(),
+    )
+
+    attempt_root = record.root / "tasks/optimize-1/attempts/seed-optimize"
+    public_eval = json.loads((attempt_root / "public_evaluation.json").read_text())
+    assert public_eval["official_reward"] == 0.0
+    assert public_eval["diagnostic_tags"] == ["timeout"]
+    assert public_eval["criterion_results"] == []
+    assert not (attempt_root / "worker_trace.jsonl").exists()
+    assert not (attempt_root / "worker_final.txt").exists()
+    assert not (attempt_root / "process_summary.json").exists()
+    assert not (attempt_root / "artifacts").exists()
+
+
 def test_evidence_corpus_never_contains_heldout_or_private_verifier_material(tmp_path):
     from qea.evolution_evidence import build_evolution_evidence
     from qea.evolution_feedback import FeedbackMode
