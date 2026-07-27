@@ -1,7 +1,7 @@
 # QEA Repository Memory
 
 > Canonical research and architecture memory for future contributors and agents.
-> Last updated: 2026-07-26. This file records current decisions, not merely historical discussion.
+> Last updated: 2026-07-27. This file records current decisions, not merely historical discussion.
 
 ## How to Use This Memory
 
@@ -94,6 +94,12 @@ The official QFBench task runtime remains Python 3.11. NexAU 0.3.9 runs in an is
 
 Moving the whole coordinator to E2B is feasible but not the first optimization. The coordinator would consume a concurrency slot and accrue compute cost while waiting. E2B pause/resume preserves memory and filesystem state, but active network streams disconnect; application checkpoints remain mandatory. Never expose `E2B_API_KEY` or unrestricted model credentials to worker/evolve shell tools.
 
+### Sandbox Provider Selection
+
+E2B remains the only **measured** QFBench backend and the immutable runtime for the active Control/Rich A/B; never change providers within an experiment arm. For post-A/B work, implement a provider-neutral backend while preserving provider-native image and lifecycle identities. Evaluate **Daytona Linux VM first** as the lowest-migration-cost alternative, then run a matched **Vercel Sandbox** cost pilot because its Active CPU billing may benefit model-wait-heavy workers. Keep E2B as the parity reference until a replacement passes exact resources, secret non-exposure, hard offline-verifier, official-test parity, force-kill/reaper/resume, and billing-telemetry gates.
+
+Do not use Daytona's default container runtime for official scoring, and do not assume its Tier 1/2 `networkBlockAll` behavior is air-gapped until a raw DNS/TCP/HTTPS canary proves it. Do not use Blaxel for official verification while its public-preview filtering depends on `HTTP_PROXY`/`HTTPS_PROXY`; tools that ignore the proxy can bypass the filter. Modal is a secure but higher-cost fallback. Sprites is suitable for persistent development agents but its fixed 8-vCPU/100-GB shape cannot preserve QFBench resource identity. Full rationale, source audit, cost break-even, and canary order: [2026-07-27 sandbox provider decision](decisions/2026-07-27-sandbox-provider-selection-and-parity-plan.md).
+
 ## AutoDL Decision
 
 Public AutoDL “no-GPU mode” is **not** an E2B replacement for this project. Its documented allocation is 0.5 CPU core and 2 GB RAM at RMB 0.1/hour, with only one no-GPU instance per main account. AutoDL container instances do not support nested Docker, and the API currently cannot boot an instance in no-GPU mode.
@@ -127,6 +133,7 @@ Still required before a formal QFBench evolution-gain claim:
 2. Repeat a fixed task subset across model seeds to estimate agent stochasticity. More tasks reduce cross-task sampling error but do not by themselves estimate model-run variance.
 3. Instrument model token/cost, E2B lifecycle duration, and billing totals in durable run artifacts; neither measured run exposes authoritative cost totals.
 4. Independently rebuild or continue excluding the eight copy-oracle tasks and the pinned inoperable `sec-8k-event-alpha` verifier.
+5. Before migrating from E2B, run the preregistered sandbox-backend parity gates in the 2026-07-27 provider decision; documentation review alone is not compatibility evidence.
 
 No report may describe adapter compatibility, E2B parity, AutoDL performance, or seed-worker QFBench score as measured until the corresponding run artifact exists.
 
