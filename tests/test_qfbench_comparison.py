@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from pathlib import Path
 import subprocess
 import sys
@@ -18,6 +19,8 @@ def _make_completed_run(
     optimize_final: float,
     attempt_limit: int = 140,
     admission_digest: str = "admission-same",
+    held_out_seed: float = 0.5,
+    held_out_final: float = 0.51,
 ) -> Path:
     run = root / f"run-{arm}"
     final_worker = run / "workers" / "iteration-05-candidate"
@@ -53,13 +56,24 @@ def _make_completed_run(
         for index in range(1, 6)
     ]
     task_rewards = {f"opt-{index:02d}": optimize_final for index in range(20)}
-    summary = {
+    optimize_summary = {
         "scores": [],
         "task_rewards": task_rewards,
         "domain_scores": {"risk": optimize_final},
         "task_mean": optimize_final,
         "overall": optimize_final,
     }
+    held_out_task_ids = [f"hold-{index:02d}" for index in range(10)]
+
+    def held_out_summary(reward: float) -> dict:
+        return {
+            "scores": [],
+            "task_rewards": {task_id: reward for task_id in held_out_task_ids},
+            "domain_scores": {"fx": reward},
+            "task_mean": reward,
+            "overall": reward,
+        }
+
     _write(run / "resume.json", {
         "schema_version": 2,
         "run_id": run.name,
@@ -82,9 +96,9 @@ def _make_completed_run(
         "identity": identity,
         "records": records,
         "optimize_trajectory": [0.2, 0.22, 0.24, 0.26, 0.28, optimize_final],
-        "optimize_final": summary,
-        "held_out_seed": {**summary, "overall": 0.5},
-        "held_out_final": {**summary, "overall": 0.51},
+        "optimize_final": optimize_summary,
+        "held_out_seed": held_out_summary(held_out_seed),
+        "held_out_final": held_out_summary(held_out_final),
         "final_worker_dir": str(final_worker.resolve()),
     })
 
@@ -112,10 +126,15 @@ def _make_completed_run(
             "split": split,
             "checkpoint": checkpoint,
         })
+        reward = optimize_final
+        if checkpoint == "seed-held-out":
+            reward = held_out_seed
+        elif checkpoint == "final-held-out":
+            reward = held_out_final
         _write(attempt / "completed-score.json", {
             "task_id": task_id,
             "domain": "risk" if split == "optimize" else "fx",
-            "reward": optimize_final if split == "optimize" else 0.5,
+            "reward": reward,
             "diagnostic_tags": [],
         })
         for role, path in (
@@ -151,8 +170,70 @@ def _make_completed_run(
     return run
 
 
+def _make_historical_run(root: Path) -> Path:
+    run = root / "qfbench-30x5-20260725"
+    _write(run / "result.json", {
+        "run_id": run.name,
+        "optimize_trajectory": [0.5],
+        "optimize_final": {"overall": 0.5},
+    })
+    _write(run / "validity-audit.json", {
+        "schema_version": 1,
+        "run_id": run.name,
+        "score_validity": {
+            "status": "provisional",
+            "affected_attempts": 14,
+            "affected_tasks": {
+                "delta-hedging-pnl-simulation": 6,
+                "form4-cross-sectional-sale-pressure": 2,
+                "swap-curve-bootstrap-ois": 6,
+            },
+        },
+    })
+    checkpoints = [
+        "seed-optimize",
+        *[f"iteration-{index}-candidate" for index in range(1, 6)],
+        "seed-held-out",
+        "final-held-out",
+    ]
+    counter = 0
+    for checkpoint in checkpoints:
+        split = "held_out" if "held-out" in checkpoint else "optimize"
+        task_ids = (
+            ["form4-cross-sectional-sale-pressure"]
+            if split == "held_out"
+            else [
+                "delta-hedging-pnl-simulation",
+                "swap-curve-bootstrap-ois",
+            ]
+        )
+        scores = []
+        for task_id in task_ids:
+            attempt_id = f"historical-{counter:02d}"
+            counter += 1
+            (run / "attempts" / attempt_id).mkdir(parents=True)
+            scores.append({
+                "task_id": task_id,
+                "domain": "data_engineering" if split == "held_out" else "derivatives",
+                "reward": 0.0,
+                "tests_passed": 0,
+                "tests_failed": 0,
+                "diagnostic_tags": [],
+                "log_uri": str(
+                    run / "attempts" / attempt_id / "verifier" / "verifier-command.trusted.json"
+                ),
+            })
+        _write(run / "evaluations" / f"{checkpoint}.json", {
+            "run_id": run.name,
+            "checkpoint": checkpoint,
+            "split": split,
+            "summary": {"scores": scores},
+        })
+    return run
+
+
 def test_comparison_audits_30x5_and_computes_rich_feedback_gain(tmp_path):
-    from scripts.compare_qfbench_feedback_ab import compare_runs
+    from scripts.compare_qfbench_feedback_ab import _markdown, compare_runs
 
     control = _make_completed_run(
         tmp_path, arm="control", optimize_final=0.30
@@ -166,7 +247,66 @@ def test_comparison_audits_30x5_and_computes_rich_feedback_gain(tmp_path):
     assert comparison["primary"]["RichFeedbackGain"] == pytest.approx(0.08)
     assert comparison["arms"]["rich"]["evidence_read_records"] == 15
     assert comparison["arms"]["control"]["edit_categories"]["prompt"] == 5
+    assert comparison["arms"]["control"]["held_out_seed"] == pytest.approx(0.5)
+    assert comparison["arms"]["control"]["held_out_final"] == pytest.approx(0.51)
+    assert comparison["arms"]["control"]["held_out_delta"] == pytest.approx(0.01)
+    markdown = _markdown(comparison)
+    assert "| Held-out seed | 0.500000 | 0.500000 |" in markdown
+    assert "| Held-out delta | 0.010000 | 0.010000 |" in markdown
     assert comparison["causal_comparison"] is True
+
+
+@pytest.mark.parametrize(
+    ("replacement", "message"),
+    [
+        (0.52, "held-out final summary overall mismatch"),
+        (float("nan"), "held-out final summary overall"),
+        (1.2, "held-out final summary overall"),
+    ],
+)
+def test_comparison_refuses_invalid_or_unreconciled_held_out_summary(
+    tmp_path, replacement, message
+):
+    from scripts.compare_qfbench_feedback_ab import ComparisonError, compare_runs
+
+    control = _make_completed_run(tmp_path, arm="control", optimize_final=0.30)
+    rich = _make_completed_run(tmp_path, arm="rich", optimize_final=0.38)
+    result_path = control / "result.json"
+    result = json.loads(result_path.read_text())
+    result["held_out_final"]["overall"] = replacement
+    _write(result_path, result)
+
+    with pytest.raises(ComparisonError, match=message):
+        compare_runs(control, rich)
+
+
+def test_comparison_enumerates_historical_contamination_from_validity_audit(
+    tmp_path,
+):
+    from scripts.compare_qfbench_feedback_ab import ComparisonError, compare_runs
+
+    control = _make_completed_run(tmp_path, arm="control", optimize_final=0.30)
+    rich = _make_completed_run(tmp_path, arm="rich", optimize_final=0.38)
+    historical = _make_historical_run(tmp_path)
+
+    comparison = compare_runs(control, rich, historical)
+    contamination = comparison["historical"]
+    assert contamination["contaminated_record_count"] == 14
+    assert len(contamination["contaminated_records"]) == 14
+    assert Counter(
+        record["task_id"] for record in contamination["contaminated_records"]
+    ) == {
+        "delta-hedging-pnl-simulation": 6,
+        "form4-cross-sectional-sale-pressure": 2,
+        "swap-curve-bootstrap-ois": 6,
+    }
+
+    validity_path = historical / "validity-audit.json"
+    validity = json.loads(validity_path.read_text())
+    validity["score_validity"]["affected_attempts"] = 13
+    _write(validity_path, validity)
+    with pytest.raises(ComparisonError, match="affected attempt count"):
+        compare_runs(control, rich, historical)
 
 
 def test_comparison_refuses_incomplete_or_identity_mismatched_runs(tmp_path):
