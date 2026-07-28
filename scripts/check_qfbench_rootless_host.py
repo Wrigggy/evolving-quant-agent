@@ -346,7 +346,7 @@ def evaluate_fixture(payload: object) -> dict[str, object]:
     )
     add(
         "cgroup_v2",
-        _text(observations, "cgroup_filesystem") == "cgroup2",
+        _text(observations, "cgroup_filesystem") in {"cgroup2", "cgroup2fs"},
         "unified cgroup2 required",
     )
     controllers = set(_text(observations, "cgroup_controllers").split())

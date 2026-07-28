@@ -22,7 +22,7 @@
     "cgroup_filesystem": {
       "exit_code": 0,
       "stderr": "",
-      "stdout": "cgroup2\n"
+      "stdout": "cgroup2fs\n"
     },
     "cpu_online": {
       "exit_code": 0,
