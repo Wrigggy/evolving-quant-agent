@@ -533,7 +533,7 @@
 
 - [ ] **Step 3: Implement deterministic build-plan objects**
 
-  Add `RootlessImageBuildPlan` and `RootlessImageManifest`. The plan contains role, task ID, QFBench commit, base image digest, sorted context members with SHA-256, generated Dockerfile bytes, dependency-lock hashes, CPU/memory/timeouts, and an identity digest. The manifest adds Docker Engine/rootless versions, image ID, repository digest when available, and build timestamp.
+  Add `RootlessImageBuildPlan` and `RootlessImageManifest`. Support a `base` role before task-specific `worker` and `verifier` roles. The base plan rewrites the QFBench base Dockerfile `FROM` to an immutable upstream digest and contains only the official `docker/` inputs plus the inert supervisor; task plans rewrite either official QFBench base family to the measured immutable local base image ID. Every plan contains role, task ID where applicable, QFBench commit, base image digest, sorted context members with SHA-256, generated Dockerfile bytes, dependency-lock hashes, CPU/memory/timeouts, and an identity digest. The manifest adds Docker Engine/rootless versions, final image ID, repository digest when available, and build timestamp.
 
 - [ ] **Step 4: Implement dry-run-first build execution**
 
@@ -542,10 +542,12 @@
 - [ ] **Step 5: Add CLI modes and test them with a fake runner**
 
   ```text
-  --role worker|verifier
-  --task-id <task-id>
+  --role base|worker|verifier
+  --task-id <task-id> (required for worker and verifier)
   --public-root <versioned path>
+  --trusted-root <versioned path> (required for verifier dependency warming only; never copied into context)
   --manifest-root <versioned path>
+  --base-image-ref <immutable upstream digest for base, or measured QFBench base image ID for task roles>
   --docker-host unix:///run/user/<uid>/docker.sock
   --plan-only (default)
   --build

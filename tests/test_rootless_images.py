@@ -1,0 +1,396 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
+
+from qea.backends.rootless_docker import CompletedCommand
+from qea.benchmarks.qfbench import git_blob_oid
+
+
+COMMIT = "024921eb507fcc0c4ffe3e0a96802724be1ae84a"
+UPSTREAM_BASE = "docker.io/library/python@sha256:" + "a" * 64
+QFBENCH_BASE = "sha256:" + "b" * 64
+NEXAU_COMMIT = "35ee1861546db3cb280a6e17e38a74060d7c96c3"
+DOCKER_HOST = "unix:///run/user/1013/docker.sock"
+
+
+@dataclass(frozen=True)
+class Call:
+    argv: tuple[str, ...]
+    input_bytes: bytes | None
+    timeout_seconds: int | float | None
+
+
+class RecordingRunner:
+    def __init__(self, *replies: CompletedCommand) -> None:
+        self.replies = list(replies)
+        self.calls: list[Call] = []
+
+    def run(self, argv, *, input_bytes=None, timeout_seconds=None):
+        self.calls.append(Call(tuple(argv), input_bytes, timeout_seconds))
+        if not self.replies:
+            raise AssertionError(f"unexpected command: {tuple(argv)!r}")
+        return self.replies.pop(0)
+
+
+def _write_manifest(root: Path, role: str, paths: list[Path]) -> None:
+    records = []
+    for path in sorted(paths):
+        payload = path.read_bytes()
+        records.append(
+            {
+                "path": path.relative_to(root).as_posix(),
+                "mode": "100755" if path.stat().st_mode & 0o111 else "100644",
+                "git_blob_oid": git_blob_oid(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "size_bytes": len(payload),
+            }
+        )
+    (root / "MANIFEST.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "role": role,
+                "repository_url": "https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+                "commit": COMMIT,
+                "task_ids": ["task-a"],
+                "files": records,
+            },
+            sort_keys=True,
+            indent=2,
+        )
+        + "\n"
+    )
+    (root / ".qfbench-revision").write_text(COMMIT + "\n")
+
+
+def _role_roots(tmp_path: Path) -> tuple[Path, Path]:
+    public = tmp_path / "public"
+    trusted = tmp_path / "trusted"
+    (public / "docker").mkdir(parents=True)
+    task = public / "tasks" / "task-a"
+    (task / "environment" / "data").mkdir(parents=True)
+    (public / "docker" / "sandbox.Dockerfile").write_text(
+        "FROM python:3.11-slim\n"
+        "COPY docker/requirements-sandbox.txt /tmp/requirements.txt\n"
+        "RUN pip install -r /tmp/requirements.txt\n"
+    )
+    (public / "docker" / "requirements-sandbox.txt").write_text(
+        "numpy>=1.26\npandas>=2.1\n"
+    )
+    (task / "instruction.md").write_text("Create /root/output/result.json\n")
+    (task / "task.toml").write_text(
+        "[agent]\ntimeout_sec = 900\n"
+        "[verifier]\ntimeout_sec = 300\n"
+        "[environment]\ncpus = 2\nmemory = '4G'\nbuild_timeout_sec = 600\n"
+    )
+    (task / "environment" / "Dockerfile").write_text(
+        "FROM finance-bench-sandbox:latest\n"
+        "COPY data /app/data/\n"
+        "RUN mkdir -p /app/output\n"
+    )
+    (task / "environment" / "data" / "input.csv").write_text("x\n1\n")
+    public_files = [
+        path
+        for path in public.rglob("*")
+        if path.is_file() and path.name != "MANIFEST.json"
+    ]
+    _write_manifest(public, "public", public_files)
+
+    tests = trusted / "tasks" / "task-a" / "tests"
+    (tests / "reference_data").mkdir(parents=True)
+    test_sh = tests / "test.sh"
+    test_sh.write_text(
+        "uvx -p 3.11 -w pytest==8.4.1 -w numpy==2.2.3 "
+        "pytest /tests/test_outputs.py\n"
+    )
+    test_sh.chmod(0o700)
+    (tests / "test_outputs.py").write_text("def test_output(): pass\n")
+    (tests / "reference_data" / "expected.json").write_text('{"expected": 17}\n')
+    trusted_files = [
+        path
+        for path in trusted.rglob("*")
+        if path.is_file() and path.name != "MANIFEST.json"
+    ]
+    _write_manifest(trusted, "trusted-verifier", trusted_files)
+    return public, trusted
+
+
+def test_base_plan_pins_from_and_contains_only_public_base_inputs(tmp_path) -> None:
+    from qea.rootless_images import prepare_rootless_image_plan
+
+    public, _ = _role_roots(tmp_path)
+
+    plan = prepare_rootless_image_plan(
+        role="base",
+        public_root=public,
+        base_image_ref=UPSTREAM_BASE,
+        cpu_count=2,
+        memory_mb=4096,
+        build_timeout_seconds=1800,
+    )
+
+    assert plan.task_id is None
+    assert plan.base_image_ref == UPSTREAM_BASE
+    assert plan.dockerfile_bytes.decode().splitlines()[0] == f"FROM {UPSTREAM_BASE}"
+    assert {member.path for member in plan.context_files} == {
+        "Dockerfile",
+        "docker/requirements-sandbox.txt",
+        "qea/sandbox-supervisor.py",
+    }
+    assert b"/usr/local/bin/qea-sandbox-supervisor" in plan.dockerfile_bytes
+    assert all("tests" not in member.path for member in plan.context_files)
+
+
+def test_worker_plan_contains_public_environment_and_pinned_nexau_only(tmp_path) -> None:
+    from qea.rootless_images import prepare_rootless_image_plan
+
+    public, _ = _role_roots(tmp_path)
+
+    plan = prepare_rootless_image_plan(
+        role="worker",
+        task_id="task-a",
+        public_root=public,
+        base_image_ref=QFBENCH_BASE,
+        cpu_count=2,
+        memory_mb=4096,
+        build_timeout_seconds=600,
+    )
+
+    dockerfile = plan.dockerfile_bytes.decode()
+    assert f"FROM {QFBENCH_BASE}" in dockerfile
+    assert NEXAU_COMMIT in dockerfile
+    assert "/opt/qea/nexau-requirements.lock" in dockerfile
+    assert {member.path for member in plan.context_files} == {
+        "Dockerfile",
+        "data/input.csv",
+    }
+    assert "tests" not in json.dumps(plan.manifest_payload())
+    assert "solution" not in json.dumps(plan.manifest_payload())
+
+
+def test_verifier_plan_reads_test_lock_declaration_but_never_copies_tests(tmp_path) -> None:
+    from qea.rootless_images import prepare_rootless_image_plan
+
+    public, trusted = _role_roots(tmp_path)
+
+    plan = prepare_rootless_image_plan(
+        role="verifier",
+        task_id="task-a",
+        public_root=public,
+        trusted_root=trusted,
+        base_image_ref=QFBENCH_BASE,
+        cpu_count=2,
+        memory_mb=4096,
+        build_timeout_seconds=600,
+    )
+
+    dockerfile = plan.dockerfile_bytes.decode()
+    assert "pytest==8.4.1" in dockerfile
+    assert "numpy==2.2.3" in dockerfile
+    assert "pytest --version" in dockerfile
+    assert "/opt/qea/verifier-requirements.lock" in dockerfile
+    assert "/tests/test_outputs.py" not in dockerfile
+    assert all("tests" not in member.path for member in plan.context_files)
+    assert plan.verifier_test_script_sha256 == hashlib.sha256(
+        (trusted / "tasks/task-a/tests/test.sh").read_bytes()
+    ).hexdigest()
+    assert "expected" not in json.dumps(plan.manifest_payload())
+
+
+def test_plan_rejects_mutable_base_tampered_manifest_and_secret_extra(tmp_path) -> None:
+    from qea.rootless_images import RootlessImageError, prepare_rootless_image_plan
+
+    public, _ = _role_roots(tmp_path)
+    with pytest.raises(RootlessImageError, match="immutable base image"):
+        prepare_rootless_image_plan(
+            role="base",
+            public_root=public,
+            base_image_ref="python:3.11-slim",
+            cpu_count=2,
+            memory_mb=4096,
+            build_timeout_seconds=1800,
+        )
+
+    data = public / "tasks/task-a/environment/data/input.csv"
+    data.write_text("x\n2\n")
+    with pytest.raises(RootlessImageError, match="manifest hash mismatch"):
+        prepare_rootless_image_plan(
+            role="worker",
+            task_id="task-a",
+            public_root=public,
+            base_image_ref=QFBENCH_BASE,
+            cpu_count=2,
+            memory_mb=4096,
+            build_timeout_seconds=600,
+        )
+
+    data.write_text("x\n1\n")
+    (public / ".env").write_text("API_KEY=secret\n")
+    with pytest.raises(RootlessImageError, match="unmanifested source file"):
+        prepare_rootless_image_plan(
+            role="worker",
+            task_id="task-a",
+            public_root=public,
+            base_image_ref=QFBENCH_BASE,
+            cpu_count=2,
+            memory_mb=4096,
+            build_timeout_seconds=600,
+        )
+
+
+def test_plan_rejects_non_regular_unmanifested_source_entry(tmp_path) -> None:
+    from qea.rootless_images import RootlessImageError, prepare_rootless_image_plan
+
+    public, _ = _role_roots(tmp_path)
+    os.mkfifo(public / "unexpected.pipe")
+
+    with pytest.raises(RootlessImageError, match="non-regular source entry"):
+        prepare_rootless_image_plan(
+            role="base",
+            public_root=public,
+            base_image_ref=UPSTREAM_BASE,
+            cpu_count=2,
+            memory_mb=4096,
+            build_timeout_seconds=1800,
+        )
+
+def test_execute_build_records_final_image_and_dependency_lock(tmp_path) -> None:
+    from qea.rootless_images import (
+        execute_rootless_image_build,
+        prepare_rootless_image_plan,
+    )
+
+    public, _ = _role_roots(tmp_path)
+    plan = prepare_rootless_image_plan(
+        role="worker",
+        task_id="task-a",
+        public_root=public,
+        base_image_ref=QFBENCH_BASE,
+        cpu_count=2,
+        memory_mb=4096,
+        build_timeout_seconds=600,
+    )
+    image_id = "sha256:" + "c" * 64
+    runner = RecordingRunner(
+        CompletedCommand(0, (image_id + "\n").encode(), b""),
+        CompletedCommand(
+            0,
+            json.dumps({"Id": image_id, "RepoDigests": []}).encode(),
+            b"",
+        ),
+        CompletedCommand(0, b"29.4.1\n", b""),
+        CompletedCommand(0, b'["name=rootless"]\n', b""),
+        CompletedCommand(0, b"nexau==0.3.9\nnumpy==2.2.3\n", b""),
+    )
+
+    result = execute_rootless_image_build(
+        plan,
+        output_root=tmp_path / "images",
+        docker_host=DOCKER_HOST,
+        expected_uid=1013,
+        runner=runner,
+        at=datetime(2026, 7, 28, 14, 0, tzinfo=timezone.utc),
+    )
+
+    build_argv = runner.calls[0].argv
+    assert build_argv[:4] == ("docker", "--host", DOCKER_HOST, "build")
+    assert "--pull=false" in build_argv
+    assert ("--network", "bridge") == _pair(build_argv, "--network")
+    assert result.image_id == image_id
+    assert result.output_dir.name == plan.identity_sha256
+    manifest = json.loads(result.manifest_path.read_text())
+    assert manifest["image_id"] == image_id
+    assert manifest["docker_version"] == "29.4.1"
+    assert manifest["docker_security_options"] == ["name=rootless"]
+    lock = result.output_dir / "dependency-lock.txt"
+    assert manifest["dependency_lock_sha256"] == hashlib.sha256(
+        lock.read_bytes()
+    ).hexdigest()
+    assert (result.output_dir / "context/Dockerfile").is_file()
+    assert not result.output_dir.with_name(plan.identity_sha256 + ".partial").exists()
+
+
+def test_execute_build_refuses_system_socket_and_existing_identity(tmp_path) -> None:
+    from qea.rootless_images import (
+        RootlessImageError,
+        execute_rootless_image_build,
+        prepare_rootless_image_plan,
+    )
+
+    public, _ = _role_roots(tmp_path)
+    plan = prepare_rootless_image_plan(
+        role="base",
+        public_root=public,
+        base_image_ref=UPSTREAM_BASE,
+        cpu_count=2,
+        memory_mb=4096,
+        build_timeout_seconds=1800,
+    )
+    with pytest.raises(RootlessImageError, match="rootless Docker socket"):
+        execute_rootless_image_build(
+            plan,
+            output_root=tmp_path / "images",
+            docker_host="unix:///var/run/docker.sock",
+            expected_uid=1013,
+            runner=RecordingRunner(),
+        )
+
+    existing = tmp_path / "images" / plan.identity_sha256
+    existing.mkdir(parents=True)
+    with pytest.raises(RootlessImageError, match="existing image identity"):
+        execute_rootless_image_build(
+            plan,
+            output_root=tmp_path / "images",
+            docker_host=DOCKER_HOST,
+            expected_uid=1013,
+            runner=RecordingRunner(),
+        )
+
+
+def test_rootless_image_cli_plan_only_writes_nothing(tmp_path) -> None:
+    public, _ = _role_roots(tmp_path)
+    output = tmp_path / "images"
+    repository = Path(__file__).resolve().parents[1]
+
+    result = subprocess.run(
+        (
+            sys.executable,
+            "scripts/build_qfbench_rootless_images.py",
+            "--role",
+            "base",
+            "--public-root",
+            str(public),
+            "--manifest-root",
+            str(output),
+            "--base-image-ref",
+            UPSTREAM_BASE,
+            "--docker-host",
+            DOCKER_HOST,
+            "--expected-uid",
+            "1013",
+            "--plan-only",
+        ),
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "identity sha256:" in result.stdout
+    assert "context files: 3" in result.stdout
+    assert not output.exists()
+
+
+def _pair(argv: tuple[str, ...], option: str) -> tuple[str, str]:
+    index = argv.index(option)
+    return argv[index], argv[index + 1]
