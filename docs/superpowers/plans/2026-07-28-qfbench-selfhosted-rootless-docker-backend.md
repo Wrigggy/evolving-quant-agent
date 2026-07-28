@@ -292,6 +292,7 @@
 
 - Create: `qea/backends/__init__.py`
 - Create: `qea/backends/rootless_docker.py`
+- Modify: `pyproject.toml`
 - Create: `tests/test_rootless_docker_backend.py`
 
 - [ ] **Step 1: Add failing command-construction and safety tests**
@@ -384,10 +385,14 @@
   /Users/kevinwu/Coding/evolving-quant-agent/.venv-nexau/bin/python -m pytest -q -p no:cacheprovider tests/test_sandbox_backend.py tests/test_sandbox_lifecycle.py tests/test_sandbox_reaper.py
   ```
 
-- [ ] **Step 7: Commit the backend**
+- [ ] **Step 7: Register the backend package and verify the built wheel**
+
+  Add `qea.backends` to `[tool.setuptools].packages` in `pyproject.toml`. Build a wheel in a temporary directory, list its members, and require both `qea/backends/__init__.py` and `qea/backends/rootless_docker.py` to be present.
+
+- [ ] **Step 8: Commit the backend**
 
   ```bash
-  git add qea/backends tests/test_rootless_docker_backend.py
+  git add qea/backends pyproject.toml tests/test_rootless_docker_backend.py
   git commit -m "feat(sandbox): add rootless Docker adapter"
   ```
 
