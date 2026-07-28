@@ -461,6 +461,8 @@
   Add `classify_qfbench_path(path, *, task_ids) -> Literal["public", "trusted-verifier", "deny"]`. Use component-aware `PurePosixPath` checks, not substring checks. Allow only the pinned repository Docker/base paths already required by `materialize_qfbench_raw_snapshot`, plus these task subtrees:
 
   ```text
+  tasks/<task_id>/instruction.md
+  tasks/<task_id>/task.toml
   tasks/<task_id>/instruction/
   tasks/<task_id>/environment/
   tasks/<task_id>/tests/
@@ -477,6 +479,7 @@
   `scripts/materialize_qfbench_rootless_snapshot.py` arguments:
 
   ```text
+  --source-tree <local Git tree containing the pinned commit>
   --commit 024921eb507fcc0c4ffe3e0a96802724be1ae84a
   --task-id <repeatable>
   --task-panel-manifest <path>
@@ -495,6 +498,7 @@
   ```bash
   /Users/kevinwu/Coding/evolving-quant-agent/.venv-nexau/bin/python -m pytest -q -p no:cacheprovider tests/test_qfbench_rootless_materializer.py tests/test_qfbench_adapter.py
   /Users/kevinwu/Coding/evolving-quant-agent/.venv-nexau/bin/python scripts/materialize_qfbench_rootless_snapshot.py \
+    --source-tree /private/tmp/qea-qfbench-024921eb \
     --commit 024921eb507fcc0c4ffe3e0a96802724be1ae84a \
     --task-panel-manifest data/qfbench/MANIFEST.json \
     --public-root /tmp/qea-qfbench-public \

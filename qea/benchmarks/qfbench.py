@@ -11,8 +11,8 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Callable, Iterable
+from pathlib import Path, PurePosixPath
+from typing import Callable, Iterable, Literal
 
 
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -38,6 +38,27 @@ class PinnedBlob:
     mode: str
     oid: str
     path: str
+
+
+QFBenchMaterializationRole = Literal["public", "trusted-verifier", "deny"]
+
+
+@dataclass(frozen=True)
+class QFBenchRoleSnapshotPlan:
+    repository_url: str
+    commit: str
+    task_ids: tuple[str, ...]
+    public_blobs: tuple[PinnedBlob, ...]
+    trusted_verifier_blobs: tuple[PinnedBlob, ...]
+    denied_solution_blobs: tuple[PinnedBlob, ...]
+
+
+@dataclass(frozen=True)
+class QFBenchRoleSnapshotResult:
+    public_root: Path
+    trusted_root: Path
+    public_manifest: Path
+    trusted_manifest: Path
 
 
 @dataclass(frozen=True)
@@ -359,6 +380,348 @@ def materialize_qfbench_raw_snapshot(
     target.parent.mkdir(parents=True, exist_ok=True)
     os.replace(staging, target)
     return target
+
+
+def _secret_like_qfbench_path(path: PurePosixPath) -> bool:
+    name = path.name.lower()
+    return (
+        name == ".env"
+        or name.startswith(".env.")
+        or name.startswith("credentials")
+        or name.startswith("secrets")
+        or name in {"id_rsa", "id_ed25519"}
+        or name.endswith((".pem", ".key"))
+    )
+
+
+def classify_qfbench_path(
+    path: str,
+    *,
+    task_ids: Iterable[str],
+) -> QFBenchMaterializationRole:
+    """Classify one pinned path without exposing tests or solutions to workers."""
+
+    if not isinstance(path, str):
+        return "deny"
+    pure = PurePosixPath(path)
+    selected = frozenset(str(task_id) for task_id in task_ids)
+    if (
+        pure.is_absolute()
+        or not pure.parts
+        or pure.as_posix() != path
+        or any(part in {"", ".", ".."} for part in pure.parts)
+        or "solution" in pure.parts
+        or _secret_like_qfbench_path(pure)
+    ):
+        return "deny"
+    if pure.parts[0] == "docker":
+        return "public" if len(pure.parts) >= 2 else "deny"
+    if len(pure.parts) < 3 or pure.parts[0] != "tasks":
+        return "deny"
+    if pure.parts[1] not in selected:
+        return "deny"
+    task_path = pure.parts[2:]
+    if task_path in {("instruction.md",), ("task.toml",)}:
+        return "public"
+    if task_path[0] == "environment" and len(task_path) >= 2:
+        return "public"
+    if task_path[0] == "tests" and len(task_path) >= 2:
+        return "trusted-verifier"
+    return "deny"
+
+
+def _is_selected_solution(path: str, task_ids: frozenset[str]) -> bool:
+    pure = PurePosixPath(path)
+    return (
+        not pure.is_absolute()
+        and len(pure.parts) >= 4
+        and pure.parts[0] == "tasks"
+        and pure.parts[1] in task_ids
+        and pure.parts[2] == "solution"
+    )
+
+
+def plan_qfbench_role_snapshot(
+    source_repo: str | Path,
+    *,
+    repository_url: str,
+    commit: str,
+    task_ids: Iterable[str],
+) -> QFBenchRoleSnapshotPlan:
+    """Plan a two-root snapshot and fail closed on unknown selected paths."""
+
+    revision = commit.strip().lower()
+    selected = tuple(sorted(set(str(task_id) for task_id in task_ids)))
+    selected_set = frozenset(selected)
+    if _GITHUB_REPOSITORY_RE.fullmatch(repository_url.strip()) is None:
+        raise QFBenchConfigError(
+            "role-separated materialization requires an official GitHub repository URL"
+        )
+    blobs = list_qfbench_tree_blobs(source_repo, revision, selected)
+    public: list[PinnedBlob] = []
+    trusted: list[PinnedBlob] = []
+    denied_solutions: list[PinnedBlob] = []
+    for blob in blobs:
+        role = classify_qfbench_path(blob.path, task_ids=selected)
+        if role == "deny":
+            if _is_selected_solution(blob.path, selected_set):
+                denied_solutions.append(blob)
+                continue
+            raise QFBenchConfigError(
+                f"unexpected task path is denied by role materializer: {blob.path!r}"
+            )
+        if blob.mode not in {"100644", "100755"}:
+            raise QFBenchConfigError(
+                f"role materializer accepts regular files only: "
+                f"mode {blob.mode} at {blob.path}"
+            )
+        (public if role == "public" else trusted).append(blob)
+
+    public_paths = {blob.path for blob in public}
+    trusted_paths = {blob.path for blob in trusted}
+    for task_id in selected:
+        required_public = {
+            f"tasks/{task_id}/instruction.md",
+            f"tasks/{task_id}/task.toml",
+            f"tasks/{task_id}/environment/Dockerfile",
+        }
+        missing_public = sorted(required_public - public_paths)
+        if missing_public:
+            raise QFBenchConfigError(
+                f"QFBench task {task_id!r} is missing public files: {missing_public}"
+            )
+        required_test = f"tasks/{task_id}/tests/test.sh"
+        if required_test not in trusted_paths:
+            raise QFBenchConfigError(
+                f"QFBench task {task_id!r} is missing trusted verifier script"
+            )
+    return QFBenchRoleSnapshotPlan(
+        repository_url=repository_url,
+        commit=revision,
+        task_ids=selected,
+        public_blobs=tuple(public),
+        trusted_verifier_blobs=tuple(trusted),
+        denied_solution_blobs=tuple(denied_solutions),
+    )
+
+
+def _write_verified_role_blobs(
+    staging: Path,
+    blobs: tuple[PinnedBlob, ...],
+    *,
+    fetch_blob: Callable[[str], bytes],
+    trusted: bool,
+) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for blob in blobs:
+        path = staging / blob.path
+        payload: bytes
+        if path.is_file() and not path.is_symlink():
+            payload = path.read_bytes()
+            if git_blob_oid(payload) != blob.oid:
+                payload = fetch_blob(blob.path)
+        else:
+            payload = fetch_blob(blob.path)
+        if not isinstance(payload, bytes):
+            raise QFBenchConfigError(
+                f"raw QFBench fetcher returned non-bytes for {blob.path!r}"
+            )
+        actual_oid = git_blob_oid(payload)
+        if actual_oid != blob.oid:
+            raise QFBenchConfigError(
+                f"Git blob hash mismatch for {blob.path}: "
+                f"expected {blob.oid}, found {actual_oid}"
+            )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + ".download")
+        temporary.write_bytes(payload)
+        if trusted:
+            temporary.chmod(0o700 if blob.mode == "100755" else 0o600)
+        else:
+            temporary.chmod(0o755 if blob.mode == "100755" else 0o644)
+        os.replace(temporary, path)
+        records.append(
+            {
+                "path": blob.path,
+                "mode": blob.mode,
+                "git_blob_oid": blob.oid,
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "size_bytes": len(payload),
+            }
+        )
+    return records
+
+
+def _role_manifest_payload(
+    plan: QFBenchRoleSnapshotPlan,
+    *,
+    role: Literal["public", "trusted-verifier"],
+    records: list[dict[str, object]],
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "role": role,
+        "repository_url": plan.repository_url,
+        "commit": plan.commit,
+        "task_ids": list(plan.task_ids),
+        "files": records,
+    }
+
+
+def _write_role_metadata(
+    staging: Path,
+    plan: QFBenchRoleSnapshotPlan,
+    *,
+    role: Literal["public", "trusted-verifier"],
+    records: list[dict[str, object]],
+    trusted: bool,
+) -> None:
+    metadata = {
+        "MANIFEST.json": json.dumps(
+            _role_manifest_payload(plan, role=role, records=records),
+            sort_keys=True,
+            indent=2,
+        )
+        + "\n",
+        ".qfbench-revision": plan.commit + "\n",
+        ".qfbench-sparse-tasks.json": json.dumps(
+            list(plan.task_ids), indent=2
+        )
+        + "\n",
+        ".qfbench-cache": (
+            "Role-separated QFBench cache; files verified against the pinned Git tree.\n"
+        ),
+    }
+    for name, content in metadata.items():
+        path = staging / name
+        path.write_text(content)
+        path.chmod(0o600 if trusted else 0o644)
+
+
+def _scan_role_staging(
+    staging: Path,
+    *,
+    expected_paths: set[str],
+    role: Literal["public", "trusted-verifier"],
+) -> None:
+    metadata_paths = {
+        "MANIFEST.json",
+        ".qfbench-revision",
+        ".qfbench-sparse-tasks.json",
+        ".qfbench-cache",
+    }
+    actual_paths: set[str] = set()
+    for path in staging.rglob("*"):
+        if path.is_symlink():
+            raise QFBenchConfigError(
+                f"symlink is forbidden in {role} staging: {path}"
+            )
+        if path.is_file():
+            actual_paths.add(path.relative_to(staging).as_posix())
+    expected = expected_paths | metadata_paths
+    if actual_paths != expected:
+        unexpected = sorted(actual_paths - expected)
+        missing = sorted(expected - actual_paths)
+        raise QFBenchConfigError(
+            f"{role} staging membership mismatch; "
+            f"unexpected={unexpected}, missing={missing}"
+        )
+    if any("solution" in PurePosixPath(path).parts for path in actual_paths):
+        raise QFBenchConfigError(f"solution path found in {role} staging")
+
+
+def materialize_qfbench_role_snapshot(
+    source_repo: str | Path,
+    public_root: str | Path,
+    trusted_root: str | Path,
+    *,
+    repository_url: str,
+    commit: str,
+    task_ids: Iterable[str],
+    fetch_blob: Callable[[str], bytes] | None = None,
+) -> QFBenchRoleSnapshotResult:
+    """Verify, separate, and promote public and verifier-only snapshot roots."""
+
+    plan = plan_qfbench_role_snapshot(
+        source_repo,
+        repository_url=repository_url,
+        commit=commit,
+        task_ids=task_ids,
+    )
+    public_target = Path(public_root).expanduser().resolve()
+    trusted_target = Path(trusted_root).expanduser().resolve()
+    if (
+        public_target == trusted_target
+        or public_target in trusted_target.parents
+        or trusted_target in public_target.parents
+    ):
+        raise QFBenchConfigError("public and trusted roots must be disjoint")
+    for target in (public_target, trusted_target):
+        if target.exists() or target.is_symlink():
+            raise QFBenchConfigError(
+                f"refusing existing role-separated QFBench destination {target}"
+            )
+    public_staging = public_target.with_name(public_target.name + ".partial")
+    trusted_staging = trusted_target.with_name(trusted_target.name + ".partial")
+    for staging in (public_staging, trusted_staging):
+        if staging.is_symlink() or (staging.exists() and not staging.is_dir()):
+            raise QFBenchConfigError(f"unsafe QFBench staging path {staging}")
+        staging.mkdir(parents=True, exist_ok=True)
+    public_staging.chmod(0o750)
+    trusted_staging.chmod(0o700)
+    fetch = fetch_blob or _github_raw_fetcher(plan.repository_url, plan.commit)
+
+    public_records = _write_verified_role_blobs(
+        public_staging,
+        plan.public_blobs,
+        fetch_blob=fetch,
+        trusted=False,
+    )
+    trusted_records = _write_verified_role_blobs(
+        trusted_staging,
+        plan.trusted_verifier_blobs,
+        fetch_blob=fetch,
+        trusted=True,
+    )
+    _write_role_metadata(
+        public_staging,
+        plan,
+        role="public",
+        records=public_records,
+        trusted=False,
+    )
+    _write_role_metadata(
+        trusted_staging,
+        plan,
+        role="trusted-verifier",
+        records=trusted_records,
+        trusted=True,
+    )
+    _scan_role_staging(
+        public_staging,
+        expected_paths={blob.path for blob in plan.public_blobs},
+        role="public",
+    )
+    _scan_role_staging(
+        trusted_staging,
+        expected_paths={blob.path for blob in plan.trusted_verifier_blobs},
+        role="trusted-verifier",
+    )
+
+    public_target.parent.mkdir(parents=True, exist_ok=True)
+    trusted_target.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(public_staging, public_target)
+    try:
+        os.replace(trusted_staging, trusted_target)
+    except OSError:
+        os.replace(public_target, public_staging)
+        raise
+    return QFBenchRoleSnapshotResult(
+        public_root=public_target,
+        trusted_root=trusted_target,
+        public_manifest=public_target / "MANIFEST.json",
+        trusted_manifest=trusted_target / "MANIFEST.json",
+    )
 
 
 def _snapshot_revision(root: Path) -> str:
