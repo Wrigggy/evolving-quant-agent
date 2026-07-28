@@ -44,7 +44,7 @@ def _config_payload():
         },
         "task": {
             "task_id": "historical-var-data-prep",
-            "domain": "risk_credit",
+            "domain": "risk",
             "worker_dir": "qea/worker",
             "model_name": "openai/gpt-5",
             "proxy_upstream_base_url": "https://openrouter.ai/api/v1",
@@ -223,6 +223,12 @@ def test_first_failure_marks_all_later_stages_not_run(tmp_path):
             "task": {
                 **_config_payload()["task"],
                 "task_id": "some-other-task",
+            }
+        },
+        {
+            "task": {
+                **_config_payload()["task"],
+                "domain": "risk_credit",
             }
         },
         {"api_key": "forbidden-secret"},

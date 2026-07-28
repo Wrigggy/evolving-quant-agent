@@ -39,6 +39,7 @@ _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _EXPECTED_BRANCH = "qfbench-selfhosted-vm-backend"
 _EXPECTED_TASK = "historical-var-data-prep"
+_EXPECTED_DOMAIN = "risk"
 _PATH_KEYS = frozenset(
     {
         "source_root",
@@ -323,6 +324,10 @@ def load_canary_config(
     task = {name: _require_string(raw_task, name) for name in sorted(_TASK_KEYS)}
     if task["task_id"] != _EXPECTED_TASK:
         raise CanaryConfigError(f"canary task must be {_EXPECTED_TASK!r}")
+    if task["domain"] != _EXPECTED_DOMAIN:
+        raise CanaryConfigError(
+            f"canary task domain must match the five-task manifest: {_EXPECTED_DOMAIN!r}"
+        )
     task["worker_dir"] = _safe_relative(task["worker_dir"], label="worker_dir")
     upstream = urlsplit(task["proxy_upstream_base_url"])
     if (

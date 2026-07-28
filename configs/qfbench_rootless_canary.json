@@ -16,7 +16,7 @@
   "run_id": "qfbench-rootless-canary-20260728",
   "schema_version": 1,
   "task": {
-    "domain": "risk_credit",
+    "domain": "risk",
     "model_name": "openai/gpt-5",
     "proxy_allowed_path_prefix": "/v1",
     "proxy_upstream_base_url": "https://openrouter.ai/api/v1",
