@@ -74,6 +74,12 @@ def _freeze_environment(values: Mapping[str, str]) -> Mapping[str, str]:
     return MappingProxyType(dict(sorted(normalized.items())))
 
 
+def validate_sandbox_environment(values: Mapping[str, str]) -> Mapping[str, str]:
+    """Return an immutable public-only environment mapping for sandbox commands."""
+
+    return _freeze_environment(values)
+
+
 def _freeze_tmpfs(values: Mapping[str, int]) -> Mapping[str, int]:
     if not isinstance(values, Mapping):
         raise SandboxSpecError("writable_tmpfs_mb must be a mapping")

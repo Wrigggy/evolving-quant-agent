@@ -533,7 +533,7 @@
 
 - [ ] **Step 4: Implement dry-run-first build execution**
 
-  Generate contexts beneath a new temporary directory, scan before calling Docker, invoke `docker build --pull=false --network=none` when dependencies are fully vendored, and use a dedicated explicitly allowed build network only for the dependency-warming phase. Runtime tests and references must never be baked into an image. Inspect the built image and require an immutable `sha256:` ID before writing the manifest atomically.
+  Generate contexts beneath a new temporary directory, scan before calling Docker, and install the inert supervisor at `/usr/local/bin/qea-sandbox-supervisor` on the read-only image layer so the role tmpfs mounts cannot hide it. Invoke `docker build --pull=false --network=none` when dependencies are fully vendored, and use a dedicated explicitly allowed build network only for the dependency-warming phase. Runtime tests and references must never be baked into an image. Inspect the built image and require an immutable `sha256:` ID before writing the manifest atomically.
 
 - [ ] **Step 5: Add CLI modes and test them with a fake runner**
 
