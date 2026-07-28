@@ -1,0 +1,149 @@
+{
+  "expected": {
+    "docker_host": "unix:///run/user/1013/docker.sock",
+    "expected_uid": 1013,
+    "min_cpu_count": 32,
+    "min_docker_version": "29.0.0",
+    "min_free_bytes": 53687091200,
+    "min_memory_bytes": 103079215104,
+    "runtime_root": "/home/julius/qea/runtime",
+    "secret_file": "/home/julius/qea/runtime/secrets/model-token",
+    "source_commit": "c7842ebf9e6a6113e1002c628e69699eb8d58d0d",
+    "source_root": "/home/julius/qea/worktrees/qfbench-selfhosted-vm-backend",
+    "username": "julius"
+  },
+  "fixture_kind": "bc-post-bootstrap-contract",
+  "observations": {
+    "cgroup_controllers": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "cpuset cpu io memory hugetlb pids rdma misc dmem\n"
+    },
+    "cgroup_filesystem": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "cgroup2\n"
+    },
+    "cpu_online": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "64\n"
+    },
+    "docker_info": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "{\"DockerRootDir\":\"/home/julius/.local/share/docker\",\"Driver\":\"overlay2\",\"DriverStatus\":[[\"Backing Filesystem\",\"extfs\"]],\"SecurityOptions\":[\"name=seccomp,profile=builtin\",\"name=rootless\",\"name=cgroupns\"]}\n"
+    },
+    "docker_socket_stat": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "660:1013:socket\n"
+    },
+    "docker_version": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "{\"Client\":{\"Version\":\"29.4.1\"},\"Server\":{\"Version\":\"29.4.1\"}}\n"
+    },
+    "filesystem_free": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/nvme0n1p2 359357620 219027760 122002208 65% /\n"
+    },
+    "filesystem_type": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "ext2/ext3\n"
+    },
+    "fuse_overlayfs_path": {
+      "exit_code": 1,
+      "stderr": "",
+      "stdout": ""
+    },
+    "git_head": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "c7842ebf9e6a6113e1002c628e69699eb8d58d0d\n"
+    },
+    "git_status": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "kernel_release": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "6.17.0-23-generic\n"
+    },
+    "linger": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "yes\n"
+    },
+    "max_user_namespaces": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "513587\n"
+    },
+    "meminfo": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "MemTotal:       131842520 kB\nMemAvailable:   120000000 kB\n"
+    },
+    "newgidmap_path": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "/usr/bin/newgidmap\n"
+    },
+    "newgidmap_stat": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "4755:0:regular file\n"
+    },
+    "newuidmap_path": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "/usr/bin/newuidmap\n"
+    },
+    "newuidmap_stat": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "4755:0:regular file\n"
+    },
+    "runtime_stat": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "700:1013:directory\n"
+    },
+    "secret_stat": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "600:1013:regular file\n"
+    },
+    "subgid": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "julius:886432:65536\n"
+    },
+    "subuid": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "julius:886432:65536\n"
+    },
+    "systemd_user": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "running\n"
+    },
+    "uid": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "1013\n"
+    },
+    "username": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "julius\n"
+    }
+  },
+  "schema_version": 1
+}
