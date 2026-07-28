@@ -244,11 +244,18 @@ def list_qfbench_tree_blobs(
         raise QFBenchConfigError(f"invalid QFBench task IDs for raw fetch: {invalid}")
 
     repository = Path(source_repo).expanduser().resolve()
-    if not (repository / ".git").exists():
+    if (repository / ".git").exists():
+        repository_args = ["-C", str(repository)]
+    elif (
+        (repository / "HEAD").is_file()
+        and (repository / "config").is_file()
+        and (repository / "objects").is_dir()
+    ):
+        repository_args = ["--git-dir", str(repository)]
+    else:
         raise QFBenchConfigError(f"QFBench source tree has no Git metadata: {repository}")
     output = _run_git([
-        "-C",
-        str(repository),
+        *repository_args,
         "ls-tree",
         "-r",
         revision,

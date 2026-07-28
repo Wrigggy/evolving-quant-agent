@@ -178,6 +178,37 @@ def test_materializer_fails_closed_on_unknown_task_root_path(tmp_path) -> None:
         )
 
 
+def test_materializer_plans_from_bare_object_store(tmp_path) -> None:
+    from qea.benchmarks.qfbench import plan_qfbench_role_snapshot
+
+    source, commit = _write_source(tmp_path)
+    bare = tmp_path / "source.git"
+    subprocess.run(
+        ("git", "clone", "--bare", str(source), str(bare)),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    plan = plan_qfbench_role_snapshot(
+        bare,
+        repository_url="https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+        commit=commit,
+        task_ids=("task-a",),
+    )
+
+    assert {blob.path for blob in plan.public_blobs} >= {
+        "docker/sandbox.Dockerfile",
+        "tasks/task-a/instruction.md",
+    }
+    assert {blob.path for blob in plan.trusted_verifier_blobs} >= {
+        "tasks/task-a/tests/test.sh",
+    }
+    assert {blob.path for blob in plan.denied_solution_blobs} == {
+        "tasks/task-a/solution/solve.sh",
+    }
+
+
 def test_materializer_rejects_git_symlinks_before_fetch(tmp_path) -> None:
     from qea.benchmarks.qfbench import (
         QFBenchConfigError,

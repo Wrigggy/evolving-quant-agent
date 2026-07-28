@@ -92,12 +92,12 @@ Do not push over a checked-out ref, use `rsync` for the repo, or create a second
 Create a bare, no-checkout source store. Tree metadata includes denied path identities, but only requested public/test blobs are fetched by the role materializer; no solution worktree is created:
 
 ```bash
-git clone --bare --filter=blob:none https://github.com/QF-Bench/QuantitativeFinance-Bench.git "$HOME/qea/git/qfbench.git"
+git clone --bare --filter=blob:none ssh://git@ssh.github.com:443/QF-Bench/QuantitativeFinance-Bench.git "$HOME/qea/git/qfbench.git"
 git --git-dir="$HOME/qea/git/qfbench.git" fetch --filter=blob:none origin 024921eb507fcc0c4ffe3e0a96802724be1ae84a
 git --git-dir="$HOME/qea/git/qfbench.git" cat-file -t 024921eb507fcc0c4ffe3e0a96802724be1ae84a
 ```
 
-Do not run `git checkout`, `git show ...:tasks/.../solution/...`, or an unfiltered clone.
+The SSH/443 URL is the measured `bc-server` transport only; the pinned panel and materialized manifests retain the official HTTPS repository identity. Do not run `git checkout`, `git show ...:tasks/.../solution/...`, or an unfiltered clone.
 
 ## 5. Install and Pin Rootless Docker
 
