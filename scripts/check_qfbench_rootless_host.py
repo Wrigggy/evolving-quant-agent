@@ -366,7 +366,7 @@ def evaluate_fixture(payload: object) -> dict[str, object]:
         expected["docker_host"] == f"unix:///run/user/{uid}/docker.sock"
         and socket_metadata is not None
         and socket_metadata[1:] == (uid, "socket")
-        and socket_metadata[0] in {"600", "660"}
+        and socket_metadata[0] in {"600", "660", "1600", "1660"}
     )
     add("docker_endpoint", endpoint_ok, str(expected["docker_host"]))
 
@@ -401,12 +401,21 @@ def evaluate_fixture(payload: object) -> dict[str, object]:
         if isinstance(pair, list)
         for value in pair
     ).lower()
+    filesystem = _text(observations, "filesystem_type")
     storage_ok = bool(
         docker_info
-        and docker_info.get("Driver") == "overlay2"
-        and ("extfs" in backing or "ext4" in backing)
+        and docker_info.get("Driver") in {"overlay2", "overlayfs"}
+        and (
+            "extfs" in backing
+            or "ext4" in backing
+            or filesystem in {"ext2/ext3", "ext4"}
+        )
     )
-    add("docker_storage", storage_ok, "overlay2 on ext4/extfs required")
+    add(
+        "docker_storage",
+        storage_ok,
+        "native overlay2/overlayfs on the observed ext4 filesystem required",
+    )
 
     df_lines = _text(observations, "filesystem_free").splitlines()
     available_bytes = None
@@ -455,14 +464,16 @@ def evaluate_fixture(payload: object) -> dict[str, object]:
     )
 
     fuse_present = bool(_text(observations, "fuse_overlayfs_path"))
-    filesystem = _text(observations, "filesystem_type")
     fuse_unnecessary = not fuse_present and filesystem in {"ext2/ext3", "ext4"} and storage_ok
     checks.append(
         {
             "name": "fuse_overlayfs",
             "required": False,
             "status": "pass" if fuse_present else ("unnecessary" if fuse_unnecessary else "fail"),
-            "detail": "optional with overlay2 on the observed modern kernel/ext4 host",
+            "detail": (
+                "optional with native overlay2/overlayfs on the observed "
+                "modern kernel/ext4 host"
+            ),
         }
     )
 

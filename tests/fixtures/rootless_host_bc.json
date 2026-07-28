@@ -32,12 +32,12 @@
     "docker_info": {
       "exit_code": 0,
       "stderr": "",
-      "stdout": "{\"DockerRootDir\":\"/home/julius/.local/share/docker\",\"Driver\":\"overlay2\",\"DriverStatus\":[[\"Backing Filesystem\",\"extfs\"]],\"SecurityOptions\":[\"name=seccomp,profile=builtin\",\"name=rootless\",\"name=cgroupns\"]}\n"
+      "stdout": "{\"DockerRootDir\":\"/home/julius/.local/share/docker\",\"Driver\":\"overlayfs\",\"DriverStatus\":[],\"SecurityOptions\":[\"name=seccomp,profile=builtin\",\"name=rootless\",\"name=cgroupns\"]}\n"
     },
     "docker_socket_stat": {
       "exit_code": 0,
       "stderr": "",
-      "stdout": "660:1013:socket\n"
+      "stdout": "1660:1013:socket\n"
     },
     "docker_version": {
       "exit_code": 0,

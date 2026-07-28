@@ -121,7 +121,7 @@ docker version
 docker info --format '{{json .SecurityOptions}}'
 ```
 
-Require `name=rootless` and a user-owned Docker data root. Do not add `julius` to a system Docker group.
+Require `name=rootless`, a user-owned Docker data root, and the measured native `overlayfs`/containerd snapshotter on ext4. Do not add `julius` to a system Docker group.
 
 Create a coordinator venv outside the worktree:
 
