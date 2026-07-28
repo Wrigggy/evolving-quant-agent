@@ -1,0 +1,26 @@
+{
+  "benchmark_commit": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+  "branch": "qfbench-selfhosted-vm-backend",
+  "docker_host": "unix:///run/user/1013/docker.sock",
+  "expected_uid": 1013,
+  "paths": {
+    "historical_artifact_manifest": "runtime/replay/historical-var-artifact.json",
+    "historical_e2b_score": "runtime/replay/historical-var-e2b-score.json",
+    "image_manifest_root": "runtime/images",
+    "public_root": "runtime/qfbench-public/024921eb-five-task",
+    "run_output_root": "runs/qfbench-rootless-canary-20260728",
+    "secret_file": "runtime/secrets/model-token",
+    "source_root": "worktrees/qfbench-selfhosted-vm-backend",
+    "trusted_root": "runtime/trusted-verifier/024921eb-five-task"
+  },
+  "run_id": "qfbench-rootless-canary-20260728",
+  "schema_version": 1,
+  "task": {
+    "domain": "risk_credit",
+    "model_name": "openai/gpt-5",
+    "proxy_allowed_path_prefix": "/v1",
+    "proxy_upstream_base_url": "https://openrouter.ai/api/v1",
+    "task_id": "historical-var-data-prep",
+    "worker_dir": "qea/worker"
+  }
+}
