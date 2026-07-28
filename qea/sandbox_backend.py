@@ -211,6 +211,8 @@ class KillResult:
 class SandboxBackend(Protocol):
     """Minimal operations shared by remote and self-hosted sandboxes."""
 
+    backend_name: str
+
     def create(self, spec: SandboxSpec) -> SandboxHandle:
         raise NotImplementedError
 
