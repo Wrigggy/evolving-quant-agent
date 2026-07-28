@@ -221,13 +221,34 @@ def test_proxy_start_connects_internal_network_before_starting() -> None:
 
     _backend(runner).start(_handle(spec))
 
-    assert runner.calls[1].argv[-4:] == (
+    assert runner.calls[1].argv[-6:] == (
         "network",
         "connect",
+        "--alias",
+        "qea-model-proxy",
         "qea-run-1-internal",
         "container-exact-1",
     )
     assert runner.calls[2].argv[-2:] == ("start", "container-exact-1")
+
+
+def test_proxy_create_uses_fixed_waiting_entrypoint_without_secret_arguments() -> None:
+    runner = RecordingRunner(CompletedCommand(0, b"container-exact-1\n", b""))
+    spec = _spec(
+        role="proxy",
+        network_policy="proxy-outbound",
+        environment={},
+        writable_tmpfs_mb={"/run/qea-secrets": 1, "/tmp": 64},
+    )
+
+    _backend(runner).create(spec)
+
+    argv = runner.calls[0].argv
+    assert argv[-2:] == (
+        IMAGE_REF,
+        "/usr/local/bin/qea-model-proxy-entrypoint",
+    )
+    assert "token" not in " ".join(argv).lower()
 
 
 def test_put_and_read_bytes_use_deterministic_tar_not_host_paths() -> None:

@@ -56,6 +56,43 @@ signal.signal(signal.SIGINT, stop)
 while True:
     signal.pause()
 """
+_MODEL_PROXY_ENTRYPOINT_PATH = "/usr/local/bin/qea-model-proxy-entrypoint"
+_MODEL_PROXY_ENTRYPOINT = b"""#!/usr/bin/env python3
+import json
+import os
+import time
+from pathlib import Path
+
+
+config_path = Path('/run/qea-secrets/proxy-config.json')
+token_path = Path('/run/qea-secrets/model-token')
+while not (config_path.is_file() and token_path.is_file()):
+    time.sleep(0.05)
+config = json.loads(config_path.read_text())
+required = {
+    'listen_host', 'listen_port', 'upstream_base_url', 'allowed_path_prefix',
+    'max_request_bytes', 'max_response_bytes', 'connect_timeout_seconds',
+    'read_timeout_seconds',
+}
+if set(config) != required:
+    raise SystemExit(78)
+argv = [
+    '/usr/local/bin/python3',
+    '/usr/local/lib/qea/run_qea_model_proxy.py',
+    '--listen-host', str(config['listen_host']),
+    '--listen-port', str(config['listen_port']),
+    '--upstream-base-url', str(config['upstream_base_url']),
+    '--allowed-path-prefix', str(config['allowed_path_prefix']),
+    '--token-file', str(token_path),
+    '--max-request-bytes', str(config['max_request_bytes']),
+    '--max-response-bytes', str(config['max_response_bytes']),
+    '--connect-timeout-seconds', str(config['connect_timeout_seconds']),
+    '--read-timeout-seconds', str(config['read_timeout_seconds']),
+]
+environment = os.environ.copy()
+environment['PYTHONPATH'] = '/usr/local/lib'
+os.execve(argv[0], argv, environment)
+"""
 
 
 class RootlessImageError(RuntimeError):
@@ -342,12 +379,39 @@ def prepare_rootless_image_plan(
             + _SUPERVISOR_PATH.encode("utf-8")
             + b"\nRUN chmod 0555 "
             + _SUPERVISOR_PATH.encode("utf-8")
-            + b"\n"
+            + b"\nCOPY qea/model-proxy-entrypoint.py "
+            + _MODEL_PROXY_ENTRYPOINT_PATH.encode("utf-8")
+            + b"\nRUN chmod 0555 "
+            + _MODEL_PROXY_ENTRYPOINT_PATH.encode("utf-8")
+            + b"\nRUN mkdir -p /usr/local/lib/qea\n"
+            + b"COPY qea/__init__.py /usr/local/lib/qea/__init__.py\n"
+            + b"COPY qea/model_proxy.py /usr/local/lib/qea/model_proxy.py\n"
+            + b"COPY qea/sandbox_backend.py /usr/local/lib/qea/sandbox_backend.py\n"
+            + b"COPY qea/run_qea_model_proxy.py "
+            + b"/usr/local/lib/qea/run_qea_model_proxy.py\n"
         )
+        package_root = Path(__file__).resolve().parent
+        proxy_script = package_root.parent / "scripts" / "run_qea_model_proxy.py"
         files = (
             _context_file("Dockerfile", dockerfile),
             _context_file(
                 "docker/requirements-sandbox.txt", requirements.read_bytes()
+            ),
+            _context_file(
+                "qea/__init__.py", (package_root / "__init__.py").read_bytes()
+            ),
+            _context_file(
+                "qea/model-proxy-entrypoint.py", _MODEL_PROXY_ENTRYPOINT, 0o555
+            ),
+            _context_file(
+                "qea/model_proxy.py", (package_root / "model_proxy.py").read_bytes()
+            ),
+            _context_file(
+                "qea/run_qea_model_proxy.py", proxy_script.read_bytes(), 0o555
+            ),
+            _context_file(
+                "qea/sandbox_backend.py",
+                (package_root / "sandbox_backend.py").read_bytes(),
             ),
             _context_file("qea/sandbox-supervisor.py", _SUPERVISOR, 0o555),
         )

@@ -144,9 +144,16 @@ def test_base_plan_pins_from_and_contains_only_public_base_inputs(tmp_path) -> N
     assert {member.path for member in plan.context_files} == {
         "Dockerfile",
         "docker/requirements-sandbox.txt",
+        "qea/__init__.py",
+        "qea/model-proxy-entrypoint.py",
+        "qea/model_proxy.py",
+        "qea/run_qea_model_proxy.py",
+        "qea/sandbox_backend.py",
         "qea/sandbox-supervisor.py",
     }
     assert b"/usr/local/bin/qea-sandbox-supervisor" in plan.dockerfile_bytes
+    assert b"/usr/local/bin/qea-model-proxy-entrypoint" in plan.dockerfile_bytes
+    assert b"/usr/local/lib/qea/run_qea_model_proxy.py" in plan.dockerfile_bytes
     assert all("tests" not in member.path for member in plan.context_files)
 
 
@@ -387,7 +394,7 @@ def test_rootless_image_cli_plan_only_writes_nothing(tmp_path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert "identity sha256:" in result.stdout
-    assert "context files: 3" in result.stdout
+    assert "context files: 8" in result.stdout
     assert not output.exists()
 
 

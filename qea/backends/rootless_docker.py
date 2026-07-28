@@ -43,6 +43,8 @@ _ALLOWED_FILTER_LABELS = frozenset(
 _MAX_ERROR_BYTES = 16 * 1024
 _DEFAULT_MAX_COMMAND_OUTPUT_BYTES = 2 * 1024 * 1024
 _DEFAULT_MAX_TRANSFER_BYTES = 512 * 1024 * 1024
+_SANDBOX_SUPERVISOR = "/usr/local/bin/qea-sandbox-supervisor"
+_MODEL_PROXY_ENTRYPOINT = "/usr/local/bin/qea-model-proxy-entrypoint"
 
 
 class RootlessDockerError(RuntimeError):
@@ -322,9 +324,10 @@ class RootlessDockerBackend:
             )
         for name, value in spec.environment.items():
             arguments.extend(("--env", f"{name}={value}"))
-        arguments.extend(
-            (spec.image_ref, "/usr/local/bin/qea-sandbox-supervisor")
+        entrypoint = (
+            _MODEL_PROXY_ENTRYPOINT if spec.role == "proxy" else _SANDBOX_SUPERVISOR
         )
+        arguments.extend((spec.image_ref, entrypoint))
         result = self._checked(
             arguments,
             timeout_seconds=60,
@@ -349,6 +352,8 @@ class RootlessDockerBackend:
                 self._argv(
                     "network",
                     "connect",
+                    "--alias",
+                    "qea-model-proxy",
                     network_name,
                     handle.native_id,
                 ),
