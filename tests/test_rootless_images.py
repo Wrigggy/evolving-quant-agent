@@ -177,6 +177,14 @@ def test_worker_plan_contains_public_environment_and_pinned_nexau_only(tmp_path)
     assert plan.base_image_ref == QFBENCH_BASE
     assert NEXAU_COMMIT in dockerfile
     assert "/opt/qea/nexau-requirements.lock" in dockerfile
+    git_install = (
+        "apt-get update && apt-get install -y --no-install-recommends git "
+        "&& rm -rf /var/lib/apt/lists/*"
+    )
+    assert git_install in dockerfile
+    assert dockerfile.index(git_install) < dockerfile.index(
+        f"git+https://github.com/nex-agi/NexAU.git@{NEXAU_COMMIT}"
+    )
     assert {member.path for member in plan.context_files} == {
         "Dockerfile",
         "data/input.csv",

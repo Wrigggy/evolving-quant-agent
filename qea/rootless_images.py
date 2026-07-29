@@ -314,6 +314,11 @@ def _task_dockerfile(
 ) -> bytes:
     generated = _rewrite_single_from(upstream, base_image_ref).rstrip() + "\n\n"
     generated += f"# QEA generated rootless {role} layer.\nUSER root\n"
+    if role == "worker":
+        generated += (
+            "RUN apt-get update && apt-get install -y --no-install-recommends git "
+            "&& rm -rf /var/lib/apt/lists/*\n"
+        )
     dependencies = (
         (NEXAU_WORKER_DEPENDENCY,)
         if role == "worker"
