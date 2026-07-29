@@ -68,7 +68,7 @@ def _parse_upstream(value: str) -> _Upstream:
     except ValueError as exc:
         raise ModelProxyError("upstream base URL has an invalid port") from exc
     base_path = parsed.path.rstrip("/")
-    if not base_path.startswith("/"):
+    if base_path and not base_path.startswith("/"):
         raise ModelProxyError("upstream base URL requires an absolute path")
     if _unsafe_path(base_path or "/"):
         raise ModelProxyError("upstream base URL contains an unsafe path")

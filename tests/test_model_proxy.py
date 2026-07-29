@@ -306,6 +306,26 @@ def test_proxy_sandbox_plan_contains_no_token_and_uses_secret_tmpfs(tmp_path):
     assert REAL_TOKEN not in " ".join(plan.start_argv)
 
 
+def test_proxy_sandbox_plan_accepts_fixed_origin_root_upstream():
+    from qea.model_proxy import build_model_proxy_sandbox_plan
+
+    plan = build_model_proxy_sandbox_plan(
+        run_id="run-origin-root",
+        attempt_id="proxy-origin-root",
+        image_ref="sha256:" + "c" * 64,
+        upstream_base_url="https://example.com",
+        allowed_path_prefix="/v1",
+        listen_port=8080,
+        cpu_count=1,
+        memory_mb=512,
+        pids_limit=64,
+        timeout_seconds=300,
+    )
+
+    assert plan.upstream_base_url == "https://example.com"
+    assert plan.public_payload()["upstream_base_url"] == "https://example.com"
+
+
 def test_proxy_controller_persists_before_start_and_uploads_token_last(tmp_path):
     from qea.model_proxy import (
         build_model_proxy_sandbox_plan,
