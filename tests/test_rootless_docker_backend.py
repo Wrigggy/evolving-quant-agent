@@ -251,7 +251,7 @@ def test_proxy_create_uses_fixed_waiting_entrypoint_without_secret_arguments() -
     assert "token" not in " ".join(argv).lower()
 
 
-def test_put_and_read_bytes_use_deterministic_tar_not_host_paths() -> None:
+def test_put_uses_exec_tar_for_read_only_tmpfs_and_read_uses_deterministic_tar() -> None:
     read_payload = b"artifact-result"
     runner = RecordingRunner(
         _inspect_reply(),
@@ -265,7 +265,18 @@ def test_put_and_read_bytes_use_deterministic_tar_not_host_paths() -> None:
     returned = backend.read_bytes(_handle(), "/qea/result.json")
 
     upload = runner.calls[1]
-    assert upload.argv[-3:] == ("cp", "-", "container-exact-1:/qea")
+    assert upload.argv[-9:] == (
+        "exec",
+        "--interactive",
+        "container-exact-1",
+        "tar",
+        "--extract",
+        "--file",
+        "-",
+        "--directory",
+        "/qea",
+    )
+    assert "cp" not in upload.argv
     with tarfile.open(fileobj=io.BytesIO(upload.input_bytes), mode="r:") as archive:
         member = archive.getmembers()[0]
         assert member.name == "input.json"

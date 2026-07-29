@@ -385,7 +385,17 @@ class RootlessDockerBackend:
         self._require_handle_ownership(handle)
         archive = _tar_single_file(container_path.name, payload)
         self._checked(
-            ("cp", "-", f"{handle.native_id}:{container_path.parent.as_posix()}"),
+            (
+                "exec",
+                "--interactive",
+                handle.native_id,
+                "tar",
+                "--extract",
+                "--file",
+                "-",
+                "--directory",
+                container_path.parent.as_posix(),
+            ),
             input_bytes=archive,
             timeout_seconds=120,
             operation="container upload",
