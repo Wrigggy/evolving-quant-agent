@@ -311,7 +311,7 @@ def test_execute_build_records_final_image_and_dependency_lock(tmp_path) -> None
     build_argv = runner.calls[0].argv
     assert build_argv[:4] == ("docker", "--host", DOCKER_HOST, "build")
     assert "--pull=false" in build_argv
-    assert ("--network", "bridge") == _pair(build_argv, "--network")
+    assert ("--network", "default") == _pair(build_argv, "--network")
     assert result.image_id == image_id
     assert result.output_dir.name == plan.identity_sha256
     manifest = json.loads(result.manifest_path.read_text())

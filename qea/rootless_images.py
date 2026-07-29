@@ -472,7 +472,7 @@ def prepare_rootless_image_plan(
         "cpu_count": cpu_count,
         "memory_mb": memory_mb,
         "build_timeout_seconds": build_timeout_seconds,
-        "build_network": "bridge",
+        "build_network": "default",
     }
     identity = _plan_identity(identity_payload)
     return RootlessImageBuildPlan(
@@ -487,7 +487,7 @@ def prepare_rootless_image_plan(
         cpu_count=cpu_count,
         memory_mb=memory_mb,
         build_timeout_seconds=build_timeout_seconds,
-        build_network="bridge",
+        build_network="default",
         identity_sha256=identity,
     )
 
