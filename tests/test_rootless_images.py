@@ -182,6 +182,9 @@ def test_worker_plan_contains_public_environment_and_pinned_nexau_only(tmp_path)
         "&& rm -rf /var/lib/apt/lists/*"
     )
     assert git_install in dockerfile
+    assert dockerfile.index("uv venv --python 3.12") < dockerfile.index(
+        git_install
+    )
     assert dockerfile.index(git_install) < dockerfile.index(
         f"git+https://github.com/nex-agi/NexAU.git@{NEXAU_COMMIT}"
     )
