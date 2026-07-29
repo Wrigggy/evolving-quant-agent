@@ -2097,6 +2097,8 @@ print(json.dumps({'artifact_sha256': hashlib.sha256(payload).hexdigest(), 'nexau
                     "/app": 1024,
                     "/tests": 128,
                     "/logs": 128,
+                    "/opt/qea/uv-cache": 256,
+                    "/opt/qea/uv-tools": 64,
                 },
             ),
         )
@@ -2221,6 +2223,8 @@ print(json.dumps({'artifact_sha256': hashlib.sha256(payload).hexdigest(), 'nexau
                         "/app": 2048,
                         "/tests": 128,
                         "/logs": 128,
+                        "/opt/qea/uv-cache": 256,
+                        "/opt/qea/uv-tools": 64,
                     },
                 ),
             )

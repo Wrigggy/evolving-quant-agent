@@ -182,21 +182,29 @@ def _attempt():
     )
 
 
-def _resources(timeout_seconds=120):
+def _resources(timeout_seconds=120, *, verifier=False):
     from qea.executors.sandbox_nexau import SandboxResourceContract
 
+    writable_tmpfs_mb = {
+        "/tmp": 256,
+        "/qea": 512,
+        "/app": 1024,
+        "/tests": 64,
+        "/logs": 64,
+    }
+    if verifier:
+        writable_tmpfs_mb.update(
+            {
+                "/opt/qea/uv-cache": 256,
+                "/opt/qea/uv-tools": 64,
+            }
+        )
     return SandboxResourceContract(
         cpu_count=2,
         memory_mb=4096,
         pids_limit=256,
         timeout_seconds=timeout_seconds,
-        writable_tmpfs_mb={
-            "/tmp": 256,
-            "/qea": 512,
-            "/app": 1024,
-            "/tests": 64,
-            "/logs": 64,
-        },
+        writable_tmpfs_mb=writable_tmpfs_mb,
     )
 
 
@@ -369,7 +377,7 @@ def test_verifier_is_independent_offline_and_rehashes_artifacts(tmp_path):
         lifecycle_root=lifecycle_root,
         verifier_image_ref="sha256:" + "b" * 64,
         trusted_task_root=trusted_root,
-        resource_contract=_resources(),
+        resource_contract=_resources(verifier=True),
     )
     score = verifier.verify(
         attempt=attempt,
@@ -382,6 +390,15 @@ def test_verifier_is_independent_offline_and_rehashes_artifacts(tmp_path):
     assert spec.role == "verifier"
     assert spec.network_policy == "none"
     assert dict(spec.environment) == {}
+    assert dict(spec.writable_tmpfs_mb) == {
+        "/tmp": 256,
+        "/qea": 512,
+        "/app": 1024,
+        "/tests": 64,
+        "/logs": 64,
+        "/opt/qea/uv-cache": 256,
+        "/opt/qea/uv-tools": 64,
+    }
     members = _tar_members(
         verifier_backend.uploads[("verifier", "/qea/verifier-input.tar")]
     )
@@ -395,6 +412,23 @@ def test_verifier_is_independent_offline_and_rehashes_artifacts(tmp_path):
         isinstance(event, tuple) and event[0] == "run:verifier:artifact-integrity"
         for event in verifier_backend.events
     )
+    cache_copy = (
+        "cp",
+        "-a",
+        "/opt/qea/uv-cache-seed/.",
+        "/opt/qea/uv-cache/",
+    )
+    cache_copy_index = next(
+        index
+        for index, event in enumerate(verifier_backend.events)
+        if isinstance(event, tuple) and event[1] == cache_copy
+    )
+    verifier_index = next(
+        index
+        for index, event in enumerate(verifier_backend.events)
+        if isinstance(event, tuple) and event[0] == "run:verifier:verifier"
+    )
+    assert cache_copy_index < verifier_index
     assert score.reward == 1.0
     assert score.tests_passed == 3
     evidence = json.loads(
@@ -452,7 +486,7 @@ def test_verifier_failures_remain_infrastructure_errors(tmp_path, failure, phase
         lifecycle_root=lifecycle_root,
         verifier_image_ref="sha256:" + "b" * 64,
         trusted_task_root=trusted_root,
-        resource_contract=_resources(),
+        resource_contract=_resources(verifier=True),
     )
     with pytest.raises(SandboxInfrastructureError) as raised:
         verifier.verify(
@@ -462,6 +496,23 @@ def test_verifier_failures_remain_infrastructure_errors(tmp_path, failure, phase
             run_dir=tmp_path / "run",
         )
     assert raised.value.phase == phase
+
+
+def test_verifier_rejects_read_only_uv_runtime(tmp_path):
+    from qea.executors.sandbox_nexau import (
+        SandboxInfrastructureError,
+        SandboxQFBenchVerifier,
+    )
+
+    _, trusted_root = _roots(tmp_path / "trusted-roots")
+    with pytest.raises(SandboxInfrastructureError, match="missing tmpfs mounts"):
+        SandboxQFBenchVerifier(
+            backend=FakeBackend(),
+            lifecycle_root=tmp_path / "lifecycles",
+            verifier_image_ref="sha256:" + "b" * 64,
+            trusted_task_root=trusted_root,
+            resource_contract=_resources(),
+        )
 
 
 def test_proposer_feedback_stays_on_existing_answer_free_contract():

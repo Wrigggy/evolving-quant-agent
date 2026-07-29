@@ -343,6 +343,7 @@ def _task_dockerfile(
             "UV_TOOL_DIR=/opt/qea/uv-tools "
             f"UV_TOOL_BIN_DIR=/opt/qea/uv-bin {lock}\n"
         )
+        generated += "RUN cp -a /opt/qea/uv-cache /opt/qea/uv-cache-seed\n"
     generated += f'LABEL org.qea.qfbench.role="{role}"\n'
     return generated.encode("utf-8")
 

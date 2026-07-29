@@ -217,6 +217,9 @@ def test_verifier_plan_reads_test_lock_declaration_but_never_copies_tests(tmp_pa
     assert "numpy==2.2.3" in dockerfile
     assert "pytest --version" in dockerfile
     assert "/opt/qea/verifier-requirements.lock" in dockerfile
+    assert (
+        "cp -a /opt/qea/uv-cache /opt/qea/uv-cache-seed" in dockerfile
+    )
     assert "/tests/test_outputs.py" not in dockerfile
     assert all("tests" not in member.path for member in plan.context_files)
     assert plan.verifier_test_script_sha256 == hashlib.sha256(

@@ -46,7 +46,15 @@ _REMOTE_RUNNER = Path(__file__).with_name("remote_nexau_worker.py")
 _RUNTIME_BRIDGE = Path(__file__).parents[1] / "runtime_bridge.py"
 _WORKER_REQUIRED_TMPFS = frozenset({"/tmp", "/qea", "/app"})
 _VERIFIER_REQUIRED_TMPFS = frozenset(
-    {"/tmp", "/qea", "/app", "/tests", "/logs"}
+    {
+        "/tmp",
+        "/qea",
+        "/app",
+        "/tests",
+        "/logs",
+        "/opt/qea/uv-cache",
+        "/opt/qea/uv-tools",
+    }
 )
 _OFFLINE_VERIFIER_ENV = {
     "UV_OFFLINE": "1",
@@ -884,6 +892,12 @@ class SandboxQFBenchVerifier:
                 ("tar", "-xf", "/qea/verifier-input.tar", "-C", "/qea"),
                 ("cp", "-R", "/qea/tests/.", "/tests/"),
                 ("cp", "-R", "/qea/artifacts/.", "/app/output/"),
+                (
+                    "cp",
+                    "-a",
+                    "/opt/qea/uv-cache-seed/.",
+                    "/opt/qea/uv-cache/",
+                ),
             ):
                 _run_required(
                     self.backend,
