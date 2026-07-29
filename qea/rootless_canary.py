@@ -40,6 +40,7 @@ _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _EXPECTED_BRANCH = "qfbench-selfhosted-vm-backend"
 _EXPECTED_TASK = "historical-var-data-prep"
 _EXPECTED_DOMAIN = "risk"
+_SYNTHETIC_PROXY_UPSTREAM_BASE_URL = "https://example.com/v1"
 _PATH_KEYS = frozenset(
     {
         "source_root",
@@ -1715,7 +1716,7 @@ class RootlessCanaryLiveGates:
                 run_id=self.config.run_id,
                 attempt_id="proxy-synthetic",
                 image_ref=str(images["base"]["image_id"]),
-                upstream_base_url="https://example.com",
+                upstream_base_url=_SYNTHETIC_PROXY_UPSTREAM_BASE_URL,
                 allowed_path_prefix="/v1",
                 listen_port=8080,
                 cpu_count=1,

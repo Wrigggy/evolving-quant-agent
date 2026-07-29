@@ -93,6 +93,18 @@ def test_plan_only_is_side_effect_free_and_redacts_secret_values(tmp_path):
     assert not runtime_root.exists()
 
 
+def test_synthetic_proxy_uses_explicit_absolute_upstream_path():
+    from urllib.parse import urlsplit
+
+    from qea.rootless_canary import _SYNTHETIC_PROXY_UPSTREAM_BASE_URL
+
+    parsed = urlsplit(_SYNTHETIC_PROXY_UPSTREAM_BASE_URL)
+    assert parsed.scheme == "https"
+    assert parsed.hostname == "example.com"
+    assert parsed.path.startswith("/") and parsed.path != "/"
+    assert not parsed.query and not parsed.fragment
+
+
 def test_apply_persists_each_pass_in_order_and_resume_reuses_it(tmp_path):
     from qea.rootless_canary import load_canary_config, run_canary
 
