@@ -543,7 +543,7 @@ def _write_verified_role_blobs(
         temporary = path.with_name(path.name + ".download")
         temporary.write_bytes(payload)
         if trusted:
-            temporary.chmod(0o700 if blob.mode == "100755" else 0o600)
+            temporary.chmod(0o600)
         else:
             temporary.chmod(0o755 if blob.mode == "100755" else 0o644)
         os.replace(temporary, path)
@@ -637,6 +637,21 @@ def _scan_role_staging(
         raise QFBenchConfigError(f"solution path found in {role} staging")
 
 
+def _harden_trusted_staging(staging: Path) -> None:
+    """Keep verifier-only snapshots non-executable and owner-only at rest."""
+
+    staging.chmod(0o700)
+    for path in staging.rglob("*"):
+        if path.is_dir():
+            path.chmod(0o700)
+        elif path.is_file():
+            path.chmod(0o600)
+        else:
+            raise QFBenchConfigError(
+                f"unsupported verifier-only staging entry {path}"
+            )
+
+
 def materialize_qfbench_role_snapshot(
     source_repo: str | Path,
     public_root: str | Path,
@@ -714,6 +729,7 @@ def materialize_qfbench_role_snapshot(
         expected_paths={blob.path for blob in plan.trusted_verifier_blobs},
         role="trusted-verifier",
     )
+    _harden_trusted_staging(trusted_staging)
 
     public_target.parent.mkdir(parents=True, exist_ok=True)
     trusted_target.parent.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -42,7 +43,9 @@ def _write_source(tmp_path: Path, *, unknown_path: bool = False) -> tuple[Path, 
         "FROM finance-bench-sandbox:latest\n"
     )
     (task / "environment" / "data" / "input.csv").write_text("x\n1\n")
-    (task / "tests" / "test.sh").write_text("pytest -q /tests/test_outputs.py\n")
+    test_script = task / "tests" / "test.sh"
+    test_script.write_text("pytest -q /tests/test_outputs.py\n")
+    test_script.chmod(0o755)
     (task / "tests" / "test_outputs.py").write_text(
         "def test_output(): pass\n"
     )
@@ -130,6 +133,17 @@ def test_materializes_disjoint_public_and_trusted_roots_without_solution(tmp_pat
     assert {item["sha256"] for item in trusted_manifest["files"]}
     assert not public_root.with_name("public.partial").exists()
     assert not trusted_root.with_name("trusted.partial").exists()
+    assert stat.S_IMODE(trusted_root.stat().st_mode) == 0o700
+    assert {
+        stat.S_IMODE(path.stat().st_mode)
+        for path in trusted_root.rglob("*")
+        if path.is_dir()
+    } == {0o700}
+    assert {
+        stat.S_IMODE(path.stat().st_mode)
+        for path in trusted_root.rglob("*")
+        if path.is_file()
+    } == {0o600}
 
 
 def test_materializer_rejects_wrong_blob_without_promoting_either_root(tmp_path) -> None:
