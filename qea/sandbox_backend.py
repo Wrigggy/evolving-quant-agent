@@ -101,6 +101,29 @@ def _freeze_tmpfs(values: Mapping[str, int]) -> Mapping[str, int]:
     return MappingProxyType(dict(sorted(normalized.items())))
 
 
+def _freeze_executable_tmpfs(
+    values: object,
+    *,
+    writable_tmpfs_mb: Mapping[str, int],
+) -> frozenset[str]:
+    if isinstance(values, (str, bytes)):
+        raise SandboxSpecError("executable_tmpfs_paths must be a collection")
+    try:
+        normalized = frozenset(values)  # type: ignore[arg-type]
+    except TypeError as exc:
+        raise SandboxSpecError(
+            "executable_tmpfs_paths must be a collection"
+        ) from exc
+    if any(not isinstance(path, str) for path in normalized):
+        raise SandboxSpecError("executable tmpfs paths must be strings")
+    outside = sorted(normalized - set(writable_tmpfs_mb))
+    if outside:
+        raise SandboxSpecError(
+            f"executable tmpfs paths are not bounded writable mounts: {outside}"
+        )
+    return normalized
+
+
 def _require_image_ref(value: object) -> str:
     if not isinstance(value, str) or not (
         _RAW_IMAGE_ID.fullmatch(value)
@@ -127,6 +150,7 @@ class SandboxSpec:
     network_policy: NetworkPolicy
     environment: Mapping[str, str] = field(default_factory=dict)
     writable_tmpfs_mb: Mapping[str, int] = field(default_factory=dict)
+    executable_tmpfs_paths: frozenset[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
         if self.role not in _ALLOWED_ROLES:
@@ -144,10 +168,15 @@ class SandboxSpec:
         _require_positive_integer("pids_limit", self.pids_limit)
         _require_positive_integer("timeout_seconds", self.timeout_seconds)
         object.__setattr__(self, "environment", _freeze_environment(self.environment))
+        writable_tmpfs_mb = _freeze_tmpfs(self.writable_tmpfs_mb)
+        object.__setattr__(self, "writable_tmpfs_mb", writable_tmpfs_mb)
         object.__setattr__(
             self,
-            "writable_tmpfs_mb",
-            _freeze_tmpfs(self.writable_tmpfs_mb),
+            "executable_tmpfs_paths",
+            _freeze_executable_tmpfs(
+                self.executable_tmpfs_paths,
+                writable_tmpfs_mb=writable_tmpfs_mb,
+            ),
         )
 
     def canonical_json(self) -> str:
@@ -157,6 +186,7 @@ class SandboxSpec:
             "attempt_id": self.attempt_id,
             "cpu_count": self.cpu_count,
             "environment": dict(self.environment),
+            "executable_tmpfs_paths": sorted(self.executable_tmpfs_paths),
             "image_ref": self.image_ref,
             "memory_mb": self.memory_mb,
             "network_policy": self.network_policy,

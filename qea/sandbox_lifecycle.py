@@ -50,6 +50,9 @@ class SandboxLifecycle:
         resources = dict(self.resource_contract)
         tmpfs = resources.get("writable_tmpfs_mb", {})
         resources["writable_tmpfs_mb"] = MappingProxyType(dict(tmpfs))
+        resources["executable_tmpfs_paths"] = tuple(
+            sorted(resources.get("executable_tmpfs_paths", ()))
+        )
         object.__setattr__(self, "resource_contract", MappingProxyType(resources))
 
     def to_payload(self) -> dict[str, object]:
@@ -58,6 +61,9 @@ class SandboxLifecycle:
         resources = dict(self.resource_contract)
         resources["writable_tmpfs_mb"] = dict(
             self.resource_contract["writable_tmpfs_mb"]  # type: ignore[arg-type]
+        )
+        resources["executable_tmpfs_paths"] = list(
+            self.resource_contract["executable_tmpfs_paths"]  # type: ignore[arg-type]
         )
         return {
             "schema_version": self.schema_version,
@@ -143,6 +149,7 @@ def _resource_contract(spec: SandboxSpec) -> Mapping[str, object]:
         "pids_limit": spec.pids_limit,
         "timeout_seconds": spec.timeout_seconds,
         "writable_tmpfs_mb": dict(spec.writable_tmpfs_mb),
+        "executable_tmpfs_paths": sorted(spec.executable_tmpfs_paths),
     }
 
 

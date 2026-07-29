@@ -390,6 +390,9 @@ def test_verifier_is_independent_offline_and_rehashes_artifacts(tmp_path):
     assert spec.role == "verifier"
     assert spec.network_policy == "none"
     assert dict(spec.environment) == {}
+    assert spec.executable_tmpfs_paths == frozenset(
+        {"/opt/qea/uv-cache", "/opt/qea/uv-tools"}
+    )
     assert dict(spec.writable_tmpfs_mb) == {
         "/tmp": 256,
         "/qea": 512,
@@ -423,12 +426,20 @@ def test_verifier_is_independent_offline_and_rehashes_artifacts(tmp_path):
         for index, event in enumerate(verifier_backend.events)
         if isinstance(event, tuple) and event[1] == cache_copy
     )
-    verifier_index = next(
-        index
+    verifier_index, verifier_event = next(
+        (index, event)
         for index, event in enumerate(verifier_backend.events)
         if isinstance(event, tuple) and event[0] == "run:verifier:verifier"
     )
     assert cache_copy_index < verifier_index
+    assert verifier_event[2] == {
+        "TMPDIR": "/opt/qea/uv-tools",
+        "UV_OFFLINE": "1",
+        "UV_CACHE_DIR": "/opt/qea/uv-cache",
+        "UV_TOOL_DIR": "/opt/qea/uv-tools",
+        "UV_TOOL_BIN_DIR": "/opt/qea/uv-bin",
+        "PATH": "/opt/qea/uv-bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin",
+    }
     assert score.reward == 1.0
     assert score.tests_passed == 3
     evidence = json.loads(

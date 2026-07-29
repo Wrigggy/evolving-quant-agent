@@ -733,6 +733,7 @@ def validate_docker_inspect_contract(
     pids_limit: int,
     network_policy: str,
     writable_tmpfs_mb: Mapping[str, int] | None = None,
+    executable_tmpfs_paths: frozenset[str] = frozenset(),
 ) -> dict[str, object]:
     """Require the live Docker control plane to match the declared spec."""
 
@@ -797,9 +798,13 @@ def validate_docker_inspect_contract(
             raise CanaryGateError("Docker tmpfs targets differ from contract")
         for path, size_mb in expected_tmpfs.items():
             options = str(raw_tmpfs[path]).split(",")
-            required = {"rw", "nosuid", "nodev", "noexec", f"size={size_mb}m"}
+            executable = "exec" if path in executable_tmpfs_paths else "noexec"
+            opposite = "noexec" if executable == "exec" else "exec"
+            required = {"rw", "nosuid", "nodev", executable, f"size={size_mb}m"}
             if not required.issubset(options):
                 raise CanaryGateError(f"Docker tmpfs options differ for {path}")
+            if opposite in options:
+                raise CanaryGateError(f"Docker tmpfs execution mode differs for {path}")
     if not isinstance(mounts, list):
         raise CanaryGateError("Docker inspect mounts are malformed")
     for mount in mounts:
@@ -1558,6 +1563,7 @@ class RootlessCanaryLiveGates:
                 pids_limit=spec.pids_limit,
                 network_policy=spec.network_policy,
                 writable_tmpfs_mb=spec.writable_tmpfs_mb,
+                executable_tmpfs_paths=spec.executable_tmpfs_paths,
             )
             mark_finished(lifecycle)
             finished = True
@@ -1692,6 +1698,7 @@ class RootlessCanaryLiveGates:
             pids_limit=spec.pids_limit,
             network_policy=spec.network_policy,
             writable_tmpfs_mb=spec.writable_tmpfs_mb,
+            executable_tmpfs_paths=spec.executable_tmpfs_paths,
         )
 
     def _worker_proxy_gate(self) -> Mapping[str, object]:
@@ -1834,6 +1841,7 @@ print(json.dumps({'artifact_sha256': hashlib.sha256(payload).hexdigest(), 'nexau
                 pids_limit=spec.pids_limit,
                 network_policy=spec.network_policy,
                 writable_tmpfs_mb=spec.writable_tmpfs_mb,
+                executable_tmpfs_paths=spec.executable_tmpfs_paths,
             )
             self.backend.put_bytes(handle, "/qea/no-model.py", script.encode())
             result = self.backend.run(

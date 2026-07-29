@@ -72,6 +72,7 @@ def test_create_lifecycle_persists_identity_without_environment_values(tmp_path)
         "native_id": "container-exact-1",
         "resource_contract": {
             "cpu_count": 2,
+            "executable_tmpfs_paths": [],
             "memory_mb": 4096,
             "network_policy": "worker-proxy-only",
             "pids_limit": 256,

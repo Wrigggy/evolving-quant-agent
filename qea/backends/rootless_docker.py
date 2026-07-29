@@ -316,10 +316,11 @@ class RootlessDockerBackend:
             )
         )
         for path, size_mb in spec.writable_tmpfs_mb.items():
+            executable = "exec" if path in spec.executable_tmpfs_paths else "noexec"
             arguments.extend(
                 (
                     "--tmpfs",
-                    f"{path}:rw,nosuid,nodev,noexec,size={size_mb}m",
+                    f"{path}:rw,nosuid,nodev,{executable},size={size_mb}m",
                 )
             )
         for name, value in spec.environment.items():

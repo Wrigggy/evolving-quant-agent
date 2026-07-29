@@ -180,6 +180,38 @@ def test_create_emits_bounded_read_only_container_argv() -> None:
     assert handle == _handle(spec)
 
 
+def test_create_marks_only_declared_tmpfs_paths_executable() -> None:
+    runner = RecordingRunner(CompletedCommand(0, b"container-exact-1\n", b""))
+    backend = _backend(runner)
+    spec = _spec(
+        role="verifier",
+        network_policy="none",
+        environment={},
+        writable_tmpfs_mb={
+            "/tmp": 256,
+            "/opt/qea/uv-cache": 256,
+            "/opt/qea/uv-tools": 64,
+        },
+        executable_tmpfs_paths={
+            "/opt/qea/uv-cache",
+            "/opt/qea/uv-tools",
+        },
+    )
+
+    backend.create(spec)
+
+    tmpfs = _option_pairs(runner.calls[0].argv, "--tmpfs")
+    assert ("--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=256m") in tmpfs
+    assert (
+        "--tmpfs",
+        "/opt/qea/uv-cache:rw,nosuid,nodev,exec,size=256m",
+    ) in tmpfs
+    assert (
+        "--tmpfs",
+        "/opt/qea/uv-tools:rw,nosuid,nodev,exec,size=64m",
+    ) in tmpfs
+
+
 def test_create_rejects_non_docker_image_identity() -> None:
     backend = _backend(RecordingRunner())
     with pytest.raises(RootlessDockerError, match="Docker image"):

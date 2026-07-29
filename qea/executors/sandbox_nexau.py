@@ -56,7 +56,11 @@ _VERIFIER_REQUIRED_TMPFS = frozenset(
         "/opt/qea/uv-tools",
     }
 )
+_VERIFIER_EXECUTABLE_TMPFS = frozenset(
+    {"/opt/qea/uv-cache", "/opt/qea/uv-tools"}
+)
 _OFFLINE_VERIFIER_ENV = {
+    "TMPDIR": "/opt/qea/uv-tools",
     "UV_OFFLINE": "1",
     "UV_CACHE_DIR": "/opt/qea/uv-cache",
     "UV_TOOL_DIR": "/opt/qea/uv-tools",
@@ -809,6 +813,7 @@ class SandboxQFBenchVerifier:
             network_policy="none",
             environment={},
             writable_tmpfs_mb=self.resource_contract.writable_tmpfs_mb,
+            executable_tmpfs_paths=_VERIFIER_EXECUTABLE_TMPFS,
         )
         identity = _attempt_identity(
             role="verifier",

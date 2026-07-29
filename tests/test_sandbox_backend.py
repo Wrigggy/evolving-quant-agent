@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import MappingProxyType
 
 import pytest
@@ -43,6 +44,26 @@ def test_spec_digest_is_order_independent_and_changes_with_contract() -> None:
     ).spec_sha256
     assert len(left.spec_sha256) == 64
     assert set(left.spec_sha256) <= set("0123456789abcdef")
+
+
+def test_spec_declares_executable_tmpfs_paths_in_immutable_identity() -> None:
+    spec = _make_spec(
+        role="verifier",
+        network_policy="none",
+        writable_tmpfs_mb={"/opt/qea/uv-cache": 256, "/tmp": 64},
+        executable_tmpfs_paths={"/opt/qea/uv-cache"},
+    )
+
+    assert spec.executable_tmpfs_paths == frozenset({"/opt/qea/uv-cache"})
+    assert json.loads(spec.canonical_json())["executable_tmpfs_paths"] == [
+        "/opt/qea/uv-cache"
+    ]
+    assert spec.spec_sha256 != _make_spec().spec_sha256
+
+
+def test_spec_rejects_executable_path_outside_bounded_tmpfs() -> None:
+    with pytest.raises(SandboxSpecError, match="executable tmpfs"):
+        _make_spec(executable_tmpfs_paths={"/not-mounted"})
 
 
 def test_spec_copies_input_mappings_and_exposes_immutable_values() -> None:
