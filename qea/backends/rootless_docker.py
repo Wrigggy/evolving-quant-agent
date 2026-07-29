@@ -405,7 +405,18 @@ class RootlessDockerBackend:
         container_path = _safe_container_path(path)
         self._require_handle_ownership(handle)
         result = self._checked(
-            ("cp", f"{handle.native_id}:{container_path.as_posix()}", "-"),
+            (
+                "exec",
+                handle.native_id,
+                "tar",
+                "--create",
+                "--file",
+                "-",
+                "--directory",
+                container_path.parent.as_posix(),
+                "--",
+                container_path.name,
+            ),
             timeout_seconds=120,
             operation="container download",
         )

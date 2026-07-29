@@ -283,11 +283,19 @@ def test_put_uses_exec_tar_for_read_only_tmpfs_and_read_uses_deterministic_tar()
         assert member.mtime == 0
         assert archive.extractfile(member).read() == b"input-data"
     assert returned == read_payload
-    assert runner.calls[3].argv[-3:] == (
-        "cp",
-        "container-exact-1:/qea/result.json",
+    assert runner.calls[3].argv[-10:] == (
+        "exec",
+        "container-exact-1",
+        "tar",
+        "--create",
+        "--file",
         "-",
+        "--directory",
+        "/qea",
+        "--",
+        "result.json",
     )
+    assert "cp" not in runner.calls[3].argv
 
 
 @pytest.mark.parametrize("path", ["relative", "/", "/qea/../host", "/qea//x"])
