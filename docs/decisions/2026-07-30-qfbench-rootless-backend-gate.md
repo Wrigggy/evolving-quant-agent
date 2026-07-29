@@ -8,6 +8,8 @@ The 2026-07-27 provider plan requires any E2B replacement to prove immutable run
 
 The canary used source commit `5d3aa5fcd5ea66a02042ddafd003f651b78149a3`, immutable base/worker/verifier images, and a rootless Docker daemon owned by UID 1013. Tests and reference data were materialized only under `/home/julius/qea/runtime/trusted-verifier/024921eb-five-task`, with directory mode `700` and file mode `600`.
 
+A final post-run audit found three upstream-executable `test.sh` files had initially retained mode `0700`. They were normalized to `0600`; the final remote tree now contains only `0700` directories and `0600` files. Follow-up commit `dbff80d` enforces those modes before future trusted snapshot promotion. The correction did not change bytes, hashes, verifier isolation, or the completed parity result because the verifier invokes its isolated script copy through `bash`.
+
 ## Decision
 
 The self-hosted rootless backend is **not accepted for formal QFBench scoring**. E2B remains the only measured formal-scoring backend.

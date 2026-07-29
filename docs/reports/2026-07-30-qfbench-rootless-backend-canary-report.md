@@ -38,6 +38,8 @@ trusted tests/reference --------------^  (--network none)
 
 Trusted data 位于 `/home/julius/qea/runtime/trusted-verifier/024921eb-five-task`，目录权限为 `700`、文件为 `600`。Public bundle 位于 `/home/julius/qea/runtime/qfbench-public/024921eb-five-task`。Materialization audit 证明 public root 不含 tests、reference data 或 solution paths；trusted root 只含已授权的 verifier inputs。
 
+Final post-run permission audit 发现三个 upstream executable `test.sh` 最初保留为 `0700`。它们已经收紧为 `0600`，复核后的 trusted tree 唯一目录 mode 为 `0700`、唯一文件 mode 为 `0600`。Follow-up commit `dbff80d` 使 materializer 在 promotion 前强制该 at-rest contract。此修复不改变 file bytes、Git blob/hash 或已完成的 parity result；verifier 通过 `bash` 执行隔离副本，不依赖 trusted storage 的 execute bit。
+
 ### 结果 / Results
 
 | Gate | Result | Evidence |
