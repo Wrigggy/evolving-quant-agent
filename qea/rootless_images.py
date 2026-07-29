@@ -273,6 +273,12 @@ def _require_image_ref(value: str) -> str:
     return value
 
 
+def _dockerfile_base_ref(value: str) -> str:
+    if _IMAGE_ID.fullmatch(value):
+        return f"qea-local-base:{value.removeprefix('sha256:')}"
+    return value
+
+
 def _require_resources(
     cpu_count: int,
     memory_mb: int,
@@ -444,7 +450,7 @@ def prepare_rootless_image_plan(
             verifier_hash = hashlib.sha256(test_bytes).hexdigest()
         dockerfile = _task_dockerfile(
             upstream.read_text(),
-            base_image_ref=base_ref,
+            base_image_ref=_dockerfile_base_ref(base_ref),
             role=role,
             verifier_test_script=verifier_script,
         )
@@ -523,6 +529,28 @@ def _docker_checked(
     return result
 
 
+def _require_docker_image_id(
+    runner: CommandRunner,
+    docker_prefix: tuple[str, ...],
+    reference: str,
+    expected_image_id: str,
+    *,
+    operation: str,
+) -> None:
+    inspected = _docker_checked(
+        runner,
+        (*docker_prefix, "image", "inspect", "--format", "{{.Id}}", reference),
+        timeout_seconds=30,
+        operation=operation,
+    )
+    observed = inspected.stdout.decode("utf-8", errors="replace").strip()
+    if observed != expected_image_id:
+        raise RootlessImageError(
+            f"Docker {operation} identity mismatch: expected {expected_image_id}, "
+            f"found {observed or '<empty>'}"
+        )
+
+
 def execute_rootless_image_build(
     plan: RootlessImageBuildPlan,
     *,
@@ -545,6 +573,7 @@ def execute_rootless_image_build(
         raise RootlessImageError(
             f"rootless Docker socket validation failed: {exc}"
         ) from exc
+    docker_prefix = ("docker", "--host", docker_host)
     root = Path(output_root).expanduser().resolve()
     final = root / plan.identity_sha256
     staging = root / f"{plan.identity_sha256}.partial"
@@ -552,11 +581,41 @@ def execute_rootless_image_build(
         raise RootlessImageError(f"existing image identity directory: {final}")
     if staging.exists() or staging.is_symlink():
         raise RootlessImageError(f"existing partial image identity directory: {staging}")
+    local_base_tag: str | None = None
+    if _IMAGE_ID.fullmatch(plan.base_image_ref):
+        local_base_tag = _dockerfile_base_ref(plan.base_image_ref)
+        if f"FROM {local_base_tag}\n".encode() not in plan.dockerfile_bytes:
+            raise RootlessImageError("local base tag differs from planned Dockerfile")
+        _require_docker_image_id(
+            command_runner,
+            docker_prefix,
+            plan.base_image_ref,
+            plan.base_image_ref,
+            operation="local base image inspection",
+        )
+        _docker_checked(
+            command_runner,
+            (
+                *docker_prefix,
+                "image",
+                "tag",
+                plan.base_image_ref,
+                local_base_tag,
+            ),
+            timeout_seconds=30,
+            operation="local base image tagging",
+        )
+        _require_docker_image_id(
+            command_runner,
+            docker_prefix,
+            local_base_tag,
+            plan.base_image_ref,
+            operation="local base tag inspection",
+        )
     root.mkdir(parents=True, exist_ok=True)
     staging.mkdir()
     context = staging / "context"
     _write_context(plan, context)
-    docker_prefix = ("docker", "--host", docker_host)
     tag = f"qea-rootless-{plan.role}-{plan.identity_sha256[:16]}"
     build = _docker_checked(
         command_runner,
@@ -652,6 +711,14 @@ def execute_rootless_image_build(
     lock_path = staging / "dependency-lock.txt"
     lock_path.write_bytes(dependency_lock)
     lock_path.chmod(0o644)
+    if local_base_tag is not None:
+        _require_docker_image_id(
+            command_runner,
+            docker_prefix,
+            local_base_tag,
+            plan.base_image_ref,
+            operation="post-build local base tag inspection",
+        )
     timestamp = at or datetime.now(timezone.utc)
     if timestamp.tzinfo is None or timestamp.utcoffset() is None:
         raise RootlessImageError("build timestamp must be timezone-aware")
@@ -660,6 +727,8 @@ def execute_rootless_image_build(
         "image_id": image_id,
         "repo_digests": repo_digests,
         "build_tag": tag,
+        "local_base_tag": local_base_tag,
+        "local_base_image_id": plan.base_image_ref if local_base_tag else None,
         "docker_version": docker_version,
         "docker_security_options": security_options,
         "dependency_lock_sha256": hashlib.sha256(dependency_lock).hexdigest(),

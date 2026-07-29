@@ -173,7 +173,8 @@ def test_worker_plan_contains_public_environment_and_pinned_nexau_only(tmp_path)
     )
 
     dockerfile = plan.dockerfile_bytes.decode()
-    assert f"FROM {QFBENCH_BASE}" in dockerfile
+    assert f"FROM qea-local-base:{'b' * 64}" in dockerfile
+    assert plan.base_image_ref == QFBENCH_BASE
     assert NEXAU_COMMIT in dockerfile
     assert "/opt/qea/nexau-requirements.lock" in dockerfile
     assert {member.path for member in plan.context_files} == {
@@ -287,7 +288,11 @@ def test_execute_build_records_final_image_and_dependency_lock(tmp_path) -> None
         build_timeout_seconds=600,
     )
     image_id = "sha256:" + "c" * 64
+    local_base_tag = "qea-local-base:" + "b" * 64
     runner = RecordingRunner(
+        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
+        CompletedCommand(0, b"", b""),
+        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
         CompletedCommand(0, (image_id + "\n").encode(), b""),
         CompletedCommand(
             0,
@@ -297,6 +302,7 @@ def test_execute_build_records_final_image_and_dependency_lock(tmp_path) -> None
         CompletedCommand(0, b"29.4.1\n", b""),
         CompletedCommand(0, b'["name=rootless"]\n', b""),
         CompletedCommand(0, b"nexau==0.3.9\nnumpy==2.2.3\n", b""),
+        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
     )
 
     result = execute_rootless_image_build(
@@ -308,7 +314,20 @@ def test_execute_build_records_final_image_and_dependency_lock(tmp_path) -> None
         at=datetime(2026, 7, 28, 14, 0, tzinfo=timezone.utc),
     )
 
-    build_argv = runner.calls[0].argv
+    assert runner.calls[0].argv[-5:] == (
+        "image",
+        "inspect",
+        "--format",
+        "{{.Id}}",
+    ) + (QFBENCH_BASE,)
+    assert runner.calls[1].argv[-4:] == (
+        "image",
+        "tag",
+        QFBENCH_BASE,
+        local_base_tag,
+    )
+    assert runner.calls[2].argv[-1] == local_base_tag
+    build_argv = runner.calls[3].argv
     assert build_argv[:4] == ("docker", "--host", DOCKER_HOST, "build")
     assert "--pull=false" in build_argv
     assert ("--network", "default") == _pair(build_argv, "--network")
@@ -316,6 +335,8 @@ def test_execute_build_records_final_image_and_dependency_lock(tmp_path) -> None
     assert result.output_dir.name == plan.identity_sha256
     manifest = json.loads(result.manifest_path.read_text())
     assert manifest["image_id"] == image_id
+    assert manifest["local_base_tag"] == local_base_tag
+    assert manifest["local_base_image_id"] == QFBENCH_BASE
     assert manifest["docker_version"] == "29.4.1"
     assert manifest["docker_security_options"] == ["name=rootless"]
     lock = result.output_dir / "dependency-lock.txt"
@@ -324,6 +345,7 @@ def test_execute_build_records_final_image_and_dependency_lock(tmp_path) -> None
     ).hexdigest()
     assert (result.output_dir / "context/Dockerfile").is_file()
     assert not result.output_dir.with_name(plan.identity_sha256 + ".partial").exists()
+    assert runner.calls[-1].argv[-1] == local_base_tag
 
 
 def test_execute_build_refuses_system_socket_and_existing_identity(tmp_path) -> None:
