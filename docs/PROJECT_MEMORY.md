@@ -139,6 +139,16 @@ Still required before a formal QFBench evolution-gain claim:
 4. Before migrating from E2B, run the preregistered sandbox-backend parity gates in the 2026-07-27 provider decision; documentation review alone is not compatibility evidence.
 5. Preserve the historical 14 contaminated scores. Repair them only if historical score authority is worth a separately identified superseding rescore; the corrected full A/B runs now supply current evidence without rewriting history.
 
+### 2026-07-30 Rootless Self-Hosted Backend Canary
+
+The shared `bc-server` rootless Docker backend passed immutable image/lock, exact-resource, read-only filesystem, bounded exec/noexec tmpfs, worker-proxy, hard offline-verifier, artifact-firewall, force-kill, exact-ID reaper/resume, and cleanup gates at source commit `5d3aa5fcd5ea66a02042ddafd003f651b78149a3`. Run `qfbench-rootless-canary-20260730-r6` replayed the historical `historical-var-data-prep` artifact at official reward `1.0` with 12/12 tests, matching the E2B parity anchor.
+
+The one authorized fresh model request did **not** complete: OpenRouter returned HTTP 403 because `openai/gpt-5` was unavailable from the shared server region. No fresh worker artifact or verifier lifecycle was produced, so this is an infrastructure/model-availability failure, not official reward zero and not end-to-end backend parity. Exact cost remains unknown. All paid-stage proxy/worker resources were cleaned; the final managed container and network counts were zero.
+
+Official tests and test reference data from QFBench commit `024921eb507fcc0c4ffe3e0a96802724be1ae84a` remain verifier-only under `/home/julius/qea/runtime/trusted-verifier/024921eb-five-task` with modes `700/600`. Audits found zero trusted payload/hash, secret, forbidden path, or official-solution exposure to worker surfaces. No official solutions were downloaded, uploaded, checked out, or run.
+
+**Current decision:** the rootless backend is retained as a verifier-parity/isolation candidate but is not accepted for formal scoring. E2B remains the only measured formal-scoring backend. Before another paid single-task canary, preregister either a compliant model-proxy egress that preserves `openai/gpt-5`, or a region-available model treated as a new infrastructure-only identity. Do not expand to the five-task panel, 30 tasks, or repetitions until a fresh worker-to-verifier loop and cost telemetry pass. See the [gate decision](decisions/2026-07-30-qfbench-rootless-backend-gate.md) and [experiment report](reports/2026-07-30-qfbench-rootless-backend-canary-report.md).
+
 No report may describe adapter compatibility, E2B parity, AutoDL performance, or seed-worker QFBench score as measured until the corresponding run artifact exists.
 
 ## Memory Maintenance Rules
