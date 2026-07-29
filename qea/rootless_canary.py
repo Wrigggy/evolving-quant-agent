@@ -2140,13 +2140,13 @@ print(json.dumps({'artifact_sha256': hashlib.sha256(payload).hexdigest(), 'nexau
             SandboxQFBenchVerifier,
             SandboxResourceContract,
         )
-        from .loop_benchmark import hash_worker_directory
         from .model_proxy import (
             build_model_proxy_sandbox_plan,
             scan_secret_exposure,
             start_model_proxy_sandbox,
         )
         from .sandbox_lifecycle import mark_cleaned, mark_finished
+        from .worker_identity import hash_worker_directory
 
         images = self._load_images()
         token_path = self.config.resolved_path("secret_file")

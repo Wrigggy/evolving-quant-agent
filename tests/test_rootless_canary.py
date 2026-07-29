@@ -72,6 +72,37 @@ def test_stage_order_is_exact_and_contains_no_formal_scoring_stage():
     assert "five-iteration" not in encoded
 
 
+def test_worker_identity_hash_is_available_without_yaml(tmp_path):
+    worker = tmp_path / "worker"
+    worker.mkdir()
+    (worker / "agent.yaml").write_text("name: seed\n")
+    script = """
+import builtins
+import sys
+
+real_import = builtins.__import__
+def blocked(name, *args, **kwargs):
+    if name == "yaml" or name.startswith("yaml."):
+        raise ModuleNotFoundError("yaml blocked by test")
+    return real_import(name, *args, **kwargs)
+builtins.__import__ = blocked
+
+from qea.worker_identity import hash_worker_directory
+print(hash_worker_directory(sys.argv[1]))
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(worker)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert len(result.stdout.strip()) == 64
+    assert set(result.stdout.strip()) <= set("0123456789abcdef")
+
+
 def test_plan_only_is_side_effect_free_and_redacts_secret_values(tmp_path):
     from qea.rootless_canary import load_canary_config, plan_canary
 

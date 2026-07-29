@@ -30,6 +30,10 @@ from .evolution_feedback import (
     load_verifier_mapping,
 )
 from .evolve_runtime import diff_signature, dir_unified_diff, run_evolve_agent, snapshot_dir
+from .worker_identity import (
+    WorkerIdentityError,
+    hash_worker_directory as _hash_worker_directory,
+)
 
 
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -137,34 +141,10 @@ class BenchmarkEvolutionResult:
 
 
 def hash_worker_directory(root: str | Path) -> str:
-    directory = Path(root).resolve()
-    if not directory.is_dir():
-        raise EvolutionConfigError(f"worker directory does not exist: {directory}")
-    digest = hashlib.sha256()
-    members = tuple(directory.rglob("*"))
-    symlinks = [path.relative_to(directory) for path in members if path.is_symlink()]
-    if symlinks:
-        raise EvolutionConfigError(
-            f"worker directory contains forbidden symlinks: {symlinks[:3]}"
-        )
-    files = sorted(
-        (
-            path
-            for path in members
-            if path.is_file()
-            and ".git" not in path.parts
-            and "__pycache__" not in path.parts
-        ),
-        key=lambda path: path.relative_to(directory).as_posix(),
-    )
-    for path in files:
-        relative = path.relative_to(directory).as_posix().encode()
-        payload = path.read_bytes()
-        digest.update(len(relative).to_bytes(8, "big"))
-        digest.update(relative)
-        digest.update(len(payload).to_bytes(8, "big"))
-        digest.update(payload)
-    return digest.hexdigest()
+    try:
+        return _hash_worker_directory(root)
+    except WorkerIdentityError as exc:
+        raise EvolutionConfigError(str(exc)) from exc
 
 
 def _sha256_file(path: str | Path) -> str:
