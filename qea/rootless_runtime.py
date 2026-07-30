@@ -16,10 +16,21 @@ from .executors.sandbox_nexau import (
     SandboxQFBenchVerifier,
 )
 from .executors.sandbox_proxy import SandboxProxyManager
-from .executors.sandbox_runtime import PLACEHOLDER_API_KEY, SandboxResourceContract
+from .executors.sandbox_runtime import (
+    PLACEHOLDER_API_KEY,
+    SandboxInfrastructureError,
+    SandboxResourceContract,
+    trusted_regular_path,
+)
+from .model_proxy import (
+    ModelProxyError,
+    build_model_proxy_sandbox_plan,
+    model_proxy_attempt_identity,
+)
 from .resource_lease import HostResourceLeasePool, ResourceRequest
 from .rootless_image_set import RootlessImageSet, RootlessImageSetError
 from .sandbox_backend import SandboxBackend
+from .sandbox_lifecycle import SandboxLifecycleError, load_lifecycle
 
 
 DEFAULT_WORKER_PIDS_LIMIT = 256
@@ -125,6 +136,7 @@ class RootlessRuntimeCatalog:
     evolver_image_ref: str
     proxy_image_ref: str
     tasks: Mapping[str, RootlessTaskRuntime]
+    image_set_identity_sha256: str
     identity_sha256: str
 
 
@@ -218,13 +230,41 @@ def load_rootless_runtime_catalog(
             identity_sha256=identity,
         )
 
+    sorted_runtimes = dict(sorted(runtimes.items()))
+    default_execution_policy = {
+        "worker": {
+            "pids_limit": DEFAULT_WORKER_PIDS_LIMIT,
+            "timeout_seconds": DEFAULT_WORKER_TIMEOUT_SECONDS,
+            "writable_tmpfs_mb": dict(DEFAULT_WORKER_TMPFS_MB),
+        },
+        "verifier": {
+            "pids_limit": DEFAULT_VERIFIER_PIDS_LIMIT,
+            "timeout_seconds": DEFAULT_VERIFIER_TIMEOUT_SECONDS,
+            "writable_tmpfs_mb": dict(DEFAULT_VERIFIER_TMPFS_MB),
+        },
+    }
+    runtime_identity = _canonical_digest(
+        {
+            "schema_version": 1,
+            "image_set_identity_sha256": image_set.identity_sha256,
+            "task_runtime_identities_sha256": [
+                {
+                    "task_id": task_id,
+                    "identity_sha256": runtime.identity_sha256,
+                }
+                for task_id, runtime in sorted_runtimes.items()
+            ],
+            "default_execution_policy": default_execution_policy,
+        }
+    )
     return RootlessRuntimeCatalog(
         benchmark_commit=image_set.benchmark_commit,
         base_image_ref=str(image_set.base["image_id"]),
         evolver_image_ref=str(image_set.evolver["image_id"]),
         proxy_image_ref=str(image_set.proxy["image_id"]),
-        tasks=MappingProxyType(dict(sorted(runtimes.items()))),
-        identity_sha256=image_set.identity_sha256,
+        tasks=MappingProxyType(sorted_runtimes),
+        image_set_identity_sha256=image_set.identity_sha256,
+        identity_sha256=runtime_identity,
     )
 
 
@@ -270,6 +310,113 @@ class _RootlessTaskRouter:
             raise RootlessRuntimeError(
                 f"task {task_id!r} is outside the rootless runtime catalog"
             ) from exc
+
+
+def _validate_worker_proxy_session(
+    session: object,
+    *,
+    proxy_manager: SandboxProxyManager,
+    catalog: RootlessRuntimeCatalog,
+    run_root: Path,
+    attempt: TaskAttempt,
+    task_id: str,
+    model_name: str,
+) -> None:
+    """Bind a yielded proxy session to its static spec and lifecycle evidence."""
+
+    expected_lifecycle = (
+        run_root
+        / "lifecycles"
+        / attempt.attempt_id
+        / "proxy-sandbox-lifecycle-v2.json"
+    )
+    try:
+        config = proxy_manager.config
+        resources = config.resource_contract
+        expected_plan = build_model_proxy_sandbox_plan(
+            run_id=attempt.run_id,
+            attempt_id=attempt.attempt_id,
+            task_id=task_id,
+            image_ref=catalog.proxy_image_ref,
+            upstream_base_url=config.upstream_base_url,
+            allowed_path_prefix=config.allowed_path_prefix,
+            listen_port=config.listen_port,
+            cpu_count=resources.cpu_count,
+            memory_mb=resources.memory_mb,
+            pids_limit=resources.pids_limit,
+            timeout_seconds=resources.timeout_seconds,
+            network_scope=attempt.attempt_id,
+            allowed_model=model_name,
+            audit_path="/run/qea-secrets/proxy-audit.jsonl",
+            writable_tmpfs_mb=resources.writable_tmpfs_mb,
+        )
+        lifecycle_path = trusted_regular_path(
+            getattr(session, "lifecycle_uri"),
+            phase="worker.proxy",
+            contained_by=run_root,
+        )
+        immutable_image_ref = getattr(session, "immutable_image_ref")
+        spec_sha256 = getattr(session, "spec_sha256")
+        public_plan_sha256 = getattr(session, "public_plan_sha256")
+        public_config_sha256 = getattr(session, "public_config_sha256")
+        attempt_identity_sha256 = getattr(
+            session, "attempt_identity_sha256"
+        )
+        native_id = getattr(session, "native_id")
+        network_name = getattr(session, "network_name")
+        network_id = getattr(session, "network_id")
+        combined_identity = model_proxy_attempt_identity(
+            public_plan_sha256=public_plan_sha256,
+            public_config_sha256=public_config_sha256,
+        )
+        lifecycle = load_lifecycle(lifecycle_path)
+    except (
+        AttributeError,
+        ModelProxyError,
+        OSError,
+        SandboxInfrastructureError,
+        SandboxLifecycleError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise RootlessRuntimeError(
+            "worker proxy session identity is incomplete or invalid"
+        ) from exc
+
+    if (
+        lifecycle_path != expected_lifecycle
+        or getattr(session, "network_scope", None) != attempt.attempt_id
+        or getattr(session, "allowed_model", None) != model_name
+        or immutable_image_ref != catalog.proxy_image_ref
+        or spec_sha256 != expected_plan.spec.spec_sha256
+        or combined_identity != attempt_identity_sha256
+        or not isinstance(native_id, str)
+        or not native_id
+        or not isinstance(network_name, str)
+        or not network_name
+        or not isinstance(network_id, str)
+        or not network_id
+    ):
+        raise RootlessRuntimeError(
+            "worker proxy session identity differs from the attempt"
+        )
+    if (
+        not lifecycle.backend
+        or lifecycle.role != "proxy"
+        or lifecycle.run_id != attempt.run_id
+        or lifecycle.attempt_id != attempt.attempt_id
+        or lifecycle.task_id != task_id
+        or lifecycle.native_id != native_id
+        or lifecycle.immutable_image_ref != immutable_image_ref
+        or lifecycle.spec_sha256 != spec_sha256
+        or lifecycle.attempt_identity_sha256 != attempt_identity_sha256
+        or lifecycle.started_at is None
+        or lifecycle.finished_at is not None
+        or lifecycle.cleaned_up
+    ):
+        raise RootlessRuntimeError(
+            "worker proxy session identity differs from lifecycle evidence"
+        )
 
 
 class RootlessWorkerRouter(_RootlessTaskRouter):
@@ -341,13 +488,15 @@ class RootlessWorkerRouter(_RootlessTaskRouter):
                 caller_role="worker",
                 run_dir=run_root,
             ) as session:
-                if (
-                    session.network_scope != attempt.attempt_id
-                    or session.allowed_model != self.model_name
-                ):
-                    raise RootlessRuntimeError(
-                        "worker proxy session identity differs from the attempt"
-                    )
+                _validate_worker_proxy_session(
+                    session,
+                    proxy_manager=self.proxy_manager,
+                    catalog=self.catalog,
+                    run_root=run_root,
+                    attempt=attempt,
+                    task_id=task.task_id,
+                    model_name=self.model_name,
+                )
                 executor = SandboxNexAUExecutor(
                     backend=self.backend,
                     lifecycle_root=self.lifecycle_root,

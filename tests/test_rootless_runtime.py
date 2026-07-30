@@ -4,6 +4,7 @@ import hashlib
 import json
 from contextlib import contextmanager
 from pathlib import Path
+from threading import Event
 from types import MappingProxyType, SimpleNamespace
 
 import pytest
@@ -152,7 +153,9 @@ def test_catalog_loads_one_explicit_image_set_as_sorted_read_only_runtime(
         benchmark_commit=COMMIT,
     )
 
-    assert catalog.identity_sha256 == selected.identity_sha256
+    assert catalog.image_set_identity_sha256 == selected.identity_sha256
+    assert catalog.identity_sha256 != catalog.image_set_identity_sha256
+    assert len(catalog.identity_sha256) == 64
     assert catalog.base_image_ref == BASE_IMAGE
     assert catalog.proxy_image_ref == "sha256:" + "2" * 64
     assert catalog.evolver_image_ref == "sha256:" + "3" * 64
@@ -239,50 +242,146 @@ def test_catalog_revalidates_referenced_manifest_and_dependency_lock(tmp_path) -
 
 
 class _Lease:
-    def __init__(self, events):
-        self.events = events
+    def __init__(self, pool):
+        self.pool = pool
+        self.events = pool.events
 
     def __enter__(self):
+        self.pool.active += 1
         self.events.append("lease:entered")
         return self
 
     def __exit__(self, exc_type, exc, traceback):
         self.events.append("lease:released")
+        self.pool.active -= 1
 
 
 class _Pool:
     def __init__(self, events):
         self.events = events
         self.requests = []
+        self.active = 0
 
     def acquire(self, key, request, *, timeout_seconds):
         self.events.append("lease:acquired")
         self.requests.append((key, request, timeout_seconds))
-        return _Lease(self.events)
+        return _Lease(self)
 
 
 class _ProxyManager:
-    def __init__(self, backend, events, resources):
+    def __init__(
+        self,
+        backend,
+        events,
+        resources,
+        *,
+        tamper=None,
+        failure=None,
+    ):
         self.backend = backend
         self.events = events
+        self.tamper = tamper
+        self.failure = failure
+        self.opens = 0
         self.config = SimpleNamespace(
             resource_contract=resources,
             allowed_model="example/model",
             image_ref="sha256:" + "2" * 64,
+            upstream_base_url="https://provider.example/v1",
+            allowed_path_prefix="/v1",
+            listen_port=8080,
+            timeout_seconds=120,
+            expect_request=True,
         )
 
     @contextmanager
     def open(self, **kwargs):
+        from qea.model_proxy import (
+            build_model_proxy_sandbox_plan,
+            model_proxy_plan_identity,
+        )
+        from qea.sandbox_backend import SandboxHandle
+        from qea.sandbox_lifecycle import (
+            create_lifecycle,
+            mark_cleaned,
+            mark_finished,
+            mark_started,
+        )
+
+        self.opens += 1
         self.events.append(("proxy:open", kwargs))
+        if self.failure == "open":
+            raise RuntimeError("synthetic proxy open failure")
+        resources = self.config.resource_contract
+        plan = build_model_proxy_sandbox_plan(
+            run_id=kwargs["run_id"],
+            attempt_id=kwargs["attempt_id"],
+            task_id=kwargs["task_id"],
+            image_ref=self.config.image_ref,
+            upstream_base_url=self.config.upstream_base_url,
+            allowed_path_prefix=self.config.allowed_path_prefix,
+            listen_port=self.config.listen_port,
+            cpu_count=resources.cpu_count,
+            memory_mb=resources.memory_mb,
+            pids_limit=resources.pids_limit,
+            timeout_seconds=resources.timeout_seconds,
+            network_scope=kwargs["attempt_id"],
+            allowed_model=self.config.allowed_model,
+            audit_path="/run/qea-secrets/proxy-audit.jsonl",
+            writable_tmpfs_mb=resources.writable_tmpfs_mb,
+        )
+        public_plan, public_config, attempt_identity = model_proxy_plan_identity(plan)
+        lifecycle_uri = (
+            kwargs["run_dir"]
+            / "lifecycles"
+            / kwargs["attempt_id"]
+            / "proxy-sandbox-lifecycle-v2.json"
+        )
+        handle = SandboxHandle(
+            backend="fake",
+            native_id="proxy-1",
+            immutable_image_ref=plan.spec.image_ref,
+            spec_sha256=plan.spec.spec_sha256,
+        )
+        create_lifecycle(
+            lifecycle_uri,
+            handle=handle,
+            spec=plan.spec,
+            attempt_identity_sha256=attempt_identity,
+        )
+        mark_started(lifecycle_uri)
+        values = {
+            "base_url": "http://qea-model-proxy:8080/v1",
+            "network_scope": kwargs["attempt_id"],
+            "network_name": "qea-run-001-attempt-network",
+            "network_id": "network-1",
+            "allowed_model": "example/model",
+            "immutable_image_ref": handle.immutable_image_ref,
+            "spec_sha256": handle.spec_sha256,
+            "public_plan_sha256": public_plan,
+            "public_config_sha256": public_config,
+            "attempt_identity_sha256": attempt_identity,
+            "native_id": handle.native_id,
+            "lifecycle_uri": lifecycle_uri,
+        }
+        if self.tamper == "image":
+            values["immutable_image_ref"] = "sha256:" + "9" * 64
+        elif self.tamper == "spec":
+            values["spec_sha256"] = "9" * 64
+        elif self.tamper == "digest":
+            values["attempt_identity_sha256"] = "9" * 64
         try:
-            yield SimpleNamespace(
-                base_url="http://qea-model-proxy:8080/v1",
-                network_scope=kwargs["attempt_id"],
-                network_name="qea-run-001-attempt-network",
-                allowed_model="example/model",
-            )
+            yield SimpleNamespace(**values)
         finally:
+            mark_finished(lifecycle_uri)
+            mark_cleaned(
+                lifecycle_uri,
+                cleanup_method="exact-id",
+                cleanup_result="killed",
+            )
             self.events.append("proxy:closed")
+            if self.failure == "close":
+                raise RuntimeError("synthetic proxy close failure")
 
 
 def _sandbox_resources(*, verifier=False, proxy=False):
@@ -315,24 +414,28 @@ def _sandbox_resources(*, verifier=False, proxy=False):
     )
 
 
-def _catalog():
+def _catalog(task_ids=("task-a",)):
     from qea.rootless_runtime import RootlessRuntimeCatalog, RootlessTaskRuntime
 
-    runtime = RootlessTaskRuntime(
-        task_id="task-a",
-        worker_image_ref="sha256:" + "4" * 64,
-        verifier_image_ref="sha256:" + "5" * 64,
-        worker_resources=_sandbox_resources(),
-        verifier_resources=_sandbox_resources(verifier=True),
-        identity_sha256="6" * 64,
-    )
+    tasks = {
+        task_id: RootlessTaskRuntime(
+            task_id=task_id,
+            worker_image_ref="sha256:" + "4" * 64,
+            verifier_image_ref="sha256:" + "5" * 64,
+            worker_resources=_sandbox_resources(),
+            verifier_resources=_sandbox_resources(verifier=True),
+            identity_sha256="6" * 64,
+        )
+        for task_id in task_ids
+    }
     return RootlessRuntimeCatalog(
         benchmark_commit=COMMIT,
         base_image_ref=BASE_IMAGE,
         proxy_image_ref="sha256:" + "2" * 64,
         evolver_image_ref="sha256:" + "3" * 64,
-        tasks=MappingProxyType({"task-a": runtime}),
-        identity_sha256="7" * 64,
+        tasks=MappingProxyType(tasks),
+        image_set_identity_sha256="7" * 64,
+        identity_sha256="8" * 64,
     )
 
 
@@ -346,6 +449,42 @@ def _attempt():
         split="optimize",
         checkpoint="seed",
         worker_digest="a" * 64,
+    )
+
+
+def _seed_worker(root: Path) -> Path:
+    worker = root / "worker-source"
+    worker.mkdir()
+    (worker / "agent.yaml").write_text("name: qf-worker\n")
+    (worker / "systemprompt.md").write_text("Solve the task.\n")
+    return worker
+
+
+def _worker_execution(attempt, run_dir: Path, task):
+    from qea.evaluation import ArtifactRecord
+    from qea.executors.execution_record import WorkerExecution
+
+    attempt_dir = run_dir / "attempts" / attempt.attempt_id
+    artifact_dir = attempt_dir / "artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifact = artifact_dir / "answer.txt"
+    artifact.write_text(f"{task.task_id}\n")
+    trace = attempt_dir / "raw-trace.jsonl"
+    log = attempt_dir / "worker-command.json"
+    final = attempt_dir / "final.txt"
+    trace.write_text("{}\n")
+    log.write_text("{}\n")
+    final.write_text("done\n")
+    return WorkerExecution(
+        attempt_id=attempt.attempt_id,
+        artifact_dir=artifact_dir,
+        artifacts=(ArtifactRecord.from_file(artifact, root=artifact_dir),),
+        trace_uri=str(trace),
+        log_uri=str(log),
+        final_text_uri=str(final),
+        summary={"files": 1},
+        sandbox_id=f"worker-{task.task_id}",
+        cleaned_up=True,
     )
 
 
@@ -443,6 +582,7 @@ def test_worker_router_atomically_leases_proxy_and_exact_task_runtime(
     assert init["placeholder_api_key"] == "qea-proxy-placeholder"
     assert events.index("lease:entered") < events.index(proxy_event)
     assert events.index("proxy:closed") < events.index("lease:released")
+    assert pool.active == 0
 
 
 def test_verifier_router_leases_only_exact_offline_task_runtime(
@@ -532,4 +672,481 @@ def test_worker_router_rejects_proxy_image_outside_selected_catalog(tmp_path) ->
             proxy_manager=proxy,
             resource_pool=_Pool(events),
             model_name="example/model",
+        )
+
+
+@pytest.mark.parametrize("tamper", ("image", "spec", "digest"))
+def test_worker_router_rejects_executed_proxy_identity_before_worker_creation(
+    tmp_path,
+    monkeypatch,
+    tamper,
+) -> None:
+    import qea.rootless_runtime as runtime_module
+    from qea.rootless_runtime import RootlessRuntimeError, RootlessWorkerRouter
+
+    events = []
+    backend = object()
+    proxy = _ProxyManager(
+        backend,
+        events,
+        _sandbox_resources(proxy=True),
+        tamper=tamper,
+    )
+    pool = _Pool(events)
+
+    class RefusingExecutor:
+        def __init__(self, **kwargs):
+            raise AssertionError("worker executor must not be created")
+
+    monkeypatch.setattr(runtime_module, "SandboxNexAUExecutor", RefusingExecutor)
+    router = RootlessWorkerRouter(
+        catalog=_catalog(),
+        backend=backend,
+        lifecycle_root=tmp_path / "lifecycles",
+        public_task_root=tmp_path / "public",
+        proxy_manager=proxy,
+        resource_pool=pool,
+        model_name="example/model",
+    )
+
+    with pytest.raises(RootlessRuntimeError, match="proxy session identity"):
+        router.execute(
+            attempt=_attempt(),
+            task=SimpleNamespace(task_id="task-a"),
+            worker_dir=tmp_path / "worker",
+            run_dir=tmp_path / "run",
+            model_env={},
+        )
+    assert "proxy:closed" in events
+    assert "lease:released" in events
+    assert pool.active == 0
+
+
+@pytest.mark.parametrize(
+    ("failure_source", "message", "proxy_closed"),
+    [
+        ("proxy-open", "synthetic proxy open failure", False),
+        ("executor-init", "synthetic executor init failure", True),
+        ("executor-execute", "synthetic worker execute failure", True),
+        ("proxy-close", "synthetic proxy close failure", True),
+    ],
+)
+def test_worker_router_releases_combined_lease_across_failure_boundaries(
+    tmp_path,
+    monkeypatch,
+    failure_source,
+    message,
+    proxy_closed,
+) -> None:
+    import qea.rootless_runtime as runtime_module
+    from qea.rootless_runtime import RootlessWorkerRouter
+
+    events = []
+    backend = object()
+    pool = _Pool(events)
+    proxy_failure = {
+        "proxy-open": "open",
+        "proxy-close": "close",
+    }.get(failure_source)
+    proxy = _ProxyManager(
+        backend,
+        events,
+        _sandbox_resources(proxy=True),
+        failure=proxy_failure,
+    )
+
+    class FailingExecutor:
+        def __init__(self, **kwargs):
+            events.append("executor:created")
+            if failure_source == "executor-init":
+                raise RuntimeError("synthetic executor init failure")
+
+        def execute(self, **kwargs):
+            events.append("executor:executed")
+            if failure_source == "executor-execute":
+                raise RuntimeError("synthetic worker execute failure")
+            return object()
+
+    monkeypatch.setattr(runtime_module, "SandboxNexAUExecutor", FailingExecutor)
+    router = RootlessWorkerRouter(
+        catalog=_catalog(),
+        backend=backend,
+        lifecycle_root=tmp_path / "lifecycles",
+        public_task_root=tmp_path / "public",
+        proxy_manager=proxy,
+        resource_pool=pool,
+        model_name="example/model",
+    )
+
+    with pytest.raises(RuntimeError, match=message):
+        router.execute(
+            attempt=_attempt(),
+            task=SimpleNamespace(task_id="task-a"),
+            worker_dir=tmp_path / "worker",
+            run_dir=tmp_path / "run",
+            model_env={},
+        )
+
+    assert pool.active == 0
+    assert events[-1] == "lease:released"
+    assert ("proxy:closed" in events) is proxy_closed
+
+
+def test_actual_rootless_routers_resume_completed_score_without_acquisition(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    import qea.rootless_runtime as runtime_module
+    from qea.evaluation import OfficialTaskScore
+    from qea.loop_benchmark import QFBenchSandboxEvaluator
+    from qea.rootless_runtime import RootlessVerifierRouter, RootlessWorkerRouter
+
+    events = []
+    backend = object()
+    pool = _Pool(events)
+    proxy = _ProxyManager(backend, events, _sandbox_resources(proxy=True))
+    calls = {"worker_init": 0, "worker_execute": 0, "verifier_init": 0,
+             "verifier_verify": 0}
+
+    class FakeExecutor:
+        def __init__(self, **kwargs):
+            calls["worker_init"] += 1
+
+        def execute(self, *, attempt, task, run_dir, **kwargs):
+            calls["worker_execute"] += 1
+            return _worker_execution(attempt, run_dir, task)
+
+    class FakeVerifier:
+        def __init__(self, **kwargs):
+            calls["verifier_init"] += 1
+
+        def verify(self, *, task, **kwargs):
+            calls["verifier_verify"] += 1
+            return OfficialTaskScore(
+                task_id=task.task_id,
+                domain=task.domain,
+                reward=0.75,
+            )
+
+    monkeypatch.setattr(runtime_module, "SandboxNexAUExecutor", FakeExecutor)
+    monkeypatch.setattr(runtime_module, "SandboxQFBenchVerifier", FakeVerifier)
+    worker_router = RootlessWorkerRouter(
+        catalog=_catalog(),
+        backend=backend,
+        lifecycle_root=tmp_path / "lifecycles",
+        public_task_root=tmp_path / "public",
+        proxy_manager=proxy,
+        resource_pool=pool,
+        model_name="example/model",
+    )
+    verifier_router = RootlessVerifierRouter(
+        catalog=_catalog(),
+        backend=backend,
+        lifecycle_root=tmp_path / "lifecycles",
+        trusted_task_root=tmp_path / "trusted",
+        resource_pool=pool,
+    )
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit=COMMIT,
+        run_id="rootless-score-resume",
+        executor=worker_router,
+        verifier=verifier_router,
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+    task = SimpleNamespace(task_id="task-a", domain="risk", lineage="a")
+    worker = _seed_worker(tmp_path)
+    run_dir = tmp_path / "run"
+
+    first = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=(task,),
+        split="optimize",
+        checkpoint="seed-optimize",
+        run_dir=run_dir,
+    )
+    acquisitions = tuple(pool.requests)
+    opens = proxy.opens
+    call_counts = dict(calls)
+    second = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=(task,),
+        split="optimize",
+        checkpoint="seed-optimize",
+        run_dir=run_dir,
+    )
+
+    assert first == second
+    assert tuple(pool.requests) == acquisitions
+    assert proxy.opens == opens == 1
+    assert calls == call_counts == {
+        "worker_init": 1,
+        "worker_execute": 1,
+        "verifier_init": 1,
+        "verifier_verify": 1,
+    }
+    assert pool.active == 0
+
+
+def test_actual_rootless_routers_resume_worker_execution_without_worker_acquisition(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    import qea.rootless_runtime as runtime_module
+    from qea.evaluation import OfficialTaskScore
+    from qea.loop_benchmark import QFBenchSandboxEvaluator
+    from qea.rootless_runtime import RootlessVerifierRouter, RootlessWorkerRouter
+
+    events = []
+    backend = object()
+    pool = _Pool(events)
+    proxy = _ProxyManager(backend, events, _sandbox_resources(proxy=True))
+    worker_calls = []
+    verifier_calls = []
+
+    class FakeExecutor:
+        def __init__(self, **kwargs):
+            worker_calls.append("init")
+
+        def execute(self, *, attempt, task, run_dir, **kwargs):
+            worker_calls.append("execute")
+            return _worker_execution(attempt, run_dir, task)
+
+    class InterruptingVerifier:
+        def __init__(self, **kwargs):
+            verifier_calls.append("init")
+
+        def verify(self, *, task, **kwargs):
+            verifier_calls.append("verify")
+            if verifier_calls.count("verify") == 1:
+                raise RuntimeError("synthetic verifier interruption")
+            return OfficialTaskScore(
+                task_id=task.task_id,
+                domain=task.domain,
+                reward=0.5,
+            )
+
+    monkeypatch.setattr(runtime_module, "SandboxNexAUExecutor", FakeExecutor)
+    monkeypatch.setattr(
+        runtime_module,
+        "SandboxQFBenchVerifier",
+        InterruptingVerifier,
+    )
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit=COMMIT,
+        run_id="rootless-worker-resume",
+        executor=RootlessWorkerRouter(
+            catalog=_catalog(),
+            backend=backend,
+            lifecycle_root=tmp_path / "lifecycles",
+            public_task_root=tmp_path / "public",
+            proxy_manager=proxy,
+            resource_pool=pool,
+            model_name="example/model",
+        ),
+        verifier=RootlessVerifierRouter(
+            catalog=_catalog(),
+            backend=backend,
+            lifecycle_root=tmp_path / "lifecycles",
+            trusted_task_root=tmp_path / "trusted",
+            resource_pool=pool,
+        ),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+    task = SimpleNamespace(task_id="task-a", domain="risk", lineage="a")
+    worker = _seed_worker(tmp_path)
+    run_dir = tmp_path / "run"
+
+    with pytest.raises(RuntimeError, match="synthetic verifier interruption"):
+        evaluator.evaluate(
+            worker_dir=worker,
+            tasks=(task,),
+            split="optimize",
+            checkpoint="seed-optimize",
+            run_dir=run_dir,
+        )
+    worker_acquisitions = tuple(
+        item for item in pool.requests if item[0].startswith("worker:")
+    )
+    requests_before_resume = len(pool.requests)
+    summary = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=(task,),
+        split="optimize",
+        checkpoint="seed-optimize",
+        run_dir=run_dir,
+    )
+
+    assert summary.overall == 0.5
+    assert tuple(
+        item for item in pool.requests if item[0].startswith("worker:")
+    ) == worker_acquisitions
+    assert len(pool.requests) == requests_before_resume + 1
+    assert pool.requests[-1][0].startswith("verifier:")
+    assert proxy.opens == 1
+    assert worker_calls == ["init", "execute"]
+    assert verifier_calls == ["init", "verify", "init", "verify"]
+    assert pool.active == 0
+
+
+@pytest.mark.parametrize("verifier_fits_with_live_worker", (True, False))
+def test_actual_rootless_routers_overlap_verifier_only_with_weighted_capacity(
+    tmp_path,
+    monkeypatch,
+    verifier_fits_with_live_worker,
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    import qea.rootless_runtime as runtime_module
+    from qea.evaluation import OfficialTaskScore
+    from qea.loop_benchmark import QFBenchSandboxEvaluator
+    from qea.resource_lease import (
+        HostHealthSnapshot,
+        HostHeadroomPolicy,
+        HostResourceLeasePool,
+        ResourceCapacity,
+    )
+    from qea.rootless_runtime import RootlessVerifierRouter, RootlessWorkerRouter
+
+    worker_b_live = Event()
+    release_worker_b = Event()
+    verifier_requested = Event()
+    verifier_started = Event()
+    events = []
+    backend = object()
+    # Two worker+proxy requests need (8, 13312, 640, 5776, 4). The extra
+    # verifier overlaps one live worker only when tmpfs capacity reaches 6280.
+    capacity = ResourceCapacity(
+        cpu_count=8,
+        memory_mb=13_312,
+        pids_limit=640,
+        tmpfs_mb=6_280 if verifier_fits_with_live_worker else 5_776,
+        sandboxes=4,
+    )
+    real_pool = HostResourceLeasePool(
+        capacity,
+        HostHeadroomPolicy(
+            max_load_1m=100.0,
+            min_available_memory_mb=0,
+            min_free_disk_mb=0,
+            min_free_inodes=0,
+        ),
+        lambda: HostHealthSnapshot(
+            load_1m=0.0,
+            available_memory_mb=100_000,
+            free_disk_mb=100_000,
+            free_inodes=100_000,
+        ),
+    )
+
+    class ObservingPool:
+        def acquire(self, key, request, *, timeout_seconds):
+            if key.startswith("verifier:"):
+                verifier_requested.set()
+            return real_pool.acquire(
+                key,
+                request,
+                timeout_seconds=timeout_seconds,
+            )
+
+    pool = ObservingPool()
+    proxy = _ProxyManager(backend, events, _sandbox_resources(proxy=True))
+
+    class BarrierExecutor:
+        def __init__(self, **kwargs):
+            pass
+
+        def execute(self, *, attempt, task, run_dir, **kwargs):
+            if task.task_id == "task-b":
+                worker_b_live.set()
+                gate = verifier_started if verifier_fits_with_live_worker else release_worker_b
+                assert gate.wait(2), "capacity gate did not make progress"
+            else:
+                assert worker_b_live.wait(2), "second worker never held its lease"
+            return _worker_execution(attempt, run_dir, task)
+
+    class BarrierVerifier:
+        def __init__(self, **kwargs):
+            pass
+
+        def verify(self, *, task, **kwargs):
+            if task.task_id == "task-a":
+                verifier_started.set()
+            return OfficialTaskScore(
+                task_id=task.task_id,
+                domain=task.domain,
+                reward=0.5,
+            )
+
+    monkeypatch.setattr(runtime_module, "SandboxNexAUExecutor", BarrierExecutor)
+    monkeypatch.setattr(runtime_module, "SandboxQFBenchVerifier", BarrierVerifier)
+    catalog = _catalog(("task-a", "task-b"))
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit=COMMIT,
+        run_id=f"rootless-capacity-{verifier_fits_with_live_worker}",
+        executor=RootlessWorkerRouter(
+            catalog=catalog,
+            backend=backend,
+            lifecycle_root=tmp_path / "lifecycles",
+            public_task_root=tmp_path / "public",
+            proxy_manager=proxy,
+            resource_pool=pool,
+            model_name="example/model",
+            lease_timeout_seconds=2,
+        ),
+        verifier=RootlessVerifierRouter(
+            catalog=catalog,
+            backend=backend,
+            lifecycle_root=tmp_path / "lifecycles",
+            trusted_task_root=tmp_path / "trusted",
+            resource_pool=pool,
+            lease_timeout_seconds=2,
+        ),
+        model_env={},
+        worker_concurrency=2,
+        verifier_concurrency=1,
+    )
+    tasks = (
+        SimpleNamespace(task_id="task-a", domain="risk", lineage="a"),
+        SimpleNamespace(task_id="task-b", domain="strategy", lineage="b"),
+    )
+
+    with ThreadPoolExecutor(max_workers=1) as thread:
+        future = thread.submit(
+            evaluator.evaluate,
+            worker_dir=_seed_worker(tmp_path),
+            tasks=tasks,
+            split="optimize",
+            checkpoint="seed-optimize",
+            run_dir=tmp_path / "run",
+        )
+        assert verifier_requested.wait(2), "verifier never requested a lease"
+        if verifier_fits_with_live_worker:
+            assert verifier_started.wait(2), (
+                "verifier did not overlap a live worker despite exact capacity"
+            )
+        else:
+            assert not verifier_started.is_set()
+            release_worker_b.set()
+            assert verifier_started.wait(2), (
+                "verifier did not start after the live worker released capacity"
+            )
+        summary = future.result(timeout=2)
+
+    assert summary.overall == 0.5
+    assert [score.task_id for score in summary.scores] == ["task-a", "task-b"]
+    with real_pool._condition:
+        assert real_pool._live == {}
+        assert all(
+            getattr(real_pool._available, field) == getattr(capacity, field)
+            for field in (
+                "cpu_count",
+                "memory_mb",
+                "pids_limit",
+                "tmpfs_mb",
+                "sandboxes",
+            )
         )
