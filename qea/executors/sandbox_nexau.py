@@ -29,14 +29,12 @@ from ..verifiers.qfbench import (
     prepare_offline_verifier_script,
 )
 from .bundles import build_verifier_bundle, build_worker_bundle
-from .e2b_nexau import (
-    extract_output_archive,
-)
 from .execution_record import (
     WorkerBehaviorTimeout,
     WorkerExecution,
     persist_worker_execution,
 )
+from .output_archive import extract_output_archive
 from .sandbox_runtime import (
     PLACEHOLDER_API_KEY as _PLACEHOLDER_API_KEY,
     SandboxExecutionError,

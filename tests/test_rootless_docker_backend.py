@@ -164,6 +164,64 @@ def _backend(runner: RecordingRunner) -> RootlessDockerBackend:
     )
 
 
+def test_preflight_measures_exact_rootless_daemon_and_selected_images(
+    monkeypatch,
+) -> None:
+    from qea.backends.rootless_docker import RootlessDockerPreflight
+
+    image_ids = ("sha256:" + "a" * 64, "sha256:" + "b" * 64)
+    runner = RecordingRunner(
+        CompletedCommand(0, b"29.4.1\n", b""),
+        CompletedCommand(0, b'["seccomp","name=rootless"]\n', b""),
+        *(CompletedCommand(0, (image_id + "\n").encode(), b"") for image_id in image_ids),
+    )
+    monkeypatch.setattr("qea.backends.rootless_docker.os.getuid", lambda: 1013)
+
+    measured = _backend(runner).preflight(
+        expected_server_version="29.4.1",
+        expected_security_options=("name=rootless", "seccomp"),
+        image_ids=reversed(image_ids),
+    )
+
+    assert isinstance(measured, RootlessDockerPreflight)
+    assert measured.docker_host == DOCKER_HOST
+    assert measured.actual_uid == 1013
+    assert measured.server_version == "29.4.1"
+    assert measured.security_options == ("name=rootless", "seccomp")
+    assert measured.image_ids == image_ids
+    assert len(measured.identity_sha256) == 64
+    assert [call.argv[-1] for call in runner.calls[2:]] == list(image_ids)
+
+
+@pytest.mark.parametrize("failure", ("daemon", "security", "image"))
+def test_preflight_fails_closed_on_daemon_or_image_identity_drift(
+    monkeypatch, failure
+) -> None:
+    image_id = "sha256:" + "a" * 64
+    version = b"29.4.2\n" if failure == "daemon" else b"29.4.1\n"
+    security = (
+        b'["seccomp"]\n'
+        if failure == "security"
+        else b'["name=rootless","seccomp"]\n'
+    )
+    observed_image = (
+        "sha256:" + "b" * 64 if failure == "image" else image_id
+    )
+    runner = RecordingRunner(
+        CompletedCommand(0, version, b""),
+        CompletedCommand(0, security, b""),
+        CompletedCommand(0, (observed_image + "\n").encode(), b""),
+    )
+    monkeypatch.setattr("qea.backends.rootless_docker.os.getuid", lambda: 1013)
+
+    with pytest.raises(RootlessDockerError, match="identity|rootless|image"):
+        _backend(runner).preflight(
+            expected_server_version="29.4.1",
+            expected_security_options=("name=rootless", "seccomp"),
+            image_ids=(image_id,),
+        )
+
+
 def test_backend_rejects_system_tcp_and_wrong_user_sockets() -> None:
     for docker_host in (
         "unix:///var/run/docker.sock",

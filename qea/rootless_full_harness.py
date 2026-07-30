@@ -469,6 +469,162 @@ class RootlessFullHarnessRuntime:
         self._coordinator_lock.close()
 
 
+def _selected_image_entries(image_set) -> tuple[Mapping[str, object], ...]:
+    entries: list[Mapping[str, object]] = []
+    for role in ("base", "proxy", "evolver"):
+        entry = getattr(image_set, role, None)
+        if not isinstance(entry, Mapping):
+            raise RootlessFullHarnessError(
+                f"selected {role} image entry is unavailable"
+            )
+        entries.append(entry)
+    tasks = getattr(image_set, "tasks", None)
+    if isinstance(tasks, (str, bytes)) or not isinstance(tasks, (tuple, list)):
+        raise RootlessFullHarnessError("selected task image entries are unavailable")
+    for task in tasks:
+        if not isinstance(task, Mapping):
+            raise RootlessFullHarnessError("selected task image entry is invalid")
+        for role in ("worker", "verifier"):
+            entry = task.get(role)
+            if not isinstance(entry, Mapping):
+                raise RootlessFullHarnessError(
+                    f"selected task {role} image entry is unavailable"
+                )
+            entries.append(entry)
+    return tuple(entries)
+
+
+def _verify_benchmark_materials(
+    *,
+    config: RootlessFullHarnessConfig,
+    image_set,
+    benchmark_commit: str,
+    task_ids: tuple[str, ...],
+) -> str:
+    from .rootless_images import RootlessImageError, verify_role_root
+
+    try:
+        public = verify_role_root(config.public_root, "public")
+        trusted = verify_role_root(config.trusted_root, "trusted-verifier")
+    except RootlessImageError as exc:
+        raise RootlessFullHarnessError(
+            f"benchmark material manifest verification failed: {exc}"
+        ) from exc
+    panel = tuple(sorted(task_ids))
+    if (
+        public.commit != benchmark_commit
+        or trusted.commit != benchmark_commit
+        or public.task_ids != panel
+        or trusted.task_ids != panel
+    ):
+        raise RootlessFullHarnessError(
+            "benchmark material commit or exact task panel differs"
+        )
+    for entry in _selected_image_entries(image_set):
+        if entry.get("source_manifest_sha256") != public.manifest_sha256:
+            raise RootlessFullHarnessError(
+                "public material manifest differs from selected image sources"
+            )
+    selected_tasks = {
+        str(task["task_id"]): task
+        for task in image_set.tasks
+        if isinstance(task, Mapping) and isinstance(task.get("task_id"), str)
+    }
+    if tuple(sorted(selected_tasks)) != panel:
+        raise RootlessFullHarnessError(
+            "selected image task membership differs from benchmark materials"
+        )
+    trusted_task_identities: list[dict[str, str]] = []
+    for task_id in panel:
+        prefix = f"tasks/{task_id}/"
+        records = [
+            (path, record)
+            for path, record in trusted.records.items()
+            if path.startswith(prefix)
+        ]
+        test_script = f"tasks/{task_id}/tests/test.sh"
+        try:
+            test_script_sha256 = trusted.records[test_script]["sha256"]
+            verifier_entry = selected_tasks[task_id]["verifier"]
+        except (KeyError, TypeError) as exc:
+            raise RootlessFullHarnessError(
+                f"trusted verifier material is incomplete for {task_id!r}"
+            ) from exc
+        if (
+            not isinstance(verifier_entry, Mapping)
+            or verifier_entry.get("verifier_test_script_sha256")
+            != test_script_sha256
+        ):
+            raise RootlessFullHarnessError(
+                f"trusted verifier script differs from selected image for {task_id!r}"
+            )
+        trusted_task_identities.append(
+            {
+                "task_id": task_id,
+                "identity_sha256": _canonical_digest(
+                    {
+                        "task_id": task_id,
+                        "files": [
+                            {
+                                "path": path.removeprefix(prefix),
+                                "sha256": record["sha256"],
+                                "git_blob_oid": record["git_blob_oid"],
+                                "size_bytes": record["size_bytes"],
+                                "mode": record.get("mode"),
+                            }
+                            for path, record in sorted(records)
+                        ],
+                    }
+                ),
+            }
+        )
+    return _canonical_digest(
+        {
+            "schema_version": 1,
+            "benchmark_commit": benchmark_commit,
+            "task_ids": list(panel),
+            "public_manifest_sha256": public.manifest_sha256,
+            "trusted_manifest_sha256": trusted.manifest_sha256,
+            "trusted_task_identities": trusted_task_identities,
+        }
+    )
+
+
+def _expected_docker_preflight(image_set) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+    entries = _selected_image_entries(image_set)
+    daemon_identities: set[tuple[str, tuple[str, ...]]] = set()
+    image_ids: list[str] = []
+    for entry in entries:
+        docker_identity = entry.get("docker_identity")
+        if not isinstance(docker_identity, Mapping):
+            raise RootlessFullHarnessError(
+                "selected image omits its Docker daemon identity"
+            )
+        version = docker_identity.get("version")
+        security = docker_identity.get("security_options")
+        if (
+            not isinstance(version, str)
+            or not version
+            or not isinstance(security, (list, tuple))
+            or not all(isinstance(value, str) for value in security)
+            or "name=rootless" not in security
+        ):
+            raise RootlessFullHarnessError(
+                "selected image has an invalid Docker daemon identity"
+            )
+        daemon_identities.add((version, tuple(sorted(security))))
+        image_id = entry.get("image_id")
+        if not isinstance(image_id, str):
+            raise RootlessFullHarnessError("selected image ID is unavailable")
+        image_ids.append(image_id)
+    if len(daemon_identities) != 1:
+        raise RootlessFullHarnessError(
+            "selected images were built by inconsistent Docker daemon identities"
+        )
+    version, security = next(iter(daemon_identities))
+    return version, security, tuple(sorted(set(image_ids)))
+
+
 def _resolved_catalog(catalog, config: RootlessFullHarnessConfig):
     from .rootless_runtime import RootlessRuntimeCatalog, RootlessTaskRuntime
 
@@ -595,7 +751,6 @@ def build_rootless_full_harness_runtime(
     tasks,
     run_id: str,
     results_root: str | Path,
-    health_probe=None,
 ) -> RootlessFullHarnessRuntime:
     """Assemble one E2B-independent rootless full-harness runtime."""
 
@@ -648,6 +803,15 @@ def build_rootless_full_harness_runtime(
         raise RootlessFullHarnessError(
             "Task 5 image set differs from the Task 7 runtime catalog"
         )
+    material_identity = _verify_benchmark_materials(
+        config=config,
+        image_set=image_set,
+        benchmark_commit=benchmark_commit,
+        task_ids=task_ids,
+    )
+    expected_docker_version, expected_docker_security, selected_image_ids = (
+        _expected_docker_preflight(image_set)
+    )
     for role, configured in (
         ("evolver", config.evolver_resources),
         ("proxy", config.proxy_resources),
@@ -701,11 +865,21 @@ def build_rootless_full_harness_runtime(
     )
     lock = _CoordinatorLock(run_root / ".coordinator.lock").acquire()
     try:
-        backend = RootlessDockerBackend(
-            docker_host=config.docker_host,
-            expected_uid=config.expected_uid,
-        )
-        probe = health_probe or _default_health_probe(root)
+        try:
+            backend = RootlessDockerBackend(
+                docker_host=config.docker_host,
+                expected_uid=config.expected_uid,
+            )
+            measured_preflight = backend.preflight(
+                expected_server_version=expected_docker_version,
+                expected_security_options=expected_docker_security,
+                image_ids=selected_image_ids,
+            )
+        except Exception as exc:
+            raise RootlessFullHarnessError(
+                "rootless Docker daemon and image preflight failed"
+            ) from exc
+        probe = _default_health_probe(root)
         pool = HostResourceLeasePool(config.capacity, config.headroom, probe)
         proxy_config = SandboxProxyConfig(
             image_ref=catalog.proxy_image_ref,
@@ -790,10 +964,19 @@ def build_rootless_full_harness_runtime(
                     "backend": backend.backend_name,
                     "docker_host": config.docker_host,
                     "expected_uid": config.expected_uid,
-                    "actual_uid": os.getuid(),
+                    "actual_uid": measured_preflight.actual_uid,
+                    "server_version": measured_preflight.server_version,
+                    "security_options": list(
+                        measured_preflight.security_options
+                    ),
+                    "selected_image_ids": list(measured_preflight.image_ids),
+                    "measurement_identity_sha256": (
+                        measured_preflight.identity_sha256
+                    ),
                 },
                 "benchmark_commit": benchmark_commit,
                 "task_panel": task_panel,
+                "benchmark_material_identity_sha256": material_identity,
                 "task7_catalog_identity_sha256": source_catalog.identity_sha256,
                 "resolved_catalog_identity_sha256": catalog.identity_sha256,
                 "image_set_identity_sha256": catalog.image_set_identity_sha256,

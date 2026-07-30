@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import io
 import hashlib
 import json
 import os
-import tarfile
 from datetime import datetime, timezone
 from dataclasses import asdict, dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Mapping
 from urllib.parse import urlparse
 
@@ -28,6 +26,10 @@ from .execution_record import (
     WorkerExecutionError,
     load_worker_execution,
     persist_worker_execution,
+)
+from .output_archive import (
+    OutputArchiveError,
+    extract_output_archive as _extract_output_archive,
 )
 
 
@@ -228,21 +230,6 @@ def _sandbox_lifetime(command_timeout: int, global_cap: int) -> int:
     return min(global_cap, command_timeout + 180)
 
 
-def _unsafe_output_name(name: str) -> bool:
-    path = PurePosixPath(name)
-    if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
-        return True
-    lowered = path.name.lower()
-    return (
-        lowered == ".env"
-        or lowered.startswith(".env.")
-        or lowered.startswith("credentials")
-        or lowered.startswith("secrets")
-        or lowered in {"id_rsa", "id_ed25519"}
-        or lowered.endswith((".pem", ".key"))
-    )
-
-
 def extract_output_archive(
     payload: bytes,
     destination: str | Path,
@@ -250,45 +237,17 @@ def extract_output_archive(
     max_files: int = 2_000,
     max_bytes: int = 512 * 1024 * 1024,
 ) -> tuple[Path, ...]:
-    """Extract regular files only, without tar traversal, links, or secret files."""
+    """Preserve the historical E2B error boundary over neutral extraction."""
 
-    root = Path(destination).resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    extracted: list[Path] = []
-    total_bytes = 0
-    seen: set[str] = set()
     try:
-        archive = tarfile.open(fileobj=io.BytesIO(payload), mode="r:*")
-    except tarfile.TarError as exc:
-        raise E2BExecutionError(f"invalid output archive: {exc}") from exc
-    with archive:
-        for member in archive.getmembers():
-            if member.isdir():
-                continue
-            if not member.isfile() or _unsafe_output_name(member.name):
-                raise E2BExecutionError(f"unsafe output member {member.name!r}")
-            name = PurePosixPath(member.name).as_posix()
-            if name in seen:
-                raise E2BExecutionError(f"duplicate output member {name!r}")
-            seen.add(name)
-            if len(seen) > max_files:
-                raise E2BExecutionError(f"output file limit exceeded: {len(seen)} > {max_files}")
-            total_bytes += member.size
-            if total_bytes > max_bytes:
-                raise E2BExecutionError(f"output byte limit exceeded: {total_bytes} > {max_bytes}")
-            target = (root / Path(*PurePosixPath(name).parts)).resolve()
-            try:
-                target.relative_to(root)
-            except ValueError as exc:
-                raise E2BExecutionError(f"unsafe output member {member.name!r}") from exc
-            target.parent.mkdir(parents=True, exist_ok=True)
-            source = archive.extractfile(member)
-            if source is None:
-                raise E2BExecutionError(f"cannot read output member {member.name!r}")
-            with target.open("wb") as handle:
-                handle.write(source.read())
-            extracted.append(target)
-    return tuple(sorted(extracted, key=lambda path: path.relative_to(root).as_posix()))
+        return _extract_output_archive(
+            payload,
+            destination,
+            max_files=max_files,
+            max_bytes=max_bytes,
+        )
+    except OutputArchiveError as exc:
+        raise E2BExecutionError(str(exc)) from exc
 
 
 class E2BNexAUExecutor:

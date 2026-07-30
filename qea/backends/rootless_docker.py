@@ -64,6 +64,48 @@ class CompletedCommand:
     stderr: bytes
 
 
+@dataclass(frozen=True)
+class RootlessDockerPreflight:
+    """Measured daemon and immutable-image identity for one coordinator."""
+
+    docker_host: str
+    actual_uid: int
+    server_version: str
+    security_options: tuple[str, ...]
+    image_ids: tuple[str, ...]
+    identity_sha256: str
+
+    @classmethod
+    def measured(
+        cls,
+        *,
+        docker_host: str,
+        actual_uid: int,
+        server_version: str,
+        security_options: tuple[str, ...],
+        image_ids: tuple[str, ...],
+    ) -> "RootlessDockerPreflight":
+        payload = {
+            "schema_version": 1,
+            "docker_host": docker_host,
+            "actual_uid": actual_uid,
+            "server_version": server_version,
+            "security_options": list(security_options),
+            "image_ids": list(image_ids),
+        }
+        identity = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        return cls(
+            docker_host=docker_host,
+            actual_uid=actual_uid,
+            server_version=server_version,
+            security_options=security_options,
+            image_ids=image_ids,
+            identity_sha256=identity,
+        )
+
+
 class CommandTimedOut(TimeoutError):
     """A shell-free host command exceeded its deadline."""
 
@@ -269,9 +311,110 @@ class RootlessDockerBackend:
         if type(max_transfer_bytes) is not int or max_transfer_bytes <= 0:
             raise RootlessDockerError("max_transfer_bytes must be positive")
         self.docker_host = docker_host
+        self.expected_uid = uid
         self.runner = runner or SubprocessCommandRunner()
         self.max_command_output_bytes = max_command_output_bytes
         self.max_transfer_bytes = max_transfer_bytes
+
+    def preflight(
+        self,
+        *,
+        expected_server_version: str,
+        expected_security_options: Sequence[str],
+        image_ids: Sequence[str],
+    ) -> RootlessDockerPreflight:
+        """Measure and require the exact rootless daemon and selected images."""
+
+        actual_uid = os.getuid()
+        if actual_uid != self.expected_uid:
+            raise RootlessDockerError(
+                "rootless Docker UID identity differs from the coordinator"
+            )
+        if (
+            not isinstance(expected_server_version, str)
+            or not expected_server_version
+            or len(expected_server_version) > 128
+            or any(
+                ord(character) < 0x21 or ord(character) > 0x7E
+                for character in expected_server_version
+            )
+        ):
+            raise RootlessDockerError("expected Docker server identity is invalid")
+        if isinstance(expected_security_options, (str, bytes)):
+            raise RootlessDockerError("expected Docker security identity is invalid")
+        raw_expected_security = tuple(expected_security_options)
+        if (
+            not raw_expected_security
+            or any(
+                not isinstance(value, str) or not value
+                for value in raw_expected_security
+            )
+        ):
+            raise RootlessDockerError("expected Docker rootless identity is invalid")
+        expected_security = tuple(sorted(raw_expected_security))
+        if "name=rootless" not in expected_security:
+            raise RootlessDockerError("expected Docker rootless identity is invalid")
+        if isinstance(image_ids, (str, bytes)):
+            raise RootlessDockerError("selected image identity set is invalid")
+        raw_image_ids = tuple(image_ids)
+        if not raw_image_ids or any(
+            not isinstance(value, str) or _DOCKER_IMAGE_ID.fullmatch(value) is None
+            for value in raw_image_ids
+        ):
+            raise RootlessDockerError("selected image identity set is invalid")
+        selected_images = tuple(sorted(set(raw_image_ids)))
+
+        version = self._checked(
+            ("version", "--format", "{{.Server.Version}}"),
+            timeout_seconds=30,
+            operation="server version preflight",
+        ).stdout.decode("utf-8", errors="replace").strip()
+        if version != expected_server_version:
+            raise RootlessDockerError(
+                "active Docker server version identity differs from image builds"
+            )
+        security_raw = self._checked(
+            ("info", "--format", "{{json .SecurityOptions}}"),
+            timeout_seconds=30,
+            operation="security preflight",
+        ).stdout
+        if len(security_raw) > 64 * 1024:
+            raise RootlessDockerError("active Docker security identity is oversized")
+        try:
+            decoded_security = json.loads(security_raw)
+        except json.JSONDecodeError as exc:
+            raise RootlessDockerError(
+                "active Docker security identity is malformed"
+            ) from exc
+        if not isinstance(decoded_security, list) or any(
+            not isinstance(value, str) or not value for value in decoded_security
+        ):
+            raise RootlessDockerError("active Docker security identity is malformed")
+        measured_security = tuple(sorted(decoded_security))
+        if (
+            "name=rootless" not in measured_security
+            or measured_security != expected_security
+        ):
+            raise RootlessDockerError(
+                "active Docker rootless security identity differs from image builds"
+            )
+        for image_id in selected_images:
+            observed = self._checked(
+                ("image", "inspect", "--format", "{{.Id}}", image_id),
+                timeout_seconds=30,
+                operation="selected image preflight",
+            ).stdout.decode("utf-8", errors="replace").strip()
+            if observed != image_id:
+                raise RootlessDockerError(
+                    f"selected Docker image identity differs for {image_id}"
+                )
+        return RootlessDockerPreflight.measured(
+            docker_host=self.docker_host,
+            actual_uid=actual_uid,
+            server_version=version,
+            security_options=measured_security,
+            image_ids=selected_images,
+        )
 
     def _argv(self, *arguments: str) -> tuple[str, ...]:
         return ("docker", "--host", self.docker_host, *arguments)

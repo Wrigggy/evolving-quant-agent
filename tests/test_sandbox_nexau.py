@@ -42,6 +42,15 @@ def _tar_members(payload):
         return tuple(sorted(member.name for member in archive if member.isfile()))
 
 
+def test_neutral_output_archive_rejects_traversal_without_e2b_import(tmp_path) -> None:
+    from qea.executors.output_archive import OutputArchiveError, extract_output_archive
+
+    malicious = _tar_bytes({"../escape.txt": "owned"})
+    with pytest.raises(OutputArchiveError, match="unsafe output member"):
+        extract_output_archive(malicious, tmp_path / "artifacts")
+    assert not (tmp_path / "escape.txt").exists()
+
+
 class FakeBackend:
     backend_name = "fake-backend"
 

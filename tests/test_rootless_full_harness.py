@@ -1,11 +1,90 @@
+import hashlib
+import importlib
+import importlib.abc
 import json
 import os
-import builtins
-import importlib
+import sys
 from dataclasses import fields, replace
+from pathlib import Path
 from types import MappingProxyType, SimpleNamespace
 
 import pytest
+
+from qea.benchmarks.qfbench import git_blob_oid
+
+
+COMMIT = "024921eb507fcc0c4ffe3e0a96802724be1ae84a"
+
+
+def _write_role_manifest(root: Path, role: str) -> None:
+    records = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.name == "MANIFEST.json":
+            continue
+        payload = path.read_bytes()
+        records.append(
+            {
+                "path": path.relative_to(root).as_posix(),
+                "mode": "100755" if path.stat().st_mode & 0o111 else "100644",
+                "git_blob_oid": git_blob_oid(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "size_bytes": len(payload),
+            }
+        )
+    (root / "MANIFEST.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "role": role,
+                "repository_url": "https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+                "commit": COMMIT,
+                "task_ids": ["task-a"],
+                "files": records,
+            },
+            sort_keys=True,
+            indent=2,
+        )
+        + "\n"
+    )
+
+
+def _refresh_manifest_record(root: Path, relative_path: str) -> None:
+    manifest_path = root / "MANIFEST.json"
+    manifest = json.loads(manifest_path.read_text())
+    payload = (root / relative_path).read_bytes()
+    record = next(
+        item for item in manifest["files"] if item["path"] == relative_path
+    )
+    record.update(
+        {
+            "git_blob_oid": git_blob_oid(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "size_bytes": len(payload),
+        }
+    )
+    manifest_path.write_text(
+        json.dumps(manifest, sort_keys=True, indent=2) + "\n"
+    )
+
+
+def _write_role_roots(public: Path, trusted: Path) -> None:
+    environment = public / "tasks/task-a/environment"
+    (environment / "data").mkdir(parents=True)
+    (public / "docker").mkdir()
+    (public / "docker/sandbox.Dockerfile").write_text("FROM fixture\n")
+    (public / "docker/requirements-sandbox.txt").write_text("numpy==2.2.3\n")
+    (public / "tasks/task-a/instruction.md").write_text("Produce result.json\n")
+    (public / "tasks/task-a/task.toml").write_text("[agent]\ntimeout_sec=1800\n")
+    (environment / "Dockerfile").write_text("FROM fixture\n")
+    (environment / "data/input.csv").write_text("x\n1\n")
+    _write_role_manifest(public, "public")
+
+    tests = trusted / "tasks/task-a/tests"
+    (tests / "reference_data").mkdir(parents=True)
+    (tests / "test.sh").write_text("pytest /tests/test_outputs.py\n")
+    (tests / "test_outputs.py").write_text("def test_output(): pass\n")
+    (tests / "reference_data/expected.json").write_text('{"expected": 17}\n')
+    _write_role_manifest(trusted, "trusted-verifier")
 
 
 def _resource(*, cpu: int = 1, memory: int = 512, role: str = "evolver"):
@@ -34,6 +113,7 @@ def _valid_config(tmp_path):
     trusted = tmp_path / "trusted"
     public.mkdir(parents=True)
     trusted.mkdir()
+    _write_role_roots(public, trusted)
     trusted.chmod(0o700)
     token = tmp_path / "model-token"
     token.write_text("fixture-token\n")
@@ -142,17 +222,71 @@ def _healthy_snapshot():
     )
 
 
-def _selected_image_set(catalog, *, proxy_cpu: int = 1):
+def _selected_image_set(catalog, config, *, proxy_cpu: int = 1):
+    source_sha = hashlib.sha256(
+        (config.public_root / "MANIFEST.json").read_bytes()
+    ).hexdigest()
+    verifier_sha = hashlib.sha256(
+        (config.trusted_root / "tasks/task-a/tests/test.sh").read_bytes()
+    ).hexdigest()
+    docker_identity = {
+        "version": "29.4.1",
+        "security_options": ["name=rootless"],
+    }
+
+    def entry(role, image_id, *, cpu, memory, test_sha=None):
+        return {
+            "role": role,
+            "image_id": image_id,
+            "source_manifest_sha256": source_sha,
+            "verifier_test_script_sha256": test_sha,
+            "resource_contract": {"cpu_count": cpu, "memory_mb": memory},
+            "docker_identity": {
+                "version": docker_identity["version"],
+                "security_options": list(docker_identity["security_options"]),
+            },
+        }
+
     return SimpleNamespace(
         benchmark_commit=catalog.benchmark_commit,
         task_ids=tuple(catalog.tasks),
         identity_sha256=catalog.image_set_identity_sha256,
-        evolver={"resource_contract": {"cpu_count": 1, "memory_mb": 512}},
-        proxy={"resource_contract": {"cpu_count": proxy_cpu, "memory_mb": 512}},
+        base=entry(
+            "base", catalog.base_image_ref, cpu=2, memory=4096
+        ),
+        evolver=entry(
+            "evolver", catalog.evolver_image_ref, cpu=1, memory=512
+        ),
+        proxy=entry(
+            "proxy", catalog.proxy_image_ref, cpu=proxy_cpu, memory=512
+        ),
+        tasks=(
+            {
+                "task_id": "task-a",
+                "worker": entry(
+                    "worker",
+                    catalog.tasks["task-a"].worker_image_ref,
+                    cpu=3,
+                    memory=6144,
+                ),
+                "verifier": entry(
+                    "verifier",
+                    catalog.tasks["task-a"].verifier_image_ref,
+                    cpu=3,
+                    memory=6144,
+                    test_sha=verifier_sha,
+                ),
+            },
+        ),
     )
 
 
-def _patch_catalog(monkeypatch, catalog, *, image_set=None) -> None:
+def _patch_catalog(monkeypatch, catalog, *, config, image_set=None) -> None:
+    from qea.backends.rootless_docker import (
+        RootlessDockerBackend,
+        RootlessDockerPreflight,
+    )
+    import qea.rootless_full_harness as rootless_full_harness
     import qea.rootless_image_set as rootless_image_set
     import qea.rootless_runtime as rootless_runtime
 
@@ -161,12 +295,34 @@ def _patch_catalog(monkeypatch, catalog, *, image_set=None) -> None:
         "load_rootless_runtime_catalog",
         lambda *args, **kwargs: catalog,
     )
-    selected = image_set or _selected_image_set(catalog)
+    selected = image_set or _selected_image_set(catalog, config)
     monkeypatch.setattr(
         rootless_image_set.RootlessImageSet,
         "load",
         classmethod(lambda cls, path: selected),
     )
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "_default_health_probe",
+        lambda root: _healthy_snapshot,
+    )
+
+    def fake_preflight(
+        self,
+        *,
+        expected_server_version,
+        expected_security_options,
+        image_ids,
+    ):
+        return RootlessDockerPreflight.measured(
+            docker_host=self.docker_host,
+            actual_uid=config.expected_uid,
+            server_version=expected_server_version,
+            security_options=tuple(sorted(expected_security_options)),
+            image_ids=tuple(sorted(image_ids)),
+        )
+
+    monkeypatch.setattr(RootlessDockerBackend, "preflight", fake_preflight)
 
 
 def _task(*, cpus: int = 3):
@@ -208,20 +364,52 @@ def test_rootless_optional_extra_is_focused_and_e2b_independent() -> None:
     ]
 
 
-def test_rootless_module_imports_when_all_e2b_modules_are_unavailable(
-    monkeypatch,
+def test_approved_rootless_factory_constructs_when_all_e2b_modules_are_blocked(
+    tmp_path, monkeypatch,
 ) -> None:
     import qea.rootless_full_harness as module
 
-    original_import = builtins.__import__
+    class RejectE2BFinder(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname == "e2b" or fullname.startswith("e2b.") or fullname.startswith(
+                "qea.e2b"
+            ) or fullname.startswith("qea.executors.e2b_"):
+                raise ModuleNotFoundError(fullname)
+            return None
 
-    def reject_e2b(name, *args, **kwargs):
-        if name == "e2b" or name.startswith("e2b.") or name.startswith("qea.e2b"):
-            raise ModuleNotFoundError(name)
-        return original_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", reject_e2b)
-    assert importlib.reload(module).RootlessFullHarnessConfig is not None
+    refresh = {
+        name: loaded
+        for name, loaded in tuple(sys.modules.items())
+        if name in {"qea.rootless_runtime", "qea.executors.sandbox_nexau"}
+        or name.startswith("qea.e2b")
+        or name.startswith("qea.executors.e2b_")
+    }
+    for name in refresh:
+        sys.modules.pop(name, None)
+    finder = RejectE2BFinder()
+    sys.meta_path.insert(0, finder)
+    runtime = None
+    try:
+        selected = _catalog()
+        config = _valid_config(tmp_path / "config")
+        _patch_catalog(monkeypatch, selected, config=config)
+        runtime = module.build_rootless_full_harness_runtime(
+            config=config,
+            image_set_manifest=tmp_path / "image-set.json",
+            benchmark_commit=selected.benchmark_commit,
+            tasks=(_task(),),
+            run_id="no-e2b-approved",
+            results_root=tmp_path / "results",
+        )
+        assert runtime.backend.backend_name == "rootless-docker"
+    finally:
+        if runtime is not None:
+            runtime.close()
+        sys.meta_path.remove(finder)
+        for name in tuple(sys.modules):
+            if name in {"qea.rootless_runtime", "qea.executors.sandbox_nexau"}:
+                sys.modules.pop(name, None)
+        sys.modules.update(refresh)
 
 
 def test_rootless_config_normalizes_immutable_limits_and_private_paths(tmp_path) -> None:
@@ -435,8 +623,8 @@ def test_factory_builds_one_shared_runtime_and_applies_explicit_role_limits(
 ) -> None:
     from qea.rootless_full_harness import build_rootless_full_harness_runtime
     selected = _catalog()
-    _patch_catalog(monkeypatch, selected)
     config = _valid_config(tmp_path / "config")
+    _patch_catalog(monkeypatch, selected, config=config)
     results = tmp_path / "results"
 
     runtime = build_rootless_full_harness_runtime(
@@ -446,7 +634,6 @@ def test_factory_builds_one_shared_runtime_and_applies_explicit_role_limits(
         tasks=(_task(),),
         run_id="rootless-task8",
         results_root=results,
-        health_probe=_healthy_snapshot,
     )
     try:
         assert runtime.backend.backend_name == "rootless-docker"
@@ -473,6 +660,211 @@ def test_factory_builds_one_shared_runtime_and_applies_explicit_role_limits(
         runtime.close()
 
 
+@pytest.mark.parametrize(
+    "relative_path",
+    (
+        "public/tasks/task-a/environment/data/input.csv",
+        "trusted/tasks/task-a/tests/test.sh",
+        "trusted/tasks/task-a/tests/reference_data/expected.json",
+    ),
+)
+def test_factory_rejects_manifested_material_byte_mutation_before_backend(
+    tmp_path, monkeypatch, relative_path
+) -> None:
+    from qea.rootless_full_harness import (
+        RootlessFullHarnessError,
+        build_rootless_full_harness_runtime,
+    )
+
+    selected = _catalog()
+    config = _valid_config(tmp_path / "config")
+    _patch_catalog(monkeypatch, selected, config=config)
+    mutated = config.public_root.parent / relative_path
+    mutated.write_bytes(mutated.read_bytes() + b"tampered\n")
+
+    with pytest.raises(RootlessFullHarnessError, match="material|manifest|hash"):
+        build_rootless_full_harness_runtime(
+            config=config,
+            image_set_manifest=tmp_path / "image-set.json",
+            benchmark_commit=selected.benchmark_commit,
+            tasks=(_task(),),
+            run_id="material-mutation",
+            results_root=tmp_path / "results",
+        )
+
+    assert not (tmp_path / "results/material-mutation/.coordinator.lock").exists()
+
+
+def test_factory_api_has_no_unbound_health_probe_injection() -> None:
+    import inspect
+
+    from qea.rootless_full_harness import build_rootless_full_harness_runtime
+
+    assert "health_probe" not in inspect.signature(
+        build_rootless_full_harness_runtime
+    ).parameters
+
+
+def test_factory_binds_self_consistent_trusted_reference_manifest_drift(
+    tmp_path, monkeypatch
+) -> None:
+    from qea.rootless_full_harness import build_rootless_full_harness_runtime
+
+    selected = _catalog()
+    config = _valid_config(tmp_path / "config")
+    _patch_catalog(monkeypatch, selected, config=config)
+
+    baseline = build_rootless_full_harness_runtime(
+        config=config,
+        image_set_manifest=tmp_path / "image-set.json",
+        benchmark_commit=selected.benchmark_commit,
+        tasks=(_task(),),
+        run_id="material-baseline",
+        results_root=tmp_path / "results",
+    )
+    baseline.close()
+
+    relative = "tasks/task-a/tests/reference_data/expected.json"
+    reference = config.trusted_root / relative
+    reference.write_text('{"expected": 18}\n')
+    _refresh_manifest_record(config.trusted_root, relative)
+    changed = build_rootless_full_harness_runtime(
+        config=config,
+        image_set_manifest=tmp_path / "image-set.json",
+        benchmark_commit=selected.benchmark_commit,
+        tasks=(_task(),),
+        run_id="material-changed",
+        results_root=tmp_path / "results",
+    )
+    changed.close()
+
+    assert changed.runtime_identity_digest != baseline.runtime_identity_digest
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "message"),
+    [
+        ("tasks/task-a/environment/data/input.csv", "public material"),
+        ("tasks/task-a/instruction.md", "public material"),
+    ],
+)
+def test_factory_rejects_self_consistent_public_material_drift_from_images(
+    tmp_path, monkeypatch, relative_path, message
+) -> None:
+    from qea.rootless_full_harness import (
+        RootlessFullHarnessError,
+        build_rootless_full_harness_runtime,
+    )
+
+    selected = _catalog()
+    config = _valid_config(tmp_path / "config")
+    _patch_catalog(monkeypatch, selected, config=config)
+    path = config.public_root / relative_path
+    path.write_bytes(path.read_bytes() + b"changed\n")
+    _refresh_manifest_record(config.public_root, relative_path)
+
+    with pytest.raises(RootlessFullHarnessError, match=message):
+        build_rootless_full_harness_runtime(
+            config=config,
+            image_set_manifest=tmp_path / "image-set.json",
+            benchmark_commit=selected.benchmark_commit,
+            tasks=(_task(),),
+            run_id="public-drift",
+            results_root=tmp_path / "results",
+        )
+
+
+def test_factory_rejects_self_consistent_test_script_drift_from_verifier_image(
+    tmp_path, monkeypatch
+) -> None:
+    from qea.rootless_full_harness import (
+        RootlessFullHarnessError,
+        build_rootless_full_harness_runtime,
+    )
+
+    selected = _catalog()
+    config = _valid_config(tmp_path / "config")
+    _patch_catalog(monkeypatch, selected, config=config)
+    relative = "tasks/task-a/tests/test.sh"
+    script = config.trusted_root / relative
+    script.write_bytes(script.read_bytes() + b"# changed\n")
+    _refresh_manifest_record(config.trusted_root, relative)
+
+    with pytest.raises(RootlessFullHarnessError, match="verifier script"):
+        build_rootless_full_harness_runtime(
+            config=config,
+            image_set_manifest=tmp_path / "image-set.json",
+            benchmark_commit=selected.benchmark_commit,
+            tasks=(_task(),),
+            run_id="test-script-drift",
+            results_root=tmp_path / "results",
+        )
+
+
+def test_factory_rejects_inconsistent_image_daemons_before_lock(
+    tmp_path, monkeypatch
+) -> None:
+    from qea.rootless_full_harness import (
+        RootlessFullHarnessError,
+        build_rootless_full_harness_runtime,
+    )
+
+    selected = _catalog()
+    config = _valid_config(tmp_path / "config")
+    image_set = _selected_image_set(selected, config)
+    image_set.proxy["docker_identity"] = {
+        "version": "29.4.2",
+        "security_options": ["name=rootless"],
+    }
+    _patch_catalog(monkeypatch, selected, config=config, image_set=image_set)
+
+    with pytest.raises(RootlessFullHarnessError, match="inconsistent Docker daemon"):
+        build_rootless_full_harness_runtime(
+            config=config,
+            image_set_manifest=tmp_path / "image-set.json",
+            benchmark_commit=selected.benchmark_commit,
+            tasks=(_task(),),
+            run_id="daemon-drift",
+            results_root=tmp_path / "results",
+        )
+    assert not (tmp_path / "results/daemon-drift/.coordinator.lock").exists()
+
+
+def test_factory_preflight_failure_releases_coordinator_lock(
+    tmp_path, monkeypatch
+) -> None:
+    from qea.backends.rootless_docker import RootlessDockerBackend
+    from qea.rootless_full_harness import build_rootless_full_harness_runtime
+
+    selected = _catalog()
+    config = _valid_config(tmp_path / "config")
+    _patch_catalog(monkeypatch, selected, config=config)
+    successful_preflight = RootlessDockerBackend.preflight
+    monkeypatch.setattr(
+        RootlessDockerBackend,
+        "preflight",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            RuntimeError("synthetic daemon preflight failure")
+        ),
+    )
+    kwargs = dict(
+        config=config,
+        image_set_manifest=tmp_path / "image-set.json",
+        benchmark_commit=selected.benchmark_commit,
+        tasks=(_task(),),
+        run_id="preflight-lock",
+        results_root=tmp_path / "results",
+    )
+    with pytest.raises(
+        RuntimeError, match="rootless Docker daemon and image preflight failed"
+    ):
+        build_rootless_full_harness_runtime(**kwargs)
+
+    monkeypatch.setattr(RootlessDockerBackend, "preflight", successful_preflight)
+    replacement = build_rootless_full_harness_runtime(**kwargs)
+    replacement.close()
+
+
 def test_factory_lock_is_exclusive_for_the_complete_runtime_lifetime(
     tmp_path, monkeypatch
 ) -> None:
@@ -481,15 +873,15 @@ def test_factory_lock_is_exclusive_for_the_complete_runtime_lifetime(
         build_rootless_full_harness_runtime,
     )
     selected = _catalog()
-    _patch_catalog(monkeypatch, selected)
+    config = _valid_config(tmp_path / "config")
+    _patch_catalog(monkeypatch, selected, config=config)
     kwargs = dict(
-        config=_valid_config(tmp_path / "config"),
+        config=config,
         image_set_manifest=tmp_path / "image-set.json",
         benchmark_commit=selected.benchmark_commit,
         tasks=(_task(),),
         run_id="exclusive-run",
         results_root=tmp_path / "results",
-        health_probe=_healthy_snapshot,
     )
     first = build_rootless_full_harness_runtime(**kwargs)
     try:
@@ -504,8 +896,8 @@ def test_factory_lock_is_exclusive_for_the_complete_runtime_lifetime(
 def test_factory_binds_runtime_scheduler_and_catalog_identity(tmp_path, monkeypatch) -> None:
     from qea.rootless_full_harness import build_rootless_full_harness_runtime
     selected = _catalog()
-    _patch_catalog(monkeypatch, selected)
     config = _valid_config(tmp_path / "config")
+    _patch_catalog(monkeypatch, selected, config=config)
 
     def build(current_config, *, suffix):
         runtime = build_rootless_full_harness_runtime(
@@ -515,7 +907,6 @@ def test_factory_binds_runtime_scheduler_and_catalog_identity(tmp_path, monkeypa
             tasks=(_task(),),
             run_id="identity-run",
             results_root=tmp_path / f"results-{suffix}",
-            health_probe=_healthy_snapshot,
         )
         runtime.close()
         return runtime
@@ -540,7 +931,7 @@ def test_factory_binds_runtime_scheduler_and_catalog_identity(tmp_path, monkeypa
     assert scheduling.scheduler_identity_digest != baseline.scheduler_identity_digest
 
     changed_catalog = _catalog(identity="d" * 64)
-    _patch_catalog(monkeypatch, changed_catalog)
+    _patch_catalog(monkeypatch, changed_catalog, config=config)
     catalog_drift = build(config, suffix="catalog")
     assert catalog_drift.runtime_identity_digest != baseline.runtime_identity_digest
 
@@ -553,15 +944,14 @@ def test_factory_fails_before_construction_on_uid_task_or_capacity_drift(
         build_rootless_full_harness_runtime,
     )
     selected = _catalog()
-    _patch_catalog(monkeypatch, selected)
     config = _valid_config(tmp_path / "config")
+    _patch_catalog(monkeypatch, selected, config=config)
     common = dict(
         config=config,
         image_set_manifest=tmp_path / "image-set.json",
         benchmark_commit=selected.benchmark_commit,
         run_id="invalid-run",
         results_root=tmp_path / "results",
-        health_probe=_healthy_snapshot,
     )
     monkeypatch.setattr(os, "getuid", lambda: config.expected_uid + 1)
     with pytest.raises(RootlessFullHarnessError, match="UID"):
@@ -588,12 +978,13 @@ def test_factory_rejects_neutral_image_resource_drift(tmp_path, monkeypatch) -> 
     )
 
     selected = _catalog()
+    config = _valid_config(tmp_path / "config")
     _patch_catalog(
         monkeypatch,
         selected,
-        image_set=_selected_image_set(selected, proxy_cpu=9),
+        config=config,
+        image_set=_selected_image_set(selected, config, proxy_cpu=9),
     )
-    config = _valid_config(tmp_path / "config")
     with pytest.raises(RootlessFullHarnessError, match="proxy image resource"):
         build_rootless_full_harness_runtime(
             config=config,
@@ -602,5 +993,4 @@ def test_factory_rejects_neutral_image_resource_drift(tmp_path, monkeypatch) -> 
             tasks=(_task(),),
             run_id="neutral-resource-drift",
             results_root=tmp_path / "results",
-            health_probe=_healthy_snapshot,
         )

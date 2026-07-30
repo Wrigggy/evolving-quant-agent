@@ -188,10 +188,11 @@ class RootlessImageBuildResult:
 
 
 @dataclass(frozen=True)
-class _VerifiedRoleRoot:
+class VerifiedRoleRoot:
     root: Path
     role: str
     commit: str
+    task_ids: tuple[str, ...]
     records: Mapping[str, dict[str, object]]
     manifest_sha256: str
 
@@ -211,7 +212,11 @@ def _safe_relative_path(value: object) -> str:
     return value
 
 
-def _verify_role_root(root: str | Path, expected_role: str) -> _VerifiedRoleRoot:
+def verify_role_root(root: str | Path, expected_role: str) -> VerifiedRoleRoot:
+    """Verify one complete public or trusted role root against its manifest."""
+
+    if expected_role not in {"public", "trusted-verifier"}:
+        raise RootlessImageError(f"unsupported role-root identity: {expected_role!r}")
     resolved = Path(root).expanduser().resolve()
     manifest_path = resolved / "MANIFEST.json"
     try:
@@ -226,6 +231,19 @@ def _verify_role_root(root: str | Path, expected_role: str) -> _VerifiedRoleRoot
     commit = payload.get("commit")
     if not isinstance(commit, str) or _COMMIT.fullmatch(commit) is None:
         raise RootlessImageError("role manifest has invalid benchmark commit")
+    raw_task_ids = payload.get("task_ids")
+    if (
+        not isinstance(raw_task_ids, list)
+        or not raw_task_ids
+        or any(
+            not isinstance(task_id, str) or _TASK_ID.fullmatch(task_id) is None
+            for task_id in raw_task_ids
+        )
+        or len(set(raw_task_ids)) != len(raw_task_ids)
+        or raw_task_ids != sorted(raw_task_ids)
+    ):
+        raise RootlessImageError("role manifest has an invalid canonical task panel")
+    task_ids = tuple(raw_task_ids)
     raw_records = payload.get("files")
     if not isinstance(raw_records, list) or not raw_records:
         raise RootlessImageError("role manifest has no file records")
@@ -247,6 +265,28 @@ def _verify_role_root(root: str | Path, expected_role: str) -> _VerifiedRoleRoot
         ):
             raise RootlessImageError(f"manifest hash mismatch for {relative}")
         records[relative] = record
+    manifested_tasks: set[str] = set()
+    for relative in records:
+        parts = PurePosixPath(relative).parts
+        if parts[0] != "tasks":
+            if expected_role == "trusted-verifier":
+                raise RootlessImageError(
+                    f"trusted manifest path is outside task tests: {relative}"
+                )
+            continue
+        if len(parts) < 3 or parts[1] not in task_ids:
+            raise RootlessImageError(
+                f"role manifest task membership differs: {relative}"
+            )
+        manifested_tasks.add(parts[1])
+        if expected_role == "trusted-verifier" and parts[2] != "tests":
+            raise RootlessImageError(
+                f"trusted manifest path is outside task tests: {relative}"
+            )
+        if expected_role == "public" and "tests" in parts[2:]:
+            raise RootlessImageError(f"public manifest contains tests: {relative}")
+    if manifested_tasks != set(task_ids):
+        raise RootlessImageError("role manifest task panel differs from file membership")
     discovered = tuple(resolved.rglob("*"))
     for path in discovered:
         relative = path.relative_to(resolved).as_posix()
@@ -265,13 +305,17 @@ def _verify_role_root(root: str | Path, expected_role: str) -> _VerifiedRoleRoot
         raise RootlessImageError(
             f"unmanifested source file membership; extras={extras}, missing={missing}"
         )
-    return _VerifiedRoleRoot(
+    return VerifiedRoleRoot(
         root=resolved,
         role=expected_role,
         commit=commit,
+        task_ids=task_ids,
         records=records,
         manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
     )
+
+
+_verify_role_root = verify_role_root
 
 
 def _require_image_ref(value: str) -> str:
