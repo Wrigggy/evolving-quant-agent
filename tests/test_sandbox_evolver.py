@@ -163,7 +163,12 @@ class FakeBackend:
         if command and command[0] == NEXAU_RUNTIME_PYTHON:
             self.events.append(("run:evolver", command, dict(environment)))
             if self.command_error:
-                return SandboxCommandResult(19, "", "provider failed", False)
+                detail = (
+                    self.command_error
+                    if isinstance(self.command_error, str)
+                    else "provider failed"
+                )
+                return SandboxCommandResult(19, "", detail, False)
             if self.echo_secret:
                 return SandboxCommandResult(0, self.echo_secret, "", False)
         else:
@@ -191,11 +196,77 @@ class FakeProxyManager:
             expect_request=True,
         )
         self.opens = 0
+        self.tamper_attempt_identity = None
 
     @contextmanager
     def open(self, **kwargs):
+        from qea.model_proxy import build_model_proxy_sandbox_plan
+        from qea.sandbox_lifecycle import (
+            create_lifecycle,
+            mark_cleaned,
+            mark_finished,
+            mark_started,
+        )
+
         self.opens += 1
         self.events.append(("proxy:open", kwargs))
+        plan = build_model_proxy_sandbox_plan(
+            run_id=kwargs["run_id"],
+            attempt_id=kwargs["attempt_id"],
+            task_id=kwargs["task_id"],
+            image_ref=self.config.image_ref,
+            upstream_base_url=self.config.upstream_base_url,
+            allowed_path_prefix=self.config.allowed_path_prefix,
+            listen_port=self.config.listen_port,
+            cpu_count=self.config.resource_contract.cpu_count,
+            memory_mb=self.config.resource_contract.memory_mb,
+            pids_limit=self.config.resource_contract.pids_limit,
+            timeout_seconds=self.config.resource_contract.timeout_seconds,
+            network_scope=kwargs["attempt_id"],
+            allowed_model=self.config.allowed_model,
+            audit_path="/run/qea-secrets/proxy-audit.jsonl",
+            denied_request_identities_sha256=(),
+            writable_tmpfs_mb=self.config.resource_contract.writable_tmpfs_mb,
+        )
+        public_plan_sha256 = hashlib.sha256(
+            json.dumps(
+                plan.public_payload(), sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
+        public_config_sha256 = hashlib.sha256(
+            json.dumps(
+                plan.config_payload(), sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
+        attempt_identity_sha256 = hashlib.sha256(
+            json.dumps(
+                {
+                    "public_config_sha256": public_config_sha256,
+                    "public_plan_sha256": public_plan_sha256,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        lifecycle_uri = (
+            Path(kwargs["run_dir"])
+            / "lifecycles"
+            / kwargs["attempt_id"]
+            / "proxy-sandbox-lifecycle-v2.json"
+        )
+        handle = SandboxHandle(
+            backend=self.backend.backend_name,
+            native_id="proxy-1",
+            immutable_image_ref=plan.spec.image_ref,
+            spec_sha256=plan.spec.spec_sha256,
+        )
+        create_lifecycle(
+            lifecycle_uri,
+            handle=handle,
+            spec=plan.spec,
+            attempt_identity_sha256=attempt_identity_sha256,
+        )
+        mark_started(lifecycle_uri)
         try:
             yield SimpleNamespace(
                 base_url="http://qea-model-proxy:8080/v1",
@@ -204,8 +275,22 @@ class FakeProxyManager:
                 network_id="network-1",
                 native_id="proxy-1",
                 allowed_model="example/model",
+                lifecycle_uri=lifecycle_uri,
+                immutable_image_ref=handle.immutable_image_ref,
+                spec_sha256=handle.spec_sha256,
+                public_plan_sha256=public_plan_sha256,
+                public_config_sha256=public_config_sha256,
+                attempt_identity_sha256=(
+                    self.tamper_attempt_identity or attempt_identity_sha256
+                ),
             )
         finally:
+            mark_finished(lifecycle_uri)
+            mark_cleaned(
+                lifecycle_uri,
+                cleanup_method="exact-id",
+                cleanup_result="killed",
+            )
             self.events.append("proxy:close")
 
 
@@ -438,6 +523,75 @@ def test_completed_resume_rejects_proxy_configuration_drift(tmp_path):
         _propose(proposer, tmp_path)
     assert len(backend.specs) == 1
     assert proxy.opens == 1
+
+
+def test_completed_resume_binds_executed_proxy_lifecycle_provenance(tmp_path):
+    proposer, _, _, _, _ = _proposer(tmp_path)
+    first = _propose(proposer, tmp_path)
+    manifest_path = tmp_path / "run/evolutions/iteration-0001/result.json"
+    manifest = json.loads(manifest_path.read_text())
+
+    assert first.executed_proxy_image_ref == manifest[
+        "executed_proxy_image_ref"
+    ]
+    assert first.executed_proxy_spec_sha256 == manifest[
+        "executed_proxy_spec_sha256"
+    ]
+    assert first.executed_proxy_public_plan_sha256 == manifest[
+        "executed_proxy_public_plan_sha256"
+    ]
+    assert first.executed_proxy_config_sha256 == manifest[
+        "executed_proxy_config_sha256"
+    ]
+    assert first.executed_proxy_attempt_identity_sha256 == manifest[
+        "executed_proxy_attempt_identity_sha256"
+    ]
+    proxy_lifecycle = json.loads(first.proxy_lifecycle_uri.read_text())
+    assert proxy_lifecycle["cleaned_up"] is True
+    assert proxy_lifecycle["native_id"] == first.proxy_sandbox_id
+    assert proxy_lifecycle["attempt_identity_sha256"] == (
+        first.executed_proxy_attempt_identity_sha256
+    )
+
+    proxy_lifecycle["attempt_identity_sha256"] = "f" * 64
+    first.proxy_lifecycle_uri.write_text(
+        json.dumps(proxy_lifecycle, sort_keys=True) + "\n"
+    )
+    with pytest.raises(Exception, match="proxy lifecycle identity mismatch"):
+        _propose(proposer, tmp_path)
+
+
+def test_completed_resume_ignores_later_monotonic_proxy_denylist_growth(tmp_path):
+    proposer, backend, proxy, _, _ = _proposer(tmp_path)
+    first = _propose(proposer, tmp_path)
+    registry = tmp_path / "run/proxy-request-registry.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "request_identities_sha256": ["9" * 64],
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    )
+
+    second = _propose(proposer, tmp_path)
+
+    assert second == first
+    assert len(backend.specs) == 1
+    assert proxy.opens == 1
+
+
+def test_fresh_result_rejects_tampered_proxy_session_identity(tmp_path):
+    proposer, backend, proxy, _, _ = _proposer(tmp_path)
+    proxy.tamper_attempt_identity = "e" * 64
+
+    with pytest.raises(Exception, match="proxy session identity"):
+        _propose(proposer, tmp_path)
+
+    assert len(backend.specs) == 0
+    assert not (tmp_path / "run/evolutions/iteration-0001/result.json").exists()
 
 
 def test_diagnosis_credentials_are_structurally_scrubbed_from_all_artifacts(tmp_path):
@@ -933,6 +1087,131 @@ def test_evolver_rechecks_actual_bundled_evidence_against_record(
     with pytest.raises(Exception, match="bundled evidence differs"):
         _propose(proposer, tmp_path)
 
+    assert backend.specs == []
+    assert proxy.opens == 0
+    assert pool.requests == []
+
+
+@pytest.mark.parametrize("state", ["missing", "nonempty", "nested"])
+def test_evolver_requires_one_empty_root_access_log(tmp_path, state):
+    proposer, backend, proxy, pool, _ = _proposer(tmp_path)
+    candidate, evidence, evolver = _roots(tmp_path / "run/inputs")
+    if state == "missing":
+        (evidence.root / "access_log.jsonl").unlink()
+    elif state == "nonempty":
+        (evidence.root / "access_log.jsonl").write_text('{"access":true}\n')
+    else:
+        nested = evidence.root / "nested"
+        nested.mkdir()
+        (nested / "access_log.jsonl").write_text("")
+
+    with pytest.raises(Exception, match="access_log.jsonl"):
+        proposer.propose(
+            candidate_dir=candidate,
+            evidence_dir=evidence,
+            evolver_dir=evolver,
+            diagnosis="Improve validation.",
+            iteration=1,
+            run_id="run-001",
+            run_dir=tmp_path / "run",
+            model_env={},
+        )
+
+    assert backend.specs == []
+    assert proxy.opens == 0
+    assert pool.requests == []
+
+
+def test_evolver_rejects_substituted_access_log_in_actual_bundle(
+    tmp_path, monkeypatch
+):
+    import qea.executors.sandbox_evolver as module
+    from qea.executors.bundles import build_evolver_input_bundle as real_build
+
+    def substitute(*args, **kwargs):
+        record = real_build(*args, **kwargs)
+        files = {}
+        with tarfile.open(record.path, mode="r:*") as archive:
+            for member in archive.getmembers():
+                if not member.isfile():
+                    continue
+                handle = archive.extractfile(member)
+                assert handle is not None
+                files[member.name] = handle.read()
+        files["evidence/access_log.jsonl"] = b'{"substituted":true}\n'
+        payload = _tar_bytes(files)
+        record.path.write_bytes(payload)
+        return replace(
+            record,
+            sha256=hashlib.sha256(payload).hexdigest(),
+            size_bytes=len(payload),
+        )
+
+    monkeypatch.setattr(module, "build_evolver_input_bundle", substitute)
+    proposer, backend, proxy, pool, _ = _proposer(tmp_path)
+
+    with pytest.raises(Exception, match="access_log.jsonl"):
+        _propose(proposer, tmp_path)
+
+    assert backend.specs == []
+    assert proxy.opens == 0
+    assert pool.requests == []
+
+
+def test_nonzero_command_error_redacts_known_diagnosis_secret_everywhere(tmp_path):
+    secret = "sk-or-v1-command-error-secret"
+    events = []
+    backend = FakeBackend(events, command_error=secret)
+    proposer, _, _, _, _ = _proposer(
+        tmp_path, backend=backend, events=events
+    )
+
+    with pytest.raises(Exception, match="evolver command exited") as caught:
+        _propose(
+            proposer,
+            tmp_path,
+            diagnosis={"OPENROUTER_API_KEY": secret, "goal": "improve"},
+        )
+
+    current = caught.value
+    while current is not None:
+        assert secret not in str(current)
+        current = current.__cause__
+    for path in tmp_path.rglob("*"):
+        if path.is_file():
+            assert secret.encode() not in path.read_bytes()
+    for payload in backend.uploads.values():
+        assert secret.encode() not in payload
+
+
+@pytest.mark.parametrize("parent_name", ["attempts", "lifecycles"])
+def test_evolver_rejects_symlinked_proxy_state_parent_before_acquisition(
+    tmp_path, parent_name
+):
+    proposer, backend, proxy, pool, _ = _proposer(tmp_path)
+    candidate, evidence, evolver = _roots(tmp_path / "run/inputs")
+    external = tmp_path / f"external-{parent_name}"
+    external.mkdir()
+    marker = external / "sentinel"
+    marker.write_text("unchanged")
+    (tmp_path / "run" / parent_name).symlink_to(
+        external, target_is_directory=True
+    )
+
+    with pytest.raises(Exception, match="symlink"):
+        proposer.propose(
+            candidate_dir=candidate,
+            evidence_dir=evidence,
+            evolver_dir=evolver,
+            diagnosis="Improve validation.",
+            iteration=1,
+            run_id="run-001",
+            run_dir=tmp_path / "run",
+            model_env={},
+        )
+
+    assert marker.read_text() == "unchanged"
+    assert sorted(path.name for path in external.iterdir()) == ["sentinel"]
     assert backend.specs == []
     assert proxy.opens == 0
     assert pool.requests == []

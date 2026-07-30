@@ -15,8 +15,12 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Callable, Mapping
 
-from ..model_proxy import ModelProxyError, build_model_proxy_sandbox_plan
 from ..evolution_evidence import EvidenceRecord
+from ..model_proxy import (
+    ModelProxyError,
+    build_model_proxy_sandbox_plan,
+    model_proxy_attempt_identity,
+)
 from ..qfbench_images import NEXAU_REQUIREMENTS_LOCK, NEXAU_RUNTIME_PYTHON
 from ..resource_lease import HostResourceLeasePool, ResourceRequest
 from ..sandbox_backend import SandboxBackend, SandboxCommandResult, SandboxSpec
@@ -160,6 +164,7 @@ class SandboxEvolverResult:
     summary_uri: Path
     command_log_uri: Path
     lifecycle_uri: Path
+    proxy_lifecycle_uri: Path
     dependency_lock_uri: Path
     sandbox_id: str
     proxy_sandbox_id: str
@@ -167,6 +172,11 @@ class SandboxEvolverResult:
     cleaned_up: bool
     backend: str
     spec_sha256: str
+    executed_proxy_image_ref: str
+    executed_proxy_spec_sha256: str
+    executed_proxy_public_plan_sha256: str
+    executed_proxy_config_sha256: str
+    executed_proxy_attempt_identity_sha256: str
 
 
 def _digest_tree(root: Path) -> str:
@@ -222,11 +232,27 @@ def _safe_evidence_member(value: str) -> PurePosixPath:
 def _digest_evidence_payloads(
     payloads: Mapping[str, bytes],
 ) -> tuple[str, tuple[str, ...]]:
+    nested_access_logs = [
+        name
+        for name in payloads
+        if PurePosixPath(name).name == "access_log.jsonl"
+        and name != "access_log.jsonl"
+    ]
+    if nested_access_logs:
+        raise SandboxInfrastructureError(
+            "evolver.evidence",
+            f"nested access_log.jsonl is forbidden: {sorted(nested_access_logs)}",
+        )
+    if payloads.get("access_log.jsonl") != b"":
+        raise SandboxInfrastructureError(
+            "evolver.evidence",
+            "evidence requires exactly one empty root access_log.jsonl",
+        )
     digest = hashlib.sha256()
     members: list[str] = []
     for name in sorted(payloads):
         path = _safe_evidence_member(name)
-        if path.name == "access_log.jsonl":
+        if path.as_posix() == "access_log.jsonl":
             continue
         payload = payloads[name]
         encoded = path.as_posix().encode()
@@ -323,6 +349,11 @@ def _verify_bundled_evidence(bundle_path: Path, record: EvidenceRecord) -> None:
                     )
                 relative = PurePosixPath(*path.parts[1:]).as_posix()
                 _safe_evidence_member(relative)
+                if relative in payloads:
+                    raise SandboxInfrastructureError(
+                        "evolver.evidence",
+                        f"duplicate evidence bundle member: {relative}",
+                    )
                 handle = archive.extractfile(member)
                 if handle is None:
                     raise SandboxInfrastructureError(
@@ -590,7 +621,11 @@ def _candidate_archive_limit(config: SandboxEvolverConfig) -> int:
     )
 
 
-def _result_paths(evolution_dir: Path, lifecycle_path: Path) -> dict[str, Path]:
+def _result_paths(
+    evolution_dir: Path,
+    lifecycle_path: Path,
+    proxy_lifecycle_path: Path,
+) -> dict[str, Path]:
     return {
         "trace_uri": evolution_dir / "raw_trace.jsonl",
         "final_uri": evolution_dir / "final.txt",
@@ -599,6 +634,7 @@ def _result_paths(evolution_dir: Path, lifecycle_path: Path) -> dict[str, Path]:
         "summary_uri": evolution_dir / "summary.json",
         "command_log_uri": evolution_dir / "command.json",
         "lifecycle_uri": lifecycle_path,
+        "proxy_lifecycle_uri": proxy_lifecycle_path,
         "dependency_lock_uri": evolution_dir / "nexau-requirements.lock",
     }
 
@@ -674,6 +710,45 @@ def _load_completed(
         raise SandboxInfrastructureError(
             "evolver.resume", "completed lifecycle identity mismatch"
         )
+    executed_identity_fields = (
+        "executed_proxy_spec_sha256",
+        "executed_proxy_public_plan_sha256",
+        "executed_proxy_config_sha256",
+        "executed_proxy_attempt_identity_sha256",
+    )
+    if any(
+        _SHA256.fullmatch(str(payload.get(name, ""))) is None
+        for name in executed_identity_fields
+    ) or not isinstance(payload.get("executed_proxy_image_ref"), str):
+        raise SandboxInfrastructureError(
+            "evolver.resume", "completed proxy execution identity is invalid"
+        )
+    recomputed_proxy_attempt_identity = model_proxy_attempt_identity(
+        public_plan_sha256=str(
+            payload["executed_proxy_public_plan_sha256"]
+        ),
+        public_config_sha256=str(payload["executed_proxy_config_sha256"]),
+    )
+    if recomputed_proxy_attempt_identity != payload.get(
+        "executed_proxy_attempt_identity_sha256"
+    ):
+        raise SandboxInfrastructureError(
+            "evolver.resume", "completed proxy execution identity mismatch"
+        )
+    proxy_lifecycle = load_lifecycle(paths["proxy_lifecycle_uri"])
+    if (
+        proxy_lifecycle.cleaned_up is not True
+        or proxy_lifecycle.native_id != payload.get("proxy_sandbox_id")
+        or proxy_lifecycle.immutable_image_ref
+        != payload.get("executed_proxy_image_ref")
+        or proxy_lifecycle.spec_sha256
+        != payload.get("executed_proxy_spec_sha256")
+        or proxy_lifecycle.attempt_identity_sha256
+        != payload.get("executed_proxy_attempt_identity_sha256")
+    ):
+        raise SandboxInfrastructureError(
+            "evolver.resume", "completed proxy lifecycle identity mismatch"
+        )
     file_digests = payload.get("file_sha256")
     if not isinstance(file_digests, dict) or any(
         _SHA256.fullmatch(str(file_digests.get(name, ""))) is None
@@ -694,8 +769,88 @@ def _load_completed(
         cleaned_up=True,
         backend=str(payload["backend"]),
         spec_sha256=str(payload["spec_sha256"]),
+        executed_proxy_image_ref=str(payload["executed_proxy_image_ref"]),
+        executed_proxy_spec_sha256=str(
+            payload["executed_proxy_spec_sha256"]
+        ),
+        executed_proxy_public_plan_sha256=str(
+            payload["executed_proxy_public_plan_sha256"]
+        ),
+        executed_proxy_config_sha256=str(
+            payload["executed_proxy_config_sha256"]
+        ),
+        executed_proxy_attempt_identity_sha256=str(
+            payload["executed_proxy_attempt_identity_sha256"]
+        ),
         **paths,
     )
+
+
+def _validate_executed_proxy_session(
+    session: object,
+    *,
+    lifecycle_path: Path,
+    run_root: Path,
+    run_id: str,
+    attempt_id: str,
+    expected_image_ref: str,
+    expected_spec_sha256: str,
+    require_cleaned: bool,
+) -> None:
+    try:
+        session_lifecycle_path = trusted_regular_path(
+            getattr(session, "lifecycle_uri"),
+            phase="evolver.proxy",
+            contained_by=run_root,
+        )
+        executed_image_ref = getattr(session, "immutable_image_ref")
+        executed_spec_sha256 = getattr(session, "spec_sha256")
+        public_plan_sha256 = getattr(session, "public_plan_sha256")
+        public_config_sha256 = getattr(session, "public_config_sha256")
+        attempt_identity_sha256 = getattr(
+            session, "attempt_identity_sha256"
+        )
+    except (AttributeError, TypeError) as exc:
+        raise SandboxInfrastructureError(
+            "evolver.proxy", "proxy session identity is incomplete"
+        ) from exc
+    if session_lifecycle_path != lifecycle_path:
+        raise SandboxInfrastructureError(
+            "evolver.proxy", "proxy session lifecycle path is unexpected"
+        )
+    if (
+        executed_image_ref != expected_image_ref
+        or executed_spec_sha256 != expected_spec_sha256
+        or _SHA256.fullmatch(str(public_plan_sha256)) is None
+        or _SHA256.fullmatch(str(public_config_sha256)) is None
+        or _SHA256.fullmatch(str(attempt_identity_sha256)) is None
+    ):
+        raise SandboxInfrastructureError(
+            "evolver.proxy", "proxy session identity differs from static spec"
+        )
+    if model_proxy_attempt_identity(
+        public_plan_sha256=str(public_plan_sha256),
+        public_config_sha256=str(public_config_sha256),
+    ) != str(attempt_identity_sha256):
+        raise SandboxInfrastructureError(
+            "evolver.proxy", "proxy session identity digest is inconsistent"
+        )
+    lifecycle = load_lifecycle(session_lifecycle_path)
+    if (
+        lifecycle.backend == ""
+        or lifecycle.role != "proxy"
+        or lifecycle.run_id != run_id
+        or lifecycle.attempt_id != attempt_id
+        or lifecycle.task_id != _TASK_ID
+        or lifecycle.native_id != getattr(session, "native_id", None)
+        or lifecycle.immutable_image_ref != executed_image_ref
+        or lifecycle.spec_sha256 != executed_spec_sha256
+        or lifecycle.attempt_identity_sha256 != attempt_identity_sha256
+        or lifecycle.cleaned_up is not require_cleaned
+    ):
+        raise SandboxInfrastructureError(
+            "evolver.proxy", "proxy session identity differs from lifecycle"
+        )
 
 
 class SandboxFullHarnessProposer:
@@ -781,6 +936,36 @@ class SandboxFullHarnessProposer:
             evidence_dir, contained_by=run_root
         )
         attempt_id = f"evolver-iteration-{iteration}"
+        proxy_attempt_dir = trusted_directory(
+            run_root / "attempts" / attempt_id,
+            create=True,
+            phase="evolver.proxy-state",
+            contained_by=run_root,
+        )
+        proxy_lifecycle_dir = trusted_directory(
+            run_root / "lifecycles" / attempt_id,
+            create=True,
+            phase="evolver.proxy-state",
+            contained_by=run_root,
+        )
+        proxy_registry_path = run_root / "proxy-request-registry.json"
+        proxy_audit_path = proxy_attempt_dir / "proxy-audit.jsonl"
+        quarantine_path = proxy_attempt_dir / "proxy-audit.quarantined.json"
+        proxy_lifecycle_path = (
+            proxy_lifecycle_dir / "proxy-sandbox-lifecycle-v2.json"
+        )
+        for proxy_state_path in (
+            proxy_registry_path,
+            proxy_audit_path,
+            quarantine_path,
+            proxy_lifecycle_path,
+        ):
+            trusted_regular_path(
+                proxy_state_path,
+                phase="evolver.proxy-state",
+                contained_by=run_root,
+                allow_missing=True,
+            )
         proxy_url = (
             f"http://qea-model-proxy:{self.proxy_manager.config.listen_port}"
             f"{self.proxy_manager.config.allowed_path_prefix}"
@@ -888,7 +1073,9 @@ class SandboxFullHarnessProposer:
             contained_by=self.lifecycle_root,
             allow_missing=True,
         )
-        paths = _result_paths(evolution_dir, lifecycle_path)
+        paths = _result_paths(
+            evolution_dir, lifecycle_path, proxy_lifecycle_path
+        )
         expected_identity = {
             "run_id": run_id,
             "iteration": iteration,
@@ -915,12 +1102,6 @@ class SandboxFullHarnessProposer:
             pending_input_path.unlink()
             return completed
 
-        quarantine_path = (
-            run_root
-            / "attempts"
-            / attempt_id
-            / "proxy-audit.quarantined.json"
-        )
         if quarantine_path.exists() or quarantine_path.is_symlink():
             pending_input_path.unlink()
             raise SandboxInfrastructureError(
@@ -1021,6 +1202,16 @@ class SandboxFullHarnessProposer:
                     raise SandboxInfrastructureError(
                         "evolver.proxy", "proxy session identity differs from evolver spec"
                     )
+                _validate_executed_proxy_session(
+                    session,
+                    lifecycle_path=proxy_lifecycle_path,
+                    run_root=run_root,
+                    run_id=run_id,
+                    attempt_id=attempt_id,
+                    expected_image_ref=proxy_image_ref,
+                    expected_spec_sha256=proxy_spec_sha256,
+                    require_cleaned=False,
+                )
                 try:
                     handle = backend_call(
                         "evolver.create", lambda: self.backend.create(spec)
@@ -1159,10 +1350,14 @@ class SandboxFullHarnessProposer:
                             "evolver.command", "evolver command timed out"
                         )
                     if command_result.exit_code != 0:
+                        error_detail = _redact_text(
+                            command_result.stderr or command_result.stdout,
+                            set(known_secrets),
+                        )
                         raise SandboxInfrastructureError(
                             "evolver.command",
                             f"evolver command exited {command_result.exit_code}: "
-                            f"{command_result.stderr or command_result.stdout}",
+                            f"{error_detail}",
                         )
                     archive = read_bounded(
                         self.backend,
@@ -1247,6 +1442,16 @@ class SandboxFullHarnessProposer:
                 raise SandboxInfrastructureError(
                     "evolver.coordinator", "sandbox identities were not recorded"
                 )
+            _validate_executed_proxy_session(
+                session,
+                lifecycle_path=proxy_lifecycle_path,
+                run_root=run_root,
+                run_id=run_id,
+                attempt_id=attempt_id,
+                expected_image_ref=proxy_image_ref,
+                expected_spec_sha256=proxy_spec_sha256,
+                require_cleaned=True,
+            )
             lifecycle = load_lifecycle(lifecycle_path)
             if not lifecycle.cleaned_up:
                 raise SandboxInfrastructureError(
@@ -1265,6 +1470,7 @@ class SandboxFullHarnessProposer:
                 summary_uri=paths["summary_uri"],
                 command_log_uri=paths["command_log_uri"],
                 lifecycle_uri=lifecycle_path,
+                proxy_lifecycle_uri=proxy_lifecycle_path,
                 dependency_lock_uri=paths["dependency_lock_uri"],
                 sandbox_id=handle.native_id,
                 proxy_sandbox_id=session.native_id,
@@ -1272,6 +1478,17 @@ class SandboxFullHarnessProposer:
                 cleaned_up=True,
                 backend=handle.backend,
                 spec_sha256=handle.spec_sha256,
+                executed_proxy_image_ref=session.immutable_image_ref,
+                executed_proxy_spec_sha256=session.spec_sha256,
+                executed_proxy_public_plan_sha256=(
+                    session.public_plan_sha256
+                ),
+                executed_proxy_config_sha256=(
+                    session.public_config_sha256
+                ),
+                executed_proxy_attempt_identity_sha256=(
+                    session.attempt_identity_sha256
+                ),
             )
             file_digests = {
                 name: _sha256(path.read_bytes()) for name, path in paths.items()
@@ -1287,6 +1504,21 @@ class SandboxFullHarnessProposer:
                     "sandbox_id": result.sandbox_id,
                     "proxy_sandbox_id": result.proxy_sandbox_id,
                     "network_id": result.network_id,
+                    "executed_proxy_image_ref": (
+                        result.executed_proxy_image_ref
+                    ),
+                    "executed_proxy_spec_sha256": (
+                        result.executed_proxy_spec_sha256
+                    ),
+                    "executed_proxy_public_plan_sha256": (
+                        result.executed_proxy_public_plan_sha256
+                    ),
+                    "executed_proxy_config_sha256": (
+                        result.executed_proxy_config_sha256
+                    ),
+                    "executed_proxy_attempt_identity_sha256": (
+                        result.executed_proxy_attempt_identity_sha256
+                    ),
                     "cleaned_up": True,
                     "file_sha256": file_digests,
                 },

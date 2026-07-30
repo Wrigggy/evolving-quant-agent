@@ -17,6 +17,7 @@ from ..model_proxy import (
     ModelProxyError,
     _read_token_bytes,
     build_model_proxy_sandbox_plan,
+    model_proxy_plan_identity,
 )
 from ..sandbox_backend import (
     SandboxBackend,
@@ -150,6 +151,11 @@ class SandboxProxySession:
     lifecycle_uri: Path
     audit_uri: Path
     allowed_model: str
+    immutable_image_ref: str
+    spec_sha256: str
+    public_plan_sha256: str
+    public_config_sha256: str
+    attempt_identity_sha256: str
 
 
 def _utc_now() -> datetime:
@@ -628,10 +634,14 @@ class SandboxProxyManager:
                 ),
                 writable_tmpfs_mb=self.config.resource_contract.writable_tmpfs_mb,
             )
-            public_identity = json.dumps(
-                plan.public_payload(), sort_keys=True, separators=(",", ":")
+            (
+                public_plan_sha256,
+                public_config_sha256,
+                attempt_identity,
+            ) = model_proxy_plan_identity(plan)
+            public_config_identity = json.dumps(
+                plan.config_payload(), sort_keys=True, separators=(",", ":")
             ).encode()
-            attempt_identity = hashlib.sha256(public_identity).hexdigest()
             handle = _backend_call(
                 "proxy.create",
                 lambda: self.backend.create(plan.spec),
@@ -659,12 +669,7 @@ class SandboxProxyManager:
                 lambda: mark_started(lifecycle_uri, at=self.clock()),
                 secret=token_buffer,
             )
-            config_payload = (
-                json.dumps(
-                    plan.config_payload(), sort_keys=True, separators=(",", ":")
-                ).encode()
-                + b"\n"
-            )
+            config_payload = public_config_identity + b"\n"
             _backend_call(
                 "proxy.config.transfer",
                 lambda: self.backend.put_bytes(
@@ -722,6 +727,11 @@ class SandboxProxyManager:
                 lifecycle_uri=lifecycle_uri,
                 audit_uri=audit_uri,
                 allowed_model=self.config.allowed_model,
+                immutable_image_ref=handle.immutable_image_ref,
+                spec_sha256=handle.spec_sha256,
+                public_plan_sha256=public_plan_sha256,
+                public_config_sha256=public_config_sha256,
+                attempt_identity_sha256=attempt_identity,
             )
             yielded = True
             try:

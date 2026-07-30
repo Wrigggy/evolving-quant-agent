@@ -504,7 +504,61 @@ class ModelProxySandboxPlan:
             "listen_port": self.listen_port,
             "allowed_model": self.allowed_model,
             "audit_path": self.audit_path,
+            "denied_request_identities_sha256": list(
+                self.denied_request_identities_sha256
+            ),
         }
+
+
+def model_proxy_attempt_identity(
+    *, public_plan_sha256: str, public_config_sha256: str
+) -> str:
+    """Bind the executed public proxy plan and uploaded public config."""
+
+    if (
+        not isinstance(public_plan_sha256, str)
+        or _SHA256.fullmatch(public_plan_sha256) is None
+        or not isinstance(public_config_sha256, str)
+        or _SHA256.fullmatch(public_config_sha256) is None
+    ):
+        raise ModelProxyError("proxy public identity digest is invalid")
+    return hashlib.sha256(
+        json.dumps(
+            {
+                "public_config_sha256": public_config_sha256,
+                "public_plan_sha256": public_plan_sha256,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+
+
+def model_proxy_plan_identity(
+    plan: ModelProxySandboxPlan,
+) -> tuple[str, str, str]:
+    """Return public plan, public config, and combined executed digests."""
+
+    if not isinstance(plan, ModelProxySandboxPlan):
+        raise ModelProxyError("proxy plan identity requires a sandbox plan")
+    public_plan_sha256 = hashlib.sha256(
+        json.dumps(
+            plan.public_payload(), sort_keys=True, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    public_config_sha256 = hashlib.sha256(
+        json.dumps(
+            plan.config_payload(), sort_keys=True, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    return (
+        public_plan_sha256,
+        public_config_sha256,
+        model_proxy_attempt_identity(
+            public_plan_sha256=public_plan_sha256,
+            public_config_sha256=public_config_sha256,
+        ),
+    )
 
 
 def build_model_proxy_sandbox_plan(

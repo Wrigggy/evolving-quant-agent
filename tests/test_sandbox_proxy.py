@@ -285,6 +285,11 @@ def test_session_uses_one_scoped_network_and_private_token_transfer(tmp_path):
         assert session.network_id == "network-native-1"
         assert session.native_id == "proxy-native-1"
         assert session.allowed_model == "openai/gpt-5"
+        assert session.immutable_image_ref == "sha256:" + "c" * 64
+        assert len(session.spec_sha256) == 64
+        assert len(session.public_plan_sha256) == 64
+        assert len(session.public_config_sha256) == 64
+        assert len(session.attempt_identity_sha256) == 64
         assert session.lifecycle_uri.is_file()
         assert REAL_TOKEN.decode() not in json.dumps(asdict(session), default=str)
 
@@ -318,6 +323,11 @@ def test_session_uses_one_scoped_network_and_private_token_transfer(tmp_path):
     lifecycle = json.loads(session.lifecycle_uri.read_text())
     assert lifecycle["cleaned_up"] is True
     assert lifecycle["native_id"] == "proxy-native-1"
+    assert lifecycle["immutable_image_ref"] == session.immutable_image_ref
+    assert lifecycle["spec_sha256"] == session.spec_sha256
+    assert lifecycle["attempt_identity_sha256"] == (
+        session.attempt_identity_sha256
+    )
 
 
 def test_two_attempts_in_one_run_never_share_proxy_or_network_ids(tmp_path):
@@ -625,6 +635,13 @@ def test_completed_hash_enters_private_run_registry_and_next_attempt_config(tmp_
         assert private_config["denied_request_identities_sha256"] == [
             request_identity
         ]
+        assert hashlib.sha256(config_upload.rstrip(b"\n")).hexdigest() == (
+            session.public_config_sha256
+        )
+        lifecycle = json.loads(session.lifecycle_uri.read_text())
+        assert lifecycle["attempt_identity_sha256"] == (
+            session.attempt_identity_sha256
+        )
         public_surface = json.dumps(
             {
                 "session": asdict(session),

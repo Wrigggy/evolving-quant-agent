@@ -845,6 +845,33 @@ def test_proxy_sandbox_plan_binds_scope_model_and_private_audit_config():
     assert plan.allowed_model == "openai/gpt-5"
     assert plan.audit_path == "/run/qea-secrets/proxy-audit.jsonl"
     assert plan.config_payload()["allowed_model"] == "openai/gpt-5"
+
+
+def test_proxy_public_plan_identity_includes_safe_denied_request_hashes():
+    from qea.model_proxy import build_model_proxy_sandbox_plan
+
+    denied = ("1" * 64, "2" * 64)
+    plan = build_model_proxy_sandbox_plan(
+        run_id="run-001",
+        attempt_id="attempt-001",
+        task_id="historical-var-data-prep",
+        image_ref="sha256:" + "c" * 64,
+        upstream_base_url="https://openrouter.ai/api/v1",
+        allowed_path_prefix="/v1",
+        allowed_model="openai/gpt-5",
+        audit_path="/run/qea-secrets/proxy-audit.jsonl",
+        network_scope="attempt-001",
+        denied_request_identities_sha256=denied,
+        listen_port=8080,
+        cpu_count=1,
+        memory_mb=512,
+        pids_limit=64,
+        timeout_seconds=300,
+    )
+
+    assert plan.public_payload()["denied_request_identities_sha256"] == list(
+        denied
+    )
     assert plan.config_payload()["audit_file"] == (
         "/run/qea-secrets/proxy-audit.jsonl"
     )
