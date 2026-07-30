@@ -10,20 +10,17 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
-from types import MappingProxyType, SimpleNamespace
+from types import SimpleNamespace
 from typing import Callable, Mapping, Sequence
-from urllib.parse import urlparse
 
 from ..evaluation import ArtifactRecord, OfficialTaskScore, TaskAttempt
 from ..qfbench_images import NEXAU_REQUIREMENTS_LOCK, NEXAU_RUNTIME_PYTHON
 from ..sandbox_backend import SandboxBackend, SandboxCommandResult, SandboxSpec
 from ..sandbox_lifecycle import (
     create_lifecycle,
-    mark_cleaned,
     mark_finished,
     mark_started,
 )
@@ -40,10 +37,23 @@ from .execution_record import (
     WorkerExecution,
     persist_worker_execution,
 )
+from .sandbox_runtime import (
+    PLACEHOLDER_API_KEY as _PLACEHOLDER_API_KEY,
+    SandboxExecutionError,
+    SandboxInfrastructureError,
+    SandboxResourceContract,
+    atomic_json as _atomic_json,
+    backend_call as _backend_call,
+    finish_and_cleanup as _finish_and_cleanup,
+    public_model_environment,
+    require_tmpfs as _require_tmpfs,
+    run_required as _run_required,
+    utc_now as _utc_now,
+    validate_public_model_env,
+    write_command_log as _write_command_log,
+)
 
 
-_PLACEHOLDER_API_KEY = "qea-proxy-placeholder"
-_SYSTEM_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
 _REMOTE_RUNNER = Path(__file__).with_name("remote_nexau_worker.py")
 _RUNTIME_BRIDGE = Path(__file__).parents[1] / "runtime_bridge.py"
 _WORKER_REQUIRED_TMPFS = frozenset({"/tmp", "/qea", "/app"})
@@ -92,134 +102,8 @@ raise SystemExit(0 if actual == expected else 87)
 """
 
 
-class SandboxExecutionError(RuntimeError):
-    """A neutral worker/verifier attempt cannot produce an official result."""
-
-
-class SandboxInfrastructureError(SandboxExecutionError):
-    """A coordinator, backend, transfer, isolation, or cleanup operation failed."""
-
-    def __init__(self, phase: str, detail: str) -> None:
-        self.phase = phase
-        self.detail = " ".join(str(detail).split())[:2_000]
-        super().__init__(f"{phase}: {self.detail}")
-
-
 class SandboxWorkerTimeout(WorkerBehaviorTimeout, SandboxExecutionError):
     """The worker's task command, and only that command, reached its timeout."""
-
-
-@dataclass(frozen=True)
-class SandboxResourceContract:
-    """Bounded resources and writable tmpfs mounts for one sandbox role."""
-
-    cpu_count: int
-    memory_mb: int
-    pids_limit: int
-    timeout_seconds: int
-    writable_tmpfs_mb: Mapping[str, int]
-
-    def __post_init__(self) -> None:
-        for name in ("cpu_count", "memory_mb", "pids_limit", "timeout_seconds"):
-            value = getattr(self, name)
-            if type(value) is not int or value <= 0:
-                raise SandboxInfrastructureError(
-                    "resource.contract", f"{name} must be a positive integer"
-                )
-        if not isinstance(self.writable_tmpfs_mb, Mapping):
-            raise SandboxInfrastructureError(
-                "resource.contract", "writable_tmpfs_mb must be a mapping"
-            )
-        copied: dict[str, int] = {}
-        for path, size_mb in self.writable_tmpfs_mb.items():
-            if (
-                not isinstance(path, str)
-                or not path.startswith("/")
-                or path == "/"
-                or type(size_mb) is not int
-                or size_mb <= 0
-            ):
-                raise SandboxInfrastructureError(
-                    "resource.contract", f"invalid tmpfs entry {path!r}"
-                )
-            copied[path] = size_mb
-        object.__setattr__(
-            self,
-            "writable_tmpfs_mb",
-            MappingProxyType(dict(sorted(copied.items()))),
-        )
-
-
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    encoded = json.dumps(payload, sort_keys=True, indent=2).encode() + b"\n"
-    try:
-        with temporary.open("wb") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
-
-
-def _require_tmpfs(
-    resources: SandboxResourceContract,
-    required: frozenset[str],
-    *,
-    role: str,
-) -> None:
-    missing = sorted(required - set(resources.writable_tmpfs_mb))
-    if missing:
-        raise SandboxInfrastructureError(
-            f"{role}.config", f"resource contract is missing tmpfs mounts: {missing}"
-        )
-
-
-def _backend_call(phase: str, operation: Callable[[], object]):
-    try:
-        return operation()
-    except SandboxInfrastructureError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - typed provider boundary.
-        raise SandboxInfrastructureError(
-            phase, f"{type(exc).__name__}: {exc}"
-        ) from exc
-
-
-def _run_required(
-    backend: SandboxBackend,
-    handle,
-    argv: Sequence[str],
-    *,
-    environment: Mapping[str, str],
-    timeout_seconds: int,
-    phase: str,
-) -> SandboxCommandResult:
-    result = _backend_call(
-        phase,
-        lambda: backend.run(
-            handle,
-            tuple(argv),
-            environment=environment,
-            timeout_seconds=timeout_seconds,
-        ),
-    )
-    assert isinstance(result, SandboxCommandResult)
-    if result.timed_out:
-        raise SandboxInfrastructureError(phase, "coordinator operation timed out")
-    if result.exit_code != 0:
-        detail = result.stderr or result.stdout or f"exit {result.exit_code}"
-        raise SandboxInfrastructureError(
-            phase, f"command exited {result.exit_code}: {detail}"
-        )
-    return result
 
 
 def _task_timeout(task, attribute: str, cap: int, *, phase: str) -> int:
@@ -295,44 +179,18 @@ def _worker_environment(
     model_name: str,
     placeholder_api_key: str,
 ) -> dict[str, str]:
-    if placeholder_api_key != _PLACEHOLDER_API_KEY:
-        raise SandboxInfrastructureError(
-            "worker.proxy", "only the fixed public proxy placeholder is accepted"
-        )
-    parsed = urlparse(proxy_base_url)
-    if (
-        parsed.scheme != "http"
-        or not parsed.hostname
-        or parsed.hostname != "qea-model-proxy"
-        or parsed.username
-        or parsed.password
-        or parsed.query
-        or parsed.fragment
-        or not parsed.path.startswith("/v1")
-    ):
-        raise SandboxInfrastructureError(
-            "worker.proxy", "proxy URL must be the internal qea-model-proxy /v1 endpoint"
-        )
-    if not isinstance(model_name, str) or not model_name.strip():
-        raise SandboxInfrastructureError("worker.proxy", "model name must be public")
-    return {
-        "LLM_API_KEY": placeholder_api_key,
-        "LLM_BASE_URL": proxy_base_url,
-        "LLM_MODEL": model_name,
-        "SSL_CERT_FILE": _SYSTEM_CA_BUNDLE,
-    }
+    return public_model_environment(
+        proxy_base_url=proxy_base_url,
+        model_name=model_name,
+        placeholder_api_key=placeholder_api_key,
+    )
 
 
 def _validate_public_model_env(
     supplied: Mapping[str, str] | None,
     expected: Mapping[str, str],
 ) -> None:
-    values = dict(supplied or {})
-    if values and values != dict(expected):
-        raise SandboxInfrastructureError(
-            "worker.public proxy environment",
-            "execute() accepts no provider credential or environment override",
-        )
+    validate_public_model_env(supplied, expected, role="worker")
 
 
 def _attempt_identity(
@@ -351,66 +209,6 @@ def _attempt_identity(
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
-
-
-def _write_command_log(path: Path, result: SandboxCommandResult) -> None:
-    _atomic_json(
-        path,
-        {
-            "exit_code": result.exit_code,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "timed_out": result.timed_out,
-        },
-    )
-
-
-def _finish_and_cleanup(
-    *,
-    backend: SandboxBackend,
-    handle,
-    lifecycle_path: Path | None,
-    clock: Callable[[], datetime],
-    role: str,
-    primary_error: BaseException | None,
-    finished: bool,
-) -> None:
-    finish_error: SandboxInfrastructureError | None = None
-    if lifecycle_path is not None and lifecycle_path.is_file() and not finished:
-        try:
-            mark_finished(
-                lifecycle_path,
-                at=clock(),
-                failure=str(primary_error) if primary_error else "attempt interrupted",
-            )
-        except Exception as exc:  # noqa: BLE001 - lifecycle boundary.
-            finish_error = SandboxInfrastructureError(
-                f"{role}.lifecycle", f"{type(exc).__name__}: {exc}"
-            )
-
-    cleanup_error: SandboxInfrastructureError | None = None
-    if handle is not None:
-        try:
-            result = backend.kill(handle.native_id)
-            if lifecycle_path is not None and lifecycle_path.is_file():
-                mark_cleaned(
-                    lifecycle_path,
-                    cleanup_method="exact-id",
-                    cleanup_result=result.outcome,
-                    at=clock(),
-                )
-        except Exception as exc:  # noqa: BLE001 - normalize backend cleanup.
-            cleanup_error = SandboxInfrastructureError(
-                f"{role}.cleanup", f"{type(exc).__name__}: {exc}"
-            )
-    if cleanup_error is not None:
-        if primary_error is not None:
-            raise cleanup_error from primary_error
-        raise cleanup_error
-    if finish_error is not None:
-        if primary_error is not None:
-            raise finish_error from primary_error
-        raise finish_error
 
 
 def _artifact_records(execution: WorkerExecution) -> tuple[ArtifactRecord, ...]:

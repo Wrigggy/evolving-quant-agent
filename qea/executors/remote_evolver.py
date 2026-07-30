@@ -1,4 +1,4 @@
-"""Entrypoint uploaded to the isolated E2B full-harness evolver sandbox."""
+"""Entrypoint uploaded to an isolated full-harness evolver sandbox."""
 
 from __future__ import annotations
 

@@ -271,7 +271,11 @@ def _proposal_metadata(proposal: object, run_dir: Path) -> dict:
         "candidate_digest",
         "input_bundle_sha256",
         "sandbox_id",
+        "proxy_sandbox_id",
+        "network_id",
         "cleaned_up",
+        "backend",
+        "spec_sha256",
     ):
         if hasattr(proposal, name):
             payload[name] = getattr(proposal, name)

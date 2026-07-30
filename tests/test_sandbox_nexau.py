@@ -16,6 +16,16 @@ from qea.sandbox_backend import (
 )
 
 
+def test_sandbox_nexau_reexports_neutral_runtime_contracts():
+    from qea.executors import sandbox_nexau, sandbox_runtime
+
+    assert (
+        sandbox_nexau.SandboxInfrastructureError
+        is sandbox_runtime.SandboxInfrastructureError
+    )
+    assert sandbox_nexau.SandboxResourceContract is sandbox_runtime.SandboxResourceContract
+
+
 def _tar_bytes(files):
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w") as archive:
