@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import math
 import os
 import re
+import stat
+import tarfile
 from dataclasses import dataclass, replace
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Callable, Mapping
 
+from ..model_proxy import ModelProxyError, build_model_proxy_sandbox_plan
+from ..evolution_evidence import EvidenceRecord
 from ..qfbench_images import NEXAU_REQUIREMENTS_LOCK, NEXAU_RUNTIME_PYTHON
 from ..resource_lease import HostResourceLeasePool, ResourceRequest
 from ..sandbox_backend import SandboxBackend, SandboxCommandResult, SandboxSpec
@@ -31,11 +36,15 @@ from .sandbox_runtime import (
     SandboxInfrastructureError,
     SandboxResourceContract,
     atomic_json,
+    atomic_bytes,
     backend_call,
     finish_and_cleanup,
     public_model_environment,
+    read_bounded,
     require_tmpfs,
     run_required,
+    trusted_directory,
+    trusted_regular_path,
     utc_now,
     validate_public_model_env,
     write_command_log,
@@ -46,8 +55,18 @@ _REMOTE_RUNNER = Path(__file__).with_name("remote_evolver.py")
 _REQUIRED_TMPFS = frozenset({"/tmp", "/qea"})
 _TASK_ID = "full-harness-evolver"
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+_CREDENTIAL_KEY = re.compile(
+    r"(?i)(?:^|[_-])(?:api[_-]?key|access[_-]?token|authorization|auth|bearer|"
+    r"token|secret|password|passwd|credential|credentials)$"
+)
 _CREDENTIAL_ASSIGNMENT = re.compile(
-    r"(?i)\b(api[_-]?key|token|secret|password)\b\s*[:=]\s*([^\s,;]+)"
+    r"(?i)\b([a-z0-9_-]*(?:api[_-]?key|access[_-]?token|authorization|auth|"
+    r"bearer|token|secret|password|passwd|credentials?))"
+    r"(\s*[:=]\s*)([\"']?)([^\"'\s,;]+)\3"
+)
+_BEARER_CREDENTIAL = re.compile(r"(?i)\bBearer\s+([^\s,;\"']+)")
+_URL_CREDENTIAL = re.compile(
+    r"(?i)(https?://)([^/\s:@]+):([^@\s/]+)@"
 )
 _DOWNLOAD_LIMITS = {
     "raw_trace.jsonl": 4 * 1024 * 1024,
@@ -58,6 +77,22 @@ _DOWNLOAD_LIMITS = {
 }
 _JSON_EVIDENCE = frozenset(
     {"prediction.json", "access-summary.json", "summary.json"}
+)
+_DEPENDENCY_LOCK_LIMIT = 8 * 1024 * 1024
+_TAR_MEMBER_ENVELOPE_BYTES = 8 * 1024
+_TAR_TRAILER_BYTES = 10 * 1024
+_PRIVATE_EVIDENCE_PARTS = frozenset(
+    {
+        "tests",
+        "solution",
+        "official-tests",
+        "official_tests",
+        "reference-data",
+        "reference_data",
+        "trusted-verifier",
+        "trusted_verifier",
+        "gold",
+    }
 )
 
 
@@ -167,22 +202,284 @@ def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def _safe_diagnosis(value: object) -> bytes:
+def _safe_evidence_member(value: str) -> PurePosixPath:
+    path = PurePosixPath(value)
+    if (
+        path.is_absolute()
+        or not path.parts
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
+        raise SandboxInfrastructureError(
+            "evolver.evidence", f"unsafe evidence member: {value!r}"
+        )
+    if any(part.casefold() in _PRIVATE_EVIDENCE_PARTS for part in path.parts):
+        raise SandboxInfrastructureError(
+            "evolver.evidence", f"private evaluator path in evidence: {value}"
+        )
+    return path
+
+
+def _digest_evidence_payloads(
+    payloads: Mapping[str, bytes],
+) -> tuple[str, tuple[str, ...]]:
+    digest = hashlib.sha256()
+    members: list[str] = []
+    for name in sorted(payloads):
+        path = _safe_evidence_member(name)
+        if path.name == "access_log.jsonl":
+            continue
+        payload = payloads[name]
+        encoded = path.as_posix().encode()
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+        members.append(path.as_posix())
+    return digest.hexdigest(), tuple(members)
+
+
+def _validate_evidence_record(
+    value: object, *, contained_by: Path
+) -> tuple[EvidenceRecord, Path]:
+    if not isinstance(value, EvidenceRecord):
+        raise SandboxInfrastructureError(
+            "evolver.evidence",
+            "evidence_dir must be an authorized EvidenceRecord",
+        )
+    if _SHA256.fullmatch(value.sha256) is None:
+        raise SandboxInfrastructureError(
+            "evolver.evidence", "EvidenceRecord has an invalid digest"
+        )
+    if (
+        not isinstance(value.members, tuple)
+        or tuple(sorted(set(value.members))) != value.members
+    ):
+        raise SandboxInfrastructureError(
+            "evolver.evidence", "EvidenceRecord members are not canonical"
+        )
+    for member in value.members:
+        safe = _safe_evidence_member(member)
+        if safe.name == "access_log.jsonl":
+            raise SandboxInfrastructureError(
+                "evolver.evidence",
+                "EvidenceRecord must exclude access_log.jsonl from its identity",
+            )
+    root = trusted_directory(
+        value.root,
+        create=False,
+        phase="evolver.evidence",
+        contained_by=contained_by,
+    )
+    payloads: dict[str, bytes] = {}
+    for path in sorted(
+        root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()
+    ):
+        relative = path.relative_to(root).as_posix()
+        _safe_evidence_member(relative)
+        try:
+            metadata = path.lstat()
+        except OSError as exc:
+            raise SandboxInfrastructureError(
+                "evolver.evidence", f"cannot inspect evidence member {relative}: {exc}"
+            ) from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            raise SandboxInfrastructureError(
+                "evolver.evidence", f"symlink is forbidden in evidence: {relative}"
+            )
+        if stat.S_ISDIR(metadata.st_mode):
+            continue
+        if not stat.S_ISREG(metadata.st_mode):
+            raise SandboxInfrastructureError(
+                "evolver.evidence", f"evidence member is not regular: {relative}"
+            )
+        try:
+            payloads[relative] = path.read_bytes()
+        except OSError as exc:
+            raise SandboxInfrastructureError(
+                "evolver.evidence", f"cannot read evidence member {relative}: {exc}"
+            ) from exc
+    digest, members = _digest_evidence_payloads(payloads)
+    if digest != value.sha256 or members != value.members:
+        raise SandboxInfrastructureError(
+            "evolver.evidence", "EvidenceRecord evidence digest or members changed"
+        )
+    return value, root
+
+
+def _verify_bundled_evidence(bundle_path: Path, record: EvidenceRecord) -> None:
+    payloads: dict[str, bytes] = {}
+    try:
+        with tarfile.open(fileobj=io.BytesIO(bundle_path.read_bytes()), mode="r:*") as archive:
+            for member in archive.getmembers():
+                path = PurePosixPath(member.name)
+                if not path.parts or path.parts[0] != "evidence":
+                    continue
+                if member.isdir():
+                    continue
+                if not member.isfile():
+                    raise SandboxInfrastructureError(
+                        "evolver.evidence",
+                        f"non-regular evidence bundle member: {member.name}",
+                    )
+                relative = PurePosixPath(*path.parts[1:]).as_posix()
+                _safe_evidence_member(relative)
+                handle = archive.extractfile(member)
+                if handle is None:
+                    raise SandboxInfrastructureError(
+                        "evolver.evidence",
+                        f"unreadable evidence bundle member: {member.name}",
+                    )
+                payloads[relative] = handle.read()
+    except (OSError, tarfile.TarError) as exc:
+        raise SandboxInfrastructureError(
+            "evolver.evidence", f"invalid evolver input archive: {exc}"
+        ) from exc
+    digest, members = _digest_evidence_payloads(payloads)
+    if digest != record.sha256 or members != record.members:
+        raise SandboxInfrastructureError(
+            "evolver.evidence",
+            "bundled evidence differs from the authorized EvidenceRecord",
+        )
+
+
+def _is_credential_key(value: object) -> bool:
+    return isinstance(value, str) and _CREDENTIAL_KEY.search(value) is not None
+
+
+def _text_secrets(text: str) -> set[str]:
+    secrets = {
+        match.group(4)
+        for match in _CREDENTIAL_ASSIGNMENT.finditer(text)
+        if match.group(4)
+    }
+    secrets.update(
+        match.group(1) for match in _BEARER_CREDENTIAL.finditer(text)
+    )
+    secrets.update(
+        match.group(3) for match in _URL_CREDENTIAL.finditer(text)
+    )
+    return secrets
+
+
+def _collect_known_secrets(value: object) -> set[str]:
+    secrets: set[str] = set()
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if _is_credential_key(key) and isinstance(item, str) and item:
+                bearer = _BEARER_CREDENTIAL.fullmatch(item.strip())
+                secrets.add(bearer.group(1) if bearer else item)
+            secrets.update(_collect_known_secrets(item))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            secrets.update(_collect_known_secrets(item))
+    elif isinstance(value, str):
+        secrets.update(_text_secrets(value))
+    return {secret for secret in secrets if secret and secret != "[REDACTED]"}
+
+
+def _redact_text(text: str, known_secrets: set[str]) -> str:
+    scrubbed = _CREDENTIAL_ASSIGNMENT.sub(
+        lambda match: f"{match.group(1)}{match.group(2)}[REDACTED]", text
+    )
+    scrubbed = _BEARER_CREDENTIAL.sub("Bearer [REDACTED]", scrubbed)
+    scrubbed = _URL_CREDENTIAL.sub(r"\1[REDACTED]@", scrubbed)
+    for secret in sorted(known_secrets, key=len, reverse=True):
+        scrubbed = scrubbed.replace(secret, "[REDACTED]")
+    return scrubbed
+
+
+def _scrub_structure(value: object, known_secrets: set[str]) -> object:
+    if isinstance(value, Mapping):
+        return {
+            str(key): (
+                "[REDACTED]"
+                if _is_credential_key(key)
+                else _scrub_structure(item, known_secrets)
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_scrub_structure(item, known_secrets) for item in value]
+    if isinstance(value, tuple):
+        return [_scrub_structure(item, known_secrets) for item in value]
     if isinstance(value, str):
-        text = value
-    elif isinstance(value, Mapping):
-        text = json.dumps(value, sort_keys=True, separators=(",", ":"))
-    else:
+        return _redact_text(value, known_secrets)
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    raise SandboxInfrastructureError(
+        "evolver.diagnosis", "diagnosis contains a non-JSON value"
+    )
+
+
+def _safe_diagnosis(value: object) -> tuple[bytes, tuple[str, ...]]:
+    parsed: object = value
+    serialize_json = isinstance(value, Mapping)
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            decoded = None
+        if isinstance(decoded, (dict, list)):
+            parsed = decoded
+            serialize_json = True
+    elif not isinstance(value, Mapping):
         raise SandboxInfrastructureError(
             "evolver.diagnosis", "diagnosis must be text or a JSON object"
         )
+    known_secrets = _collect_known_secrets(parsed)
+    scrubbed = _scrub_structure(parsed, known_secrets)
+    if serialize_json:
+        text = json.dumps(scrubbed, sort_keys=True, separators=(",", ":"))
+    else:
+        text = str(scrubbed)
     encoded = text.encode("utf-8")
     if len(encoded) > 2 * 1024 * 1024:
         raise SandboxInfrastructureError(
             "evolver.diagnosis", "diagnosis exceeds its bounded contract"
         )
-    scrubbed = _CREDENTIAL_ASSIGNMENT.sub(r"\1=[REDACTED]", text)
-    return scrubbed.encode("utf-8")
+    return encoded, tuple(sorted(known_secrets))
+
+
+def _proxy_identity(
+    proxy_manager: SandboxProxyManager,
+    *,
+    run_id: str,
+    attempt_id: str,
+) -> tuple[str, str, str]:
+    config = proxy_manager.config
+    resources = config.resource_contract
+    try:
+        plan = build_model_proxy_sandbox_plan(
+            run_id=run_id,
+            attempt_id=attempt_id,
+            task_id=_TASK_ID,
+            image_ref=config.image_ref,
+            upstream_base_url=config.upstream_base_url,
+            allowed_path_prefix=config.allowed_path_prefix,
+            listen_port=config.listen_port,
+            cpu_count=resources.cpu_count,
+            memory_mb=resources.memory_mb,
+            pids_limit=resources.pids_limit,
+            timeout_seconds=resources.timeout_seconds,
+            network_scope=attempt_id,
+            allowed_model=config.allowed_model,
+            audit_path="/run/qea-secrets/proxy-audit.jsonl",
+            denied_request_identities_sha256=(),
+            writable_tmpfs_mb=resources.writable_tmpfs_mb,
+        )
+    except (AttributeError, ModelProxyError) as exc:
+        raise SandboxInfrastructureError(
+            "evolver.config", f"invalid public proxy identity: {exc}"
+        ) from exc
+    public_config = {
+        "plan_config": plan.config_payload(),
+        "manager_timeout_seconds": config.timeout_seconds,
+        "expect_request": config.expect_request,
+    }
+    config_sha256 = _sha256(
+        json.dumps(public_config, sort_keys=True, separators=(",", ":")).encode()
+    )
+    return plan.spec.image_ref, plan.spec.spec_sha256, config_sha256
 
 
 def _attempt_identity(
@@ -194,6 +491,9 @@ def _attempt_identity(
     model_name: str,
     image_ref: str,
     spec_sha256: str,
+    proxy_image_ref: str,
+    proxy_spec_sha256: str,
+    proxy_config_sha256: str,
     backend: str,
 ) -> str:
     payload = {
@@ -203,6 +503,9 @@ def _attempt_identity(
         "input_bundle_sha256": input_bundle_sha256,
         "iteration": iteration,
         "model_name": model_name,
+        "proxy_config_sha256": proxy_config_sha256,
+        "proxy_image_ref": proxy_image_ref,
+        "proxy_spec_sha256": proxy_spec_sha256,
         "run_id": run_id,
         "spec_sha256": spec_sha256,
     }
@@ -225,7 +528,12 @@ def _combined_request(
     )
 
 
-def _validate_evidence(name: str, payload: object) -> bytes:
+def _validate_evidence(
+    name: str,
+    payload: object,
+    *,
+    forbidden_values: tuple[str, ...] = (),
+) -> bytes:
     if not isinstance(payload, bytes):
         raise SandboxInfrastructureError(
             "evolver.download", f"{name} download is not bytes"
@@ -233,6 +541,10 @@ def _validate_evidence(name: str, payload: object) -> bytes:
     if len(payload) > _DOWNLOAD_LIMITS[name]:
         raise SandboxInfrastructureError(
             "evolver.download", f"{name} exceeds its bounded contract"
+        )
+    if any(value.encode() in payload for value in forbidden_values if value):
+        raise SandboxInfrastructureError(
+            "evolver.download", f"{name} contains a forbidden credential value"
         )
     try:
         text = payload.decode("utf-8")
@@ -268,6 +580,16 @@ def _validate_evidence(name: str, payload: object) -> bytes:
     return payload
 
 
+def _candidate_archive_limit(config: SandboxEvolverConfig) -> int:
+    """Bound tar transport from the configured extracted payload and file caps."""
+
+    return (
+        config.max_candidate_bytes
+        + config.max_candidate_files * _TAR_MEMBER_ENVELOPE_BYTES
+        + _TAR_TRAILER_BYTES
+    )
+
+
 def _result_paths(evolution_dir: Path, lifecycle_path: Path) -> dict[str, Path]:
     return {
         "trace_uri": evolution_dir / "raw_trace.jsonl",
@@ -288,7 +610,13 @@ def _load_completed(
     paths: Mapping[str, Path],
 ) -> SandboxEvolverResult | None:
     manifest_path = evolution_dir / "result.json"
-    if not manifest_path.is_file():
+    trusted_regular_path(
+        manifest_path,
+        phase="evolver.resume",
+        contained_by=evolution_dir,
+        allow_missing=True,
+    )
+    if not manifest_path.exists():
         return None
     try:
         payload = json.loads(manifest_path.read_text())
@@ -311,12 +639,25 @@ def _load_completed(
         raise SandboxInfrastructureError(
             "evolver.resume", "completed result was not exactly cleaned"
         )
-    missing = [name for name, path in paths.items() if not path.is_file()]
+    missing: list[str] = []
+    for name, path in paths.items():
+        trusted_regular_path(
+            path,
+            phase="evolver.resume",
+            allow_missing=True,
+        )
+        if not path.exists():
+            missing.append(name)
     if missing:
         raise SandboxInfrastructureError(
             "evolver.resume", f"completed result files are missing: {missing}"
         )
-    candidate_dir = evolution_dir / "candidate"
+    candidate_dir = trusted_directory(
+        evolution_dir / "candidate",
+        create=False,
+        phase="evolver.resume",
+        contained_by=evolution_dir,
+    )
     candidate_digest = _digest_tree(candidate_dir)
     if candidate_digest != payload.get("candidate_digest"):
         raise SandboxInfrastructureError(
@@ -396,7 +737,9 @@ class SandboxFullHarnessProposer:
             )
         self.config = config
         self.backend = backend
-        self.lifecycle_root = Path(lifecycle_root).expanduser().resolve()
+        self.lifecycle_root = trusted_directory(
+            lifecycle_root, create=True, phase="evolver.lifecycle"
+        )
         self.proxy_manager = proxy_manager
         self.resource_pool = resource_pool
         self.model_name = model_name
@@ -407,7 +750,7 @@ class SandboxFullHarnessProposer:
         self,
         *,
         candidate_dir: str | Path,
-        evidence_dir: str | Path,
+        evidence_dir: EvidenceRecord,
         evolver_dir: str | Path,
         diagnosis: object,
         iteration: int,
@@ -419,9 +762,24 @@ class SandboxFullHarnessProposer:
             raise SandboxInfrastructureError(
                 "evolver.config", "iteration must be a positive integer"
             )
-        run_root = Path(run_dir).expanduser().resolve()
-        evolution_dir = run_root / "evolutions" / f"iteration-{iteration:04d}"
-        evolution_dir.mkdir(parents=True, exist_ok=True)
+        run_root = trusted_directory(
+            run_dir, create=False, phase="evolver.run"
+        )
+        evolution_dir = trusted_directory(
+            run_root / "evolutions" / f"iteration-{iteration:04d}",
+            create=True,
+            phase="evolver.result",
+            contained_by=run_root,
+        )
+        candidate_root = trusted_directory(
+            candidate_dir, create=False, phase="evolver.input"
+        )
+        evolver_root = trusted_directory(
+            evolver_dir, create=False, phase="evolver.input"
+        )
+        evidence_record, evidence_root = _validate_evidence_record(
+            evidence_dir, contained_by=run_root
+        )
         attempt_id = f"evolver-iteration-{iteration}"
         proxy_url = (
             f"http://qea-model-proxy:{self.proxy_manager.config.listen_port}"
@@ -431,24 +789,45 @@ class SandboxFullHarnessProposer:
             proxy_base_url=proxy_url, model_name=self.model_name
         )
         validate_public_model_env(model_env, environment, role="evolver")
+        diagnosis_payload, known_secrets = _safe_diagnosis(diagnosis)
+        diagnosis_sha256 = _sha256(diagnosis_payload)
         pending_input_path = evolution_dir / "input.pending.tar"
+        trusted_regular_path(
+            pending_input_path,
+            phase="evolver.input",
+            contained_by=evolution_dir,
+            allow_missing=True,
+        )
+        if pending_input_path.exists():
+            raise SandboxInfrastructureError(
+                "evolver.input", "stale pending input archive is ambiguous"
+            )
         try:
             input_bundle = build_evolver_input_bundle(
-                candidate_dir,
-                evidence_dir,
-                evolver_dir,
+                candidate_root,
+                evidence_root,
+                evolver_root,
                 pending_input_path,
+                forbidden_values=known_secrets,
                 max_files=self.config.max_input_files,
                 max_bytes=self.config.max_input_bytes,
             )
+            trusted_regular_path(
+                input_bundle.path,
+                phase="evolver.input",
+                contained_by=evolution_dir,
+            )
+            _verify_bundled_evidence(input_bundle.path, evidence_record)
+        except SandboxInfrastructureError:
+            if pending_input_path.exists():
+                pending_input_path.unlink()
+            raise
         except BundleError as exc:
             if pending_input_path.exists():
                 pending_input_path.unlink()
             raise SandboxInfrastructureError(
                 "evolver.input", f"{type(exc).__name__}: {exc}"
             ) from exc
-        diagnosis_payload = _safe_diagnosis(diagnosis)
-        diagnosis_sha256 = _sha256(diagnosis_payload)
         spec = SandboxSpec(
             role="evolver",
             run_id=run_id,
@@ -469,6 +848,15 @@ class SandboxFullHarnessProposer:
             raise SandboxInfrastructureError(
                 "evolver.config", "sandbox backend has no stable name"
             )
+        (
+            proxy_image_ref,
+            proxy_spec_sha256,
+            proxy_config_sha256,
+        ) = _proxy_identity(
+            self.proxy_manager,
+            run_id=run_id,
+            attempt_id=attempt_id,
+        )
         attempt_identity = _attempt_identity(
             run_id=run_id,
             iteration=iteration,
@@ -477,6 +865,9 @@ class SandboxFullHarnessProposer:
             model_name=self.model_name,
             image_ref=self.config.image_ref,
             spec_sha256=spec.spec_sha256,
+            proxy_image_ref=proxy_image_ref,
+            proxy_spec_sha256=proxy_spec_sha256,
+            proxy_config_sha256=proxy_config_sha256,
             backend=backend_name,
         )
         lifecycle_path = (
@@ -484,6 +875,18 @@ class SandboxFullHarnessProposer:
             / run_id
             / attempt_id
             / "evolver-sandbox-lifecycle-v2.json"
+        )
+        trusted_directory(
+            lifecycle_path.parent,
+            create=True,
+            phase="evolver.lifecycle",
+            contained_by=self.lifecycle_root,
+        )
+        trusted_regular_path(
+            lifecycle_path,
+            phase="evolver.lifecycle",
+            contained_by=self.lifecycle_root,
+            allow_missing=True,
         )
         paths = _result_paths(evolution_dir, lifecycle_path)
         expected_identity = {
@@ -494,6 +897,9 @@ class SandboxFullHarnessProposer:
             "model_name": self.model_name,
             "image_ref": self.config.image_ref,
             "spec_sha256": spec.spec_sha256,
+            "proxy_image_ref": proxy_image_ref,
+            "proxy_spec_sha256": proxy_spec_sha256,
+            "proxy_config_sha256": proxy_config_sha256,
             "backend": backend_name,
             "attempt_identity_sha256": attempt_identity,
         }
@@ -533,18 +939,55 @@ class SandboxFullHarnessProposer:
                     "evolver.resume",
                     "unfinished evolver sandbox requires exact-ID cleanup",
                 )
+            pending_input_path.unlink()
+            raise SandboxInfrastructureError(
+                "evolver.resume",
+                "stale cleaned lifecycle without a completed result is ambiguous",
+            )
 
-        output_dir = evolution_dir / "candidate"
-        if output_dir.exists():
-            if output_dir.is_symlink() or any(output_dir.iterdir()):
+        for name, path in paths.items():
+            if name == "lifecycle_uri":
+                continue
+            trusted_regular_path(
+                path,
+                phase="evolver.resume",
+                allow_missing=True,
+            )
+            if path.exists():
                 pending_input_path.unlink()
                 raise SandboxInfrastructureError(
                     "evolver.resume",
-                    "uncommitted candidate output makes the request identity ambiguous",
+                    f"stale result evidence is ambiguous: {path.name}",
                 )
-            output_dir.rmdir()
+
+        output_dir = evolution_dir / "candidate"
+        try:
+            output_metadata = output_dir.lstat()
+        except FileNotFoundError:
+            output_metadata = None
+        if output_metadata is not None:
+            pending_input_path.unlink()
+            if stat.S_ISLNK(output_metadata.st_mode):
+                raise SandboxInfrastructureError(
+                    "evolver.resume", "candidate output symlink is forbidden"
+                )
+            raise SandboxInfrastructureError(
+                "evolver.resume",
+                "uncommitted candidate output makes the request identity ambiguous",
+            )
 
         committed_input_path = evolution_dir / "input.tar"
+        trusted_regular_path(
+            committed_input_path,
+            phase="evolver.resume",
+            contained_by=evolution_dir,
+            allow_missing=True,
+        )
+        if committed_input_path.exists():
+            pending_input_path.unlink()
+            raise SandboxInfrastructureError(
+                "evolver.resume", "stale committed input archive is ambiguous"
+            )
         os.replace(pending_input_path, committed_input_path)
         input_bundle = replace(input_bundle, path=committed_input_path)
         dependency_lock = b""
@@ -599,11 +1042,15 @@ class SandboxFullHarnessProposer:
                         "evolver.lifecycle",
                         lambda: mark_started(lifecycle_path, at=self.clock()),
                     )
-                    dependency_lock = backend_call(
-                        "evolver.dependency",
-                        lambda: self.backend.read_bytes(
-                            handle, NEXAU_REQUIREMENTS_LOCK
+                    dependency_lock = read_bounded(
+                        self.backend,
+                        handle,
+                        NEXAU_REQUIREMENTS_LOCK,
+                        max_bytes=_DEPENDENCY_LOCK_LIMIT,
+                        timeout_seconds=min(
+                            120, self.config.resource_contract.timeout_seconds
                         ),
+                        phase="evolver.dependency",
                     )
                     if (
                         not isinstance(dependency_lock, bytes)
@@ -613,7 +1060,20 @@ class SandboxFullHarnessProposer:
                             "evolver.dependency",
                             "NexAU dependency lock is missing or empty",
                         )
-                    paths["dependency_lock_uri"].write_bytes(dependency_lock)
+                    if any(
+                        value.encode() in dependency_lock
+                        for value in known_secrets
+                        if value
+                    ):
+                        raise SandboxInfrastructureError(
+                            "evolver.dependency",
+                            "dependency lock contains a forbidden credential value",
+                        )
+                    atomic_bytes(
+                        paths["dependency_lock_uri"],
+                        dependency_lock,
+                        phase="evolver.result",
+                    )
                     for remote_path, payload in (
                         ("/qea/evolver-input.tar", input_bundle.path.read_bytes()),
                         ("/qea/remote_evolver.py", _REMOTE_RUNNER.read_bytes()),
@@ -689,7 +1149,11 @@ class SandboxFullHarnessProposer:
                         raise SandboxInfrastructureError(
                             "evolver.command", "backend returned an invalid result"
                         )
-                    write_command_log(paths["command_log_uri"], command_result)
+                    write_command_log(
+                        paths["command_log_uri"],
+                        command_result,
+                        forbidden_values=known_secrets,
+                    )
                     if command_result.timed_out:
                         raise SandboxInfrastructureError(
                             "evolver.command", "evolver command timed out"
@@ -700,15 +1164,24 @@ class SandboxFullHarnessProposer:
                             f"evolver command exited {command_result.exit_code}: "
                             f"{command_result.stderr or command_result.stdout}",
                         )
-                    archive = backend_call(
-                        "evolver.download",
-                        lambda: self.backend.read_bytes(
-                            handle, "/qea/result/candidate.tar"
+                    archive = read_bounded(
+                        self.backend,
+                        handle,
+                        "/qea/result/candidate.tar",
+                        max_bytes=_candidate_archive_limit(self.config),
+                        timeout_seconds=min(
+                            120, self.config.resource_contract.timeout_seconds
                         ),
+                        phase="evolver.download",
                     )
-                    if not isinstance(archive, bytes):
+                    if any(
+                        value.encode() in archive
+                        for value in known_secrets
+                        if value
+                    ):
                         raise SandboxInfrastructureError(
-                            "evolver.download", "candidate archive is not bytes"
+                            "evolver.download",
+                            "candidate archive contains a forbidden credential value",
                         )
                     try:
                         extract_candidate_archive(
@@ -728,14 +1201,25 @@ class SandboxFullHarnessProposer:
                         ("access-summary.json", "access_summary_uri"),
                         ("summary.json", "summary_uri"),
                     ):
-                        payload = backend_call(
-                            "evolver.download",
-                            lambda remote_name=remote_name: self.backend.read_bytes(
-                                handle, f"/qea/result/{remote_name}"
+                        payload = read_bounded(
+                            self.backend,
+                            handle,
+                            f"/qea/result/{remote_name}",
+                            max_bytes=_DOWNLOAD_LIMITS[remote_name],
+                            timeout_seconds=min(
+                                120,
+                                self.config.resource_contract.timeout_seconds,
                             ),
+                            phase="evolver.download",
                         )
-                        paths[path_key].write_bytes(
-                            _validate_evidence(remote_name, payload)
+                        atomic_bytes(
+                            paths[path_key],
+                            _validate_evidence(
+                                remote_name,
+                                payload,
+                                forbidden_values=known_secrets,
+                            ),
+                            phase="evolver.result",
                         )
                     mark_finished(lifecycle_path, at=self.clock())
                     finished = True
@@ -754,6 +1238,7 @@ class SandboxFullHarnessProposer:
                         role="evolver",
                         primary_error=primary_error,
                         finished=finished,
+                        forbidden_values=known_secrets,
                     )
                 if primary_error is not None:
                     raise primary_error

@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
+import stat
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +25,39 @@ from ..sandbox_lifecycle import mark_cleaned, mark_finished
 
 PLACEHOLDER_API_KEY = "qea-proxy-placeholder"
 SYSTEM_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
+_BOUNDED_READ_CODE = r'''
+# QEA_BOUNDED_READ_V1
+import base64
+import os
+import stat
+import sys
+
+path = sys.argv[1]
+limit = int(sys.argv[2])
+flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+try:
+    descriptor = os.open(path, flags)
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > limit:
+            raise SystemExit(73)
+        chunks = []
+        remaining = limit + 1
+        while remaining:
+            chunk = os.read(descriptor, min(1024 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+    finally:
+        os.close(descriptor)
+except (OSError, ValueError):
+    raise SystemExit(74)
+payload = b"".join(chunks)
+if len(payload) > limit:
+    raise SystemExit(73)
+sys.stdout.write(base64.b64encode(payload).decode("ascii"))
+'''.strip()
 
 
 class SandboxExecutionError(RuntimeError):
@@ -33,6 +70,7 @@ class SandboxInfrastructureError(SandboxExecutionError):
     def __init__(self, phase: str, detail: str) -> None:
         self.phase = phase
         self.detail = " ".join(str(detail).split())[:2_000]
+        self.secondary_failures: tuple[SandboxInfrastructureError, ...] = ()
         super().__init__(f"{phase}: {self.detail}")
 
 
@@ -83,21 +121,134 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def lexical_absolute(path: str | Path) -> Path:
+    """Return an absolute lexical path without resolving symlinks."""
+
+    return Path(os.path.abspath(os.fspath(Path(path).expanduser())))
+
+
+def trusted_directory(
+    path: str | Path,
+    *,
+    create: bool,
+    phase: str,
+    contained_by: str | Path | None = None,
+) -> Path:
+    """Validate every path component as a real directory, optionally creating it."""
+
+    target = lexical_absolute(path)
+    if contained_by is not None:
+        root = lexical_absolute(contained_by)
+        try:
+            target.relative_to(root)
+        except ValueError as exc:
+            raise SandboxInfrastructureError(
+                phase, f"directory escapes its trusted root: {target}"
+            ) from exc
+    current = Path(target.anchor)
+    for part in target.parts[1:]:
+        current /= part
+        try:
+            metadata = current.lstat()
+        except FileNotFoundError:
+            if not create:
+                raise SandboxInfrastructureError(
+                    phase, f"trusted directory is unavailable: {current}"
+                )
+            try:
+                os.mkdir(current, 0o700)
+                metadata = current.lstat()
+            except OSError as exc:
+                raise SandboxInfrastructureError(
+                    phase, f"cannot create trusted directory {current}: {exc}"
+                ) from exc
+        except OSError as exc:
+            raise SandboxInfrastructureError(
+                phase, f"cannot inspect trusted directory {current}: {exc}"
+            ) from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            raise SandboxInfrastructureError(
+                phase, f"symlink is forbidden in trusted directory: {current}"
+            )
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise SandboxInfrastructureError(
+                phase, f"trusted directory component is not a directory: {current}"
+            )
+    return target
+
+
+def trusted_regular_path(
+    path: str | Path,
+    *,
+    phase: str,
+    contained_by: str | Path | None = None,
+    allow_missing: bool = False,
+) -> Path:
+    """Validate one leaf as a contained regular non-symlink file."""
+
+    target = lexical_absolute(path)
+    if contained_by is not None:
+        root = lexical_absolute(contained_by)
+        try:
+            target.relative_to(root)
+        except ValueError as exc:
+            raise SandboxInfrastructureError(
+                phase, f"file escapes its trusted root: {target}"
+            ) from exc
+    trusted_directory(target.parent, create=False, phase=phase)
+    try:
+        metadata = target.lstat()
+    except FileNotFoundError:
+        if allow_missing:
+            return target
+        raise SandboxInfrastructureError(
+            phase, f"trusted file is unavailable: {target}"
+        )
+    except OSError as exc:
+        raise SandboxInfrastructureError(
+            phase, f"cannot inspect trusted file {target}: {exc}"
+        ) from exc
+    if stat.S_ISLNK(metadata.st_mode):
+        raise SandboxInfrastructureError(
+            phase, f"symlink is forbidden for trusted file: {target}"
+        )
+    if not stat.S_ISREG(metadata.st_mode):
+        raise SandboxInfrastructureError(
+            phase, f"trusted file is not regular: {target}"
+        )
+    return target
+
+
+def atomic_bytes(path: Path, payload: bytes, *, phase: str) -> None:
+    """Atomically replace one regular file without following stale symlinks."""
+
+    target = lexical_absolute(path)
+    trusted_directory(target.parent, create=True, phase=phase)
+    trusted_regular_path(
+        target, phase=phase, contained_by=target.parent, allow_missing=True
+    )
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{target.name}.", suffix=".tmp", dir=target.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def atomic_json(path: Path, payload: Mapping[str, object]) -> None:
     """Durably replace one JSON document without exposing a partial write."""
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
     encoded = json.dumps(payload, sort_keys=True, indent=2).encode() + b"\n"
-    try:
-        with temporary.open("wb") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
+    atomic_bytes(path, encoded, phase="sandbox.atomic-write")
 
 
 def require_tmpfs(
@@ -160,6 +311,71 @@ def run_required(
     return result
 
 
+def read_bounded(
+    backend: SandboxBackend,
+    handle,
+    path: str,
+    *,
+    max_bytes: int,
+    timeout_seconds: int,
+    phase: str,
+) -> bytes:
+    """Read a regular sandbox file through a bounded no-follow command."""
+
+    if (
+        not isinstance(path, str)
+        or not path.startswith("/")
+        or type(max_bytes) is not int
+        or max_bytes <= 0
+        or type(timeout_seconds) is not int
+        or timeout_seconds <= 0
+    ):
+        raise SandboxInfrastructureError(
+            phase, "invalid bounded read contract"
+        )
+    result = backend_call(
+        phase,
+        lambda: backend.run(
+            handle,
+            (
+                "/usr/local/bin/python3",
+                "-c",
+                _BOUNDED_READ_CODE,
+                path,
+                str(max_bytes),
+            ),
+            environment={},
+            timeout_seconds=timeout_seconds,
+        ),
+    )
+    if not isinstance(result, SandboxCommandResult):
+        raise SandboxInfrastructureError(
+            phase, "backend returned an invalid bounded read result"
+        )
+    if result.timed_out:
+        raise SandboxInfrastructureError(phase, "bounded read timed out")
+    if result.exit_code != 0:
+        raise SandboxInfrastructureError(
+            phase, f"bounded read rejected remote file (exit {result.exit_code})"
+        )
+    maximum_encoded = 4 * ((max_bytes + 2) // 3)
+    if len(result.stdout) > maximum_encoded:
+        raise SandboxInfrastructureError(
+            phase, "bounded read returned an oversized envelope"
+        )
+    try:
+        payload = base64.b64decode(result.stdout.encode("ascii"), validate=True)
+    except (UnicodeEncodeError, binascii.Error) as exc:
+        raise SandboxInfrastructureError(
+            phase, "bounded read returned invalid base64"
+        ) from exc
+    if len(payload) > max_bytes:
+        raise SandboxInfrastructureError(
+            phase, "bounded read exceeded its local contract"
+        )
+    return payload
+
+
 def public_model_environment(
     *,
     proxy_base_url: str,
@@ -213,15 +429,31 @@ def validate_public_model_env(
         )
 
 
-def write_command_log(path: Path, result: SandboxCommandResult) -> None:
+def _redact_values(value: str, forbidden_values: Sequence[str]) -> str:
+    cleaned = value
+    for secret in sorted(
+        {item for item in forbidden_values if isinstance(item, str) and item},
+        key=len,
+        reverse=True,
+    ):
+        cleaned = cleaned.replace(secret, "[REDACTED]")
+    return cleaned
+
+
+def write_command_log(
+    path: Path,
+    result: SandboxCommandResult,
+    *,
+    forbidden_values: Sequence[str] = (),
+) -> None:
     """Persist only the bounded command result, never its environment or argv."""
 
     atomic_json(
         path,
         {
             "exit_code": result.exit_code,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
+            "stdout": _redact_values(result.stdout, forbidden_values),
+            "stderr": _redact_values(result.stderr, forbidden_values),
             "timed_out": result.timed_out,
         },
     )
@@ -236,6 +468,7 @@ def finish_and_cleanup(
     role: str,
     primary_error: BaseException | None,
     finished: bool,
+    forbidden_values: Sequence[str] = (),
 ) -> None:
     """Finish lifecycle evidence and kill exactly the recorded native ID."""
 
@@ -246,6 +479,7 @@ def finish_and_cleanup(
                 lifecycle_path,
                 at=clock(),
                 failure=str(primary_error) if primary_error else "attempt interrupted",
+                forbidden_values=forbidden_values,
             )
         except Exception as exc:  # noqa: BLE001 - lifecycle boundary.
             finish_error = SandboxInfrastructureError(
@@ -268,6 +502,8 @@ def finish_and_cleanup(
                 f"{role}.cleanup", f"{type(exc).__name__}: {exc}"
             )
     if cleanup_error is not None:
+        if finish_error is not None:
+            cleanup_error.secondary_failures = (finish_error,)
         if primary_error is not None:
             raise cleanup_error from primary_error
         raise cleanup_error
@@ -283,12 +519,17 @@ __all__ = [
     "SandboxExecutionError",
     "SandboxInfrastructureError",
     "SandboxResourceContract",
+    "atomic_bytes",
     "atomic_json",
     "backend_call",
     "finish_and_cleanup",
+    "lexical_absolute",
     "public_model_environment",
+    "read_bounded",
     "require_tmpfs",
     "run_required",
+    "trusted_directory",
+    "trusted_regular_path",
     "utc_now",
     "validate_public_model_env",
     "write_command_log",

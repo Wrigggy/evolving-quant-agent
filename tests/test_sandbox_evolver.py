@@ -1,8 +1,10 @@
+import base64
 import hashlib
 import io
 import json
 import tarfile
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,6 +12,7 @@ import pytest
 
 from qea.qfbench_images import NEXAU_REQUIREMENTS_LOCK, NEXAU_RUNTIME_PYTHON
 from qea.resource_lease import ResourceRequest
+from qea.evolution_evidence import EvidenceRecord
 from qea.sandbox_backend import (
     KillResult,
     SandboxCommandResult,
@@ -33,6 +36,28 @@ def _tar_bytes(files, *, symlink=None):
     return output.getvalue()
 
 
+def _evidence_record(root):
+    digest = hashlib.sha256()
+    members = []
+    for path in sorted(
+        (
+            path
+            for path in root.rglob("*")
+            if path.is_file() and path.name != "access_log.jsonl"
+        ),
+        key=lambda path: path.relative_to(root).as_posix(),
+    ):
+        relative = path.relative_to(root).as_posix()
+        payload = path.read_bytes()
+        encoded = relative.encode()
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+        members.append(relative)
+    return EvidenceRecord(root=root, sha256=digest.hexdigest(), members=tuple(members))
+
+
 def _roots(tmp_path):
     candidate = tmp_path / "candidate"
     evidence = tmp_path / "evidence"
@@ -43,16 +68,25 @@ def _roots(tmp_path):
     (candidate / "tools" / "__init__.py").write_text("")
     evidence.mkdir(exist_ok=True)
     (evidence / "contract.json").write_text('{"mode":"rich"}\n')
+    (evidence / "access_log.jsonl").write_text("")
     (evolver / "tools").mkdir(parents=True, exist_ok=True)
     (evolver / "agent.yaml").write_text("name: evolver\n")
     (evolver / "tools" / "__init__.py").write_text("")
-    return candidate, evidence, evolver
+    return candidate, _evidence_record(evidence), evolver
 
 
 class FakeBackend:
     backend_name = "fake-rootless"
 
-    def __init__(self, events, *, candidate_archive=None, command_error=False):
+    def __init__(
+        self,
+        events,
+        *,
+        candidate_archive=None,
+        command_error=False,
+        oversized_path=None,
+        echo_secret=None,
+    ):
         self.events = events
         self.candidate_archive = candidate_archive or _tar_bytes(
             {
@@ -62,6 +96,8 @@ class FakeBackend:
             }
         )
         self.command_error = command_error
+        self.oversized_path = oversized_path
+        self.echo_secret = echo_secret
         self.specs = []
         self.uploads = {}
 
@@ -84,7 +120,11 @@ class FakeBackend:
 
     def read_bytes(self, handle, path):
         self.events.append(f"read:{path}")
-        values = {
+        values = self._download_values()
+        return values[path]
+
+    def _download_values(self):
+        return {
             NEXAU_REQUIREMENTS_LOCK: b"nexau==0.3.9\n",
             "/qea/result/candidate.tar": self.candidate_archive,
             "/qea/result/raw_trace.jsonl": (
@@ -101,14 +141,31 @@ class FakeBackend:
                 b'{"model_usage":null,"tool_calls":4,"turns":2}\n'
             ),
         }
-        return values[path]
 
     def run(self, handle, argv, *, environment, timeout_seconds):
         command = tuple(argv)
+        if (
+            len(command) == 5
+            and command[0] == "/usr/local/bin/python3"
+            and command[1] == "-c"
+            and "QEA_BOUNDED_READ_V1" in command[2]
+        ):
+            remote_path = command[3]
+            self.events.append(f"run:bounded:{remote_path}")
+            if remote_path == self.oversized_path:
+                return SandboxCommandResult(
+                    73, "", "bounded read limit exceeded", False
+                )
+            payload = self._download_values()[remote_path]
+            return SandboxCommandResult(
+                0, base64.b64encode(payload).decode("ascii"), "", False
+            )
         if command and command[0] == NEXAU_RUNTIME_PYTHON:
             self.events.append(("run:evolver", command, dict(environment)))
             if self.command_error:
                 return SandboxCommandResult(19, "", "provider failed", False)
+            if self.echo_secret:
+                return SandboxCommandResult(0, self.echo_secret, "", False)
         else:
             self.events.append(("run:setup", command, dict(environment)))
         return SandboxCommandResult(0, "ok", "", False)
@@ -123,10 +180,15 @@ class FakeProxyManager:
         self.backend = backend
         self.events = events
         self.config = SimpleNamespace(
+            image_ref="sha256:" + "c" * 64,
             resource_contract=proxy_resources,
+            token_file=Path("/never/read/model-token"),
+            upstream_base_url="https://openrouter.ai/api/v1",
             allowed_model="example/model",
             listen_port=8080,
             allowed_path_prefix="/v1",
+            timeout_seconds=120,
+            expect_request=True,
         )
         self.opens = 0
 
@@ -185,7 +247,15 @@ def _resources(*, proxy=False, timeout_seconds=300):
     )
 
 
-def _proposer(tmp_path, *, backend=None, events=None, image=None, model=None):
+def _proposer(
+    tmp_path,
+    *,
+    backend=None,
+    events=None,
+    image=None,
+    model=None,
+    lifecycle_root=None,
+):
     from qea.executors.sandbox_evolver import (
         SandboxEvolverConfig,
         SandboxFullHarnessProposer,
@@ -202,7 +272,7 @@ def _proposer(tmp_path, *, backend=None, events=None, image=None, model=None):
             command_timeout_seconds=180,
         ),
         backend=backend,
-        lifecycle_root=tmp_path / "lifecycles",
+        lifecycle_root=lifecycle_root or tmp_path / "lifecycles",
         proxy_manager=proxy,
         resource_pool=pool,
         model_name=model or "example/model",
@@ -211,7 +281,8 @@ def _proposer(tmp_path, *, backend=None, events=None, image=None, model=None):
 
 
 def _propose(proposer, tmp_path, **overrides):
-    candidate, evidence, evolver = _roots(tmp_path / "inputs")
+    candidate, evidence, evolver = _roots(tmp_path / "run/inputs")
+    (tmp_path / "run").mkdir(exist_ok=True)
     values = {
         "candidate_dir": candidate,
         "evidence_dir": evidence,
@@ -344,6 +415,9 @@ def test_completed_evolver_resume_binds_all_content_identity_fields(tmp_path):
         ("model_name", "other/model"),
         ("image_ref", "sha256:" + "b" * 64),
         ("spec_sha256", "3" * 64),
+        ("proxy_image_ref", "sha256:" + "e" * 64),
+        ("proxy_spec_sha256", "4" * 64),
+        ("proxy_config_sha256", "5" * 64),
         ("backend", "other-backend"),
     ):
         changed = dict(original)
@@ -354,14 +428,69 @@ def test_completed_evolver_resume_binds_all_content_identity_fields(tmp_path):
         result_path.write_text(json.dumps(original, sort_keys=True) + "\n")
 
 
+def test_completed_resume_rejects_proxy_configuration_drift(tmp_path):
+    proposer, backend, proxy, _, _ = _proposer(tmp_path)
+    _propose(proposer, tmp_path)
+
+    proxy.config.image_ref = "sha256:" + "d" * 64
+
+    with pytest.raises(Exception, match="identity mismatch"):
+        _propose(proposer, tmp_path)
+    assert len(backend.specs) == 1
+    assert proxy.opens == 1
+
+
+def test_diagnosis_credentials_are_structurally_scrubbed_from_all_artifacts(tmp_path):
+    secret = "sk-or-v1-sensitive-real-bytes"
+    url_password = "url-password-sensitive"
+    events = []
+    backend = FakeBackend(events, echo_secret=secret)
+    proposer, backend, _, _, _ = _proposer(
+        tmp_path, backend=backend, events=events
+    )
+
+    result = _propose(
+        proposer,
+        tmp_path,
+        diagnosis={
+            "OPENROUTER_API_KEY": secret,
+            "nested": {
+                "authorization": f"Bearer {secret}",
+                "note": f"provider repeated {secret}",
+            },
+            "provider_assignment": f"OPENROUTER_API_KEY={secret}",
+            "provider_url": (
+                f"https://agent:{url_password}@provider.example.invalid/v1"
+            ),
+        },
+    )
+
+    diagnosis_upload = backend.uploads["/qea/diagnosis.txt"]
+    assert b"[REDACTED]" in diagnosis_upload
+    checked = list(backend.uploads.values())
+    checked.extend(
+        path.read_bytes()
+        for path in (tmp_path / "run").rglob("*")
+        if path.is_file()
+    )
+    checked.extend(
+        path.read_bytes()
+        for path in result.lifecycle_uri.parent.rglob("*")
+        if path.is_file()
+    )
+    for payload in checked:
+        assert secret.encode() not in payload
+        assert url_password.encode() not in payload
+
+
 def test_rejected_resume_drift_does_not_overwrite_committed_input_bundle(tmp_path):
     proposer, _, _, _, _ = _proposer(tmp_path)
     _propose(proposer, tmp_path)
     input_path = tmp_path / "run/evolutions/iteration-0001/input.tar"
     committed = input_path.read_bytes()
-    candidate = tmp_path / "inputs/candidate"
-    evidence = tmp_path / "inputs/evidence"
-    evolver = tmp_path / "inputs/evolve_agent"
+    candidate = tmp_path / "run/inputs/candidate"
+    evidence = _evidence_record(tmp_path / "run/inputs/evidence")
+    evolver = tmp_path / "run/inputs/evolve_agent"
     (candidate / "systemprompt.md").write_text("Drifted input.\n")
 
     with pytest.raises(Exception, match="identity mismatch"):
@@ -408,14 +537,14 @@ def test_quarantined_resume_does_not_replace_prior_input_evidence(tmp_path):
     )
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text('{"request_state":"quarantined","schema_version":1}\n')
-    candidate = tmp_path / "inputs/candidate"
+    candidate = tmp_path / "run/inputs/candidate"
     (candidate / "systemprompt.md").write_text("Drifted input.\n")
 
     with pytest.raises(Exception, match="quarantined"):
         proposer.propose(
             candidate_dir=candidate,
-            evidence_dir=tmp_path / "inputs/evidence",
-            evolver_dir=tmp_path / "inputs/evolve_agent",
+            evidence_dir=_evidence_record(tmp_path / "run/inputs/evidence"),
+            evolver_dir=tmp_path / "run/inputs/evolve_agent",
             diagnosis="Improve artifact validation.",
             iteration=1,
             run_id="run-001",
@@ -432,14 +561,14 @@ def test_ambiguous_candidate_resume_does_not_replace_prior_input_evidence(tmp_pa
     evolution = tmp_path / "run/evolutions/iteration-0001"
     (evolution / "result.json").unlink()
     committed = (evolution / "input.tar").read_bytes()
-    candidate = tmp_path / "inputs/candidate"
+    candidate = tmp_path / "run/inputs/candidate"
     (candidate / "systemprompt.md").write_text("Drifted input.\n")
 
     with pytest.raises(Exception, match="ambiguous"):
         proposer.propose(
             candidate_dir=candidate,
-            evidence_dir=tmp_path / "inputs/evidence",
-            evolver_dir=tmp_path / "inputs/evolve_agent",
+            evidence_dir=_evidence_record(tmp_path / "run/inputs/evidence"),
+            evolver_dir=tmp_path / "run/inputs/evolve_agent",
             diagnosis="Improve artifact validation.",
             iteration=1,
             run_id="run-001",
@@ -556,3 +685,254 @@ def test_candidate_digest_is_content_addressed_and_not_path_addressed(tmp_path):
         digest.update(len(payload).to_bytes(8, "big"))
         digest.update(payload)
     assert result.candidate_digest == digest.hexdigest()
+
+
+def test_evolver_requires_authorized_evidence_record_not_a_bare_path(tmp_path):
+    proposer, backend, proxy, pool, _ = _proposer(tmp_path)
+    candidate, evidence, evolver = _roots(tmp_path / "run/inputs")
+    (tmp_path / "run").mkdir(exist_ok=True)
+
+    with pytest.raises(Exception, match="EvidenceRecord"):
+        proposer.propose(
+            candidate_dir=candidate,
+            evidence_dir=evidence.root,
+            evolver_dir=evolver,
+            diagnosis="Improve validation.",
+            iteration=1,
+            run_id="run-001",
+            run_dir=tmp_path / "run",
+            model_env={},
+        )
+
+    assert backend.specs == []
+    assert proxy.opens == 0
+    assert pool.requests == []
+
+
+def test_evolver_requires_evidence_record_root_inside_run(tmp_path):
+    proposer, backend, proxy, pool, _ = _proposer(tmp_path)
+    candidate, evidence, evolver = _roots(tmp_path / "outside-inputs")
+    (tmp_path / "run").mkdir()
+
+    with pytest.raises(Exception, match="escapes its trusted root"):
+        proposer.propose(
+            candidate_dir=candidate,
+            evidence_dir=evidence,
+            evolver_dir=evolver,
+            diagnosis="Improve validation.",
+            iteration=1,
+            run_id="run-001",
+            run_dir=tmp_path / "run",
+            model_env={},
+        )
+
+    assert backend.specs == []
+    assert proxy.opens == 0
+    assert pool.requests == []
+
+
+def test_evolver_rejects_mutated_or_private_evidence_before_upload(tmp_path):
+    proposer, backend, proxy, pool, _ = _proposer(tmp_path)
+    candidate, evidence, evolver = _roots(tmp_path / "run/inputs")
+    (tmp_path / "run").mkdir(exist_ok=True)
+    (evidence.root / "contract.json").write_text('{"mode":"mutated"}\n')
+
+    with pytest.raises(Exception, match="evidence.*digest"):
+        proposer.propose(
+            candidate_dir=candidate,
+            evidence_dir=evidence,
+            evolver_dir=evolver,
+            diagnosis="Improve validation.",
+            iteration=1,
+            run_id="run-001",
+            run_dir=tmp_path / "run",
+            model_env={},
+        )
+
+    private = evidence.root / "tests"
+    private.mkdir()
+    (private / "hidden.json").write_text('{"answer":42}\n')
+    with pytest.raises(Exception, match="private evaluator path"):
+        proposer.propose(
+            candidate_dir=candidate,
+            evidence_dir=_evidence_record(evidence.root),
+            evolver_dir=evolver,
+            diagnosis="Improve validation.",
+            iteration=1,
+            run_id="run-001",
+            run_dir=tmp_path / "run",
+            model_env={},
+        )
+
+    assert backend.specs == []
+    assert proxy.opens == 0
+    assert pool.requests == []
+
+
+@pytest.mark.parametrize("surface", ["run", "input", "result", "lifecycle", "evidence"])
+def test_evolver_rejects_symlinked_trusted_surfaces(tmp_path, surface):
+    lifecycle_root = tmp_path / "lifecycles"
+    proposer, backend, proxy, pool, _ = _proposer(
+        tmp_path, lifecycle_root=lifecycle_root
+    )
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    if surface == "run":
+        candidate, evidence, evolver = _roots(outside / "inputs")
+        run_root.rmdir()
+        run_root.symlink_to(outside, target_is_directory=True)
+    else:
+        candidate, evidence, evolver = _roots(run_root / "inputs")
+
+    if surface == "input":
+        evolution = run_root / "evolutions/iteration-0001"
+        evolution.mkdir(parents=True)
+        target = outside / "input.tar"
+        target.write_text("sentinel")
+        (evolution / "input.pending.tar").symlink_to(target)
+    elif surface == "result":
+        evolution = run_root / "evolutions/iteration-0001"
+        evolution.mkdir(parents=True)
+        target = outside / "result.json"
+        target.write_text("{}\n")
+        (evolution / "result.json").symlink_to(target)
+    elif surface == "lifecycle":
+        leaf = lifecycle_root / "run-001/evolver-iteration-1"
+        leaf.mkdir(parents=True)
+        target = outside / "lifecycle.json"
+        target.write_text("{}\n")
+        (leaf / "evolver-sandbox-lifecycle-v2.json").symlink_to(target)
+    elif surface == "evidence":
+        target = outside / "contract.json"
+        target.write_text('{"mode":"rich"}\n')
+        (evidence.root / "contract.json").unlink()
+        (evidence.root / "contract.json").symlink_to(target)
+        evidence = EvidenceRecord(
+            root=evidence.root,
+            sha256="0" * 64,
+            members=("contract.json",),
+        )
+
+    with pytest.raises(Exception, match="symlink"):
+        proposer.propose(
+            candidate_dir=candidate,
+            evidence_dir=evidence,
+            evolver_dir=evolver,
+            diagnosis="Improve validation.",
+            iteration=1,
+            run_id="run-001",
+            run_dir=run_root,
+            model_env={},
+        )
+
+    assert backend.specs == []
+    assert proxy.opens == 0
+    assert pool.requests == []
+    if surface == "input":
+        assert (outside / "input.tar").read_text() == "sentinel"
+
+
+def test_evolver_downloads_are_bounded_without_backend_read_bytes(tmp_path):
+    proposer, _, _, _, events = _proposer(tmp_path)
+
+    _propose(proposer, tmp_path)
+
+    assert not [event for event in events if str(event).startswith("read:")]
+    bounded = [event for event in events if str(event).startswith("run:bounded:")]
+    assert len(bounded) == 7
+
+
+@pytest.mark.parametrize(
+    "remote_path",
+    [
+        "/qea/result/candidate.tar",
+        "/qea/result/raw_trace.jsonl",
+    ],
+)
+def test_oversized_sandbox_download_is_rejected_before_transfer(tmp_path, remote_path):
+    events = []
+    backend = FakeBackend(events, oversized_path=remote_path)
+    proposer, _, _, _, _ = _proposer(
+        tmp_path, backend=backend, events=events
+    )
+
+    with pytest.raises(Exception, match="bounded read"):
+        _propose(proposer, tmp_path)
+
+    assert not [event for event in events if str(event).startswith("read:")]
+    assert "kill:sandbox-evolver-1" in events
+    assert not (tmp_path / "run/evolutions/iteration-0001/result.json").exists()
+
+
+def test_cleanup_error_preserves_lifecycle_finish_error_and_primary_cause(
+    tmp_path, monkeypatch
+):
+    import qea.executors.sandbox_runtime as runtime
+
+    lifecycle = tmp_path / "lifecycle.json"
+    lifecycle.write_text("{}\n")
+    primary = ValueError("primary failure")
+
+    def fail_finish(*args, **kwargs):
+        raise RuntimeError("finish failed")
+
+    class CleanupFailure:
+        def kill(self, native_id):
+            raise RuntimeError("cleanup failed")
+
+    monkeypatch.setattr(runtime, "mark_finished", fail_finish)
+    with pytest.raises(runtime.SandboxInfrastructureError, match="cleanup failed") as caught:
+        runtime.finish_and_cleanup(
+            backend=CleanupFailure(),
+            handle=SimpleNamespace(native_id="sandbox-1"),
+            lifecycle_path=lifecycle,
+            clock=runtime.utc_now,
+            role="evolver",
+            primary_error=primary,
+            finished=False,
+        )
+
+    assert caught.value.__cause__ is primary
+    secondary = caught.value.secondary_failures
+    assert len(secondary) == 1
+    assert secondary[0].phase == "evolver.lifecycle"
+    assert "finish failed" in str(secondary[0])
+
+
+def test_evolver_rechecks_actual_bundled_evidence_against_record(
+    tmp_path, monkeypatch
+):
+    import qea.executors.sandbox_evolver as module
+    from qea.executors.bundles import build_evolver_input_bundle as real_build
+
+    def substitute(*args, **kwargs):
+        record = real_build(*args, **kwargs)
+        files = {}
+        with tarfile.open(record.path, mode="r:*") as archive:
+            for member in archive.getmembers():
+                if not member.isfile():
+                    continue
+                handle = archive.extractfile(member)
+                assert handle is not None
+                files[member.name] = handle.read()
+        files["evidence/contract.json"] = b'{"mode":"substituted"}\n'
+        payload = _tar_bytes(files)
+        record.path.write_bytes(payload)
+        return replace(
+            record,
+            sha256=hashlib.sha256(payload).hexdigest(),
+            size_bytes=len(payload),
+        )
+
+    monkeypatch.setattr(module, "build_evolver_input_bundle", substitute)
+    proposer, backend, proxy, pool, _ = _proposer(tmp_path)
+
+    with pytest.raises(Exception, match="bundled evidence differs"):
+        _propose(proposer, tmp_path)
+
+    assert backend.specs == []
+    assert proxy.opens == 0
+    assert pool.requests == []
