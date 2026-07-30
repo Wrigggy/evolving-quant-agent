@@ -46,6 +46,52 @@ def test_spec_digest_is_order_independent_and_changes_with_contract() -> None:
     assert set(left.spec_sha256) <= set("0123456789abcdef")
 
 
+def test_spec_accepts_evolver_role_in_canonical_identity() -> None:
+    spec = _make_spec(role="evolver")
+
+    assert spec.role == "evolver"
+    assert json.loads(spec.canonical_json())["role"] == "evolver"
+
+
+def test_network_scope_changes_canonical_spec_identity() -> None:
+    attempt_a = _make_spec(network_scope="attempt-a")
+    attempt_b = _make_spec(network_scope="attempt-b")
+
+    assert json.loads(attempt_a.canonical_json())["network_scope"] == "attempt-a"
+    assert attempt_a.spec_sha256 != attempt_b.spec_sha256
+
+
+@pytest.mark.parametrize(
+    ("role", "network_policy"),
+    [
+        ("worker", "worker-proxy-only"),
+        ("evolver", "worker-proxy-only"),
+        ("verifier", "none"),
+        ("proxy", "proxy-outbound"),
+    ],
+)
+def test_role_accepts_its_required_network_policy(role, network_policy) -> None:
+    assert _make_spec(role=role, network_policy=network_policy).role == role
+
+
+@pytest.mark.parametrize(
+    ("role", "network_policy"),
+    [
+        ("worker", "none"),
+        ("worker", "proxy-outbound"),
+        ("evolver", "none"),
+        ("evolver", "proxy-outbound"),
+        ("verifier", "worker-proxy-only"),
+        ("verifier", "proxy-outbound"),
+        ("proxy", "none"),
+        ("proxy", "worker-proxy-only"),
+    ],
+)
+def test_role_rejects_every_other_network_policy(role, network_policy) -> None:
+    with pytest.raises(SandboxSpecError, match="network policy"):
+        _make_spec(role=role, network_policy=network_policy)
+
+
 def test_spec_declares_executable_tmpfs_paths_in_immutable_identity() -> None:
     spec = _make_spec(
         role="verifier",
@@ -113,6 +159,8 @@ def test_state_copies_labels_so_inspection_evidence_cannot_change() -> None:
         {"pids_limit": 0},
         {"timeout_seconds": 0},
         {"network_policy": "host"},
+        {"network_scope": ""},
+        {"network_scope": "../attempt"},
         {"writable_tmpfs_mb": {"relative": 32}},
         {"writable_tmpfs_mb": {"/tmp/../host": 32}},
         {"writable_tmpfs_mb": {"/tmp": 0}},

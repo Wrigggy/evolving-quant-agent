@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import sys
 import tarfile
 from dataclasses import dataclass
 
 import pytest
 
+from qea import sandbox_backend
 from qea.backends.rootless_docker import (
     CommandTimedOut,
     CompletedCommand,
@@ -80,7 +82,7 @@ def _handle(spec: SandboxSpec | None = None) -> SandboxHandle:
 
 def _labels(spec: SandboxSpec | None = None) -> dict[str, str]:
     actual = spec or _spec()
-    return {
+    labels = {
         "qea.managed": "true",
         "qea.backend": "rootless-docker",
         "qea.role": actual.role,
@@ -89,6 +91,10 @@ def _labels(spec: SandboxSpec | None = None) -> dict[str, str]:
         "qea.task-id": actual.task_id,
         "qea.spec-sha256": actual.spec_sha256,
     }
+    network_scope = getattr(actual, "network_scope", None)
+    if network_scope is not None:
+        labels["qea.network-scope"] = network_scope
+    return labels
 
 
 def _inspect_reply(
@@ -107,6 +113,32 @@ def _inspect_reply(
         },
         "State": {"Status": status},
         "NetworkSettings": {"Networks": {}},
+    }
+    return CompletedCommand(0, json.dumps(payload).encode(), b"")
+
+
+def _network_inspect_reply(
+    *,
+    native_id: str,
+    name: str,
+    run_id: str = "run-1",
+    network_scope: str | None,
+    identity_sha256: str,
+    labels: dict[str, str] | None = None,
+) -> CompletedCommand:
+    actual_labels = {
+        "qea.managed": "true",
+        "qea.backend": "rootless-docker",
+        "qea.run-id": run_id,
+        "qea.network-policy": "internal",
+        "qea.network-identity-sha256": identity_sha256,
+    }
+    if network_scope is not None:
+        actual_labels["qea.network-scope"] = network_scope
+    payload = {
+        "Id": native_id,
+        "Name": name,
+        "Labels": labels if labels is not None else actual_labels,
     }
     return CompletedCommand(0, json.dumps(payload).encode(), b"")
 
@@ -262,6 +294,62 @@ def test_proxy_start_connects_internal_network_before_starting() -> None:
         "container-exact-1",
     )
     assert runner.calls[2].argv[-2:] == ("start", "container-exact-1")
+
+
+def test_proxy_joins_only_the_network_created_for_its_scope() -> None:
+    identity_a = "8fcd5d9d64bc55c8a7f2f478030dac2b69befa8da4efa41e7fe63da98a85f1fc"
+    identity_b = "ee4b43874af9286a9de7a97ff920f0047ef84310b2987ca3e94b448c0079232f"
+    name_a = "qea-run-1-attempt-a-8fcd5d9d64bc-internal"
+    name_b = "qea-run-1-attempt-b-ee4b43874af9-internal"
+    spec = _spec(
+        role="proxy",
+        attempt_id="proxy-a",
+        network_policy="proxy-outbound",
+        network_scope="attempt-a",
+        environment={"QEA_ROLE": "proxy"},
+    )
+    runner = RecordingRunner(
+        CompletedCommand(0, b"network-native-a\n", b""),
+        _network_inspect_reply(
+            native_id="network-native-a",
+            name=name_a,
+            network_scope="attempt-a",
+            identity_sha256=identity_a,
+        ),
+        CompletedCommand(0, b"network-native-b\n", b""),
+        _network_inspect_reply(
+            native_id="network-native-b",
+            name=name_b,
+            network_scope="attempt-b",
+            identity_sha256=identity_b,
+        ),
+        CompletedCommand(0, b"container-exact-1\n", b""),
+        _inspect_reply(spec),
+        CompletedCommand(0, b"", b""),
+        CompletedCommand(0, b"container-exact-1\n", b""),
+    )
+    backend = _backend(runner)
+
+    own_network = backend.create_internal_network(
+        run_id="run-1", network_scope="attempt-a"
+    )
+    other_network = backend.create_internal_network(
+        run_id="run-1", network_scope="attempt-b"
+    )
+    proxy = backend.create(spec)
+    backend.start(proxy)
+
+    connect_argv = runner.calls[6].argv
+    assert own_network.name in connect_argv
+    assert other_network.name not in connect_argv
+    assert connect_argv[-6:] == (
+        "network",
+        "connect",
+        "--alias",
+        "qea-model-proxy",
+        name_a,
+        "container-exact-1",
+    )
 
 
 def test_proxy_create_uses_fixed_waiting_entrypoint_without_secret_arguments() -> None:
@@ -446,42 +534,215 @@ def test_list_requires_managed_filter_and_returns_exact_inspected_states() -> No
     )
 
 
-def test_internal_network_create_and_remove_require_qea_identity() -> None:
-    create_runner = RecordingRunner(CompletedCommand(0, b"network-id\n", b""))
+def test_scoped_worker_networks_have_distinct_native_ids_names_and_routes() -> None:
+    identity_a = "8fcd5d9d64bc55c8a7f2f478030dac2b69befa8da4efa41e7fe63da98a85f1fc"
+    identity_b = "ee4b43874af9286a9de7a97ff920f0047ef84310b2987ca3e94b448c0079232f"
+    name_a = "qea-run-1-attempt-a-8fcd5d9d64bc-internal"
+    name_b = "qea-run-1-attempt-b-ee4b43874af9-internal"
+    spec_a = _spec(attempt_id="attempt-a", network_scope="attempt-a")
+    spec_b = _spec(attempt_id="attempt-b", network_scope="attempt-b")
+    runner = RecordingRunner(
+        CompletedCommand(0, b"network-native-a\n", b""),
+        _network_inspect_reply(
+            native_id="network-native-a",
+            name=name_a,
+            network_scope="attempt-a",
+            identity_sha256=identity_a,
+        ),
+        CompletedCommand(0, b"network-native-b\n", b""),
+        _network_inspect_reply(
+            native_id="network-native-b",
+            name=name_b,
+            network_scope="attempt-b",
+            identity_sha256=identity_b,
+        ),
+        CompletedCommand(0, b"container-a\n", b""),
+        CompletedCommand(0, b"container-b\n", b""),
+    )
+    backend = _backend(runner)
+
+    network_a = backend.create_internal_network(
+        run_id=spec_a.run_id, network_scope=spec_a.network_scope
+    )
+    network_b = backend.create_internal_network(
+        run_id=spec_b.run_id, network_scope=spec_b.network_scope
+    )
+    backend.create(spec_a)
+    backend.create(spec_b)
+
+    assert network_a == sandbox_backend.SandboxNetworkHandle(
+        backend="rootless-docker",
+        native_id="network-native-a",
+        name=name_a,
+        run_id="run-1",
+        network_scope="attempt-a",
+        identity_sha256=identity_a,
+    )
+    assert network_b.native_id == "network-native-b"
+    assert network_a.native_id != network_b.native_id
+    assert network_a.name != network_b.name
+    network_labels = _option_pairs(runner.calls[0].argv, "--label")
+    assert ("--label", "qea.network-scope=attempt-a") in network_labels
+    assert (
+        "--label",
+        f"qea.network-identity-sha256={identity_a}",
+    ) in network_labels
+    assert ("--network", network_a.name) in _option_pairs(
+        runner.calls[4].argv, "--network"
+    )
+    assert (
+        "--label",
+        "qea.network-scope=attempt-a",
+    ) in _option_pairs(runner.calls[4].argv, "--label")
+    assert ("--network", network_b.name) in _option_pairs(
+        runner.calls[5].argv, "--network"
+    )
+
+
+def test_scoped_network_names_are_bounded_and_docker_safe() -> None:
+    name = _backend(RecordingRunner())._internal_network_name(
+        "r" * 128, "s" * 128
+    )
+
+    assert len(name) <= 255
+    assert re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name)
+    assert name.endswith("-internal")
+
+
+@pytest.mark.parametrize(
+    ("run_id", "network_scope"),
+    [
+        ("run-1", ""),
+        ("run-1", "../attempt"),
+        ("../run", "attempt-a"),
+    ],
+)
+def test_scoped_network_rejects_unsafe_identity_before_docker(
+    run_id: str, network_scope: str
+) -> None:
+    runner = RecordingRunner()
+
+    with pytest.raises(RootlessDockerError, match="(run ID|network scope)"):
+        _backend(runner).create_internal_network(
+            run_id=run_id, network_scope=network_scope
+        )
+
+    assert runner.calls == []
+
+
+def test_scoped_network_cleanup_verifies_handle_and_removes_native_id() -> None:
+    identity = "8fcd5d9d64bc55c8a7f2f478030dac2b69befa8da4efa41e7fe63da98a85f1fc"
+    name = "qea-run-1-attempt-a-8fcd5d9d64bc-internal"
+    handle = sandbox_backend.SandboxNetworkHandle(
+        backend="rootless-docker",
+        native_id="network-native-a",
+        name=name,
+        run_id="run-1",
+        network_scope="attempt-a",
+        identity_sha256=identity,
+    )
+    runner = RecordingRunner(
+        _network_inspect_reply(
+            native_id="network-native-a",
+            name=name,
+            network_scope="attempt-a",
+            identity_sha256=identity,
+        ),
+        CompletedCommand(0, b"network-native-a\n", b""),
+    )
+
+    assert _backend(runner).remove_internal_network(handle) == "killed"
+    assert runner.calls[0].argv[-1] == "network-native-a"
+    assert runner.calls[1].argv[-3:] == (
+        "network",
+        "rm",
+        "network-native-a",
+    )
+
+    wrong_labels = {
+        "qea.managed": "true",
+        "qea.backend": "rootless-docker",
+        "qea.run-id": "run-1",
+        "qea.network-scope": "attempt-a",
+        "qea.network-policy": "internal",
+        "qea.network-identity-sha256": "0" * 64,
+    }
+    refusing_runner = RecordingRunner(
+        _network_inspect_reply(
+            native_id="network-native-a",
+            name=name,
+            network_scope="attempt-a",
+            identity_sha256=identity,
+            labels=wrong_labels,
+        )
+    )
+    with pytest.raises(RootlessDockerError, match="network ownership"):
+        _backend(refusing_runner).remove_internal_network(handle)
+    assert len(refusing_runner.calls) == 1
+
+
+def test_scoped_network_cleanup_is_idempotent_for_absent_native_id() -> None:
+    handle = sandbox_backend.SandboxNetworkHandle(
+        backend="rootless-docker",
+        native_id="network-native-a",
+        name="qea-run-1-attempt-a-8fcd5d9d64bc-internal",
+        run_id="run-1",
+        network_scope="attempt-a",
+        identity_sha256="8fcd5d9d64bc55c8a7f2f478030dac2b69befa8da4efa41e7fe63da98a85f1fc",
+    )
+    runner = RecordingRunner(
+        CompletedCommand(1, b"", b"Error: No such object: network-native-a")
+    )
+
+    assert _backend(runner).remove_internal_network(handle) == "already_absent"
+    assert len(runner.calls) == 1
+
+
+def test_legacy_run_scoped_network_keeps_historical_name_and_cleanup() -> None:
+    identity = "814267555c5b16069648a39f5c24b4c9123d38fac95ad97ad0bebf502613aeb8"
+    create_runner = RecordingRunner(
+        CompletedCommand(0, b"legacy-network-id\n", b""),
+        _network_inspect_reply(
+            native_id="legacy-network-id",
+            name="qea-run-1-internal",
+            network_scope=None,
+            identity_sha256=identity,
+        ),
+    )
     backend = _backend(create_runner)
+
     assert backend.create_internal_network("run-1") == "qea-run-1-internal"
     create_argv = create_runner.calls[0].argv
     assert "--internal" in create_argv
-    assert ("--label", "qea.managed=true") in _option_pairs(create_argv, "--label")
+    assert ("--label", "qea.managed=true") in _option_pairs(
+        create_argv, "--label"
+    )
     assert create_argv[-1] == "qea-run-1-internal"
+    assert _backend(RecordingRunner())._internal_network_name("run-1") == (
+        "qea-run-1-internal"
+    )
 
-    network_payload = {
-        "Name": "qea-run-1-internal",
-        "Labels": {
-            "qea.managed": "true",
-            "qea.backend": "rootless-docker",
-            "qea.run-id": "run-1",
-            "qea.network-policy": "internal",
-        },
-    }
     remove_runner = RecordingRunner(
-        CompletedCommand(0, json.dumps(network_payload).encode(), b""),
-        CompletedCommand(0, b"qea-run-1-internal\n", b""),
+        _network_inspect_reply(
+            native_id="legacy-network-id",
+            name="qea-run-1-internal",
+            network_scope=None,
+            identity_sha256=identity,
+        ),
+        CompletedCommand(0, b"legacy-network-id\n", b""),
     )
     assert _backend(remove_runner).remove_internal_network("run-1") is True
     assert remove_runner.calls[1].argv[-3:] == (
         "network",
         "rm",
-        "qea-run-1-internal",
+        "legacy-network-id",
     )
 
-    network_payload["Labels"]["qea.run-id"] = "other-run"
-    refusing_runner = RecordingRunner(
-        CompletedCommand(0, json.dumps(network_payload).encode(), b"")
+
+def test_rootless_backend_implements_scoped_network_protocol() -> None:
+    assert isinstance(
+        _backend(RecordingRunner()), sandbox_backend.ScopedNetworkBackend
     )
-    with pytest.raises(RootlessDockerError, match="network ownership"):
-        _backend(refusing_runner).remove_internal_network("run-1")
-    assert len(refusing_runner.calls) == 1
 
 
 def test_subprocess_runner_preserves_argument_boundaries_and_reports_timeout() -> None:

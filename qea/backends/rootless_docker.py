@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -13,9 +14,11 @@ from pathlib import PurePosixPath
 from typing import Mapping, Protocol, Sequence
 
 from ..sandbox_backend import (
+    KillOutcome,
     KillResult,
     SandboxCommandResult,
     SandboxHandle,
+    SandboxNetworkHandle,
     SandboxSpec,
     SandboxSpecError,
     SandboxState,
@@ -29,6 +32,9 @@ _DOCKER_DIGEST_REF = re.compile(
 )
 _NATIVE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
+_NETWORK_SCOPE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
+_NETWORK_IDENTITY = re.compile(r"[0-9a-f]{64}\Z")
+_DOCKER_NETWORK_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,254}\Z")
 _ALLOWED_FILTER_LABELS = frozenset(
     {
         "qea.managed",
@@ -127,7 +133,15 @@ def _bounded_text(payload: bytes, limit: int) -> str:
 
 def _is_not_found(stderr: bytes) -> bool:
     lowered = stderr.decode("utf-8", errors="replace").lower()
-    return "no such object:" in lowered or "no such container:" in lowered
+    return (
+        "no such object:" in lowered
+        or "no such container:" in lowered
+        or "no such network:" in lowered
+        or (
+            "error response from daemon: network " in lowered
+            and " not found" in lowered
+        )
+    )
 
 
 def _is_control_plane_error(stderr: bytes) -> bool:
@@ -160,6 +174,23 @@ def _safe_run_id(value: str) -> str:
     if not isinstance(value, str) or _RUN_ID.fullmatch(value) is None:
         raise RootlessDockerError(f"invalid run ID: {value!r}")
     return value
+
+
+def _safe_network_scope(value: str) -> str:
+    if not isinstance(value, str) or _NETWORK_SCOPE.fullmatch(value) is None:
+        raise RootlessDockerError(f"invalid network scope: {value!r}")
+    return value
+
+
+def _safe_network_name(value: str) -> str:
+    if not isinstance(value, str) or _DOCKER_NETWORK_NAME.fullmatch(value) is None:
+        raise RootlessDockerError(f"invalid Docker network name: {value!r}")
+    return value
+
+
+def _network_identity_sha256(run_id: str, network_scope: str | None) -> str:
+    scope_value = "" if network_scope is None else network_scope
+    return hashlib.sha256(f"{run_id}\x00{scope_value}".encode("utf-8")).hexdigest()
 
 
 def _tar_single_file(name: str, payload: bytes) -> bytes:
@@ -283,10 +314,15 @@ class RootlessDockerBackend:
             "qea.task-id": spec.task_id,
             "qea.spec-sha256": spec.spec_sha256,
         }
+        if spec.network_scope is not None:
+            labels["qea.network-scope"] = spec.network_scope
         if spec.network_policy == "none":
             network = "none"
         elif spec.network_policy == "worker-proxy-only":
-            network = self._internal_network_name(spec.run_id)
+            network = self._internal_network_name(
+                spec.run_id,
+                spec.network_scope,
+            )
         else:
             network = "bridge"
         arguments: list[str] = [
@@ -348,7 +384,8 @@ class RootlessDockerBackend:
         state = self._require_handle_ownership(handle)
         if state.labels.get("qea.role") == "proxy":
             run_id = state.labels.get("qea.run-id", "")
-            network_name = self._internal_network_name(run_id)
+            network_scope = state.labels.get("qea.network-scope")
+            network_name = self._internal_network_name(run_id, network_scope)
             result = self.runner.run(
                 self._argv(
                     "network",
@@ -594,62 +631,229 @@ class RootlessDockerBackend:
             )
         return state
 
-    def _internal_network_name(self, run_id: str) -> str:
-        return f"qea-{_safe_run_id(run_id)}-internal"
-
-    def create_internal_network(self, run_id: str) -> str:
+    def _internal_network_name(
+        self,
+        run_id: str,
+        network_scope: str | None = None,
+    ) -> str:
         safe_run_id = _safe_run_id(run_id)
-        name = self._internal_network_name(safe_run_id)
+        if network_scope is None:
+            return _safe_network_name(f"qea-{safe_run_id}-internal")
+        safe_scope = _safe_network_scope(network_scope)
+        identity = _network_identity_sha256(run_id, network_scope)
+        suffix = f"-{identity[:12]}-internal"
+        readable = f"qea-{safe_run_id}-{safe_scope}"
+        bounded = readable[: 255 - len(suffix)]
+        return _safe_network_name(f"{bounded}{suffix}")
+
+    def _internal_network_labels(
+        self,
+        *,
+        run_id: str,
+        network_scope: str | None,
+        identity_sha256: str,
+    ) -> dict[str, str]:
         labels = {
             "qea.managed": "true",
             "qea.backend": self.backend_name,
-            "qea.run-id": safe_run_id,
+            "qea.run-id": run_id,
             "qea.network-policy": "internal",
+            "qea.network-identity-sha256": identity_sha256,
         }
-        arguments: list[str] = ["network", "create", "--internal"]
-        for key, value in sorted(labels.items()):
-            arguments.extend(("--label", f"{key}={value}"))
-        arguments.append(name)
-        self._checked(
-            arguments,
-            timeout_seconds=30,
-            operation="internal network create",
-        )
-        return name
+        if network_scope is not None:
+            labels["qea.network-scope"] = network_scope
+        return labels
 
-    def remove_internal_network(self, run_id: str) -> bool:
-        safe_run_id = _safe_run_id(run_id)
-        name = self._internal_network_name(safe_run_id)
+    def _inspect_internal_network(
+        self,
+        reference: str,
+    ) -> tuple[str, str, Mapping[str, str]] | None:
+        safe_reference = _safe_network_name(reference)
         result = self.runner.run(
-            self._argv("network", "inspect", "--format", "{{json .}}", name),
+            self._argv(
+                "network",
+                "inspect",
+                "--format",
+                "{{json .}}",
+                safe_reference,
+            ),
             timeout_seconds=30,
         )
         if result.returncode != 0:
             if _is_not_found(result.stderr):
-                return False
+                return None
             raise RootlessDockerError(
                 "Docker network inspect failed: "
                 + _bounded_text(result.stderr, _MAX_ERROR_BYTES)
             )
         try:
             payload = json.loads(result.stdout)
+            native_id = _safe_native_id(payload["Id"])
+            name = _safe_network_name(payload["Name"])
             labels = payload.get("Labels") or {}
-            inspected_name = payload["Name"]
         except (KeyError, TypeError, json.JSONDecodeError) as exc:
-            raise RootlessDockerError("malformed Docker network inspect output") from exc
-        required = {
-            "qea.managed": "true",
-            "qea.backend": self.backend_name,
-            "qea.run-id": safe_run_id,
-            "qea.network-policy": "internal",
-        }
-        if inspected_name != name or not isinstance(labels, dict) or any(
-            labels.get(key) != value for key, value in required.items()
+            raise RootlessDockerError(
+                "malformed Docker network inspect output"
+            ) from exc
+        if not isinstance(labels, dict) or not all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in labels.items()
         ):
-            raise RootlessDockerError(f"network ownership check failed for {name!r}")
-        self._checked(
-            ("network", "rm", name),
-            timeout_seconds=30,
-            operation="internal network removal",
+            raise RootlessDockerError("Docker network inspect returned malformed labels")
+        return native_id, name, labels
+
+    def _require_internal_network_identity(
+        self,
+        inspected: tuple[str, str, Mapping[str, str]],
+        *,
+        native_id: str,
+        name: str,
+        labels: Mapping[str, str],
+    ) -> None:
+        inspected_id, inspected_name, inspected_labels = inspected
+        if (
+            inspected_id != native_id
+            or inspected_name != name
+            or any(
+                inspected_labels.get(key) != value
+                for key, value in labels.items()
+            )
+        ):
+            raise RootlessDockerError(
+                f"network ownership check failed for {native_id!r}"
+            )
+
+    def create_internal_network(
+        self,
+        run_id: str,
+        *,
+        network_scope: str | None = None,
+    ) -> SandboxNetworkHandle | str:
+        """Create a scoped network, retaining the legacy positional run API."""
+
+        safe_run_id = _safe_run_id(run_id)
+        safe_scope = (
+            None
+            if network_scope is None
+            else _safe_network_scope(network_scope)
         )
-        return True
+        identity = _network_identity_sha256(run_id, network_scope)
+        name = self._internal_network_name(run_id, network_scope)
+        labels = self._internal_network_labels(
+            run_id=safe_run_id,
+            network_scope=safe_scope,
+            identity_sha256=identity,
+        )
+        arguments: list[str] = ["network", "create", "--internal"]
+        for key, value in sorted(labels.items()):
+            arguments.extend(("--label", f"{key}={value}"))
+        arguments.append(name)
+        result = self._checked(
+            arguments,
+            timeout_seconds=30,
+            operation="internal network create",
+        )
+        native_id = _safe_native_id(
+            result.stdout.decode("utf-8", errors="replace").strip()
+        )
+        inspected = self._inspect_internal_network(native_id)
+        if inspected is None:
+            raise RootlessDockerError(
+                f"created Docker network is absent: {native_id!r}"
+            )
+        self._require_internal_network_identity(
+            inspected,
+            native_id=native_id,
+            name=name,
+            labels=labels,
+        )
+        if safe_scope is None:
+            return name
+        return SandboxNetworkHandle(
+            backend=self.backend_name,
+            native_id=native_id,
+            name=name,
+            run_id=safe_run_id,
+            network_scope=safe_scope,
+            identity_sha256=identity,
+        )
+
+    def _remove_internal_network_by_id(self, native_id: str) -> KillOutcome:
+        safe_id = _safe_native_id(native_id)
+        result = self.runner.run(
+            self._argv("network", "rm", safe_id),
+            timeout_seconds=30,
+        )
+        if result.returncode != 0:
+            if _is_not_found(result.stderr):
+                return "already_absent"
+            raise RootlessDockerError(
+                "Docker internal network removal failed: "
+                + _bounded_text(result.stderr, _MAX_ERROR_BYTES)
+            )
+        return "killed"
+
+    def _remove_legacy_internal_network(self, run_id: str) -> bool:
+        safe_run_id = _safe_run_id(run_id)
+        name = self._internal_network_name(run_id)
+        identity = _network_identity_sha256(run_id, None)
+        inspected = self._inspect_internal_network(name)
+        if inspected is None:
+            return False
+        native_id = inspected[0]
+        self._require_internal_network_identity(
+            inspected,
+            native_id=native_id,
+            name=name,
+            labels=self._internal_network_labels(
+                run_id=safe_run_id,
+                network_scope=None,
+                identity_sha256=identity,
+            ),
+        )
+        return self._remove_internal_network_by_id(native_id) == "killed"
+
+    def remove_internal_network(
+        self,
+        handle: SandboxNetworkHandle | str,
+    ) -> KillOutcome | bool:
+        """Remove only the exact recorded network, with legacy run compatibility."""
+
+        if isinstance(handle, str):
+            return self._remove_legacy_internal_network(handle)
+        if not isinstance(handle, SandboxNetworkHandle):
+            raise RootlessDockerError("invalid sandbox network handle")
+        if handle.backend != self.backend_name:
+            raise RootlessDockerError("network handle names a different backend")
+        native_id = _safe_native_id(handle.native_id)
+        safe_run_id = _safe_run_id(handle.run_id)
+        safe_scope = _safe_network_scope(handle.network_scope)
+        if _NETWORK_IDENTITY.fullmatch(handle.identity_sha256) is None:
+            raise RootlessDockerError("network handle has an invalid identity digest")
+        expected_identity = _network_identity_sha256(
+            handle.run_id,
+            handle.network_scope,
+        )
+        expected_name = self._internal_network_name(
+            handle.run_id,
+            handle.network_scope,
+        )
+        if (
+            handle.identity_sha256 != expected_identity
+            or handle.name != expected_name
+        ):
+            raise RootlessDockerError("network handle identity check failed")
+        inspected = self._inspect_internal_network(native_id)
+        if inspected is None:
+            return "already_absent"
+        self._require_internal_network_identity(
+            inspected,
+            native_id=native_id,
+            name=expected_name,
+            labels=self._internal_network_labels(
+                run_id=safe_run_id,
+                network_scope=safe_scope,
+                identity_sha256=expected_identity,
+            ),
+        )
+        return self._remove_internal_network_by_id(native_id)

@@ -8,17 +8,23 @@ import re
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from types import MappingProxyType
-from typing import Literal, Mapping, Protocol, Sequence
+from typing import Literal, Mapping, Protocol, Sequence, runtime_checkable
 
 
-SandboxRole = Literal["worker", "verifier", "proxy", "canary"]
+SandboxRole = Literal["worker", "verifier", "evolver", "proxy", "canary"]
 NetworkPolicy = Literal["none", "worker-proxy-only", "proxy-outbound"]
 KillOutcome = Literal["killed", "already_absent"]
 
-_ALLOWED_ROLES = frozenset({"worker", "verifier", "proxy", "canary"})
+_ALLOWED_ROLES = frozenset({"worker", "verifier", "evolver", "proxy", "canary"})
 _ALLOWED_NETWORK_POLICIES = frozenset(
     {"none", "worker-proxy-only", "proxy-outbound"}
 )
+_ROLE_NETWORK_POLICIES = {
+    "worker": "worker-proxy-only",
+    "evolver": "worker-proxy-only",
+    "verifier": "none",
+    "proxy": "proxy-outbound",
+}
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _RAW_IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _DIGEST_IMAGE_REF = re.compile(
@@ -151,6 +157,7 @@ class SandboxSpec:
     environment: Mapping[str, str] = field(default_factory=dict)
     writable_tmpfs_mb: Mapping[str, int] = field(default_factory=dict)
     executable_tmpfs_paths: frozenset[str] = field(default_factory=frozenset)
+    network_scope: str | None = None
 
     def __post_init__(self) -> None:
         if self.role not in _ALLOWED_ROLES:
@@ -159,9 +166,17 @@ class SandboxSpec:
             raise SandboxSpecError(
                 f"unsupported network policy: {self.network_policy!r}"
             )
+        required_policy = _ROLE_NETWORK_POLICIES.get(self.role)
+        if required_policy is not None and self.network_policy != required_policy:
+            raise SandboxSpecError(
+                f"sandbox role {self.role!r} requires network policy "
+                f"{required_policy!r}"
+            )
         _require_identifier("run_id", self.run_id)
         _require_identifier("attempt_id", self.attempt_id)
         _require_identifier("task_id", self.task_id)
+        if self.network_scope is not None:
+            _require_identifier("network_scope", self.network_scope)
         _require_image_ref(self.image_ref)
         _require_positive_integer("cpu_count", self.cpu_count)
         _require_positive_integer("memory_mb", self.memory_mb)
@@ -190,6 +205,7 @@ class SandboxSpec:
             "image_ref": self.image_ref,
             "memory_mb": self.memory_mb,
             "network_policy": self.network_policy,
+            "network_scope": self.network_scope,
             "pids_limit": self.pids_limit,
             "role": self.role,
             "run_id": self.run_id,
@@ -212,6 +228,16 @@ class SandboxHandle:
     native_id: str
     immutable_image_ref: str
     spec_sha256: str
+
+
+@dataclass(frozen=True)
+class SandboxNetworkHandle:
+    backend: str
+    native_id: str
+    name: str
+    run_id: str
+    network_scope: str
+    identity_sha256: str
 
 
 @dataclass(frozen=True)
@@ -278,4 +304,23 @@ class SandboxBackend(Protocol):
         raise NotImplementedError
 
     def kill(self, native_id: str) -> KillResult:
+        raise NotImplementedError
+
+
+@runtime_checkable
+class ScopedNetworkBackend(Protocol):
+    """Optional exact-ID lifecycle contract for attempt-scoped networks."""
+
+    def create_internal_network(
+        self,
+        *,
+        run_id: str,
+        network_scope: str,
+    ) -> SandboxNetworkHandle:
+        raise NotImplementedError
+
+    def remove_internal_network(
+        self,
+        handle: SandboxNetworkHandle,
+    ) -> KillOutcome:
         raise NotImplementedError
