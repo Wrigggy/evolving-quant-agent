@@ -10,6 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from .rootless_images import (
+    RootlessImageError,
+    rootless_image_result_identity_sha256,
+)
+
 
 _COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -47,17 +52,31 @@ def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def _json_file(path: Path, *, label: str) -> tuple[bytes, Mapping[str, object]]:
-    if path.is_symlink() or not path.is_file():
-        raise RootlessImageSetError(f"{label} must be a regular non-symlink file: {path}")
+def _regular_leaf_path(path: str | Path, *, label: str) -> Path:
+    unresolved = Path(path).expanduser()
+    if unresolved.is_symlink() or not unresolved.is_file():
+        raise RootlessImageSetError(
+            f"{label} must be a regular non-symlink file: {unresolved}"
+        )
+    return unresolved.resolve()
+
+
+def _json_file(
+    path: str | Path,
+    *,
+    label: str,
+) -> tuple[Path, bytes, Mapping[str, object]]:
+    resolved = _regular_leaf_path(path, label=label)
     try:
-        raw = path.read_bytes()
+        raw = resolved.read_bytes()
         payload = json.loads(raw)
     except (OSError, json.JSONDecodeError) as exc:
-        raise RootlessImageSetError(f"cannot load {label} {path}: {exc}") from exc
+        raise RootlessImageSetError(f"cannot load {label} {resolved}: {exc}") from exc
     if not isinstance(payload, dict):
-        raise RootlessImageSetError(f"{label} must contain one JSON object: {path}")
-    return raw, payload
+        raise RootlessImageSetError(
+            f"{label} must contain one JSON object: {resolved}"
+        )
+    return resolved, raw, payload
 
 
 def _immutable_image(value: object, *, label: str) -> str:
@@ -96,8 +115,7 @@ def _manifest_entry(
     *,
     benchmark_commit: str,
 ) -> dict[str, object]:
-    path = Path(manifest_path).expanduser().resolve()
-    raw, manifest = _json_file(path, label="image manifest")
+    path, raw, manifest = _json_file(manifest_path, label="image manifest")
     if manifest.get("schema_version") != 1:
         raise RootlessImageSetError(f"image manifest schema is unsupported: {path}")
     role = manifest.get("role")
@@ -124,9 +142,17 @@ def _manifest_entry(
         manifest.get("dependency_lock_sha256"),
         label="dependency lock identity",
     )
-    manifest_identity = _digest(
-        manifest.get("identity_sha256"), label="image manifest identity"
+    plan_identity = _digest(
+        manifest.get("plan_identity_sha256"), label="image plan identity"
     )
+    result_identity = _digest(
+        manifest.get("result_identity_sha256"), label="image result identity"
+    )
+    compatibility_identity = _digest(
+        manifest.get("identity_sha256"), label="image compatibility identity"
+    )
+    if manifest.get("identity_kind") != "measured-result":
+        raise RootlessImageSetError(f"image identity kind is invalid: {path}")
     context_files = manifest.get("context_files")
     if not isinstance(context_files, list) or not context_files:
         raise RootlessImageSetError(f"image manifest context is empty: {path}")
@@ -147,8 +173,30 @@ def _manifest_entry(
         raise RootlessImageSetError(
             f"image manifest omits plan identity field {exc.args[0]!r}: {path}"
         ) from exc
-    if _sha256(_canonical_json(plan_identity_payload)) != manifest_identity:
-        raise RootlessImageSetError(f"image manifest identity differs: {path}")
+    if _sha256(_canonical_json(plan_identity_payload)) != plan_identity:
+        raise RootlessImageSetError(f"image plan identity differs: {path}")
+
+    docker_version = manifest.get("docker_version")
+    security_options = manifest.get("docker_security_options")
+    try:
+        recomputed_result_identity = rootless_image_result_identity_sha256(
+            plan_identity_sha256=plan_identity,
+            image_id=image_id,
+            dependency_lock_sha256=dependency_lock_sha256,
+            docker_version=docker_version,
+            docker_security_options=security_options,
+        )
+    except RootlessImageError as exc:
+        raise RootlessImageSetError(f"image result identity is invalid: {path}") from exc
+    if (
+        recomputed_result_identity != result_identity
+        or compatibility_identity != result_identity
+    ):
+        raise RootlessImageSetError(f"image result identity differs: {path}")
+    if path.parent.name != result_identity:
+        raise RootlessImageSetError(
+            f"image manifest publication path is not result-addressed: {path}"
+        )
 
     lock_path = path.with_name("dependency-lock.txt")
     if lock_path.is_symlink() or not lock_path.is_file():
@@ -174,8 +222,6 @@ def _manifest_entry(
         raise RootlessImageSetError("build_network must be a non-empty string")
     resource_contract_sha256 = _sha256(_canonical_json(resource_contract))
 
-    docker_version = manifest.get("docker_version")
-    security_options = manifest.get("docker_security_options")
     if not isinstance(docker_version, str) or not docker_version:
         raise RootlessImageSetError(f"Docker version identity is missing: {path}")
     if (
@@ -194,7 +240,9 @@ def _manifest_entry(
         "task_id": task_id,
         "manifest_path": str(path),
         "manifest_sha256": _sha256(raw),
-        "manifest_identity_sha256": manifest_identity,
+        "manifest_identity_sha256": result_identity,
+        "plan_identity_sha256": plan_identity,
+        "result_identity_sha256": result_identity,
         "source_manifest_sha256": source_manifest_sha256,
         "base_image_ref": base_image_ref,
         "image_id": image_id,
@@ -325,11 +373,14 @@ class RootlessImageSet:
     def write(self, path: str | Path) -> Path:
         """Atomically publish the index without replacing another identity."""
 
-        destination = Path(path).expanduser().resolve()
+        unresolved = Path(path).expanduser()
+        if unresolved.is_symlink():
+            raise RootlessImageSetError(
+                f"image-set output symlink is forbidden: {unresolved}"
+            )
+        destination = unresolved.resolve()
         payload = json.dumps(self.to_payload(), sort_keys=True, indent=2) + "\n"
         encoded = payload.encode()
-        if destination.is_symlink():
-            raise RootlessImageSetError(f"image-set output symlink is forbidden: {destination}")
         if destination.exists():
             if not destination.is_file() or destination.read_bytes() != encoded:
                 raise RootlessImageSetError(
@@ -348,8 +399,7 @@ class RootlessImageSet:
     def load(cls, path: str | Path) -> "RootlessImageSet":
         """Load an index and revalidate its identity and referenced manifests."""
 
-        source = Path(path).expanduser().resolve()
-        _, payload = _json_file(source, label="image-set index")
+        _, _, payload = _json_file(path, label="image-set index")
         if payload.get("schema_version") != 1:
             raise RootlessImageSetError("image-set schema is unsupported")
         identity = payload.get("identity_sha256")

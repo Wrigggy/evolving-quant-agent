@@ -12,12 +12,50 @@ import pytest
 COMMIT = "024921eb507fcc0c4ffe3e0a96802724be1ae84a"
 UPSTREAM_BASE = "docker.io/library/python@sha256:" + "a" * 64
 BASE_IMAGE_ID = "sha256:" + "b" * 64
+PLAN_IDENTITY_KEYS = (
+    "role",
+    "task_id",
+    "benchmark_commit",
+    "base_image_ref",
+    "source_manifest_sha256",
+    "verifier_test_script_sha256",
+    "context_files",
+    "cpu_count",
+    "memory_mb",
+    "build_timeout_seconds",
+    "build_network",
+)
 
 
 def _sha256_json(payload: object) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+
+
+def _result_identity(manifest: dict[str, object]) -> str:
+    return _sha256_json(
+        {
+            "plan_identity_sha256": manifest["plan_identity_sha256"],
+            "image_id": manifest["image_id"],
+            "dependency_lock_sha256": manifest["dependency_lock_sha256"],
+            "docker_version": manifest["docker_version"],
+            "docker_security_options": sorted(
+                manifest["docker_security_options"]
+            ),
+        }
+    )
+
+
+def _rehash_manifest(path: Path) -> dict[str, object]:
+    manifest = json.loads(path.read_text())
+    manifest["plan_identity_sha256"] = _sha256_json(
+        {key: manifest[key] for key in PLAN_IDENTITY_KEYS}
+    )
+    manifest["result_identity_sha256"] = _result_identity(manifest)
+    manifest["identity_sha256"] = manifest["result_identity_sha256"]
+    path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+    return manifest
 
 
 def _write_image_manifest(
@@ -32,9 +70,7 @@ def _write_image_manifest(
     memory_mb: int = 4096,
     build_timeout_seconds: int = 600,
 ) -> Path:
-    root.mkdir(parents=True)
     lock = f"{role}-runtime==1.0\n".encode()
-    (root / "dependency-lock.txt").write_bytes(lock)
     dockerfile = f"FROM {base_image_ref}\n".encode()
     context_files = [
         {
@@ -58,11 +94,13 @@ def _write_image_manifest(
         "build_network": "default",
     }
     image_id = "sha256:" + image_digit * 64
+    plan_identity = _sha256_json(identity_payload)
     manifest = {
         "schema_version": 1,
         **identity_payload,
         "dockerfile_sha256": hashlib.sha256(dockerfile).hexdigest(),
-        "identity_sha256": _sha256_json(identity_payload),
+        "plan_identity_sha256": plan_identity,
+        "identity_kind": "measured-result",
         "image_id": image_id,
         "repo_digests": [],
         "build_tag": f"qea-rootless-{role}-fixture",
@@ -73,7 +111,13 @@ def _write_image_manifest(
         "dependency_lock_sha256": hashlib.sha256(lock).hexdigest(),
         "built_at": "2026-07-30T10:00:00+00:00",
     }
-    path = root / "MANIFEST.json"
+    manifest["result_identity_sha256"] = _result_identity(manifest)
+    manifest["identity_sha256"] = manifest["result_identity_sha256"]
+    publication = root / manifest["result_identity_sha256"]
+    (publication / "context").mkdir(parents=True)
+    (publication / "dependency-lock.txt").write_bytes(lock)
+    (publication / "context" / "Dockerfile").write_bytes(dockerfile)
+    path = publication / "MANIFEST.json"
     path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
     return path
 
@@ -265,26 +309,43 @@ def test_image_set_rejects_commit_reference_lock_and_resource_drift(tmp_path) ->
     )
     verifier = json.loads(verifier_path.read_text())
     verifier["cpu_count"] = 4
-    identity_payload = {
-        key: verifier[key]
-        for key in (
-            "role",
-            "task_id",
-            "benchmark_commit",
-            "base_image_ref",
-            "source_manifest_sha256",
-            "verifier_test_script_sha256",
-            "context_files",
-            "cpu_count",
-            "memory_mb",
-            "build_timeout_seconds",
-            "build_network",
-        )
-    }
-    verifier["identity_sha256"] = _sha256_json(identity_payload)
     verifier_path.write_text(json.dumps(verifier, sort_keys=True, indent=2) + "\n")
+    _rehash_manifest(verifier_path)
     with pytest.raises(RootlessImageSetError, match="referenced manifest"):
         RootlessImageSet.load(resource_index)
+
+
+@pytest.mark.parametrize("mutation", ("resource", "role", "context"))
+def test_fresh_assembly_rejects_self_consistent_manifest_edit_at_old_anchor(
+    tmp_path, mutation: str
+) -> None:
+    from qea.rootless_image_set import RootlessImageSet, RootlessImageSetError
+
+    manifests = _image_manifests(tmp_path, task_ids=("task-a",))
+    evolver_path = next(
+        path for path in manifests if json.loads(path.read_text())["role"] == "evolver"
+    )
+    manifest = json.loads(evolver_path.read_text())
+    if mutation == "resource":
+        manifest["cpu_count"] = 8
+    elif mutation == "role":
+        manifest["role"] = "proxy"
+    else:
+        dockerfile = b"FROM sha256:" + b"b" * 64 + b"\n# changed\n"
+        dockerfile_sha256 = hashlib.sha256(dockerfile).hexdigest()
+        manifest["context_files"][0]["sha256"] = dockerfile_sha256
+        manifest["context_files"][0]["size_bytes"] = len(dockerfile)
+        manifest["dockerfile_sha256"] = dockerfile_sha256
+        (evolver_path.parent / "context" / "Dockerfile").write_bytes(dockerfile)
+    evolver_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+    _rehash_manifest(evolver_path)
+
+    with pytest.raises(RootlessImageSetError, match="publication path"):
+        RootlessImageSet.from_manifest_paths(
+            benchmark_commit=COMMIT,
+            task_ids=("task-a",),
+            manifest_paths=manifests,
+        )
 
 
 def test_image_set_load_rejects_tampered_identity_and_referenced_manifest(tmp_path) -> None:
@@ -315,6 +376,44 @@ def test_image_set_load_rejects_tampered_identity_and_referenced_manifest(tmp_pa
     proxy_path.write_text(json.dumps(proxy, sort_keys=True, indent=2) + "\n")
     with pytest.raises(RootlessImageSetError, match="referenced manifest"):
         RootlessImageSet.load(second_index)
+
+
+def test_image_set_rejects_manifest_index_and_output_leaf_symlinks(tmp_path) -> None:
+    from qea.rootless_image_set import RootlessImageSet, RootlessImageSetError
+
+    manifests = list(_image_manifests(tmp_path / "manifests", task_ids=("task-a",)))
+    proxy_index = next(
+        index
+        for index, path in enumerate(manifests)
+        if json.loads(path.read_text())["role"] == "proxy"
+    )
+    proxy_link = tmp_path / "proxy-MANIFEST.json"
+    proxy_link.symlink_to(manifests[proxy_index])
+    manifests[proxy_index] = proxy_link
+    with pytest.raises(RootlessImageSetError, match="non-symlink"):
+        RootlessImageSet.from_manifest_paths(
+            benchmark_commit=COMMIT,
+            task_ids=("task-a",),
+            manifest_paths=manifests,
+        )
+
+    real_manifests = _image_manifests(tmp_path / "real", task_ids=("task-a",))
+    image_set = RootlessImageSet.from_manifest_paths(
+        benchmark_commit=COMMIT,
+        task_ids=("task-a",),
+        manifest_paths=real_manifests,
+    )
+    index = tmp_path / "image-set.json"
+    image_set.write(index)
+    index_link = tmp_path / "image-set-link.json"
+    index_link.symlink_to(index)
+    with pytest.raises(RootlessImageSetError, match="non-symlink"):
+        RootlessImageSet.load(index_link)
+
+    output_link = tmp_path / "dangling-image-set.json"
+    output_link.symlink_to(tmp_path / "does-not-exist.json")
+    with pytest.raises(RootlessImageSetError, match="output symlink"):
+        image_set.write(output_link)
 
 
 def test_explicit_image_set_assembler_cli_writes_one_index(tmp_path) -> None:

@@ -41,6 +41,28 @@ class RecordingRunner:
         return self.replies.pop(0)
 
 
+def _successful_worker_build_runner(
+    *,
+    image_id: str,
+    dependency_lock: bytes,
+) -> RecordingRunner:
+    return RecordingRunner(
+        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
+        CompletedCommand(0, b"", b""),
+        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
+        CompletedCommand(0, (image_id + "\n").encode(), b""),
+        CompletedCommand(
+            0,
+            json.dumps({"Id": image_id, "RepoDigests": []}).encode(),
+            b"",
+        ),
+        CompletedCommand(0, b"29.4.1\n", b""),
+        CompletedCommand(0, b'["name=rootless"]\n', b""),
+        CompletedCommand(0, dependency_lock, b""),
+        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
+    )
+
+
 def _write_manifest(root: Path, role: str, paths: list[Path]) -> None:
     records = []
     for path in sorted(paths):
@@ -163,6 +185,8 @@ def test_task_neutral_proxy_and_evolver_plans_are_role_minimal(tmp_path) -> None
         memory_mb=512,
         build_timeout_seconds=600,
     )
+    assert proxy.manifest_payload()["identity_kind"] == "plan"
+    assert proxy.manifest_payload()["identity_sha256"] == proxy.identity_sha256
     evolver = prepare_rootless_image_plan(
         role="evolver",
         public_root=public,
@@ -412,20 +436,9 @@ def test_execute_build_records_final_image_and_dependency_lock(tmp_path) -> None
     )
     image_id = "sha256:" + "c" * 64
     local_base_tag = "qea-local-base:" + "b" * 64
-    runner = RecordingRunner(
-        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
-        CompletedCommand(0, b"", b""),
-        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
-        CompletedCommand(0, (image_id + "\n").encode(), b""),
-        CompletedCommand(
-            0,
-            json.dumps({"Id": image_id, "RepoDigests": []}).encode(),
-            b"",
-        ),
-        CompletedCommand(0, b"29.4.1\n", b""),
-        CompletedCommand(0, b'["name=rootless"]\n', b""),
-        CompletedCommand(0, b"nexau==0.3.9\nnumpy==2.2.3\n", b""),
-        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
+    runner = _successful_worker_build_runner(
+        image_id=image_id,
+        dependency_lock=b"nexau==0.3.9\nnumpy==2.2.3\n",
     )
 
     result = execute_rootless_image_build(
@@ -455,8 +468,13 @@ def test_execute_build_records_final_image_and_dependency_lock(tmp_path) -> None
     assert "--pull=false" in build_argv
     assert ("--network", "default") == _pair(build_argv, "--network")
     assert result.image_id == image_id
-    assert result.output_dir.name == plan.identity_sha256
+    assert result.plan_identity_sha256 == plan.identity_sha256
+    assert result.output_dir.name == result.result_identity_sha256
     manifest = json.loads(result.manifest_path.read_text())
+    assert manifest["plan_identity_sha256"] == plan.identity_sha256
+    assert manifest["result_identity_sha256"] == result.result_identity_sha256
+    assert manifest["identity_kind"] == "measured-result"
+    assert manifest["identity_sha256"] == result.result_identity_sha256
     assert manifest["image_id"] == image_id
     assert manifest["local_base_tag"] == local_base_tag
     assert manifest["local_base_image_id"] == QFBENCH_BASE
@@ -469,6 +487,53 @@ def test_execute_build_records_final_image_and_dependency_lock(tmp_path) -> None
     assert (result.output_dir / "context/Dockerfile").is_file()
     assert not result.output_dir.with_name(plan.identity_sha256 + ".partial").exists()
     assert runner.calls[-1].argv[-1] == local_base_tag
+
+
+def test_execute_build_result_identity_changes_with_measured_lock(tmp_path) -> None:
+    from qea.rootless_images import (
+        execute_rootless_image_build,
+        prepare_rootless_image_plan,
+    )
+
+    public, _ = _role_roots(tmp_path)
+    plan = prepare_rootless_image_plan(
+        role="worker",
+        task_id="task-a",
+        public_root=public,
+        base_image_ref=QFBENCH_BASE,
+        cpu_count=2,
+        memory_mb=4096,
+        build_timeout_seconds=600,
+    )
+    image_id = "sha256:" + "c" * 64
+    first = execute_rootless_image_build(
+        plan,
+        output_root=tmp_path / "images",
+        docker_host=DOCKER_HOST,
+        expected_uid=1013,
+        runner=_successful_worker_build_runner(
+            image_id=image_id,
+            dependency_lock=b"nexau==0.3.9\ntransitive==1.0\n",
+        ),
+        at=datetime(2026, 7, 28, 14, 0, tzinfo=timezone.utc),
+    )
+    second = execute_rootless_image_build(
+        plan,
+        output_root=tmp_path / "images",
+        docker_host=DOCKER_HOST,
+        expected_uid=1013,
+        runner=_successful_worker_build_runner(
+            image_id=image_id,
+            dependency_lock=b"nexau==0.3.9\ntransitive==2.0\n",
+        ),
+        at=datetime(2026, 7, 28, 15, 0, tzinfo=timezone.utc),
+    )
+
+    assert first.plan_identity_sha256 == second.plan_identity_sha256
+    assert first.result_identity_sha256 != second.result_identity_sha256
+    assert first.output_dir != second.output_dir
+    assert first.output_dir.name == first.result_identity_sha256
+    assert second.output_dir.name == second.result_identity_sha256
 
 
 def test_execute_build_refuses_system_socket_and_existing_identity(tmp_path) -> None:
@@ -496,9 +561,9 @@ def test_execute_build_refuses_system_socket_and_existing_identity(tmp_path) -> 
             runner=RecordingRunner(),
         )
 
-    existing = tmp_path / "images" / plan.identity_sha256
+    existing = tmp_path / "images" / f"{plan.identity_sha256}.partial"
     existing.mkdir(parents=True)
-    with pytest.raises(RootlessImageError, match="existing image identity"):
+    with pytest.raises(RootlessImageError, match="existing partial image identity"):
         execute_rootless_image_build(
             plan,
             output_root=tmp_path / "images",

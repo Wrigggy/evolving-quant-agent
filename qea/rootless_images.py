@@ -172,7 +172,9 @@ class RootlessImageBuildPlan:
             "memory_mb": self.memory_mb,
             "build_timeout_seconds": self.build_timeout_seconds,
             "build_network": self.build_network,
+            "identity_kind": "plan",
             "identity_sha256": self.identity_sha256,
+            "plan_identity_sha256": self.identity_sha256,
         }
 
 
@@ -181,6 +183,8 @@ class RootlessImageBuildResult:
     output_dir: Path
     manifest_path: Path
     image_id: str
+    plan_identity_sha256: str
+    result_identity_sha256: str
 
 
 @dataclass(frozen=True)
@@ -399,6 +403,40 @@ def _plan_identity(payload: dict[str, object]) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
+
+
+def rootless_image_result_identity_sha256(
+    *,
+    plan_identity_sha256: str,
+    image_id: str,
+    dependency_lock_sha256: str,
+    docker_version: str,
+    docker_security_options: list[str] | tuple[str, ...],
+) -> str:
+    """Bind immutable build inputs to measured image, lock, and daemon identity."""
+
+    if re.fullmatch(r"[0-9a-f]{64}", plan_identity_sha256) is None:
+        raise RootlessImageError("result identity requires a valid plan identity")
+    if _IMAGE_ID.fullmatch(image_id) is None:
+        raise RootlessImageError("result identity requires an immutable image ID")
+    if re.fullmatch(r"[0-9a-f]{64}", dependency_lock_sha256) is None:
+        raise RootlessImageError("result identity requires a dependency-lock digest")
+    if not isinstance(docker_version, str) or not docker_version:
+        raise RootlessImageError("result identity requires a Docker version")
+    if (
+        not isinstance(docker_security_options, (list, tuple))
+        or not all(isinstance(value, str) for value in docker_security_options)
+        or "name=rootless" not in docker_security_options
+    ):
+        raise RootlessImageError("result identity requires rootless Docker identity")
+    payload = {
+        "plan_identity_sha256": plan_identity_sha256,
+        "image_id": image_id,
+        "dependency_lock_sha256": dependency_lock_sha256,
+        "docker_version": docker_version,
+        "docker_security_options": sorted(docker_security_options),
+    }
+    return _plan_identity(payload)
 
 
 def prepare_rootless_image_plan(
@@ -638,10 +676,7 @@ def execute_rootless_image_build(
         ) from exc
     docker_prefix = ("docker", "--host", docker_host)
     root = Path(output_root).expanduser().resolve()
-    final = root / plan.identity_sha256
     staging = root / f"{plan.identity_sha256}.partial"
-    if final.exists() or final.is_symlink():
-        raise RootlessImageError(f"existing image identity directory: {final}")
     if staging.exists() or staging.is_symlink():
         raise RootlessImageError(f"existing partial image identity directory: {staging}")
     local_base_tag: str | None = None
@@ -771,6 +806,7 @@ def execute_rootless_image_build(
         timeout_seconds=120,
         operation="dependency lock extraction",
     ).stdout
+    dependency_lock_sha256 = hashlib.sha256(dependency_lock).hexdigest()
     lock_path = staging / "dependency-lock.txt"
     lock_path.write_bytes(dependency_lock)
     lock_path.chmod(0o644)
@@ -785,8 +821,21 @@ def execute_rootless_image_build(
     timestamp = at or datetime.now(timezone.utc)
     if timestamp.tzinfo is None or timestamp.utcoffset() is None:
         raise RootlessImageError("build timestamp must be timezone-aware")
+    result_identity = rootless_image_result_identity_sha256(
+        plan_identity_sha256=plan.identity_sha256,
+        image_id=image_id,
+        dependency_lock_sha256=dependency_lock_sha256,
+        docker_version=docker_version,
+        docker_security_options=security_options,
+    )
+    final = root / result_identity
+    if final.exists() or final.is_symlink():
+        raise RootlessImageError(f"existing image result identity directory: {final}")
     manifest = {
         **plan.manifest_payload(),
+        "identity_kind": "measured-result",
+        "identity_sha256": result_identity,
+        "result_identity_sha256": result_identity,
         "image_id": image_id,
         "repo_digests": repo_digests,
         "build_tag": tag,
@@ -794,7 +843,7 @@ def execute_rootless_image_build(
         "local_base_image_id": plan.base_image_ref if local_base_tag else None,
         "docker_version": docker_version,
         "docker_security_options": security_options,
-        "dependency_lock_sha256": hashlib.sha256(dependency_lock).hexdigest(),
+        "dependency_lock_sha256": dependency_lock_sha256,
         "built_at": timestamp.astimezone(timezone.utc).isoformat(),
     }
     manifest_path = staging / "MANIFEST.json"
@@ -804,4 +853,6 @@ def execute_rootless_image_build(
         output_dir=final,
         manifest_path=final / "MANIFEST.json",
         image_id=image_id,
+        plan_identity_sha256=plan.identity_sha256,
+        result_identity_sha256=result_identity,
     )
