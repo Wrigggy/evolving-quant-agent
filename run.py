@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import json
 import os
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -30,7 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--levelb", action="store_true",
                       help="real mode: Level-B evolution (file-editing evolve agent edits the NexAU worker dir)")
     ap.add_argument("--benchmark", choices=("qfbench",), help="run a benchmark-specific evolution path")
-    ap.add_argument("--executor", choices=("e2b",), default="e2b")
+    ap.add_argument(
+        "--executor",
+        choices=("rootless-docker", "e2b"),
+        default="rootless-docker",
+    )
     ap.add_argument("--qfbench-root", type=Path)
     ap.add_argument(
         "--qfbench-manifest",
@@ -39,16 +44,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--template-manifest-dir", type=Path)
     ap.add_argument("--evolver-template-manifest", type=Path)
+    ap.add_argument("--rootless-config", type=Path)
+    ap.add_argument("--rootless-image-set-manifest", type=Path)
     ap.add_argument("--feedback-mode", choices=("control", "rich"))
     ap.add_argument("--feedback-manifest", type=Path)
     ap.add_argument("--verifier-criteria-map", type=Path)
     ap.add_argument("--run-id", help="stable run ID; required to resume a QFBench run")
-    ap.add_argument("--concurrency", type=int, default=8,
-                    help="QFBench task attempts evaluated concurrently")
+    ap.add_argument("--concurrency", type=int, default=None,
+                    help="deprecated alias for QFBench worker concurrency")
+    ap.add_argument("--worker-concurrency", type=int, default=None,
+                    help="QFBench worker-stage concurrency")
+    ap.add_argument("--verifier-concurrency", type=int, default=None,
+                    help="QFBench verifier-stage concurrency")
     ap.add_argument("--global-e2b-cap", type=int, default=12,
                     help="shared worker+verifier sandbox lease cap")
     ap.add_argument("--approve-external-run", action="store_true",
-                    help="acknowledge paid E2B use and public-task/model-provider data egress")
+                    help="acknowledge selected-backend compute and public-task/model-provider data egress")
     ap.add_argument("--allow-verifier-network", action="store_true",
                     help="canary only: allow verifier network while dependencies are not yet baked")
     ap.add_argument("--worker-no-internet", action="store_true",
@@ -65,8 +76,10 @@ def build_parser() -> argparse.ArgumentParser:
 def resolve_iterations(args) -> int:
     if args.benchmark == "qfbench":
         iterations = 3 if args.iters is None else args.iters
-        if iterations not in {3, 5}:
-            raise ValueError("QFBench pilot --iters must be 3 or 5")
+        allowed = {1, 3, 5} if args.executor == "rootless-docker" else {3, 5}
+        if iterations not in allowed:
+            choices = "1, 3, or 5" if 1 in allowed else "3 or 5"
+            raise ValueError(f"QFBench pilot --iters must be {choices}")
         return iterations
     return 4 if args.iters is None else args.iters
 
@@ -76,7 +89,7 @@ def estimate_qfbench_attempts(
     held_out_count: int,
     iterations: int,
 ) -> int:
-    if optimize_count < 1 or held_out_count < 1 or iterations not in {3, 5}:
+    if optimize_count < 1 or held_out_count < 1 or iterations not in {1, 3, 5}:
         raise ValueError("invalid QFBench attempt schedule")
     return optimize_count * (iterations + 1) + held_out_count * 2
 
@@ -213,15 +226,152 @@ def validate_qfbench_full_harness_args(args) -> None:
         return
     required = (
         ("feedback_mode", "--feedback-mode"),
-        ("evolver_template_manifest", "--evolver-template-manifest"),
         ("feedback_manifest", "--feedback-manifest"),
         ("verifier_criteria_map", "--verifier-criteria-map"),
     )
     for attribute, flag in required:
         if getattr(args, attribute, None) is None:
             raise ValueError(f"{flag} is required for QFBench full-harness evolution")
-    if args.executor != "e2b":
-        raise ValueError("QFBench full-harness evolver must run in E2B")
+    if args.executor == "rootless-docker":
+        for attribute, flag in (
+            ("rootless_config", "--rootless-config"),
+            ("rootless_image_set_manifest", "--rootless-image-set-manifest"),
+        ):
+            if getattr(args, attribute, None) is None:
+                raise ValueError(
+                    f"{flag} is required for rootless QFBench full-harness evolution"
+                )
+        if args.allow_verifier_network:
+            raise ValueError("rootless verifier network must remain disabled")
+        if args.worker_no_internet:
+            raise ValueError(
+                "--worker-no-internet is E2B-only; rootless workers use proxy-only egress"
+            )
+        if any(
+            getattr(args, name, None) is not None
+            for name in (
+                "template_manifest_dir",
+                "evolver_template_manifest",
+            )
+        ):
+            raise ValueError("rootless execution rejects E2B-only template manifests")
+        return
+    if args.evolver_template_manifest is None:
+        raise ValueError(
+            "--evolver-template-manifest is required for QFBench full-harness evolution"
+        )
+
+
+def resolve_qfbench_concurrency(args, *, config=None) -> tuple[int, int]:
+    """Resolve the compatibility alias into distinct worker/verifier limits."""
+
+    alias = getattr(args, "concurrency", None)
+    worker = getattr(args, "worker_concurrency", None)
+    verifier = getattr(args, "verifier_concurrency", None)
+    if alias is not None and worker is not None and alias != worker:
+        raise ValueError(
+            "conflicting worker concurrency values: --concurrency and "
+            "--worker-concurrency differ"
+        )
+    resolved_worker = worker if worker is not None else alias
+    if resolved_worker is None:
+        resolved_worker = getattr(config, "worker_concurrency", 8)
+    if verifier is None:
+        verifier = getattr(config, "verifier_concurrency", 3)
+    for name, value in (
+        ("worker concurrency", resolved_worker),
+        ("verifier concurrency", verifier),
+    ):
+        if type(value) is not int or value < 1:
+            raise ValueError(f"QFBench {name} must be positive")
+    return resolved_worker, verifier
+
+
+def qfbench_external_run_approval_text(executor: str) -> str:
+    if executor == "rootless-docker":
+        return "model-provider egress and self-hosted compute"
+    if executor == "e2b":
+        return "paid E2B and model-provider egress"
+    raise ValueError(f"unsupported QFBench executor {executor!r}")
+
+
+@dataclass(frozen=True)
+class _QFBenchRunPlan:
+    snapshot: object
+    run_id: str
+    iterations: int
+    estimated_attempts: int
+    contract_digest: str
+    admission_digest: str
+    task_manifest_digest: str
+    results_root: Path
+
+
+def _prepare_qfbench_run(args) -> _QFBenchRunPlan:
+    """Validate and resolve provider-neutral QFBench run inputs."""
+
+    from qea.benchmarks.qfbench import load_qfbench_snapshot
+    from qea.candidate_admission import AdmissionPolicy
+    from qea.evolution_feedback import feedback_contract_digest
+
+    if args.mock or args.real or args.levelb:
+        raise ValueError("--benchmark qfbench cannot be combined with legacy mode flags")
+    validate_qfbench_full_harness_args(args)
+    if args.qfbench_root is None:
+        raise ValueError("--qfbench-root is required for QFBench")
+    if args.resume and not args.run_id:
+        raise ValueError("--run-id is required with --resume")
+    iterations = resolve_iterations(args)
+    snapshot = load_qfbench_snapshot(
+        args.qfbench_root, manifest_path=args.qfbench_manifest
+    )
+    run_id = args.run_id or datetime.now(timezone.utc).strftime(
+        "qfbench-%Y%m%dT%H%M%SZ"
+    )
+    estimated_attempts = estimate_qfbench_attempts(
+        len(snapshot.optimize.tasks),
+        len(snapshot.held_out.tasks),
+        iterations,
+    )
+    contract_digest = feedback_contract_digest(
+        args.feedback_mode, args.feedback_manifest
+    )
+    admission_digest = AdmissionPolicy.qfbench_full(
+        forbidden_content=sorted(snapshot.held_out.task_ids)
+    ).digest()
+    task_manifest_digest = hashlib.sha256(
+        Path(args.qfbench_manifest).resolve().read_bytes()
+    ).hexdigest()
+    return _QFBenchRunPlan(
+        snapshot=snapshot,
+        run_id=run_id,
+        iterations=iterations,
+        estimated_attempts=estimated_attempts,
+        contract_digest=contract_digest,
+        admission_digest=admission_digest,
+        task_manifest_digest=task_manifest_digest,
+        results_root=Path(args.results_dir).resolve(),
+    )
+
+
+def _print_qfbench_plan(plan, args, *, backend: str) -> None:
+    snapshot = plan.snapshot
+    print("[qfbench] resolved pilot")
+    print(f"  backend: {backend}")
+    print(f"  feedback arm: {args.feedback_mode}")
+    print(f"  commit: {snapshot.commit}")
+    print(f"  optimize: {', '.join(snapshot.optimize.task_ids)}")
+    print(
+        "  promotion held-out (seed/final only): "
+        + ", ".join(snapshot.held_out.task_ids)
+    )
+    print(
+        f"  iterations: {plan.iterations}; "
+        f"official scoring attempts: {plan.estimated_attempts}"
+    )
+    print(f"  feedback contract: {plan.contract_digest}")
+    print(f"  admission policy: {plan.admission_digest}")
+    print(f"  output: {plan.results_root / plan.run_id}")
 
 
 def _load_dotenv(path: str = ".env") -> None:
@@ -257,10 +407,13 @@ def main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
 
-    _load_dotenv()
-
     if args.benchmark == "qfbench":
-        return _run_qfbench(args)
+        if args.executor == "e2b":
+            _load_dotenv()
+            return _run_qfbench_e2b(args)
+        return _run_qfbench_rootless(args)
+
+    _load_dotenv()
 
     iterations = resolve_iterations(args)
 
@@ -308,11 +461,109 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if rose else 1
 
 
-def _run_qfbench(args) -> int:
-    from qea.benchmarks.qfbench import load_qfbench_snapshot
-    from qea.candidate_admission import AdmissionPolicy
+def _run_qfbench_rootless(args) -> int:
+    from qea.loop_benchmark import (
+        BenchmarkEvolutionConfig,
+        run_benchmark_evolution,
+    )
+    from qea.rootless_full_harness import (
+        build_rootless_full_harness_runtime,
+        load_rootless_full_harness_config,
+        rootless_model_route_identity,
+    )
+
+    plan = _prepare_qfbench_run(args)
+    config = load_rootless_full_harness_config(args.rootless_config)
+    worker_concurrency, verifier_concurrency = resolve_qfbench_concurrency(
+        args, config=config
+    )
+    config = replace(
+        config,
+        worker_concurrency=worker_concurrency,
+        verifier_concurrency=verifier_concurrency,
+    )
+    _print_qfbench_plan(plan, args, backend="rootless-docker")
+    print("  verifier network: disabled")
+    print(f"  model upstream base: {config.upstream_base_url}")
+    print(f"  model caller prefix: {config.allowed_path_prefix}")
+    print(f"  model identity: {config.allowed_model}")
+    approval_surface = qfbench_external_run_approval_text("rootless-docker")
+    auto_approved = os.environ.get("QEA_PAID_EVAL_AUTO_APPROVE") == "1"
+    if not (args.approve_external_run or auto_approved):
+        print(
+            "  NOT STARTED: pass --approve-external-run to authorize "
+            + approval_surface
+        )
+        return 2
+    print(
+        "  execution approval: "
+        + ("standing auto-approval" if auto_approved else "explicit CLI approval")
+        + f" ({approval_surface})"
+    )
+
+    runtime = build_rootless_full_harness_runtime(
+        config=config,
+        image_set_manifest=args.rootless_image_set_manifest,
+        benchmark_commit=plan.snapshot.commit,
+        tasks=plan.snapshot.tasks,
+        run_id=plan.run_id,
+        results_root=plan.results_root,
+    )
+    try:
+        print(f"  runtime backend: {runtime.backend.backend_name}")
+        print(f"  image identity: {runtime.image_identity_digest}")
+        print(f"  scheduler identity: {runtime.scheduler_identity_digest}")
+        print(f"  runtime identity: {runtime.runtime_identity_digest}")
+
+        def secure_proposer(context):
+            return runtime.proposer.propose(
+                candidate_dir=context.candidate_dir,
+                evidence_dir=context.evidence,
+                evolver_dir=Path("qea/evolve_agent_full").resolve(),
+                diagnosis=context.diagnosis,
+                iteration=context.iteration,
+                run_id=plan.run_id,
+                run_dir=context.run_dir,
+            )
+
+        model_identity = rootless_model_route_identity(
+            upstream_base_url=config.upstream_base_url,
+            allowed_path_prefix=config.allowed_path_prefix,
+            allowed_model=config.allowed_model,
+        )
+        result = run_benchmark_evolution(
+            BenchmarkEvolutionConfig(
+                run_id=plan.run_id,
+                n_iters=plan.iterations,
+                results_dir=plan.results_root,
+                seed_worker_dir=Path("qea/worker_gdpval_weak"),
+                worker_concurrency=worker_concurrency,
+                verifier_concurrency=verifier_concurrency,
+                scheduler_identity_digest=runtime.scheduler_identity_digest,
+                resume=args.resume,
+                feedback_mode=args.feedback_mode,
+                feedback_contract_digest=plan.contract_digest,
+                public_rubric_path=args.feedback_manifest,
+                verifier_mapping_path=args.verifier_criteria_map,
+                admission_policy_digest=plan.admission_digest,
+                task_manifest_digest=plan.task_manifest_digest,
+                model_identity=model_identity,
+                template_identity_digest=runtime.runtime_identity_digest,
+            ),
+            optimize_tasks=plan.snapshot.optimize.tasks,
+            held_out_tasks=plan.snapshot.held_out.tasks,
+            benchmark_commit=plan.snapshot.commit,
+            evaluator=runtime.evaluator,
+            proposer=secure_proposer,
+        )
+        _print_qfbench(result, backend=runtime.backend.backend_name)
+        return 0
+    finally:
+        runtime.close()
+
+
+def _run_qfbench_e2b(args) -> int:
     from qea.e2b_lease import E2BLeasePool
-    from qea.evolution_feedback import feedback_contract_digest
     from qea.executors.e2b_evolver import (
         E2BEvolverConfig,
         E2BFullHarnessProposer,
@@ -324,28 +575,17 @@ def _run_qfbench(args) -> int:
         run_benchmark_evolution,
     )
 
-    if args.mock or args.real or args.levelb:
-        raise ValueError("--benchmark qfbench cannot be combined with legacy mode flags")
-    validate_qfbench_full_harness_args(args)
-    if args.qfbench_root is None:
-        raise ValueError("--qfbench-root is required for QFBench")
+    plan = _prepare_qfbench_run(args)
     if args.template_manifest_dir is None:
         raise ValueError("--template-manifest-dir is required for QFBench E2B")
-    if args.resume and not args.run_id:
-        raise ValueError("--run-id is required with --resume")
-    iterations = resolve_iterations(args)
-    if args.concurrency < 1 or args.global_e2b_cap < 1:
-        raise ValueError("QFBench concurrency and global E2B cap must be positive")
+    worker_concurrency, verifier_concurrency = resolve_qfbench_concurrency(args)
+    if args.global_e2b_cap < 1:
+        raise ValueError("QFBench global E2B cap must be positive")
 
-    snapshot = load_qfbench_snapshot(
-        args.qfbench_root, manifest_path=args.qfbench_manifest
-    )
-    run_id = args.run_id or datetime.now(timezone.utc).strftime("qfbench-%Y%m%dT%H%M%SZ")
-    estimated_attempts = estimate_qfbench_attempts(
-        len(snapshot.optimize.tasks),
-        len(snapshot.held_out.tasks),
-        iterations,
-    )
+    snapshot = plan.snapshot
+    run_id = plan.run_id
+    iterations = plan.iterations
+    estimated_attempts = plan.estimated_attempts
     worker_templates, verifier_templates = load_template_ids(
         args.template_manifest_dir,
         snapshot.tasks,
@@ -355,33 +595,19 @@ def _run_qfbench(args) -> int:
         args.evolver_template_manifest,
         benchmark_commit=snapshot.commit,
     )
-    contract_digest = feedback_contract_digest(
-        args.feedback_mode, args.feedback_manifest
-    )
-    admission_digest = AdmissionPolicy.qfbench_full(
-        forbidden_content=sorted(snapshot.held_out.task_ids)
-    ).digest()
-    task_manifest_digest = hashlib.sha256(
-        Path(args.qfbench_manifest).resolve().read_bytes()
-    ).hexdigest()
+    contract_digest = plan.contract_digest
+    admission_digest = plan.admission_digest
+    task_manifest_digest = plan.task_manifest_digest
     template_identity = template_set_identity_digest(
         args.template_manifest_dir,
         snapshot.tasks,
         args.evolver_template_manifest,
     )
     max_lifecycles = estimated_attempts * 2 + iterations
-    print("[qfbench] resolved pilot")
-    print(f"  feedback arm: {args.feedback_mode}")
-    print(f"  commit: {snapshot.commit}")
-    print(f"  optimize: {', '.join(snapshot.optimize.task_ids)}")
-    print(f"  promotion held-out (seed/final only): {', '.join(snapshot.held_out.task_ids)}")
-    print(f"  iterations: {iterations}; estimated task attempts: {estimated_attempts}")
+    _print_qfbench_plan(plan, args, backend="e2b")
     print(f"  maximum worker/verifier/evolver lifecycles: {max_lifecycles}")
-    print(f"  feedback contract: {contract_digest}")
-    print(f"  admission policy: {admission_digest}")
     print(f"  evolver template: {evolver_template} ({evolver_identity})")
     print(f"  task templates: {len(worker_templates)} worker + {len(verifier_templates)} verifier")
-    print(f"  output: {(Path(args.results_dir).resolve() / run_id)}")
     print(f"  verifier network: {'CANARY ENABLED' if args.allow_verifier_network else 'disabled'}")
     auto_approved = os.environ.get("QEA_PAID_EVAL_AUTO_APPROVE") == "1"
     if not (args.approve_external_run or auto_approved):
@@ -402,7 +628,7 @@ def _run_qfbench(args) -> int:
         "LLM_MODEL": os.environ.get("LLM_MODEL", "deepseek/deepseek-v4-pro"),
     }
 
-    results_root = Path(args.results_dir).resolve()
+    results_root = plan.results_root
     leases = E2BLeasePool(
         results_root / ".e2b-leases",
         max_leases=args.global_e2b_cap,
@@ -421,7 +647,8 @@ def _run_qfbench(args) -> int:
         executor=executor,
         verifier=verifier,
         model_env=model_env,
-        max_workers=args.concurrency,
+        worker_concurrency=worker_concurrency,
+        verifier_concurrency=verifier_concurrency,
     )
     evolver = E2BFullHarnessProposer(
         E2BEvolverConfig(template=evolver_template),
@@ -448,7 +675,8 @@ def _run_qfbench(args) -> int:
             n_iters=iterations,
             results_dir=results_root,
             seed_worker_dir=Path("qea/worker_gdpval_weak"),
-            concurrency=args.concurrency,
+            concurrency=worker_concurrency,
+            verifier_concurrency=verifier_concurrency,
             resume=args.resume,
             feedback_mode=args.feedback_mode,
             feedback_contract_digest=contract_digest,
@@ -465,12 +693,12 @@ def _run_qfbench(args) -> int:
         evaluator=evaluator,
         proposer=secure_proposer,
     )
-    _print_qfbench(result)
+    _print_qfbench(result, backend="e2b")
     return 0
 
 
-def _print_qfbench(result) -> None:
-    print(f"\n=== QFBench E2B evolution: {result.run_id} ===")
+def _print_qfbench(result, *, backend: str = "e2b") -> None:
+    print(f"\n=== QFBench {backend} evolution: {result.run_id} ===")
     print(f"  optimize domain-macro trajectory: {result.optimize_trajectory}")
     print(
         f"  promotion held-out: {result.held_out_seed.overall:.4f} -> "

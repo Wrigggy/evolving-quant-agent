@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -31,11 +33,30 @@ def test_qfbench_cli_parses_e2b_three_iteration_pilot():
     assert run.resolve_iterations(args) == 3
 
 
+def test_qfbench_full_harness_defaults_to_rootless_and_accepts_one_iteration():
+    import run
+
+    args = run.build_parser().parse_args([
+        "--benchmark", "qfbench",
+        "--rootless-config", "/tmp/rootless.json",
+        "--rootless-image-set-manifest", "/tmp/image-set.json",
+        "--feedback-mode", "rich",
+        "--feedback-manifest", "/tmp/feedback.json",
+        "--verifier-criteria-map", "/tmp/criteria.json",
+        "--iters", "1",
+    ])
+
+    assert args.executor == "rootless-docker"
+    assert args.rootless_config.name == "rootless.json"
+    assert args.rootless_image_set_manifest.name == "image-set.json"
+    assert run.resolve_iterations(args) == 1
+
+
 def test_qfbench_cli_rejects_four_iterations_but_legacy_defaults_to_four():
     import run
 
     qf = run.build_parser().parse_args(["--benchmark", "qfbench", "--iters", "4"])
-    with pytest.raises(ValueError, match="3 or 5"):
+    with pytest.raises(ValueError, match="1, 3, or 5"):
         run.resolve_iterations(qf)
 
     legacy = run.build_parser().parse_args(["--mock"])
@@ -46,6 +67,12 @@ def test_qfbench_30x5_estimates_140_official_attempts():
     import run
 
     assert run.estimate_qfbench_attempts(20, 10, 5) == 140
+
+
+def test_qfbench_30x1_estimates_60_official_attempts():
+    import run
+
+    assert run.estimate_qfbench_attempts(20, 10, 1) == 60
 
 
 @pytest.mark.parametrize(
@@ -68,6 +95,35 @@ def test_qfbench_full_harness_requires_explicit_arm_and_contract_files(
         "--feedback-manifest": "/tmp/feedback.json",
         "--verifier-criteria-map": "/tmp/mapping.json",
     }
+    argv = ["--benchmark", "qfbench", "--executor", "e2b"]
+    for flag, value in values.items():
+        if flag != omitted:
+            argv.extend([flag, value])
+    args = run.build_parser().parse_args(argv)
+
+    with pytest.raises(ValueError, match=message):
+        run.validate_qfbench_full_harness_args(args)
+
+
+@pytest.mark.parametrize(
+    ("omitted", "message"),
+    [
+        ("--rootless-config", "rootless-config"),
+        ("--rootless-image-set-manifest", "rootless-image-set-manifest"),
+    ],
+)
+def test_rootless_full_harness_requires_explicit_config_and_image_set(
+    omitted, message
+):
+    import run
+
+    values = {
+        "--rootless-config": "/tmp/rootless.json",
+        "--rootless-image-set-manifest": "/tmp/image-set.json",
+        "--feedback-mode": "control",
+        "--feedback-manifest": "/tmp/feedback.json",
+        "--verifier-criteria-map": "/tmp/mapping.json",
+    }
     argv = ["--benchmark", "qfbench"]
     for flag, value in values.items():
         if flag != omitted:
@@ -76,6 +132,250 @@ def test_qfbench_full_harness_requires_explicit_arm_and_contract_files(
 
     with pytest.raises(ValueError, match=message):
         run.validate_qfbench_full_harness_args(args)
+
+
+def test_rootless_rejects_verifier_network_and_e2b_only_manifests() -> None:
+    import run
+
+    common = [
+        "--benchmark", "qfbench",
+        "--rootless-config", "/tmp/rootless.json",
+        "--rootless-image-set-manifest", "/tmp/image-set.json",
+        "--feedback-mode", "control",
+        "--feedback-manifest", "/tmp/feedback.json",
+        "--verifier-criteria-map", "/tmp/mapping.json",
+    ]
+    network = run.build_parser().parse_args(common + ["--allow-verifier-network"])
+    with pytest.raises(ValueError, match="verifier network"):
+        run.validate_qfbench_full_harness_args(network)
+
+    templates = run.build_parser().parse_args(
+        common + ["--template-manifest-dir", "/tmp/e2b"]
+    )
+    with pytest.raises(ValueError, match="E2B-only"):
+        run.validate_qfbench_full_harness_args(templates)
+
+    worker_network = run.build_parser().parse_args(common + ["--worker-no-internet"])
+    with pytest.raises(ValueError, match="worker-no-internet"):
+        run.validate_qfbench_full_harness_args(worker_network)
+
+
+def test_qfbench_rootless_dispatch_never_loads_dotenv(monkeypatch) -> None:
+    import run
+
+    calls = []
+    monkeypatch.setattr(
+        run,
+        "_load_dotenv",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("dotenv read")),
+    )
+    monkeypatch.setattr(
+        run,
+        "_run_qfbench_rootless",
+        lambda args: calls.append(args.executor) or 0,
+        raising=False,
+    )
+
+    assert run.main(["--benchmark", "qfbench"]) == 0
+    assert calls == ["rootless-docker"]
+
+
+def test_qfbench_explicit_e2b_dispatch_loads_dotenv(monkeypatch) -> None:
+    import run
+
+    calls = []
+    monkeypatch.setattr(run, "_load_dotenv", lambda: calls.append("dotenv"))
+    monkeypatch.setattr(
+        run,
+        "_run_qfbench_e2b",
+        lambda args: calls.append(args.executor) or 0,
+        raising=False,
+    )
+
+    assert run.main(["--benchmark", "qfbench", "--executor", "e2b"]) == 0
+    assert calls == ["dotenv", "e2b"]
+
+
+def test_rootless_concurrency_uses_config_with_legacy_worker_alias() -> None:
+    import run
+
+    config = SimpleNamespace(worker_concurrency=8, verifier_concurrency=4)
+    defaults = run.build_parser().parse_args(["--benchmark", "qfbench"])
+    assert run.resolve_qfbench_concurrency(defaults, config=config) == (8, 4)
+
+    alias = run.build_parser().parse_args(
+        ["--benchmark", "qfbench", "--concurrency", "6"]
+    )
+    assert run.resolve_qfbench_concurrency(alias, config=config) == (6, 4)
+
+    explicit = run.build_parser().parse_args([
+        "--benchmark", "qfbench",
+        "--worker-concurrency", "5",
+        "--verifier-concurrency", "2",
+    ])
+    assert run.resolve_qfbench_concurrency(explicit, config=config) == (5, 2)
+
+    conflict = run.build_parser().parse_args([
+        "--benchmark", "qfbench",
+        "--concurrency", "5",
+        "--worker-concurrency", "6",
+    ])
+    with pytest.raises(ValueError, match="conflicting worker concurrency"):
+        run.resolve_qfbench_concurrency(conflict, config=config)
+
+
+def test_rootless_approval_summary_names_real_cost_surfaces() -> None:
+    import run
+
+    summary = run.qfbench_external_run_approval_text("rootless-docker")
+    assert "model-provider egress" in summary
+    assert "self-hosted compute" in summary
+    assert "E2B" not in summary
+
+    assert "paid E2B" in run.qfbench_external_run_approval_text("e2b")
+
+
+@dataclass(frozen=True)
+class _CliRootlessConfig:
+    worker_concurrency: int = 8
+    verifier_concurrency: int = 4
+    upstream_base_url: str = "https://openrouter.ai/api/v1"
+    allowed_path_prefix: str = "/v1"
+    allowed_model: str = "provider/model"
+
+
+def _rootless_plan():
+    tasks = tuple(SimpleNamespace(task_id=f"task-{index}") for index in range(30))
+    snapshot = SimpleNamespace(
+        commit="0" * 40,
+        tasks=tasks,
+        optimize=SimpleNamespace(tasks=tasks[:20], task_ids=tuple(t.task_id for t in tasks[:20])),
+        held_out=SimpleNamespace(tasks=tasks[20:], task_ids=tuple(t.task_id for t in tasks[20:])),
+    )
+    return SimpleNamespace(
+        snapshot=snapshot,
+        run_id="rootless-cli",
+        iterations=1,
+        estimated_attempts=60,
+        contract_digest="1" * 64,
+        admission_digest="2" * 64,
+        task_manifest_digest="3" * 64,
+        results_root=Path("/tmp/results"),
+    )
+
+
+def test_rootless_dry_run_reports_60_attempts_without_e2b_or_key_reads(
+    monkeypatch, capsys
+) -> None:
+    import qea.rootless_full_harness as rootless_full_harness
+    import run
+
+    class GuardedEnvironment(dict):
+        def get(self, key, default=None):
+            if key in {"E2B_API_KEY", "OPENROUTER_API_KEY", "LLM_API_KEY"}:
+                raise AssertionError(f"forbidden environment key read: {key}")
+            return super().get(key, default)
+
+    monkeypatch.setattr(run, "_prepare_qfbench_run", lambda args: _rootless_plan(), raising=False)
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "load_rootless_full_harness_config",
+        lambda path: _CliRootlessConfig(),
+    )
+    monkeypatch.setattr(run.os, "environ", GuardedEnvironment())
+    args = run.build_parser().parse_args([
+        "--benchmark", "qfbench",
+        "--rootless-config", "/tmp/rootless.json",
+        "--rootless-image-set-manifest", "/tmp/image-set.json",
+        "--feedback-mode", "rich",
+        "--feedback-manifest", "/tmp/feedback.json",
+        "--verifier-criteria-map", "/tmp/criteria.json",
+        "--iters", "1",
+    ])
+
+    assert run._run_qfbench_rootless(args) == 2
+    output = capsys.readouterr().out
+    assert "60" in output
+    assert "rootless-docker" in output
+    assert "model-provider egress and self-hosted compute" in output
+    assert "E2B" not in output
+    assert "upstream base: https://openrouter.ai/api/v1" in output
+    assert "caller prefix: /v1" in output
+    assert "https://openrouter.ai/api/v1/v1" not in output
+
+
+def test_approved_rootless_path_binds_runtime_and_scheduler_identities(
+    monkeypatch
+) -> None:
+    import qea.loop_benchmark as loop_benchmark
+    import qea.rootless_full_harness as rootless_full_harness
+    import run
+
+    config = _CliRootlessConfig()
+    runtime = SimpleNamespace(
+        backend=SimpleNamespace(backend_name="rootless-docker"),
+        evaluator=object(),
+        proposer=SimpleNamespace(propose=lambda **kwargs: object()),
+        image_identity_digest="4" * 64,
+        scheduler_identity_digest="5" * 64,
+        runtime_identity_digest="6" * 64,
+        close=lambda: None,
+    )
+    captured = {}
+    class GuardedEnvironment(dict):
+        def get(self, key, default=None):
+            if key in {"E2B_API_KEY", "OPENROUTER_API_KEY", "LLM_API_KEY"}:
+                raise AssertionError(f"forbidden environment key read: {key}")
+            return super().get(key, default)
+
+    monkeypatch.setattr(run.os, "environ", GuardedEnvironment())
+    monkeypatch.setattr(run, "_prepare_qfbench_run", lambda args: _rootless_plan(), raising=False)
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "load_rootless_full_harness_config",
+        lambda path: config,
+    )
+    def fake_factory(**kwargs):
+        captured["factory"] = kwargs
+        return runtime
+
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "build_rootless_full_harness_runtime",
+        fake_factory,
+    )
+
+    def fake_run(configuration, **kwargs):
+        captured["configuration"] = configuration
+        captured["runner"] = kwargs
+        return SimpleNamespace(run_id="rootless-cli")
+
+    monkeypatch.setattr(loop_benchmark, "run_benchmark_evolution", fake_run)
+    monkeypatch.setattr(run, "_print_qfbench", lambda result, **kwargs: None)
+    args = run.build_parser().parse_args([
+        "--benchmark", "qfbench",
+        "--rootless-config", "/tmp/rootless.json",
+        "--rootless-image-set-manifest", "/tmp/image-set.json",
+        "--feedback-mode", "rich",
+        "--feedback-manifest", "/tmp/feedback.json",
+        "--verifier-criteria-map", "/tmp/criteria.json",
+        "--iters", "1",
+        "--worker-concurrency", "6",
+        "--verifier-concurrency", "2",
+        "--approve-external-run",
+    ])
+
+    assert run._run_qfbench_rootless(args) == 0
+    assert captured["factory"]["config"].worker_concurrency == 6
+    assert captured["factory"]["config"].verifier_concurrency == 2
+    evolution_config = captured["configuration"]
+    assert evolution_config.worker_concurrency == 6
+    assert evolution_config.verifier_concurrency == 2
+    assert evolution_config.scheduler_identity_digest == "5" * 64
+    assert evolution_config.template_identity_digest == "6" * 64
+    assert len(evolution_config.model_identity) == 64
+    assert "https://" not in evolution_config.model_identity
+    assert captured["runner"]["evaluator"] is runtime.evaluator
 
 
 def test_load_evolver_template_requires_published_matching_identity(tmp_path):

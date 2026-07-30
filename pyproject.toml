@@ -40,6 +40,12 @@ qfbench = [
     "e2b==2.30.0",
 ]
 
+# Self-hosted rootless coordinator. NexAU lives in immutable role images and
+# E2B remains confined to the explicit legacy `qfbench` extra above.
+qfbench-rootless = [
+    "PyYAML>=6.0",
+]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
