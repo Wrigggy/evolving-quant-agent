@@ -6,8 +6,11 @@ import hashlib
 import http.client
 import json
 import os
+import re
 import stat
 import tempfile
+import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -35,6 +38,26 @@ _TOKEN_PATH = "/run/qea-secrets/model-token"
 _MAX_TOKEN_BYTES = 16 * 1024
 _BUFFER_SIZE = 64 * 1024
 _ALLOWED_METHODS = frozenset({"GET", "POST"})
+_AUDIT_STATES = frozenset({"not_accepted", "completed", "quarantined"})
+_AUDIT_KEYS = frozenset(
+    {
+        "schema_version",
+        "request_identity_sha256",
+        "model",
+        "started_at",
+        "finished_at",
+        "latency_ms",
+        "request_state",
+        "upstream_status_code",
+        "provider_request_id",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "provider_cost_usd",
+        "failure_class",
+    }
+)
+_PROVIDER_REQUEST_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,511}\Z")
 
 
 class ModelProxyError(RuntimeError):
@@ -104,15 +127,15 @@ def _unsafe_path(value: str) -> bool:
     return any(part in {"", ".", ".."} for part in path.parts[1:])
 
 
-def _read_token(path: Path) -> str:
+def _read_token_bytes(path: Path) -> bytes:
     try:
         metadata = path.lstat()
     except OSError as exc:
         raise ModelProxyError("token file is unavailable") from exc
     if path.is_symlink() or not stat.S_ISREG(metadata.st_mode):
         raise ModelProxyError("token file must be a regular non-symlink file")
-    if stat.S_IMODE(metadata.st_mode) != 0o600:
-        raise ModelProxyError("token file must have exact mode 600")
+    if stat.S_IMODE(metadata.st_mode) & 0o077:
+        raise ModelProxyError("token file must have no group or other permission bits")
     if hasattr(os, "getuid") and metadata.st_uid != os.getuid():
         raise ModelProxyError("token file must be owned by the proxy user")
     if metadata.st_size > _MAX_TOKEN_BYTES:
@@ -127,9 +150,98 @@ def _read_token(path: Path) -> str:
     if not payload or any(value < 0x21 or value > 0x7E for value in payload):
         raise ModelProxyError("token file must contain one printable credential")
     try:
-        return payload.decode("ascii")
+        payload.decode("ascii")
     except UnicodeDecodeError as exc:
         raise ModelProxyError("token file must contain one printable credential") from exc
+    return payload
+
+
+def _read_token(path: Path) -> str:
+    return _read_token_bytes(path).decode("ascii")
+
+
+def _validate_model(value: object) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 256
+        or any(ord(character) < 0x21 or ord(character) > 0x7E for character in value)
+    ):
+        raise ModelProxyError("allowed model must be one bounded printable identity")
+    return value
+
+
+def _validate_audit_path(value: Path | str) -> Path:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        raise ModelProxyError("audit file must use an absolute private path")
+    parent = path.parent
+    if parent.is_symlink() or not parent.is_dir():
+        raise ModelProxyError("audit file parent must be an existing non-symlink directory")
+    if path.exists() or path.is_symlink():
+        try:
+            metadata = path.lstat()
+        except OSError as exc:
+            raise ModelProxyError("audit file is unavailable") from exc
+        if path.is_symlink() or not stat.S_ISREG(metadata.st_mode):
+            raise ModelProxyError("audit file must be a regular non-symlink file")
+        if hasattr(os, "getuid") and metadata.st_uid != os.getuid():
+            raise ModelProxyError("audit file must be owned by the proxy user")
+        if stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise ModelProxyError("audit file must have no group or other permission bits")
+    return path
+
+
+def _open_private_audit(path: Path) -> int:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags, 0o600)
+    except OSError as exc:
+        raise ModelProxyError("audit file cannot be opened safely") from exc
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ModelProxyError("audit file must be regular")
+        if hasattr(os, "getuid") and metadata.st_uid != os.getuid():
+            raise ModelProxyError("audit file must be owned by the proxy user")
+        if stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise ModelProxyError("audit file must have no group or other permission bits")
+        os.fchmod(descriptor, 0o600)
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _ensure_private_audit(path: Path) -> None:
+    descriptor = _open_private_audit(path)
+    os.close(descriptor)
+
+
+def _append_audit(
+    path: Path,
+    record: Mapping[str, object],
+    *,
+    lock: threading.Lock,
+) -> None:
+    if set(record) != _AUDIT_KEYS or record.get("schema_version") != 1:
+        raise ModelProxyError("audit record has an unsafe schema")
+    if record.get("request_state") not in _AUDIT_STATES:
+        raise ModelProxyError("audit record has an unsafe request state")
+    encoded = (
+        json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode("utf-8")
+    with lock:
+        descriptor = _open_private_audit(path)
+        try:
+            written = os.write(descriptor, encoded)
+            if written != len(encoded):
+                raise ModelProxyError("audit record write was incomplete")
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
 
 @dataclass(frozen=True)
@@ -140,7 +252,9 @@ class ModelProxyConfig:
     listen_port: int
     upstream_base_url: str
     allowed_path_prefix: str
+    allowed_model: str
     token_file: Path | str
+    audit_file: Path | str
     max_request_bytes: int = 8 * 1024 * 1024
     max_response_bytes: int = 64 * 1024 * 1024
     connect_timeout_seconds: float = 10.0
@@ -155,9 +269,11 @@ class ModelProxyConfig:
         object.__setattr__(
             self, "allowed_path_prefix", _validate_prefix(self.allowed_path_prefix)
         )
+        object.__setattr__(self, "allowed_model", _validate_model(self.allowed_model))
         token_path = Path(self.token_file).expanduser()
         _read_token(token_path)
         object.__setattr__(self, "token_file", token_path)
+        object.__setattr__(self, "audit_file", _validate_audit_path(self.audit_file))
         for name in ("max_request_bytes", "max_response_bytes"):
             value = getattr(self, name)
             if type(value) is not int or value <= 0:
@@ -265,11 +381,14 @@ class ModelProxySandboxPlan:
     upstream_base_url: str
     allowed_path_prefix: str
     listen_port: int
+    allowed_model: str | None = None
+    audit_path: str | None = None
+    network_scope: str | None = None
 
     def config_payload(self) -> dict[str, object]:
         """Return the public config uploaded before the token appears."""
 
-        return {
+        payload: dict[str, object] = {
             "listen_host": "0.0.0.0",
             "listen_port": self.listen_port,
             "upstream_base_url": self.upstream_base_url,
@@ -279,6 +398,10 @@ class ModelProxySandboxPlan:
             "connect_timeout_seconds": 10.0,
             "read_timeout_seconds": 300.0,
         }
+        if self.allowed_model is not None:
+            payload["allowed_model"] = self.allowed_model
+            payload["audit_file"] = self.audit_path
+        return payload
 
     def public_payload(self) -> dict[str, object]:
         return {
@@ -294,6 +417,7 @@ class ModelProxySandboxPlan:
                 "pids_limit": self.spec.pids_limit,
                 "timeout_seconds": self.spec.timeout_seconds,
                 "network_policy": self.spec.network_policy,
+                "network_scope": self.spec.network_scope,
                 "environment": dict(self.spec.environment),
                 "writable_tmpfs_mb": dict(self.spec.writable_tmpfs_mb),
                 "spec_sha256": self.spec.spec_sha256,
@@ -303,6 +427,8 @@ class ModelProxySandboxPlan:
             "upstream_base_url": self.upstream_base_url,
             "allowed_path_prefix": self.allowed_path_prefix,
             "listen_port": self.listen_port,
+            "allowed_model": self.allowed_model,
+            "audit_path": self.audit_path,
         }
 
 
@@ -310,6 +436,7 @@ def build_model_proxy_sandbox_plan(
     *,
     run_id: str,
     attempt_id: str,
+    task_id: str = "model-proxy",
     image_ref: str,
     upstream_base_url: str,
     allowed_path_prefix: str,
@@ -318,6 +445,10 @@ def build_model_proxy_sandbox_plan(
     memory_mb: int,
     pids_limit: int,
     timeout_seconds: int,
+    network_scope: str | None = None,
+    allowed_model: str | None = None,
+    audit_path: str | None = None,
+    writable_tmpfs_mb: Mapping[str, int] | None = None,
 ) -> ModelProxySandboxPlan:
     """Build a proxy plan that has no API-key argument, env value, or label."""
 
@@ -325,11 +456,22 @@ def build_model_proxy_sandbox_plan(
     prefix = _validate_prefix(allowed_path_prefix)
     if type(listen_port) is not int or not 1 <= listen_port <= 65535:
         raise ModelProxyError("proxy plan listener port is invalid")
+    supplied_policy = (network_scope, allowed_model, audit_path)
+    if any(value is not None for value in supplied_policy) and any(
+        value is None for value in supplied_policy
+    ):
+        raise ModelProxyError(
+            "network_scope, allowed_model, and audit_path must be supplied together"
+        )
+    if allowed_model is not None:
+        allowed_model = _validate_model(allowed_model)
+        if not isinstance(audit_path, str) or not audit_path.startswith("/"):
+            raise ModelProxyError("proxy plan audit path must be absolute")
     spec = SandboxSpec(
         role="proxy",
         run_id=run_id,
         attempt_id=attempt_id,
-        task_id="model-proxy",
+        task_id=task_id,
         image_ref=image_ref,
         cpu_count=cpu_count,
         memory_mb=memory_mb,
@@ -337,10 +479,15 @@ def build_model_proxy_sandbox_plan(
         timeout_seconds=timeout_seconds,
         network_policy="proxy-outbound",
         environment={},
-        writable_tmpfs_mb={
-            "/run/qea-secrets": 1,
-            "/tmp": 64,
-        },
+        writable_tmpfs_mb=(
+            {
+                "/run/qea-secrets": 1,
+                "/tmp": 64,
+            }
+            if writable_tmpfs_mb is None
+            else writable_tmpfs_mb
+        ),
+        network_scope=network_scope,
     )
     argv = (
         "/usr/local/bin/python3",
@@ -363,6 +510,9 @@ def build_model_proxy_sandbox_plan(
         upstream_base_url=upstream_base_url,
         allowed_path_prefix=prefix,
         listen_port=listen_port,
+        allowed_model=allowed_model,
+        audit_path=audit_path,
+        network_scope=network_scope,
     )
 
 
@@ -450,6 +600,8 @@ class _ProxyPolicy:
     upstream: _Upstream
     prefix: str
     token: str
+    allowed_model: str
+    audit_file: Path
     max_request_bytes: int
     max_response_bytes: int
     connect_timeout_seconds: float
@@ -488,12 +640,68 @@ def _filtered_response_headers(headers) -> tuple[tuple[str, str], ...]:
     )
 
 
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _bounded_nonnegative_integer(value: object) -> int | None:
+    if type(value) is int and 0 <= value <= 10**12:
+        return value
+    return None
+
+
+def _bounded_nonnegative_cost(value: object) -> int | float | None:
+    if (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and 0 <= value <= 10**9
+    ):
+        return value
+    return None
+
+
+def _response_usage(
+    payload: bytes,
+) -> tuple[int | None, int | None, int | None, int | float | None]:
+    try:
+        decoded = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        return None, None, None, None
+    if not isinstance(decoded, dict) or not isinstance(decoded.get("usage"), dict):
+        return None, None, None, None
+    usage = decoded["usage"]
+    input_tokens = _bounded_nonnegative_integer(
+        usage.get("prompt_tokens", usage.get("input_tokens"))
+    )
+    output_tokens = _bounded_nonnegative_integer(
+        usage.get("completion_tokens", usage.get("output_tokens"))
+    )
+    total_tokens = _bounded_nonnegative_integer(usage.get("total_tokens"))
+    cost = _bounded_nonnegative_cost(
+        usage.get("cost", usage.get("provider_cost_usd"))
+    )
+    return input_tokens, output_tokens, total_tokens, cost
+
+
+def _provider_request_id(headers, *, forbidden: str) -> str | None:
+    for name in ("X-Request-Id", "X-OpenAI-Request-Id", "X-OpenRouter-Request-Id"):
+        value = headers.get(name)
+        if (
+            isinstance(value, str)
+            and _PROVIDER_REQUEST_ID.fullmatch(value) is not None
+            and forbidden not in value
+        ):
+            return value
+    return None
+
+
 class _ModelProxyServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
     def __init__(self, address, policy: _ProxyPolicy) -> None:
         self.policy = policy
+        self.audit_lock = threading.Lock()
         super().__init__(address, _ModelProxyHandler)
 
 
@@ -575,6 +783,54 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             timeout=policy.connect_timeout_seconds,
         )
 
+    def _request_identity(self, target: str, body: bytes) -> str:
+        digest = hashlib.sha256()
+        digest.update(self.command.encode("ascii"))
+        digest.update(b"\x00")
+        digest.update(target.encode("utf-8"))
+        digest.update(b"\x00")
+        digest.update(body)
+        return digest.hexdigest()
+
+    def _audit(
+        self,
+        *,
+        request_identity_sha256: str,
+        model: str | None,
+        started_at: str,
+        started_monotonic: float,
+        request_state: str,
+        upstream_status_code: int | None = None,
+        provider_request_id: str | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        total_tokens: int | None = None,
+        provider_cost_usd: int | float | None = None,
+        failure_class: str | None = None,
+    ) -> None:
+        policy: _ProxyPolicy = self.server.policy
+        elapsed = max(0.0, time.monotonic() - started_monotonic)
+        _append_audit(
+            policy.audit_file,
+            {
+                "schema_version": 1,
+                "request_identity_sha256": request_identity_sha256,
+                "model": model,
+                "started_at": started_at,
+                "finished_at": _utc_timestamp(),
+                "latency_ms": round(elapsed * 1000, 3),
+                "request_state": request_state,
+                "upstream_status_code": upstream_status_code,
+                "provider_request_id": provider_request_id,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens,
+                "provider_cost_usd": provider_cost_usd,
+                "failure_class": failure_class,
+            },
+            lock=self.server.audit_lock,
+        )
+
     def _proxy(self) -> None:
         policy: _ProxyPolicy = self.server.policy
         if self.command not in _ALLOWED_METHODS:
@@ -589,6 +845,56 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
         body = self._read_body(policy)
         if body is None:
             return
+        request_identity = self._request_identity(target, body)
+        started_at = _utc_timestamp()
+        started_monotonic = time.monotonic()
+        try:
+            request_payload = json.loads(body)
+        except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+            self._audit(
+                request_identity_sha256=request_identity,
+                model=None,
+                started_at=started_at,
+                started_monotonic=started_monotonic,
+                request_state="not_accepted",
+                failure_class="policy_rejection",
+            )
+            self._reject(400, "invalid_json")
+            return
+        if not isinstance(request_payload, dict):
+            self._audit(
+                request_identity_sha256=request_identity,
+                model=None,
+                started_at=started_at,
+                started_monotonic=started_monotonic,
+                request_state="not_accepted",
+                failure_class="policy_rejection",
+            )
+            self._reject(400, "invalid_json")
+            return
+        requested_model = request_payload.get("model")
+        if requested_model is None:
+            self._audit(
+                request_identity_sha256=request_identity,
+                model=None,
+                started_at=started_at,
+                started_monotonic=started_monotonic,
+                request_state="not_accepted",
+                failure_class="policy_rejection",
+            )
+            self._reject(400, "model_required")
+            return
+        if requested_model != policy.allowed_model:
+            self._audit(
+                request_identity_sha256=request_identity,
+                model=None,
+                started_at=started_at,
+                started_monotonic=started_monotonic,
+                request_state="not_accepted",
+                failure_class="policy_rejection",
+            )
+            self._reject(400, "model_not_allowed")
+            return
         headers = _filtered_request_headers(self.headers, policy, len(body))
         connection = self._open_upstream(policy)
         spool = tempfile.SpooledTemporaryFile(
@@ -596,7 +902,11 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
         )
         response = None
         total = 0
+        request_transmission_started = False
+        audit_written = False
         try:
+            connection.connect()
+            request_transmission_started = True
             connection.request(self.command, target, body=body, headers=headers)
             if connection.sock is not None:
                 connection.sock.settimeout(policy.read_timeout_seconds)
@@ -607,6 +917,19 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                 or token_bytes in value.encode("utf-8", errors="replace")
                 for name, value in response.headers.items()
             ):
+                self._audit(
+                    request_identity_sha256=request_identity,
+                    model=policy.allowed_model,
+                    started_at=started_at,
+                    started_monotonic=started_monotonic,
+                    request_state="quarantined",
+                    upstream_status_code=response.status,
+                    provider_request_id=_provider_request_id(
+                        response.headers, forbidden=policy.token
+                    ),
+                    failure_class="unsafe_upstream_response",
+                )
+                audit_written = True
                 self._reject(502, "credential_echo")
                 return
             raw_length = response.getheader("Content-Length")
@@ -614,9 +937,35 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                 try:
                     declared = int(raw_length)
                 except ValueError:
+                    self._audit(
+                        request_identity_sha256=request_identity,
+                        model=policy.allowed_model,
+                        started_at=started_at,
+                        started_monotonic=started_monotonic,
+                        request_state="quarantined",
+                        upstream_status_code=response.status,
+                        provider_request_id=_provider_request_id(
+                            response.headers, forbidden=policy.token
+                        ),
+                        failure_class="invalid_upstream_response",
+                    )
+                    audit_written = True
                     self._reject(502, "invalid_upstream_length")
                     return
                 if declared < 0 or declared > policy.max_response_bytes:
+                    self._audit(
+                        request_identity_sha256=request_identity,
+                        model=policy.allowed_model,
+                        started_at=started_at,
+                        started_monotonic=started_monotonic,
+                        request_state="quarantined",
+                        upstream_status_code=response.status,
+                        provider_request_id=_provider_request_id(
+                            response.headers, forbidden=policy.token
+                        ),
+                        failure_class="upstream_response_limit",
+                    )
+                    audit_written = True
                     self._reject(502, "response_limit")
                     return
             overlap = b""
@@ -626,6 +975,19 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                     break
                 combined = overlap + chunk
                 if token_bytes in combined:
+                    self._audit(
+                        request_identity_sha256=request_identity,
+                        model=policy.allowed_model,
+                        started_at=started_at,
+                        started_monotonic=started_monotonic,
+                        request_state="quarantined",
+                        upstream_status_code=response.status,
+                        provider_request_id=_provider_request_id(
+                            response.headers, forbidden=policy.token
+                        ),
+                        failure_class="unsafe_upstream_response",
+                    )
+                    audit_written = True
                     self._reject(502, "credential_echo")
                     return
                 overlap = (
@@ -635,10 +997,47 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                 )
                 total += len(chunk)
                 if total > policy.max_response_bytes:
+                    self._audit(
+                        request_identity_sha256=request_identity,
+                        model=policy.allowed_model,
+                        started_at=started_at,
+                        started_monotonic=started_monotonic,
+                        request_state="quarantined",
+                        upstream_status_code=response.status,
+                        provider_request_id=_provider_request_id(
+                            response.headers, forbidden=policy.token
+                        ),
+                        failure_class="upstream_response_limit",
+                    )
+                    audit_written = True
                     self._reject(502, "response_limit")
                     return
                 spool.write(chunk)
             spool.seek(0)
+            response_payload = spool.read()
+            spool.seek(0)
+            input_tokens, output_tokens, total_tokens, provider_cost = (
+                _response_usage(response_payload)
+            )
+            self._audit(
+                request_identity_sha256=request_identity,
+                model=policy.allowed_model,
+                started_at=started_at,
+                started_monotonic=started_monotonic,
+                request_state="completed",
+                upstream_status_code=response.status,
+                provider_request_id=_provider_request_id(
+                    response.headers, forbidden=policy.token
+                ),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+                provider_cost_usd=provider_cost,
+                failure_class=(
+                    "provider_http_error" if response.status >= 400 else None
+                ),
+            )
+            audit_written = True
             self.send_response(response.status)
             for name, value in _filtered_response_headers(response.headers):
                 self.send_header(name, value)
@@ -650,6 +1049,23 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                     break
                 self.wfile.write(chunk)
         except (OSError, TimeoutError, http.client.HTTPException):
+            if not audit_written:
+                self._audit(
+                    request_identity_sha256=request_identity,
+                    model=policy.allowed_model,
+                    started_at=started_at,
+                    started_monotonic=started_monotonic,
+                    request_state=(
+                        "quarantined"
+                        if request_transmission_started
+                        else "not_accepted"
+                    ),
+                    failure_class=(
+                        "post_accept_transport"
+                        if request_transmission_started
+                        else "pre_accept_transport"
+                    ),
+                )
             if not self.wfile.closed:
                 self._reject(502, "upstream_failure")
         finally:
@@ -673,10 +1089,14 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
 def create_proxy_server(config: ModelProxyConfig) -> ThreadingHTTPServer:
     """Create but do not start a no-logging fixed-upstream proxy server."""
 
+    audit_file = Path(config.audit_file)
+    _ensure_private_audit(audit_file)
     policy = _ProxyPolicy(
         upstream=_parse_upstream(config.upstream_base_url),
         prefix=config.allowed_path_prefix,
         token=_read_token(Path(config.token_file)),
+        allowed_model=config.allowed_model,
+        audit_file=audit_file,
         max_request_bytes=config.max_request_bytes,
         max_response_bytes=config.max_response_bytes,
         connect_timeout_seconds=float(config.connect_timeout_seconds),

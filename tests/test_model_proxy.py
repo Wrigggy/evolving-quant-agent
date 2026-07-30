@@ -1,6 +1,7 @@
 import http.client
 import json
 import os
+import signal
 import socket
 import threading
 from datetime import datetime, timezone
@@ -33,11 +34,28 @@ class UpstreamHandler(BaseHTTPRequestHandler):
             payload = b"x" * 128
         else:
             payload = json.dumps(
-                {"ok": True, "chunks": ["one", "two", "three"]},
+                {
+                    "ok": True,
+                    "chunks": ["one", "two", "three"],
+                    "usage": {
+                        "prompt_tokens": 11,
+                        "completion_tokens": 7,
+                        "total_tokens": 18,
+                        "cost": 0.00125,
+                    },
+                },
                 sort_keys=True,
             ).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        self.send_header(
+            "X-Request-Id",
+            (
+                f"provider-{REAL_TOKEN}"
+                if self.path.endswith("/echo-token-header")
+                else "provider-request-fixture-001"
+            ),
+        )
         self.send_header("Connection", "keep-alive, X-Upstream-Remove")
         self.send_header("X-Upstream-Remove", "secret-hop")
         self.send_header("Content-Length", str(len(payload)))
@@ -79,8 +97,10 @@ def _start_proxy(tmp_path, upstream, **changes):
             f"http://127.0.0.1:{upstream.server_address[1]}/api/v1"
         ),
         "allowed_path_prefix": "/v1",
+        "allowed_model": "fixture",
         "token_file": _token_file(tmp_path),
-        "max_request_bytes": 64,
+        "audit_file": tmp_path / "proxy-audit.jsonl",
+        "max_request_bytes": 512,
         "max_response_bytes": 256,
         "connect_timeout_seconds": 2.0,
         "read_timeout_seconds": 2.0,
@@ -92,7 +112,13 @@ def _start_proxy(tmp_path, upstream, **changes):
     return server, thread
 
 
-def _request(proxy, method="POST", path="/v1/chat/completions", body=b"{}", headers=None):
+def _request(
+    proxy,
+    method="POST",
+    path="/v1/chat/completions",
+    body=b'{"model":"fixture"}',
+    headers=None,
+):
     connection = http.client.HTTPConnection(
         "127.0.0.1", proxy.server_address[1], timeout=3
     )
@@ -117,6 +143,39 @@ def _stop(server, thread):
     assert not thread.is_alive()
 
 
+def _read_audit(tmp_path):
+    path = tmp_path / "proxy-audit.jsonl"
+    return [json.loads(line) for line in path.read_text().splitlines()]
+
+
+def _start_disconnect_upstream():
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    captured = []
+
+    def receive_then_disconnect():
+        connection, _ = listener.accept()
+        with connection:
+            payload = b""
+            while b"\r\n\r\n" not in payload:
+                payload += connection.recv(4096)
+            headers, body = payload.split(b"\r\n\r\n", 1)
+            length = 0
+            for line in headers.split(b"\r\n")[1:]:
+                name, value = line.split(b":", 1)
+                if name.lower() == b"content-length":
+                    length = int(value.strip())
+            while len(body) < length:
+                body += connection.recv(4096)
+            captured.append(headers + b"\r\n\r\n" + body)
+        listener.close()
+
+    thread = threading.Thread(target=receive_then_disconnect, daemon=True)
+    thread.start()
+    return SimpleServerAddress(listener.getsockname()), captured, thread
+
+
 def test_proxy_routes_fixed_path_injects_token_and_strips_hop_headers(tmp_path):
     upstream, upstream_thread = _start_upstream()
     proxy, proxy_thread = _start_proxy(tmp_path, upstream)
@@ -131,7 +190,16 @@ def test_proxy_routes_fixed_path_injects_token_and_strips_hop_headers(tmp_path):
             },
         )
         assert status == 200
-        assert json.loads(payload) == {"chunks": ["one", "two", "three"], "ok": True}
+        assert json.loads(payload) == {
+            "chunks": ["one", "two", "three"],
+            "ok": True,
+            "usage": {
+                "completion_tokens": 7,
+                "cost": 0.00125,
+                "prompt_tokens": 11,
+                "total_tokens": 18,
+            },
+        }
         captured = upstream.captured[-1]
         assert captured["method"] == "POST"
         assert captured["path"] == "/api/v1/chat/completions"
@@ -148,6 +216,139 @@ def test_proxy_routes_fixed_path_injects_token_and_strips_hop_headers(tmp_path):
     finally:
         _stop(proxy, proxy_thread)
         _stop(upstream, upstream_thread)
+
+
+@pytest.mark.parametrize(
+    ("body", "expected_code"),
+    [
+        (b"{}", "model_required"),
+        (b'{"model":"other"}', "model_not_allowed"),
+        (b'{"model":', "invalid_json"),
+    ],
+)
+def test_proxy_rejects_missing_wrong_or_malformed_model_before_forwarding(
+    tmp_path, body, expected_code
+):
+    upstream, upstream_thread = _start_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, payload = _request(proxy, body=body)
+        assert status == 400
+        assert json.loads(payload)["error"]["code"] == expected_code
+        assert upstream.captured == []
+        [audit] = _read_audit(tmp_path)
+        assert audit["request_state"] == "not_accepted"
+        assert audit["failure_class"] == "policy_rejection"
+        assert audit["model"] is None
+        assert body not in (tmp_path / "proxy-audit.jsonl").read_bytes()
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_proxy_audit_has_only_safe_completed_request_fields(tmp_path):
+    upstream, upstream_thread = _start_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    prompt = "private-prompt-must-not-enter-audit"
+    body = json.dumps(
+        {"model": "fixture", "messages": [{"content": prompt}]},
+        separators=(",", ":"),
+    ).encode()
+    try:
+        status, _, _ = _request(proxy, body=body)
+        assert status == 200
+        [audit] = _read_audit(tmp_path)
+        assert set(audit) == {
+            "schema_version",
+            "request_identity_sha256",
+            "model",
+            "started_at",
+            "finished_at",
+            "latency_ms",
+            "request_state",
+            "upstream_status_code",
+            "provider_request_id",
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "provider_cost_usd",
+            "failure_class",
+        }
+        assert audit["schema_version"] == 1
+        assert len(audit["request_identity_sha256"]) == 64
+        assert audit["model"] == "fixture"
+        assert audit["latency_ms"] >= 0
+        assert audit["request_state"] == "completed"
+        assert audit["upstream_status_code"] == 200
+        assert audit["provider_request_id"] == "provider-request-fixture-001"
+        assert audit["input_tokens"] == 11
+        assert audit["output_tokens"] == 7
+        assert audit["total_tokens"] == 18
+        assert audit["provider_cost_usd"] == 0.00125
+        assert audit["failure_class"] is None
+        encoded = (tmp_path / "proxy-audit.jsonl").read_text()
+        assert prompt not in encoded
+        assert REAL_TOKEN not in encoded
+        assert "authorization" not in encoded.lower()
+        assert (tmp_path / "proxy-audit.jsonl").stat().st_mode & 0o777 == 0o600
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_proxy_audit_drops_provider_request_id_that_contains_token(tmp_path):
+    upstream, upstream_thread = _start_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, _ = _request(proxy, path="/v1/echo-token-header")
+        assert status == 502
+        [audit] = _read_audit(tmp_path)
+        assert audit["provider_request_id"] is None
+        assert REAL_TOKEN not in (tmp_path / "proxy-audit.jsonl").read_text()
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_proxy_classifies_connect_failure_before_request_as_not_accepted(tmp_path):
+    unused = socket.socket()
+    unused.bind(("127.0.0.1", 0))
+    port = unused.getsockname()[1]
+    unused.close()
+    proxy, proxy_thread = _start_proxy(
+        tmp_path, SimpleServerAddress(("127.0.0.1", port))
+    )
+    try:
+        status, _, _ = _request(proxy)
+        assert status == 502
+        [audit] = _read_audit(tmp_path)
+        assert audit["request_state"] == "not_accepted"
+        assert audit["failure_class"] == "pre_accept_transport"
+        assert audit["upstream_status_code"] is None
+        assert audit["provider_request_id"] is None
+        assert audit["input_tokens"] is None
+        assert audit["output_tokens"] is None
+        assert audit["total_tokens"] is None
+        assert audit["provider_cost_usd"] is None
+    finally:
+        _stop(proxy, proxy_thread)
+
+
+def test_proxy_quarantines_disconnect_after_request_bytes_are_received(tmp_path):
+    upstream, captured, upstream_thread = _start_disconnect_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, _ = _request(proxy)
+        assert status == 502
+        upstream_thread.join(timeout=3)
+        assert not upstream_thread.is_alive()
+        assert captured and b'{"model":"fixture"}' in captured[0]
+        [audit] = _read_audit(tmp_path)
+        assert audit["request_state"] == "quarantined"
+        assert audit["failure_class"] == "post_accept_transport"
+        assert audit["upstream_status_code"] is None
+    finally:
+        _stop(proxy, proxy_thread)
 
 
 @pytest.mark.parametrize(
@@ -182,14 +383,14 @@ def test_proxy_bounds_request_and_response_bodies(tmp_path):
     proxy, proxy_thread = _start_proxy(
         tmp_path,
         upstream,
-        max_request_bytes=8,
+        max_request_bytes=64,
         max_response_bytes=64,
     )
     try:
-        status, _, payload = _request(proxy, body=b"x" * 9)
+        status, _, payload = _request(proxy, body=b"x" * 65)
         assert status == 413
         assert upstream.captured == []
-        status, _, payload = _request(proxy, method="GET", path="/v1/large", body=b"")
+        status, _, payload = _request(proxy, path="/v1/large")
         assert status == 502
         assert b"response_limit" in payload
         assert REAL_TOKEN.encode() not in payload
@@ -203,7 +404,7 @@ def test_proxy_blocks_an_upstream_response_that_echoes_the_real_token(tmp_path):
     proxy, proxy_thread = _start_proxy(tmp_path, upstream)
     try:
         status, _, payload = _request(
-            proxy, method="GET", path="/v1/echo-token", body=b""
+            proxy, path="/v1/echo-token"
         )
         assert status == 502
         assert b"credential_echo" in payload
@@ -238,20 +439,41 @@ class SimpleServerAddress:
         self.server_address = address
 
 
-@pytest.mark.parametrize("mode", [0o644, 0o400, 0o666])
-def test_token_file_requires_exact_mode_600(tmp_path, mode):
+@pytest.mark.parametrize("mode", [0o604, 0o640, 0o644, 0o666])
+def test_token_file_rejects_any_group_or_other_permission_bits(tmp_path, mode):
     from qea.model_proxy import ModelProxyConfig, ModelProxyError
 
     token = _token_file(tmp_path)
     token.chmod(mode)
-    with pytest.raises(ModelProxyError, match="mode 600"):
+    with pytest.raises(ModelProxyError, match="group or other"):
         ModelProxyConfig(
             listen_host="127.0.0.1",
             listen_port=0,
             upstream_base_url="https://model.example/v1",
             allowed_path_prefix="/v1",
+            allowed_model="fixture",
             token_file=token,
+            audit_file=tmp_path / "audit.jsonl",
         )
+
+
+@pytest.mark.parametrize("mode", [0o400, 0o600, 0o700])
+def test_token_file_accepts_owner_only_modes(tmp_path, mode):
+    from qea.model_proxy import ModelProxyConfig
+
+    token = _token_file(tmp_path)
+    token.chmod(mode)
+    config = ModelProxyConfig(
+        listen_host="127.0.0.1",
+        listen_port=0,
+        upstream_base_url="https://model.example/v1",
+        allowed_path_prefix="/v1",
+        allowed_model="fixture",
+        token_file=token,
+        audit_file=tmp_path / "audit.jsonl",
+    )
+
+    assert config.token_file == token
 
 
 def test_token_file_rejects_symlink_and_oversized_value(tmp_path):
@@ -266,7 +488,9 @@ def test_token_file_rejects_symlink_and_oversized_value(tmp_path):
             listen_port=0,
             upstream_base_url="https://model.example/v1",
             allowed_path_prefix="/v1",
+            allowed_model="fixture",
             token_file=link,
+            audit_file=tmp_path / "audit.jsonl",
         )
     real.write_bytes(b"x" * 16_385)
     real.chmod(0o600)
@@ -276,7 +500,9 @@ def test_token_file_rejects_symlink_and_oversized_value(tmp_path):
             listen_port=0,
             upstream_base_url="https://model.example/v1",
             allowed_path_prefix="/v1",
+            allowed_model="fixture",
             token_file=real,
+            audit_file=tmp_path / "audit.jsonl",
         )
 
 
@@ -304,6 +530,37 @@ def test_proxy_sandbox_plan_contains_no_token_and_uses_secret_tmpfs(tmp_path):
     assert "--token-file" in plan.start_argv
     assert REAL_TOKEN not in encoded
     assert REAL_TOKEN not in " ".join(plan.start_argv)
+
+
+def test_proxy_sandbox_plan_binds_scope_model_and_private_audit_config():
+    from qea.model_proxy import build_model_proxy_sandbox_plan
+
+    plan = build_model_proxy_sandbox_plan(
+        run_id="run-001",
+        attempt_id="attempt-001",
+        task_id="historical-var-data-prep",
+        image_ref="sha256:" + "c" * 64,
+        upstream_base_url="https://openrouter.ai/api/v1",
+        allowed_path_prefix="/v1",
+        allowed_model="openai/gpt-5",
+        audit_path="/run/qea-secrets/proxy-audit.jsonl",
+        network_scope="attempt-001",
+        listen_port=8080,
+        cpu_count=1,
+        memory_mb=512,
+        pids_limit=64,
+        timeout_seconds=3600,
+    )
+
+    assert plan.spec.task_id == "historical-var-data-prep"
+    assert plan.spec.network_scope == "attempt-001"
+    assert plan.allowed_model == "openai/gpt-5"
+    assert plan.audit_path == "/run/qea-secrets/proxy-audit.jsonl"
+    assert plan.config_payload()["allowed_model"] == "openai/gpt-5"
+    assert plan.config_payload()["audit_file"] == (
+        "/run/qea-secrets/proxy-audit.jsonl"
+    )
+    assert "openai/gpt-5" not in " ".join(plan.start_argv)
 
 
 def test_proxy_sandbox_plan_rejects_origin_without_absolute_path():
@@ -431,3 +688,53 @@ def test_cli_accepts_token_file_only_and_graceful_shutdown_joins(tmp_path):
     _stop(proxy, proxy_thread)
     _stop(upstream, upstream_thread)
     assert not proxy_thread.is_alive()
+
+
+def test_cli_requires_and_forwards_model_and_audit_policy(tmp_path, monkeypatch):
+    import scripts.run_qea_model_proxy as cli
+
+    token = _token_file(tmp_path)
+    audit = tmp_path / "cli-audit.jsonl"
+    captured = {}
+    handlers = {}
+
+    class Server:
+        timeout = None
+
+        def handle_request(self):
+            handlers[signal.SIGTERM](signal.SIGTERM, None)
+
+        def server_close(self):
+            captured["closed"] = True
+
+    def config_factory(**values):
+        captured["config"] = values
+        return object()
+
+    monkeypatch.setattr(cli, "ModelProxyConfig", config_factory)
+    monkeypatch.setattr(cli, "create_proxy_server", lambda config: Server())
+    monkeypatch.setattr(
+        cli.signal,
+        "signal",
+        lambda signum, handler: handlers.__setitem__(signum, handler),
+    )
+
+    assert cli.main(
+        [
+            "--listen-port",
+            "8080",
+            "--upstream-base-url",
+            "https://openrouter.ai/api/v1",
+            "--allowed-path-prefix",
+            "/v1",
+            "--allowed-model",
+            "openai/gpt-5",
+            "--token-file",
+            str(token),
+            "--audit-file",
+            str(audit),
+        ]
+    ) == 0
+    assert captured["config"]["allowed_model"] == "openai/gpt-5"
+    assert captured["config"]["audit_file"] == str(audit)
+    assert captured["closed"] is True

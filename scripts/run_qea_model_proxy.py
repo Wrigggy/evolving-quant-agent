@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run QEA's fixed-upstream model proxy from a mode-600 token file."""
+"""Run QEA's fixed-upstream model proxy from an owner-only token file."""
 
 from __future__ import annotations
 
@@ -16,7 +16,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--listen-port", type=int, required=True)
     parser.add_argument("--upstream-base-url", required=True)
     parser.add_argument("--allowed-path-prefix", default="/v1")
+    parser.add_argument("--allowed-model", required=True)
     parser.add_argument("--token-file", required=True)
+    parser.add_argument("--audit-file", required=True)
     parser.add_argument("--max-request-bytes", type=int, default=8 * 1024 * 1024)
     parser.add_argument("--max-response-bytes", type=int, default=64 * 1024 * 1024)
     parser.add_argument("--connect-timeout-seconds", type=float, default=10.0)
@@ -33,7 +35,9 @@ def main(argv: list[str] | None = None) -> int:
                 listen_port=args.listen_port,
                 upstream_base_url=args.upstream_base_url,
                 allowed_path_prefix=args.allowed_path_prefix,
+                allowed_model=args.allowed_model,
                 token_file=args.token_file,
+                audit_file=args.audit_file,
                 max_request_bytes=args.max_request_bytes,
                 max_response_bytes=args.max_response_bytes,
                 connect_timeout_seconds=args.connect_timeout_seconds,
