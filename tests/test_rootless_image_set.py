@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -25,6 +26,7 @@ PLAN_IDENTITY_KEYS = (
     "build_timeout_seconds",
     "build_network",
 )
+_DEFAULT_VERIFIER_TEST_SHA256 = object()
 
 
 def _sha256_json(payload: object) -> str:
@@ -69,6 +71,7 @@ def _write_image_manifest(
     cpu_count: int = 2,
     memory_mb: int = 4096,
     build_timeout_seconds: int = 600,
+    verifier_test_script_sha256: object = _DEFAULT_VERIFIER_TEST_SHA256,
 ) -> Path:
     lock = f"{role}-runtime==1.0\n".encode()
     dockerfile = f"FROM {base_image_ref}\n".encode()
@@ -80,13 +83,15 @@ def _write_image_manifest(
             "size_bytes": len(dockerfile),
         }
     ]
+    if verifier_test_script_sha256 is _DEFAULT_VERIFIER_TEST_SHA256:
+        verifier_test_script_sha256 = "d" * 64 if role == "verifier" else None
     identity_payload = {
         "role": role,
         "task_id": task_id,
         "benchmark_commit": benchmark_commit,
         "base_image_ref": base_image_ref,
         "source_manifest_sha256": "c" * 64,
-        "verifier_test_script_sha256": "d" * 64 if role == "verifier" else None,
+        "verifier_test_script_sha256": verifier_test_script_sha256,
         "context_files": context_files,
         "cpu_count": cpu_count,
         "memory_mb": memory_mb,
@@ -212,6 +217,98 @@ def test_image_set_assembles_explicit_sorted_immutable_index(tmp_path) -> None:
     output = tmp_path / "image-set.json"
     image_set.write(output)
     assert RootlessImageSet.load(output).to_payload() == payload
+
+
+def test_real_image_set_preserves_verifier_material_identity_for_factory(
+    tmp_path, monkeypatch
+) -> None:
+    from qea.rootless_full_harness import _verify_benchmark_materials
+    from qea.rootless_image_set import RootlessImageSet
+    import qea.rootless_images as rootless_images
+
+    manifests = _image_manifests(tmp_path / "manifests", task_ids=("task-a",))
+    selected = RootlessImageSet.from_manifest_paths(
+        benchmark_commit=COMMIT,
+        task_ids=("task-a",),
+        manifest_paths=manifests,
+    )
+    index = tmp_path / "image-set.json"
+    selected.write(index)
+    loaded = RootlessImageSet.load(index)
+
+    verifier = loaded.tasks[0]["verifier"]
+    assert verifier["verifier_test_script_sha256"] == "d" * 64
+
+    public = SimpleNamespace(
+        commit=COMMIT,
+        task_ids=("task-a",),
+        manifest_sha256="c" * 64,
+        records={},
+    )
+    trusted = SimpleNamespace(
+        commit=COMMIT,
+        task_ids=("task-a",),
+        manifest_sha256="e" * 64,
+        records={
+            "tasks/task-a/tests/test.sh": {
+                "sha256": "d" * 64,
+                "git_blob_oid": "f" * 40,
+                "size_bytes": 17,
+                "mode": "100755",
+            }
+        },
+    )
+    roots = {"public": public, "trusted-verifier": trusted}
+    monkeypatch.setattr(
+        rootless_images,
+        "verify_role_root",
+        lambda root, expected_role: roots[expected_role],
+    )
+
+    identity = _verify_benchmark_materials(
+        config=SimpleNamespace(
+            public_root=tmp_path / "public",
+            trusted_root=tmp_path / "trusted",
+        ),
+        image_set=loaded,
+        benchmark_commit=COMMIT,
+        task_ids=("task-a",),
+    )
+
+    assert len(identity) == 64
+
+
+@pytest.mark.parametrize(
+    ("role", "verifier_test_script_sha256"),
+    (("verifier", None), ("worker", "d" * 64)),
+)
+def test_image_set_rejects_role_inconsistent_verifier_material_identity(
+    tmp_path, role: str, verifier_test_script_sha256: str | None
+) -> None:
+    from qea.rootless_image_set import RootlessImageSet, RootlessImageSetError
+
+    manifests = list(_image_manifests(tmp_path, task_ids=("task-a",)))
+    role_index = next(
+        index
+        for index, path in enumerate(manifests)
+        if json.loads(path.read_text())["role"] == role
+    )
+    manifests[role_index] = _write_image_manifest(
+        tmp_path / f"invalid-{role}",
+        role=role,
+        task_id="task-a",
+        image_digit="f",
+        verifier_test_script_sha256=verifier_test_script_sha256,
+    )
+
+    with pytest.raises(
+        RootlessImageSetError, match="verifier test script identity"
+    ):
+        RootlessImageSet.from_manifest_paths(
+            benchmark_commit=COMMIT,
+            task_ids=("task-a",),
+            manifest_paths=manifests,
+        )
 
 
 def test_image_set_rejects_missing_duplicate_and_outside_panel_roles(tmp_path) -> None:

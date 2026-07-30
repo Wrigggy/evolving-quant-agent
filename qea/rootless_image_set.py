@@ -129,6 +129,16 @@ def _manifest_entry(
         raise RootlessImageSetError(f"task image manifest has an invalid task ID: {path}")
     if manifest.get("benchmark_commit") != benchmark_commit:
         raise RootlessImageSetError(f"image manifest benchmark commit differs: {path}")
+    verifier_test_script_sha256 = manifest.get("verifier_test_script_sha256")
+    if role == "verifier":
+        verifier_test_script_sha256 = _digest(
+            verifier_test_script_sha256,
+            label="verifier test script identity",
+        )
+    elif verifier_test_script_sha256 is not None:
+        raise RootlessImageSetError(
+            f"verifier test script identity must be null for {role}: {path}"
+        )
 
     image_id = _immutable_image(manifest.get("image_id"), label="image ID")
     base_image_ref = _immutable_image(
@@ -244,6 +254,7 @@ def _manifest_entry(
         "plan_identity_sha256": plan_identity,
         "result_identity_sha256": result_identity,
         "source_manifest_sha256": source_manifest_sha256,
+        "verifier_test_script_sha256": verifier_test_script_sha256,
         "base_image_ref": base_image_ref,
         "image_id": image_id,
         "dependency_lock_sha256": dependency_lock_sha256,
