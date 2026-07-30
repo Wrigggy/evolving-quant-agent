@@ -157,7 +157,11 @@ def test_config_rejects_nonpilot_iteration_count(tmp_path):
 
 
 def test_config_maps_deprecated_concurrency_alias_and_rejects_conflicts(tmp_path):
-    from qea.loop_benchmark import BenchmarkEvolutionConfig, EvolutionConfigError
+    from qea.loop_benchmark import (
+        LEGACY_SCHEDULER_IDENTITY_DIGEST,
+        BenchmarkEvolutionConfig,
+        EvolutionConfigError,
+    )
 
     legacy = BenchmarkEvolutionConfig(
         run_id="legacy-concurrency",
@@ -170,6 +174,7 @@ def test_config_maps_deprecated_concurrency_alias_and_rejects_conflicts(tmp_path
     assert legacy.worker_concurrency == 2
     assert legacy.concurrency == 2
     assert legacy.verifier_concurrency == 1
+    assert legacy.scheduler_identity_digest == LEGACY_SCHEDULER_IDENTITY_DIGEST
 
     with pytest.raises(EvolutionConfigError, match="conflicting worker concurrency"):
         BenchmarkEvolutionConfig(
@@ -182,8 +187,56 @@ def test_config_maps_deprecated_concurrency_alias_and_rejects_conflicts(tmp_path
         )
 
 
+@pytest.mark.parametrize(
+    "scheduler_identity_digest",
+    ["typo", "A" * 64, "a" * 63, "g" * 64],
+)
+def test_config_rejects_invalid_scheduler_identity_digest(
+    tmp_path,
+    scheduler_identity_digest,
+):
+    from qea.loop_benchmark import BenchmarkEvolutionConfig, EvolutionConfigError
+
+    with pytest.raises(
+        EvolutionConfigError,
+        match="scheduler_identity_digest must be 64 lowercase hex characters",
+    ):
+        BenchmarkEvolutionConfig(
+            run_id="invalid-scheduler-identity",
+            n_iters=1,
+            results_dir=tmp_path,
+            seed_worker_dir=tmp_path,
+            scheduler_identity_digest=scheduler_identity_digest,
+        )
+
+
+def test_config_allows_scheduler_sentinel_only_for_legacy_concurrency(tmp_path):
+    from qea.loop_benchmark import (
+        LEGACY_SCHEDULER_IDENTITY_DIGEST,
+        BenchmarkEvolutionConfig,
+        EvolutionConfigError,
+    )
+
+    with pytest.raises(
+        EvolutionConfigError,
+        match="legacy scheduler identity sentinel requires deprecated concurrency",
+    ):
+        BenchmarkEvolutionConfig(
+            run_id="new-scheduler-missing-identity",
+            n_iters=1,
+            results_dir=tmp_path,
+            seed_worker_dir=tmp_path,
+            worker_concurrency=2,
+            scheduler_identity_digest=LEGACY_SCHEDULER_IDENTITY_DIGEST,
+        )
+
+
 def test_run_identity_records_stage_concurrency_and_scheduler_policy(tmp_path):
-    from qea.loop_benchmark import BenchmarkEvolutionConfig, run_benchmark_evolution
+    from qea.loop_benchmark import (
+        BenchmarkEvolutionConfig,
+        EvolutionConfigError,
+        run_benchmark_evolution,
+    )
 
     optimize, held_out = _tasks()
 
@@ -215,6 +268,29 @@ def test_run_identity_records_stage_concurrency_and_scheduler_policy(tmp_path):
     assert identity["worker_concurrency"] == 2
     assert identity["verifier_concurrency"] == 1
     assert identity["scheduler_identity_digest"] == "b" * 64
+
+    changed_policy = BenchmarkEvolutionConfig(
+        run_id="scheduler-identity",
+        n_iters=1,
+        results_dir=tmp_path / "results",
+        seed_worker_dir=config.seed_worker_dir,
+        worker_concurrency=2,
+        verifier_concurrency=1,
+        scheduler_identity_digest="c" * 64,
+        noise_floor=0.0,
+    )
+    with pytest.raises(
+        EvolutionConfigError,
+        match="scheduler_identity_digest",
+    ):
+        run_benchmark_evolution(
+            changed_policy,
+            optimize_tasks=optimize,
+            held_out_tasks=held_out,
+            benchmark_commit="0" * 40,
+            evaluator=ImprovingEvaluator(),
+            proposer=proposer,
+        )
 
 
 def _execution_for(attempt, run_dir, task):
@@ -450,6 +526,81 @@ def test_sandbox_evaluator_propagates_worker_infrastructure_failures(tmp_path, p
             run_dir=tmp_path / "run",
         )
     assert raised.value.phase == phase
+
+
+def test_sandbox_evaluator_retains_inflight_failure_during_shutdown(
+    tmp_path,
+    monkeypatch,
+):
+    from concurrent.futures import ThreadPoolExecutor as RealThreadPoolExecutor
+
+    import qea.loop_benchmark as loop_benchmark
+    from qea.executors.sandbox_nexau import SandboxInfrastructureError
+
+    shutdown_started = Event()
+    secondary_started = Event()
+
+    class SignalingThreadPoolExecutor(RealThreadPoolExecutor):
+        def shutdown(self, wait=True, *, cancel_futures=False):
+            shutdown_started.set()
+            return super().shutdown(wait=wait, cancel_futures=cancel_futures)
+
+    monkeypatch.setattr(
+        loop_benchmark,
+        "ThreadPoolExecutor",
+        SignalingThreadPoolExecutor,
+    )
+
+    tasks = (
+        SimpleNamespace(task_id="task-a", domain="risk", lineage="a"),
+        SimpleNamespace(task_id="task-b", domain="strategy", lineage="b"),
+    )
+
+    class FailingExecutor:
+        def execute(self, *, task, **kwargs):
+            if task.task_id == "task-a":
+                assert secondary_started.wait(2)
+                raise SandboxInfrastructureError(
+                    "worker.create",
+                    "primary infrastructure failure",
+                )
+            secondary_started.set()
+            assert shutdown_started.wait(2)
+            raise SandboxInfrastructureError(
+                "worker.upload",
+                "secondary infrastructure failure during shutdown",
+            )
+
+    evaluator = loop_benchmark.QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="concurrent-failures",
+        executor=FailingExecutor(),
+        verifier=SimpleNamespace(),
+        model_env={},
+        worker_concurrency=2,
+        verifier_concurrency=1,
+    )
+
+    with pytest.raises(
+        SandboxInfrastructureError,
+        match="primary infrastructure failure",
+    ) as raised:
+        evaluator.evaluate(
+            worker_dir=_seed_worker(tmp_path),
+            tasks=tasks,
+            split="optimize",
+            checkpoint="seed-optimize",
+            run_dir=tmp_path / "run",
+        )
+
+    assert raised.value.phase == "worker.create"
+    secondary = raised.value.evaluation_secondary_failures
+    assert len(secondary) == 1
+    assert secondary[0].stage == "worker"
+    assert secondary[0].index == 1
+    assert secondary[0].task_id == "task-b"
+    assert isinstance(secondary[0].error, SandboxInfrastructureError)
+    assert secondary[0].error.phase == "worker.upload"
 
 
 def test_sandbox_evaluator_propagates_verifier_infrastructure_failure(tmp_path):

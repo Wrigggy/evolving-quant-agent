@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 
 
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+LEGACY_SCHEDULER_IDENTITY_DIGEST = "unspecified"
 
 
 class EvolutionConfigError(ValueError):
@@ -83,7 +84,7 @@ class BenchmarkEvolutionConfig:
     concurrency: int | None = None
     worker_concurrency: int | None = None
     verifier_concurrency: int = 3
-    scheduler_identity_digest: str = "unspecified"
+    scheduler_identity_digest: str = LEGACY_SCHEDULER_IDENTITY_DIGEST
     resume: bool = True
     feedback_mode: FeedbackMode | str = FeedbackMode.CONTROL
     feedback_contract_digest: str = ""
@@ -123,8 +124,28 @@ class BenchmarkEvolutionConfig:
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
                 raise EvolutionConfigError(f"{name} must be positive")
-        if not self.scheduler_identity_digest.strip():
-            raise EvolutionConfigError("scheduler_identity_digest must be non-empty")
+        if self.scheduler_identity_digest == LEGACY_SCHEDULER_IDENTITY_DIGEST:
+            uses_legacy_concurrency = self.worker_concurrency is None or (
+                self.concurrency is not None
+                and self.concurrency == self.worker_concurrency
+            )
+            if not uses_legacy_concurrency:
+                raise EvolutionConfigError(
+                    "legacy scheduler identity sentinel requires deprecated "
+                    "concurrency or the legacy implicit default"
+                )
+        elif (
+            not isinstance(self.scheduler_identity_digest, str)
+            or re.fullmatch(
+                r"[0-9a-f]{64}",
+                self.scheduler_identity_digest,
+            )
+            is None
+        ):
+            raise EvolutionConfigError(
+                "scheduler_identity_digest must be 64 lowercase hex characters "
+                f"or {LEGACY_SCHEDULER_IDENTITY_DIGEST!r} for legacy compatibility"
+            )
         object.__setattr__(self, "worker_concurrency", worker_concurrency)
         object.__setattr__(self, "concurrency", worker_concurrency)
         try:
@@ -350,6 +371,14 @@ class PendingVerification:
     execution: WorkerExecution
 
 
+@dataclass(frozen=True)
+class EvaluationStageFailure:
+    stage: str
+    index: int
+    task_id: str
+    error: BaseException
+
+
 class QFBenchSandboxEvaluator:
     """Evaluate resumable worker and verifier stages in independent thread pools."""
 
@@ -565,6 +594,8 @@ class QFBenchSandboxEvaluator:
         }
         verifier_futures: dict = {}
         pending_futures = set(worker_futures)
+        primary_error: BaseException | None = None
+        primary_future = None
         try:
             while pending_futures:
                 completed_futures, pending_futures = wait(
@@ -580,7 +611,11 @@ class QFBenchSandboxEvaluator:
                 ):
                     if future in worker_futures:
                         index = worker_futures[future]
-                        result = future.result()
+                        try:
+                            result = future.result()
+                        except BaseException:
+                            primary_future = future
+                            raise
                         if isinstance(result, PendingVerification):
                             verifier_future = verifier_pool.submit(
                                 self._run_verifier_stage,
@@ -592,13 +627,52 @@ class QFBenchSandboxEvaluator:
                         else:
                             scores[index] = result
                     else:
-                        index, score = future.result()
+                        try:
+                            index, score = future.result()
+                        except BaseException:
+                            primary_future = future
+                            raise
                         scores[index] = score
+        except BaseException as exc:
+            primary_error = exc
+            raise
         finally:
-            for future in pending_futures:
+            all_futures = set(worker_futures) | set(verifier_futures)
+            for future in all_futures:
                 future.cancel()
             verifier_pool.shutdown(wait=True, cancel_futures=True)
             worker_pool.shutdown(wait=True, cancel_futures=True)
+            if primary_error is not None:
+                secondary_failures: list[EvaluationStageFailure] = []
+                for future in sorted(
+                    all_futures,
+                    key=lambda item: (
+                        worker_futures.get(item, verifier_futures.get(item, -1)),
+                        0 if item in worker_futures else 1,
+                    ),
+                ):
+                    if future is primary_future or future.cancelled():
+                        continue
+                    error = future.exception()
+                    if error is None:
+                        continue
+                    stage = "worker" if future in worker_futures else "verifier"
+                    index = (
+                        worker_futures[future]
+                        if stage == "worker"
+                        else verifier_futures[future]
+                    )
+                    secondary_failures.append(
+                        EvaluationStageFailure(
+                            stage=stage,
+                            index=index,
+                            task_id=task_list[index].task_id,
+                            error=error,
+                        )
+                    )
+                primary_error.evaluation_secondary_failures = tuple(
+                    secondary_failures
+                )
         if any(score is None for score in scores):
             raise EvolutionConfigError("evaluation pipeline did not produce every task score")
         ordered_scores = tuple(score for score in scores if score is not None)
