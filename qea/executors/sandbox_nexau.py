@@ -33,10 +33,12 @@ from ..verifiers.qfbench import (
 )
 from .bundles import build_verifier_bundle, build_worker_bundle
 from .e2b_nexau import (
-    E2BWorkerExecution,
-    E2BWorkerTimeout,
-    _persist_worker_execution,
     extract_output_archive,
+)
+from .execution_record import (
+    WorkerBehaviorTimeout,
+    WorkerExecution,
+    persist_worker_execution,
 )
 
 
@@ -103,7 +105,7 @@ class SandboxInfrastructureError(SandboxExecutionError):
         super().__init__(f"{phase}: {self.detail}")
 
 
-class SandboxWorkerTimeout(E2BWorkerTimeout, SandboxExecutionError):
+class SandboxWorkerTimeout(WorkerBehaviorTimeout, SandboxExecutionError):
     """The worker's task command, and only that command, reached its timeout."""
 
 
@@ -411,7 +413,7 @@ def _finish_and_cleanup(
         raise finish_error
 
 
-def _artifact_records(execution: E2BWorkerExecution) -> tuple[ArtifactRecord, ...]:
+def _artifact_records(execution: WorkerExecution) -> tuple[ArtifactRecord, ...]:
     artifact_root = Path(execution.artifact_dir).resolve()
     expected = tuple(sorted(execution.artifacts, key=lambda item: item.path))
     discovered = _regular_files(artifact_root, phase="verifier.artifacts")
@@ -505,7 +507,7 @@ class SandboxNexAUExecutor:
         worker_dir: str | Path,
         run_dir: str | Path,
         model_env: Mapping[str, str] | None = None,
-    ) -> E2BWorkerExecution:
+    ) -> WorkerExecution:
         _validate_public_model_env(model_env, self.worker_environment)
         expected_network = f"qea-{attempt.run_id}-internal"
         if self.worker_network_name != expected_network:
@@ -733,7 +735,7 @@ class SandboxNexAUExecutor:
         if primary_error is not None:
             raise primary_error
         assert handle is not None
-        execution = E2BWorkerExecution(
+        execution = WorkerExecution(
             attempt_id=attempt.attempt_id,
             artifact_dir=artifact_dir,
             artifacts=records,
@@ -744,7 +746,7 @@ class SandboxNexAUExecutor:
             sandbox_id=handle.native_id,
             cleaned_up=True,
         )
-        _persist_worker_execution(execution, attempt_dir)
+        persist_worker_execution(execution, attempt_dir)
         return execution
 
 
@@ -774,7 +776,7 @@ class SandboxQFBenchVerifier:
         *,
         attempt: TaskAttempt,
         task,
-        execution: E2BWorkerExecution,
+        execution: WorkerExecution,
         run_dir: str | Path,
     ) -> OfficialTaskScore:
         attempt_dir = Path(run_dir).resolve() / "attempts" / attempt.attempt_id

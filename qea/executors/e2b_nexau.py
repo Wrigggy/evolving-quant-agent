@@ -22,6 +22,13 @@ from ..verifiers.qfbench import (
 )
 from .bundles import build_oracle_bundle, build_verifier_bundle, build_worker_bundle
 from .e2b_protocol import E2BSandboxFactory, SDKSandboxFactory
+from .execution_record import (
+    WorkerBehaviorTimeout,
+    WorkerExecution,
+    WorkerExecutionError,
+    load_worker_execution,
+    persist_worker_execution,
+)
 
 
 _MODEL_ENV_ALLOWLIST = frozenset({"LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL"})
@@ -30,16 +37,10 @@ _REMOTE_RUNNER = Path(__file__).with_name("remote_nexau_worker.py")
 _RUNTIME_BRIDGE = Path(__file__).parents[1] / "runtime_bridge.py"
 
 
-class E2BExecutionError(RuntimeError):
-    """A worker/verifier sandbox failed or returned an unsafe artifact archive."""
-
-
-class E2BWorkerTimeout(E2BExecutionError):
-    """The worker command reached the task's declared agent timeout."""
-
-    def __init__(self, message: str, *, log_uri: str | None = None) -> None:
-        super().__init__(message)
-        self.log_uri = log_uri
+E2BExecutionError = WorkerExecutionError
+E2BWorkerTimeout = WorkerBehaviorTimeout
+E2BWorkerExecution = WorkerExecution
+_persist_worker_execution = persist_worker_execution
 
 
 @dataclass(frozen=True)
@@ -70,69 +71,6 @@ class E2BNexAUConfig:
             return self.verifier_templates[task_id]
         except KeyError as exc:
             raise E2BExecutionError(f"no E2B verifier template for task {task_id!r}") from exc
-
-
-@dataclass(frozen=True)
-class E2BWorkerExecution:
-    attempt_id: str
-    artifact_dir: Path
-    artifacts: tuple[ArtifactRecord, ...]
-    trace_uri: str
-    log_uri: str
-    final_text_uri: str
-    summary: dict
-    sandbox_id: str
-    cleaned_up: bool
-
-
-def _persist_worker_execution(execution: E2BWorkerExecution, attempt_dir: Path) -> None:
-    payload = {
-        "attempt_id": execution.attempt_id,
-        "artifact_dir": str(execution.artifact_dir.relative_to(attempt_dir)),
-        "artifacts": [asdict(record) for record in execution.artifacts],
-        "trace_uri": str(Path(execution.trace_uri).relative_to(attempt_dir)),
-        "log_uri": str(Path(execution.log_uri).relative_to(attempt_dir)),
-        "final_text_uri": str(Path(execution.final_text_uri).relative_to(attempt_dir)),
-        "summary": execution.summary,
-        "sandbox_id": execution.sandbox_id,
-        "cleaned_up": execution.cleaned_up,
-    }
-    _write_json(attempt_dir / "worker-execution.json", payload)
-
-
-def load_worker_execution(
-    attempt: TaskAttempt,
-    run_dir: str | Path,
-) -> E2BWorkerExecution | None:
-    """Restore a completed worker attempt and verify every artifact hash."""
-
-    attempt_dir = Path(run_dir).resolve() / "attempts" / attempt.attempt_id
-    manifest_path = attempt_dir / "worker-execution.json"
-    if not manifest_path.is_file():
-        return None
-    try:
-        payload = json.loads(manifest_path.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
-        raise E2BExecutionError(f"invalid worker execution manifest: {exc}") from exc
-    if payload.get("attempt_id") != attempt.attempt_id:
-        raise E2BExecutionError("worker execution manifest attempt mismatch")
-    artifact_dir = (attempt_dir / payload["artifact_dir"]).resolve()
-    records = tuple(ArtifactRecord(**item) for item in payload.get("artifacts", ()))
-    for record in records:
-        current = ArtifactRecord.from_file(artifact_dir / record.path, root=artifact_dir)
-        if current != record:
-            raise E2BExecutionError(f"artifact integrity mismatch on resume: {record.path}")
-    return E2BWorkerExecution(
-        attempt_id=attempt.attempt_id,
-        artifact_dir=artifact_dir,
-        artifacts=records,
-        trace_uri=str((attempt_dir / payload["trace_uri"]).resolve()),
-        log_uri=str((attempt_dir / payload["log_uri"]).resolve()),
-        final_text_uri=str((attempt_dir / payload["final_text_uri"]).resolve()),
-        summary=dict(payload.get("summary", {})),
-        sandbox_id=str(payload.get("sandbox_id", "")),
-        cleaned_up=bool(payload.get("cleaned_up", False)),
-    )
 
 
 def sanitize_worker_env(environment: Mapping[str, str]) -> dict[str, str]:

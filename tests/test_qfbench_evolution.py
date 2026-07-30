@@ -1,9 +1,15 @@
 import json
+from threading import Event
 from types import SimpleNamespace
 
 import pytest
 
-from qea.evaluation import OfficialTaskScore, aggregate_domain_macro
+from qea.evaluation import (
+    ArtifactRecord,
+    OfficialTaskScore,
+    TaskAttempt,
+    aggregate_domain_macro,
+)
 
 
 def _tasks():
@@ -47,8 +53,8 @@ class ImprovingEvaluator:
         ])
 
 
-@pytest.mark.parametrize("iterations", [3, 5])
-def test_runs_three_or_five_iterations_and_holds_out_seed_and_final_only(tmp_path, iterations):
+@pytest.mark.parametrize("iterations", [1, 3, 5])
+def test_runs_supported_iterations_and_holds_out_seed_and_final_only(tmp_path, iterations):
     from qea.loop_benchmark import BenchmarkEvolutionConfig, run_benchmark_evolution
 
     optimize, held_out = _tasks()
@@ -141,7 +147,7 @@ def test_domain_regression_rejects_candidate_even_when_overall_improves(tmp_path
 def test_config_rejects_nonpilot_iteration_count(tmp_path):
     from qea.loop_benchmark import BenchmarkEvolutionConfig, EvolutionConfigError
 
-    with pytest.raises(EvolutionConfigError, match="3 or 5"):
+    with pytest.raises(EvolutionConfigError, match="1, 3, or 5"):
         BenchmarkEvolutionConfig(
             run_id="bad",
             n_iters=4,
@@ -150,8 +156,96 @@ def test_config_rejects_nonpilot_iteration_count(tmp_path):
         )
 
 
-def test_e2b_evaluator_resume_does_not_repeat_completed_task_attempt(tmp_path):
-    from qea.loop_benchmark import QFBenchE2BEvaluator
+def test_config_maps_deprecated_concurrency_alias_and_rejects_conflicts(tmp_path):
+    from qea.loop_benchmark import BenchmarkEvolutionConfig, EvolutionConfigError
+
+    legacy = BenchmarkEvolutionConfig(
+        run_id="legacy-concurrency",
+        n_iters=1,
+        results_dir=tmp_path,
+        seed_worker_dir=tmp_path,
+        concurrency=2,
+        verifier_concurrency=1,
+    )
+    assert legacy.worker_concurrency == 2
+    assert legacy.concurrency == 2
+    assert legacy.verifier_concurrency == 1
+
+    with pytest.raises(EvolutionConfigError, match="conflicting worker concurrency"):
+        BenchmarkEvolutionConfig(
+            run_id="conflicting-concurrency",
+            n_iters=1,
+            results_dir=tmp_path,
+            seed_worker_dir=tmp_path,
+            concurrency=2,
+            worker_concurrency=3,
+        )
+
+
+def test_run_identity_records_stage_concurrency_and_scheduler_policy(tmp_path):
+    from qea.loop_benchmark import BenchmarkEvolutionConfig, run_benchmark_evolution
+
+    optimize, held_out = _tasks()
+
+    def proposer(candidate_dir, diagnosis, iteration, run_dir):
+        prompt = candidate_dir / "systemprompt.md"
+        prompt.write_text(prompt.read_text() + "IMPROVEMENT\n")
+        return {}
+
+    config = BenchmarkEvolutionConfig(
+        run_id="scheduler-identity",
+        n_iters=1,
+        results_dir=tmp_path / "results",
+        seed_worker_dir=_seed_worker(tmp_path),
+        worker_concurrency=2,
+        verifier_concurrency=1,
+        scheduler_identity_digest="b" * 64,
+        noise_floor=0.0,
+    )
+    result = run_benchmark_evolution(
+        config,
+        optimize_tasks=optimize,
+        held_out_tasks=held_out,
+        benchmark_commit="0" * 40,
+        evaluator=ImprovingEvaluator(),
+        proposer=proposer,
+    )
+
+    identity = json.loads((result.run_dir / "resume.json").read_text())["identity"]
+    assert identity["worker_concurrency"] == 2
+    assert identity["verifier_concurrency"] == 1
+    assert identity["scheduler_identity_digest"] == "b" * 64
+
+
+def _execution_for(attempt, run_dir, task):
+    from qea.executors.execution_record import WorkerExecution
+
+    attempt_dir = run_dir / "attempts" / attempt.attempt_id
+    artifact_dir = attempt_dir / "artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifact = artifact_dir / "answer.txt"
+    artifact.write_text(f"{task.task_id}\n")
+    trace = attempt_dir / "raw-trace.jsonl"
+    log = attempt_dir / "worker-command.json"
+    final = attempt_dir / "final.txt"
+    trace.write_text("{}\n")
+    log.write_text("{}\n")
+    final.write_text("done\n")
+    return WorkerExecution(
+        attempt_id=attempt.attempt_id,
+        artifact_dir=artifact_dir,
+        artifacts=(ArtifactRecord.from_file(artifact, root=artifact_dir),),
+        trace_uri=str(trace),
+        log_uri=str(log),
+        final_text_uri=str(final),
+        summary={"files": 1},
+        sandbox_id=f"sandbox-{task.task_id}",
+        cleaned_up=True,
+    )
+
+
+def test_sandbox_evaluator_resume_reuses_worker_manifest_after_verifier_failure(tmp_path):
+    from qea.loop_benchmark import QFBenchSandboxEvaluator
 
     tasks = (
         SimpleNamespace(task_id="task-a", domain="risk", lineage="a"),
@@ -165,9 +259,7 @@ def test_e2b_evaluator_resume_does_not_repeat_completed_task_attempt(tmp_path):
 
         def execute(self, *, attempt, task, worker_dir, run_dir, model_env):
             self.calls.append(task.task_id)
-            artifact_dir = run_dir / "fake-artifacts" / task.task_id
-            artifact_dir.mkdir(parents=True, exist_ok=True)
-            return SimpleNamespace(artifact_dir=artifact_dir, attempt_id=attempt.attempt_id)
+            return _execution_for(attempt, run_dir, task)
 
     class InterruptingVerifier:
         def __init__(self):
@@ -183,13 +275,14 @@ def test_e2b_evaluator_resume_does_not_repeat_completed_task_attempt(tmp_path):
 
     executor = FakeExecutor()
     verifier = InterruptingVerifier()
-    evaluator = QFBenchE2BEvaluator(
+    evaluator = QFBenchSandboxEvaluator(
         benchmark_commit="0" * 40,
         run_id="attempt-resume",
         executor=executor,
         verifier=verifier,
         model_env={"LLM_API_KEY": "secret"},
-        max_workers=1,
+        worker_concurrency=1,
+        verifier_concurrency=1,
     )
     run_dir = tmp_path / "run"
 
@@ -213,31 +306,251 @@ def test_e2b_evaluator_resume_does_not_repeat_completed_task_attempt(tmp_path):
     assert summary.overall == 0.5
     assert executor.calls.count("task-a") == 1
     assert verifier.calls.count("task-a") == 1
-    assert executor.calls.count("task-b") == 2
+    assert executor.calls.count("task-b") == 1
+    assert verifier.calls.count("task-b") == 2
+    assert len(tuple((run_dir / "attempts").glob("*/worker-execution.json"))) == 2
+
+
+def test_sandbox_evaluator_rejects_mismatched_persisted_attempt_identity(tmp_path):
+    from qea.loop_benchmark import (
+        EvolutionConfigError,
+        QFBenchSandboxEvaluator,
+        hash_worker_directory,
+    )
+
+    task = SimpleNamespace(task_id="task-a", domain="risk", lineage="a")
+    worker = _seed_worker(tmp_path)
+    attempt = TaskAttempt.create(
+        run_id="attempt-identity",
+        benchmark_commit="0" * 40,
+        task_id=task.task_id,
+        split="optimize",
+        checkpoint="seed-optimize",
+        worker_digest=hash_worker_directory(worker),
+    )
+    attempt_dir = tmp_path / "run" / "attempts" / attempt.attempt_id
+    attempt_dir.mkdir(parents=True)
+    mismatched = dict(attempt.__dict__)
+    mismatched["split"] = "held_out"
+    (attempt_dir / "attempt.json").write_text(json.dumps(mismatched))
+
+    class RefusingExecutor:
+        def execute(self, **kwargs):
+            raise AssertionError("mismatched attempt must not execute")
+
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="attempt-identity",
+        executor=RefusingExecutor(),
+        verifier=SimpleNamespace(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+
+    with pytest.raises(EvolutionConfigError, match="persisted attempt identity mismatch"):
+        evaluator.evaluate(
+            worker_dir=worker,
+            tasks=(task,),
+            split="optimize",
+            checkpoint="seed-optimize",
+            run_dir=tmp_path / "run",
+        )
+
+
+def test_sandbox_evaluator_uses_two_live_stages_and_restores_input_order(tmp_path):
+    from qea.loop_benchmark import QFBenchE2BEvaluator, QFBenchSandboxEvaluator
+
+    assert QFBenchE2BEvaluator is QFBenchSandboxEvaluator
+
+    verifier_a_started = Event()
+    worker_b_started = Event()
+    verifier_b_finished = Event()
+    tasks = (
+        SimpleNamespace(task_id="task-a", domain="risk", lineage="a"),
+        SimpleNamespace(task_id="task-b", domain="strategy", lineage="b"),
+    )
+
+    class BarrierExecutor:
+        def execute(self, *, attempt, task, worker_dir, run_dir, model_env):
+            if task.task_id == "task-b":
+                assert verifier_a_started.wait(2), (
+                    "worker stage waited for all workers before starting verification"
+                )
+                worker_b_started.set()
+            return _execution_for(attempt, run_dir, task)
+
+    class BarrierVerifier:
+        def verify(self, *, attempt, task, execution, run_dir):
+            if task.task_id == "task-a":
+                verifier_a_started.set()
+                assert worker_b_started.wait(2), (
+                    "verification consumed the only worker-concurrency slot"
+                )
+                assert verifier_b_finished.wait(2), (
+                    "verifier concurrency did not allow task-b to finish first"
+                )
+                reward = 0.25
+            else:
+                verifier_b_finished.set()
+                reward = 0.75
+            return OfficialTaskScore(
+                task_id=task.task_id,
+                domain=task.domain,
+                reward=reward,
+            )
+
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="two-stage",
+        executor=BarrierExecutor(),
+        verifier=BarrierVerifier(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=2,
+    )
+
+    summary = evaluator.evaluate(
+        worker_dir=_seed_worker(tmp_path),
+        tasks=tasks,
+        split="optimize",
+        checkpoint="seed-optimize",
+        run_dir=tmp_path / "run",
+    )
+
+    assert [score.task_id for score in summary.scores] == ["task-a", "task-b"]
+    assert [score.reward for score in summary.scores] == [0.25, 0.75]
+
+
+@pytest.mark.parametrize("phase", ["worker.create", "worker.upload", "worker.proxy"])
+def test_sandbox_evaluator_propagates_worker_infrastructure_failures(tmp_path, phase):
+    from qea.executors.sandbox_nexau import SandboxInfrastructureError
+    from qea.loop_benchmark import QFBenchSandboxEvaluator
+
+    class FailingExecutor:
+        def execute(self, **kwargs):
+            raise SandboxInfrastructureError(phase, "forced infrastructure failure")
+
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="infrastructure-failure",
+        executor=FailingExecutor(),
+        verifier=SimpleNamespace(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+
+    with pytest.raises(SandboxInfrastructureError) as raised:
+        evaluator.evaluate(
+            worker_dir=_seed_worker(tmp_path),
+            tasks=(SimpleNamespace(task_id="task-a", domain="risk", lineage="a"),),
+            split="optimize",
+            checkpoint="seed-optimize",
+            run_dir=tmp_path / "run",
+        )
+    assert raised.value.phase == phase
+
+
+def test_sandbox_evaluator_propagates_verifier_infrastructure_failure(tmp_path):
+    from qea.executors.sandbox_nexau import SandboxInfrastructureError
+    from qea.loop_benchmark import QFBenchSandboxEvaluator
+
+    task = SimpleNamespace(task_id="task-a", domain="risk", lineage="a")
+
+    class Executor:
+        def execute(self, *, attempt, task, worker_dir, run_dir, model_env):
+            return _execution_for(attempt, run_dir, task)
+
+    class FailingVerifier:
+        def verify(self, **kwargs):
+            raise SandboxInfrastructureError(
+                "verifier.command", "forced infrastructure failure"
+            )
+
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="verifier-failure",
+        executor=Executor(),
+        verifier=FailingVerifier(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+    run_dir = tmp_path / "run"
+
+    with pytest.raises(SandboxInfrastructureError) as raised:
+        evaluator.evaluate(
+            worker_dir=_seed_worker(tmp_path),
+            tasks=(task,),
+            split="optimize",
+            checkpoint="seed-optimize",
+            run_dir=run_dir,
+        )
+    assert raised.value.phase == "verifier.command"
+    assert len(tuple((run_dir / "attempts").glob("*/worker-execution.json"))) == 1
+
+
+def test_sandbox_evaluator_rejects_verifier_score_identity_mismatch(tmp_path):
+    from qea.loop_benchmark import EvolutionConfigError, QFBenchSandboxEvaluator
+
+    task = SimpleNamespace(task_id="task-a", domain="risk", lineage="a")
+
+    class Executor:
+        def execute(self, *, attempt, task, worker_dir, run_dir, model_env):
+            return _execution_for(attempt, run_dir, task)
+
+    class WrongVerifier:
+        def verify(self, **kwargs):
+            return OfficialTaskScore(
+                task_id="different-task",
+                domain="risk",
+                reward=1.0,
+            )
+
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="verifier-mismatch",
+        executor=Executor(),
+        verifier=WrongVerifier(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+
+    with pytest.raises(EvolutionConfigError, match="verifier score identity mismatch"):
+        evaluator.evaluate(
+            worker_dir=_seed_worker(tmp_path),
+            tasks=(task,),
+            split="optimize",
+            checkpoint="seed-optimize",
+            run_dir=tmp_path / "run",
+        )
 
 
 def test_e2b_evaluator_records_worker_command_timeout_as_zero_reward(tmp_path):
-    from qea.executors.e2b_nexau import E2BWorkerTimeout
-    from qea.loop_benchmark import QFBenchE2BEvaluator
+    from qea.executors.execution_record import WorkerBehaviorTimeout
+    from qea.loop_benchmark import QFBenchSandboxEvaluator
 
     task = SimpleNamespace(task_id="slow-task", domain="derivatives", lineage="slow")
     worker = _seed_worker(tmp_path)
 
     class TimeoutExecutor:
         def execute(self, **kwargs):
-            raise E2BWorkerTimeout("worker exceeded the official agent timeout")
+            raise WorkerBehaviorTimeout("worker exceeded the official agent timeout")
 
     class RefusingVerifier:
         def verify(self, **kwargs):
             raise AssertionError("a timed-out worker must not enter the verifier")
 
-    evaluator = QFBenchE2BEvaluator(
+    evaluator = QFBenchSandboxEvaluator(
         benchmark_commit="0" * 40,
         run_id="timeout-score",
         executor=TimeoutExecutor(),
         verifier=RefusingVerifier(),
         model_env={"LLM_API_KEY": "secret"},
-        max_workers=1,
+        worker_concurrency=1,
+        verifier_concurrency=1,
     )
     run_dir = tmp_path / "run"
 

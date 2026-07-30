@@ -297,8 +297,9 @@ def test_worker_refuses_real_model_credentials(tmp_path):
 
 def test_only_task_command_timeout_maps_to_existing_official_zero_path(tmp_path):
     from qea.executors.e2b_nexau import E2BWorkerTimeout
+    from qea.executors.execution_record import WorkerBehaviorTimeout
     from qea.executors.sandbox_nexau import SandboxWorkerTimeout
-    from qea.loop_benchmark import QFBenchE2BEvaluator
+    from qea.loop_benchmark import QFBenchE2BEvaluator, QFBenchSandboxEvaluator
 
     backend = FakeBackend(task_timed_out=True)
     executor = _executor(tmp_path, backend)
@@ -315,6 +316,8 @@ def test_only_task_command_timeout_maps_to_existing_official_zero_path(tmp_path)
         model_env={},
         max_workers=1,
     )
+    assert evaluator.worker_concurrency == 1
+    assert evaluator.verifier_concurrency == 3
     summary = evaluator.evaluate(
         worker_dir=_worker(tmp_path),
         tasks=(_task(),),
@@ -323,6 +326,8 @@ def test_only_task_command_timeout_maps_to_existing_official_zero_path(tmp_path)
         run_dir=tmp_path / "run",
     )
     assert issubclass(SandboxWorkerTimeout, E2BWorkerTimeout)
+    assert issubclass(SandboxWorkerTimeout, WorkerBehaviorTimeout)
+    assert QFBenchE2BEvaluator is QFBenchSandboxEvaluator
     assert summary.scores[0].reward == 0.0
     assert summary.scores[0].diagnostic_tags == ("timeout",)
 

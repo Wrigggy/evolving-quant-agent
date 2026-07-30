@@ -693,6 +693,59 @@ def test_completed_worker_execution_is_loaded_without_new_sandbox(tmp_path):
     assert len(factory.created) == 1
 
 
+def test_existing_worker_execution_manifest_bytes_are_stable(tmp_path):
+    from qea.evaluation import ArtifactRecord
+    from qea.executors.e2b_nexau import (
+        E2BWorkerExecution,
+        _persist_worker_execution,
+    )
+
+    attempt_dir = tmp_path / "attempts" / "attempt-123"
+    artifact_dir = attempt_dir / "artifacts"
+    artifact_dir.mkdir(parents=True)
+    trace_path = attempt_dir / "raw-trace.jsonl"
+    log_path = attempt_dir / "worker-command.json"
+    final_path = attempt_dir / "final.txt"
+    execution = E2BWorkerExecution(
+        attempt_id="attempt-123",
+        artifact_dir=artifact_dir,
+        artifacts=(
+            ArtifactRecord(path="answer.txt", sha256="a" * 64, size_bytes=3),
+        ),
+        trace_uri=str(trace_path),
+        log_uri=str(log_path),
+        final_text_uri=str(final_path),
+        summary={"turns": 2, "files": 1},
+        sandbox_id="sandbox-worker-123",
+        cleaned_up=True,
+    )
+
+    _persist_worker_execution(execution, attempt_dir)
+
+    assert (attempt_dir / "worker-execution.json").read_text() == (
+        "{\n"
+        '  "artifact_dir": "artifacts",\n'
+        '  "artifacts": [\n'
+        "    {\n"
+        '      "path": "answer.txt",\n'
+        f'      "sha256": "{"a" * 64}",\n'
+        '      "size_bytes": 3\n'
+        "    }\n"
+        "  ],\n"
+        '  "attempt_id": "attempt-123",\n'
+        '  "cleaned_up": true,\n'
+        '  "final_text_uri": "final.txt",\n'
+        '  "log_uri": "worker-command.json",\n'
+        '  "sandbox_id": "sandbox-worker-123",\n'
+        '  "summary": {\n'
+        '    "files": 1,\n'
+        '    "turns": 2\n'
+        "  },\n"
+        '  "trace_uri": "raw-trace.jsonl"\n'
+        "}\n"
+    )
+
+
 def test_oracle_parity_runner_uses_no_llm_and_then_separate_verifier(tmp_path):
     from qea.e2b_lease import E2BLeasePool
     from qea.executors.e2b_nexau import E2BOracleRunner, E2BQFBenchVerifier

@@ -6,10 +6,10 @@ import hashlib
 import json
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, Iterable, Mapping, Protocol
+from typing import TYPE_CHECKING, Callable, Iterable, Mapping, Protocol
 
 from .candidate_admission import (
     AdmissionPolicy,
@@ -30,10 +30,19 @@ from .evolution_feedback import (
     load_verifier_mapping,
 )
 from .evolve_runtime import diff_signature, dir_unified_diff, run_evolve_agent, snapshot_dir
+from .executors.execution_record import (
+    WorkerBehaviorTimeout,
+    WorkerExecution,
+    load_worker_execution,
+    persist_worker_execution,
+)
 from .worker_identity import (
     WorkerIdentityError,
     hash_worker_directory as _hash_worker_directory,
 )
+
+if TYPE_CHECKING:
+    from .benchmarks import QFBenchTask
 
 
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -71,7 +80,10 @@ class BenchmarkEvolutionConfig:
     seed_worker_dir: Path | str
     noise_floor: float = 0.02
     max_domain_regression: float = 0.0
-    concurrency: int = 3
+    concurrency: int | None = None
+    worker_concurrency: int | None = None
+    verifier_concurrency: int = 3
+    scheduler_identity_digest: str = "unspecified"
     resume: bool = True
     feedback_mode: FeedbackMode | str = FeedbackMode.CONTROL
     feedback_contract_digest: str = ""
@@ -83,14 +95,38 @@ class BenchmarkEvolutionConfig:
     template_identity_digest: str = "unspecified"
 
     def __post_init__(self) -> None:
-        if self.n_iters not in {3, 5}:
-            raise EvolutionConfigError("QFBench pilot n_iters must be 3 or 5")
+        if self.n_iters not in {1, 3, 5}:
+            raise EvolutionConfigError("QFBench pilot n_iters must be 1, 3, or 5")
         if not _RUN_ID_RE.fullmatch(self.run_id):
             raise EvolutionConfigError("run_id must be a path-safe identifier")
         if self.noise_floor < 0 or self.max_domain_regression < 0:
             raise EvolutionConfigError("noise and domain regression limits must be non-negative")
-        if self.concurrency < 1:
-            raise EvolutionConfigError("concurrency must be positive")
+        if (
+            self.concurrency is not None
+            and self.worker_concurrency is not None
+            and self.concurrency != self.worker_concurrency
+        ):
+            raise EvolutionConfigError(
+                "conflicting worker concurrency values: concurrency and "
+                "worker_concurrency differ"
+            )
+        worker_concurrency = (
+            self.worker_concurrency
+            if self.worker_concurrency is not None
+            else self.concurrency
+        )
+        if worker_concurrency is None:
+            worker_concurrency = 3
+        for name, value in (
+            ("worker_concurrency", worker_concurrency),
+            ("verifier_concurrency", self.verifier_concurrency),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise EvolutionConfigError(f"{name} must be positive")
+        if not self.scheduler_identity_digest.strip():
+            raise EvolutionConfigError("scheduler_identity_digest must be non-empty")
+        object.__setattr__(self, "worker_concurrency", worker_concurrency)
+        object.__setattr__(self, "concurrency", worker_concurrency)
         try:
             FeedbackMode(self.feedback_mode)
         except ValueError as exc:
@@ -306,8 +342,16 @@ def nexau_process_proposer(candidate_dir: Path, diagnosis: dict, iteration: int,
     return run_evolve_agent(candidate_dir, diagnosis, run_dir / f"iteration-{iteration:02d}")
 
 
-class QFBenchE2BEvaluator:
-    """Evaluate task attempts concurrently and resume from per-task official scores."""
+@dataclass(frozen=True)
+class PendingVerification:
+    index: int
+    task: "QFBenchTask"
+    attempt: TaskAttempt
+    execution: WorkerExecution
+
+
+class QFBenchSandboxEvaluator:
+    """Evaluate resumable worker and verifier stages in independent thread pools."""
 
     def __init__(
         self,
@@ -317,18 +361,47 @@ class QFBenchE2BEvaluator:
         executor,
         verifier,
         model_env: Mapping[str, str],
-        max_workers: int = 3,
+        worker_concurrency: int | None = None,
+        verifier_concurrency: int | None = None,
+        max_workers: int | None = None,
     ) -> None:
         if not re.fullmatch(r"[0-9a-f]{40}", benchmark_commit):
             raise EvolutionConfigError("benchmark_commit must be a full SHA")
-        if max_workers < 1:
-            raise EvolutionConfigError("max_workers must be positive")
+        if (
+            max_workers is not None
+            and worker_concurrency is not None
+            and max_workers != worker_concurrency
+        ):
+            raise EvolutionConfigError(
+                "conflicting worker concurrency values: max_workers and "
+                "worker_concurrency differ"
+            )
+        resolved_worker_concurrency = (
+            worker_concurrency
+            if worker_concurrency is not None
+            else max_workers
+        )
+        if resolved_worker_concurrency is None:
+            resolved_worker_concurrency = 3
+        resolved_verifier_concurrency = (
+            verifier_concurrency
+            if verifier_concurrency is not None
+            else 3
+        )
+        for name, value in (
+            ("worker_concurrency", resolved_worker_concurrency),
+            ("verifier_concurrency", resolved_verifier_concurrency),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise EvolutionConfigError(f"{name} must be positive")
         self.benchmark_commit = benchmark_commit
         self.run_id = run_id
         self.executor = executor
         self.verifier = verifier
         self.model_env = dict(model_env)
-        self.max_workers = max_workers
+        self.worker_concurrency = resolved_worker_concurrency
+        self.verifier_concurrency = resolved_verifier_concurrency
+        self.max_workers = resolved_worker_concurrency
 
     @staticmethod
     def _completed_score_path(run_dir: Path, attempt: TaskAttempt) -> Path:
@@ -346,16 +419,35 @@ class QFBenchE2BEvaluator:
             raise EvolutionConfigError(f"completed score identity mismatch for {task.task_id}")
         return score
 
-    def _score_task(
+    @staticmethod
+    def _persist_attempt(run_dir: Path, attempt: TaskAttempt) -> None:
+        path = run_dir / "attempts" / attempt.attempt_id / "attempt.json"
+        payload = asdict(attempt)
+        if path.is_file():
+            try:
+                existing = json.loads(path.read_text())
+            except (OSError, json.JSONDecodeError) as exc:
+                raise EvolutionConfigError(
+                    f"invalid persisted attempt {attempt.attempt_id}: {exc}"
+                ) from exc
+            if existing != payload:
+                raise EvolutionConfigError(
+                    f"persisted attempt identity mismatch for {attempt.task_id}"
+                )
+            return
+        _atomic_json(path, payload)
+
+    def _run_worker_stage(
         self,
         *,
+        index: int,
         task,
         worker_dir: Path,
         worker_digest: str,
         split: str,
         checkpoint: str,
         run_dir: Path,
-    ) -> OfficialTaskScore:
+    ) -> OfficialTaskScore | PendingVerification:
         attempt = TaskAttempt.create(
             run_id=self.run_id,
             benchmark_commit=self.benchmark_commit,
@@ -364,15 +456,10 @@ class QFBenchE2BEvaluator:
             checkpoint=checkpoint,
             worker_digest=worker_digest,
         )
-        _atomic_json(
-            run_dir / "attempts" / attempt.attempt_id / "attempt.json",
-            asdict(attempt),
-        )
+        self._persist_attempt(run_dir, attempt)
         completed = self._load_score(run_dir, attempt, task)
         if completed is not None:
             return completed
-
-        from .executors.e2b_nexau import E2BWorkerTimeout, load_worker_execution
 
         execution = load_worker_execution(attempt, run_dir)
         if execution is None:
@@ -384,7 +471,7 @@ class QFBenchE2BEvaluator:
                     run_dir=run_dir,
                     model_env=self.model_env,
                 )
-            except E2BWorkerTimeout as exc:
+            except WorkerBehaviorTimeout as exc:
                 score = OfficialTaskScore(
                     task_id=task.task_id,
                     domain=task.domain,
@@ -394,14 +481,52 @@ class QFBenchE2BEvaluator:
                 )
                 _atomic_json(self._completed_score_path(run_dir, attempt), asdict(score))
                 return score
-        score = self.verifier.verify(
-            attempt=attempt,
+            if not isinstance(execution, WorkerExecution):
+                raise EvolutionConfigError(
+                    f"executor returned an invalid worker execution for {task.task_id}"
+                )
+            if execution.attempt_id != attempt.attempt_id:
+                raise EvolutionConfigError(
+                    f"worker execution attempt mismatch for {task.task_id}"
+                )
+            attempt_dir = run_dir / "attempts" / attempt.attempt_id
+            persist_worker_execution(execution, attempt_dir)
+            execution = load_worker_execution(attempt, run_dir)
+            if execution is None:
+                raise EvolutionConfigError(
+                    f"worker execution manifest was not persisted for {task.task_id}"
+                )
+        return PendingVerification(
+            index=index,
             task=task,
+            attempt=attempt,
             execution=execution,
+        )
+
+    def _run_verifier_stage(
+        self,
+        pending: PendingVerification,
+        *,
+        run_dir: Path,
+    ) -> tuple[int, OfficialTaskScore]:
+        score = self.verifier.verify(
+            attempt=pending.attempt,
+            task=pending.task,
+            execution=pending.execution,
             run_dir=run_dir,
         )
-        _atomic_json(self._completed_score_path(run_dir, attempt), asdict(score))
-        return score
+        if (
+            score.task_id != pending.task.task_id
+            or score.domain != pending.task.domain
+        ):
+            raise EvolutionConfigError(
+                f"verifier score identity mismatch for {pending.task.task_id}"
+            )
+        _atomic_json(
+            self._completed_score_path(run_dir, pending.attempt),
+            asdict(score),
+        )
+        return pending.index, score
 
     def evaluate(
         self,
@@ -418,19 +543,67 @@ class QFBenchE2BEvaluator:
         worker_path = Path(worker_dir).resolve()
         run_path = Path(run_dir).resolve()
         worker_digest = hash_worker_directory(worker_path)
-        with ThreadPoolExecutor(max_workers=min(self.max_workers, len(task_list))) as pool:
-            futures = [pool.submit(
-                self._score_task,
+        scores: list[OfficialTaskScore | None] = [None] * len(task_list)
+        worker_pool = ThreadPoolExecutor(
+            max_workers=min(self.worker_concurrency, len(task_list))
+        )
+        verifier_pool = ThreadPoolExecutor(
+            max_workers=min(self.verifier_concurrency, len(task_list))
+        )
+        worker_futures = {
+            worker_pool.submit(
+                self._run_worker_stage,
+                index=index,
                 task=task,
                 worker_dir=worker_path,
                 worker_digest=worker_digest,
                 split=split,
                 checkpoint=checkpoint,
                 run_dir=run_path,
-            ) for task in task_list]
-            scores = tuple(future.result() for future in futures)
+            ): index
+            for index, task in enumerate(task_list)
+        }
+        verifier_futures: dict = {}
+        pending_futures = set(worker_futures)
+        try:
+            while pending_futures:
+                completed_futures, pending_futures = wait(
+                    pending_futures,
+                    return_when=FIRST_COMPLETED,
+                )
+                for future in sorted(
+                    completed_futures,
+                    key=lambda item: (
+                        0 if item in worker_futures else 1,
+                        worker_futures.get(item, verifier_futures.get(item, -1)),
+                    ),
+                ):
+                    if future in worker_futures:
+                        index = worker_futures[future]
+                        result = future.result()
+                        if isinstance(result, PendingVerification):
+                            verifier_future = verifier_pool.submit(
+                                self._run_verifier_stage,
+                                result,
+                                run_dir=run_path,
+                            )
+                            verifier_futures[verifier_future] = result.index
+                            pending_futures.add(verifier_future)
+                        else:
+                            scores[index] = result
+                    else:
+                        index, score = future.result()
+                        scores[index] = score
+        finally:
+            for future in pending_futures:
+                future.cancel()
+            verifier_pool.shutdown(wait=True, cancel_futures=True)
+            worker_pool.shutdown(wait=True, cancel_futures=True)
+        if any(score is None for score in scores):
+            raise EvolutionConfigError("evaluation pipeline did not produce every task score")
+        ordered_scores = tuple(score for score in scores if score is not None)
         summary = aggregate_domain_macro(
-            scores, expected_domains={task.domain for task in task_list}
+            ordered_scores, expected_domains={task.domain for task in task_list}
         )
         safe_checkpoint = re.sub(r"[^A-Za-z0-9_.-]+", "-", checkpoint)
         _atomic_json(run_path / "evaluations" / f"{safe_checkpoint}-{worker_digest[:12]}.json", {
@@ -442,6 +615,9 @@ class QFBenchE2BEvaluator:
             "summary": _summary_dict(summary),
         })
         return summary
+
+
+QFBenchE2BEvaluator = QFBenchSandboxEvaluator
 
 
 def _validate_task_sets(optimize_tasks: tuple, held_out_tasks: tuple) -> None:
@@ -641,6 +817,9 @@ def run_benchmark_evolution(
         "model_identity": config.model_identity,
         "seed_digest": hash_worker_directory(seed_source),
         "template_identity_digest": config.template_identity_digest,
+        "worker_concurrency": config.worker_concurrency,
+        "verifier_concurrency": config.verifier_concurrency,
+        "scheduler_identity_digest": config.scheduler_identity_digest,
     }
 
     run_dir = Path(config.results_dir).resolve() / config.run_id
