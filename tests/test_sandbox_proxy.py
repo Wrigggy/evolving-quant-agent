@@ -727,44 +727,232 @@ def test_downloaded_audit_requires_exact_bounded_safe_fields(
 
 
 @pytest.mark.parametrize(
-    "changes",
+    (
+        "request_state",
+        "failure_class",
+        "upstream_status_code",
+        "model",
+        "message",
+    ),
     [
-        {
-            "request_state": "not_accepted",
-            "failure_class": "post_accept_transport",
-            "upstream_status_code": None,
-        },
-        {
-            "request_state": "completed",
-            "failure_class": "provider_http_error",
-            "upstream_status_code": 200,
-        },
-        {
-            "request_state": "completed",
-            "failure_class": None,
-            "upstream_status_code": 500,
-        },
-        {
-            "request_state": "quarantined",
-            "failure_class": "policy_rejection",
-            "upstream_status_code": None,
-        },
+        pytest.param(
+            "not_accepted",
+            "policy_rejection",
+            200,
+            None,
+            "semantic",
+            id="policy-rejection-cannot-have-upstream-status",
+        ),
+        pytest.param(
+            "not_accepted",
+            "pre_accept_transport",
+            200,
+            "openai/gpt-5",
+            "semantic",
+            id="pre-accept-transport-cannot-have-upstream-status",
+        ),
+        pytest.param(
+            "completed",
+            None,
+            500,
+            "openai/gpt-5",
+            "semantic",
+            id="completed-success-requires-non-error-status",
+        ),
+        pytest.param(
+            "completed",
+            "provider_http_error",
+            200,
+            "openai/gpt-5",
+            "semantic",
+            id="provider-error-requires-error-status",
+        ),
+        pytest.param(
+            "quarantined",
+            "post_accept_transport",
+            99,
+            "openai/gpt-5",
+            "upstream status",
+            id="post-accept-transport-status-must-be-http-range",
+        ),
+        pytest.param(
+            "quarantined",
+            "unsafe_upstream_response",
+            None,
+            "openai/gpt-5",
+            "semantic",
+            id="unsafe-response-requires-upstream-status",
+        ),
+        pytest.param(
+            "quarantined",
+            "invalid_upstream_response",
+            None,
+            "openai/gpt-5",
+            "semantic",
+            id="invalid-response-requires-upstream-status",
+        ),
+        pytest.param(
+            "quarantined",
+            "upstream_response_limit",
+            None,
+            "openai/gpt-5",
+            "semantic",
+            id="response-limit-requires-upstream-status",
+        ),
+        pytest.param(
+            "quarantined",
+            "replay_denied",
+            200,
+            "openai/gpt-5",
+            "semantic",
+            id="replay-denial-cannot-have-upstream-status",
+        ),
+        pytest.param(
+            "not_accepted",
+            "post_accept_transport",
+            None,
+            "openai/gpt-5",
+            "semantic",
+            id="state-failure-pair-must-be-produced",
+        ),
     ],
 )
 def test_downloaded_audit_rejects_contradictory_state_failure_semantics(
-    tmp_path, changes
+    tmp_path,
+    request_state,
+    failure_class,
+    upstream_status_code,
+    model,
+    message,
 ):
     run_dir = tmp_path / "run"
-    record = _audit_record("completed")
-    record.update(changes)
-    if record["request_state"] == "not_accepted":
-        record["model"] = "openai/gpt-5"
+    record = _audit_record(request_state)
+    record.update(
+        {
+            "failure_class": failure_class,
+            "upstream_status_code": upstream_status_code,
+            "model": model,
+        }
+    )
     backend = RecordingBackend(
         run_dir,
         audit_payload=(json.dumps(record, sort_keys=True) + "\n").encode(),
     )
     manager = _manager(tmp_path, backend)
 
-    with pytest.raises(Exception, match="semantic"):
+    with pytest.raises(Exception, match=message):
         with _open(manager, run_dir):
             pass
+
+
+@pytest.mark.parametrize(
+    (
+        "request_state",
+        "failure_class",
+        "upstream_status_code",
+        "model",
+    ),
+    [
+        pytest.param(
+            "not_accepted",
+            "policy_rejection",
+            None,
+            None,
+            id="policy-rejection-before-upstream",
+        ),
+        pytest.param(
+            "not_accepted",
+            "pre_accept_transport",
+            None,
+            "openai/gpt-5",
+            id="transport-failure-before-request-transmission",
+        ),
+        pytest.param(
+            "completed",
+            None,
+            200,
+            "openai/gpt-5",
+            id="complete-non-error-response",
+        ),
+        pytest.param(
+            "completed",
+            "provider_http_error",
+            500,
+            "openai/gpt-5",
+            id="complete-provider-error-response",
+        ),
+        pytest.param(
+            "quarantined",
+            "post_accept_transport",
+            None,
+            "openai/gpt-5",
+            id="post-accept-failure-before-response-headers",
+        ),
+        pytest.param(
+            "quarantined",
+            "post_accept_transport",
+            200,
+            "openai/gpt-5",
+            id="post-accept-failure-after-response-headers",
+        ),
+        pytest.param(
+            "quarantined",
+            "unsafe_upstream_response",
+            200,
+            "openai/gpt-5",
+            id="unsafe-response-after-headers",
+        ),
+        pytest.param(
+            "quarantined",
+            "invalid_upstream_response",
+            200,
+            "openai/gpt-5",
+            id="invalid-response-after-headers",
+        ),
+        pytest.param(
+            "quarantined",
+            "upstream_response_limit",
+            200,
+            "openai/gpt-5",
+            id="response-limit-after-headers",
+        ),
+        pytest.param(
+            "quarantined",
+            "replay_denied",
+            None,
+            "openai/gpt-5",
+            id="replay-denied-before-upstream",
+        ),
+    ],
+)
+def test_downloaded_audit_accepts_every_produced_semantic_tuple(
+    tmp_path,
+    request_state,
+    failure_class,
+    upstream_status_code,
+    model,
+):
+    run_dir = tmp_path / "run"
+    record = _audit_record(request_state)
+    record.update(
+        {
+            "failure_class": failure_class,
+            "upstream_status_code": upstream_status_code,
+            "model": model,
+        }
+    )
+    payload = (json.dumps(record, sort_keys=True) + "\n").encode()
+    backend = RecordingBackend(run_dir, audit_payload=payload)
+    manager = _manager(tmp_path, backend)
+
+    with _open(manager, run_dir) as session:
+        pass
+
+    [persisted] = [
+        json.loads(line) for line in session.audit_uri.read_text().splitlines()
+    ]
+    assert (
+        persisted["request_state"],
+        persisted["failure_class"],
+        persisted["upstream_status_code"],
+    ) == (request_state, failure_class, upstream_status_code)

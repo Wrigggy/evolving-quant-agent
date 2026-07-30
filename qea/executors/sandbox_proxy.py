@@ -42,20 +42,24 @@ _MAX_AUDIT_LATENCY_MS = 7 * 24 * 60 * 60 * 1000
 _MAX_REQUEST_IDENTITIES = 10_000
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _PROVIDER_REQUEST_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,511}\Z")
-_REQUEST_STATES = frozenset({"not_accepted", "completed", "quarantined"})
-_FAILURE_CLASSES = frozenset(
-    {
-        None,
-        "policy_rejection",
-        "pre_accept_transport",
-        "post_accept_transport",
-        "unsafe_upstream_response",
-        "invalid_upstream_response",
-        "upstream_response_limit",
-        "provider_http_error",
-        "replay_denied",
-    }
-)
+_STATUS_MUST_BE_NULL = "must_be_null"
+_STATUS_MAY_BE_NULL = "may_be_null_or_http_status"
+_STATUS_MUST_BE_PRESENT = "must_be_http_status"
+_STATUS_MUST_BE_NON_ERROR = "must_be_100_through_399"
+_STATUS_MUST_BE_ERROR = "must_be_400_through_599"
+_AUDIT_STATUS_RULES: Mapping[tuple[str, str | None], str] = {
+    ("not_accepted", "policy_rejection"): _STATUS_MUST_BE_NULL,
+    ("not_accepted", "pre_accept_transport"): _STATUS_MUST_BE_NULL,
+    ("completed", None): _STATUS_MUST_BE_NON_ERROR,
+    ("completed", "provider_http_error"): _STATUS_MUST_BE_ERROR,
+    ("quarantined", "post_accept_transport"): _STATUS_MAY_BE_NULL,
+    ("quarantined", "unsafe_upstream_response"): _STATUS_MUST_BE_PRESENT,
+    ("quarantined", "invalid_upstream_response"): _STATUS_MUST_BE_PRESENT,
+    ("quarantined", "upstream_response_limit"): _STATUS_MUST_BE_PRESENT,
+    ("quarantined", "replay_denied"): _STATUS_MUST_BE_NULL,
+}
+_REQUEST_STATES = frozenset(state for state, _ in _AUDIT_STATUS_RULES)
+_FAILURE_CLASSES = frozenset(failure for _, failure in _AUDIT_STATUS_RULES)
 _CALLER_ROLES = frozenset({"worker", "evolver"})
 _AUDIT_KEYS = frozenset(
     {
@@ -260,31 +264,30 @@ def _validate_audit_semantics(record: Mapping[str, object]) -> None:
         "total_tokens",
         "provider_cost_usd",
     )
-    if state == "not_accepted":
-        if (
-            failure not in {"policy_rejection", "pre_accept_transport"}
-            or status is not None
-            or any(record[field] is not None for field in usage_fields)
-        ):
-            raise SandboxProxyError(
-                "proxy audit state/failure semantic pair is invalid"
-            )
-        return
-    if state == "completed":
-        if status is None or (
-            status >= 400 and failure != "provider_http_error"
-        ) or (status < 400 and failure is not None):
-            raise SandboxProxyError(
-                "proxy audit state/failure semantic pair is invalid"
-            )
-        return
-    if state == "quarantined" and failure not in {
-        "post_accept_transport",
-        "unsafe_upstream_response",
-        "invalid_upstream_response",
-        "upstream_response_limit",
-        "replay_denied",
-    }:
+    status_rule = _AUDIT_STATUS_RULES.get((state, failure))
+    status_is_http = type(status) is int and 100 <= status <= 599
+    status_is_valid = (
+        (status_rule == _STATUS_MUST_BE_NULL and status is None)
+        or (
+            status_rule == _STATUS_MAY_BE_NULL
+            and (status is None or status_is_http)
+        )
+        or (status_rule == _STATUS_MUST_BE_PRESENT and status_is_http)
+        or (
+            status_rule == _STATUS_MUST_BE_NON_ERROR
+            and status_is_http
+            and status < 400
+        )
+        or (
+            status_rule == _STATUS_MUST_BE_ERROR
+            and status_is_http
+            and status >= 400
+        )
+    )
+    if not status_is_valid or (
+        state == "not_accepted"
+        and any(record[field] is not None for field in usage_fields)
+    ):
         raise SandboxProxyError(
             "proxy audit state/failure semantic pair is invalid"
         )
