@@ -82,6 +82,23 @@ import sys
 with socket.create_connection(('127.0.0.1', int(sys.argv[1])), timeout=2):
     pass
 """.strip()
+_FINALIZE_CODE = """
+import http.client
+import sys
+
+connection = http.client.HTTPConnection(
+    '127.0.0.1', int(sys.argv[1]), timeout=float(sys.argv[2])
+)
+connection.request(
+    'POST', '/__qea_private/finalize', body=b'',
+    headers={'Content-Length': '0'},
+)
+response = connection.getresponse()
+payload = response.read()
+sys.stdout.buffer.write(payload)
+connection.close()
+raise SystemExit(0 if response.status == 200 else 3)
+""".strip()
 
 
 class SandboxProxyError(RuntimeError):
@@ -98,6 +115,7 @@ class SandboxProxyConfig:
     allowed_model: str
     listen_port: int = 8080
     timeout_seconds: int = 120
+    expect_request: bool = True
 
     def __post_init__(self) -> None:
         if not isinstance(self.resource_contract, SandboxResourceContract):
@@ -113,6 +131,8 @@ class SandboxProxyConfig:
             raise SandboxProxyError("listen_port must be an integer in [1, 65535]")
         if type(self.timeout_seconds) is not int or self.timeout_seconds <= 0:
             raise SandboxProxyError("timeout_seconds must be a positive integer")
+        if type(self.expect_request) is not bool:
+            raise SandboxProxyError("expect_request must be a boolean")
         object.__setattr__(self, "token_file", Path(self.token_file).expanduser())
 
 
@@ -203,6 +223,71 @@ def _atomic_private_write(path: Path, payload: bytes) -> None:
 
 def _is_optional_integer(value: object) -> bool:
     return value is None or (type(value) is int and value >= 0)
+
+
+def _parse_audit_seal(payload: str) -> Mapping[str, object]:
+    if not isinstance(payload, str) or len(payload.encode()) > 4096:
+        raise SandboxProxyError("proxy audit seal exceeds its bounded contract")
+    try:
+        seal = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise SandboxProxyError("proxy audit seal is invalid JSON") from exc
+    if not isinstance(seal, dict) or set(seal) != {
+        "schema_version",
+        "record_count",
+        "audit_sha256",
+    }:
+        raise SandboxProxyError("proxy audit seal has an unsafe schema")
+    if seal["schema_version"] != 1:
+        raise SandboxProxyError("proxy audit seal version is unsupported")
+    count = seal["record_count"]
+    digest = seal["audit_sha256"]
+    if type(count) is not int or not 0 <= count <= _MAX_REQUEST_IDENTITIES:
+        raise SandboxProxyError("proxy audit seal record count is invalid")
+    if not isinstance(digest, str) or _SHA256.fullmatch(digest) is None:
+        raise SandboxProxyError("proxy audit seal digest is invalid")
+    return seal
+
+
+def _validate_audit_semantics(record: Mapping[str, object]) -> None:
+    state = record["request_state"]
+    failure = record["failure_class"]
+    status = record["upstream_status_code"]
+    usage_fields = (
+        "provider_request_id",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "provider_cost_usd",
+    )
+    if state == "not_accepted":
+        if (
+            failure not in {"policy_rejection", "pre_accept_transport"}
+            or status is not None
+            or any(record[field] is not None for field in usage_fields)
+        ):
+            raise SandboxProxyError(
+                "proxy audit state/failure semantic pair is invalid"
+            )
+        return
+    if state == "completed":
+        if status is None or (
+            status >= 400 and failure != "provider_http_error"
+        ) or (status < 400 and failure is not None):
+            raise SandboxProxyError(
+                "proxy audit state/failure semantic pair is invalid"
+            )
+        return
+    if state == "quarantined" and failure not in {
+        "post_accept_transport",
+        "unsafe_upstream_response",
+        "invalid_upstream_response",
+        "upstream_response_limit",
+        "replay_denied",
+    }:
+        raise SandboxProxyError(
+            "proxy audit state/failure semantic pair is invalid"
+        )
 
 
 def _parse_audit_timestamp(value: object) -> datetime:
@@ -297,6 +382,7 @@ def _parse_audit(
             raise SandboxProxyError("proxy audit provider cost is invalid")
         if record["failure_class"] not in _FAILURE_CLASSES:
             raise SandboxProxyError("proxy audit failure class is invalid")
+        _validate_audit_semantics(record)
         records.append(record)
     return tuple(records)
 
@@ -645,6 +731,41 @@ class SandboxProxyManager:
         finally:
             if yielded and handle is not None:
                 try:
+                    finalize_result = _backend_call(
+                        "proxy.audit.finalize",
+                        lambda: self.backend.run(
+                            handle,
+                            (
+                                "/usr/local/bin/python3",
+                                "-c",
+                                _FINALIZE_CODE,
+                                str(self.config.listen_port),
+                                str(self.config.timeout_seconds),
+                            ),
+                            environment={},
+                            timeout_seconds=self.config.timeout_seconds,
+                        ),
+                        secret=token_buffer,
+                    )
+                    if not isinstance(finalize_result, SandboxCommandResult):
+                        raise SandboxProxyError(
+                            "proxy audit finalize returned an invalid result"
+                        )
+                    if finalize_result.timed_out or finalize_result.exit_code != 0:
+                        detail = (
+                            finalize_result.stderr
+                            or finalize_result.stdout
+                            or f"exit {finalize_result.exit_code}"
+                        )
+                        if token_buffer:
+                            detail = detail.replace(
+                                token_buffer.decode("ascii"), "[REDACTED]"
+                            )
+                        raise SandboxProxyError(
+                            "proxy audit finalize failed: "
+                            + " ".join(detail.split())[:1000]
+                        )
+                    seal = _parse_audit_seal(finalize_result.stdout)
                     audit_payload = _backend_call(
                         "proxy.audit.download",
                         lambda: self.backend.read_bytes(handle, _PRIVATE_AUDIT_PATH),
@@ -654,12 +775,22 @@ class SandboxProxyManager:
                         raise SandboxProxyError(
                             "proxy audit download returned non-bytes data"
                         )
+                    if hashlib.sha256(audit_payload).hexdigest() != seal[
+                        "audit_sha256"
+                    ]:
+                        raise SandboxProxyError(
+                            "proxy audit seal digest does not match downloaded bytes"
+                        )
                     records = _parse_audit(
                         audit_payload,
                         secret=token_buffer,
                         allowed_model=self.config.allowed_model,
                     )
-                    if not records:
+                    if len(records) != seal["record_count"]:
+                        raise SandboxProxyError(
+                            "proxy audit seal record count does not match audit"
+                        )
+                    if self.config.expect_request and not records:
                         raise SandboxProxyError(
                             "proxy audit has no persisted request record"
                         )

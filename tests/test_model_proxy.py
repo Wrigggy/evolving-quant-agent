@@ -1,3 +1,4 @@
+import hashlib
 import http.client
 import json
 import os
@@ -7,6 +8,7 @@ import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -136,6 +138,23 @@ def _request(
     return result
 
 
+def _finalize(proxy):
+    connection = http.client.HTTPConnection(
+        "127.0.0.1", proxy.server_address[1], timeout=3
+    )
+    connection.request(
+        "POST",
+        "/__qea_private/finalize",
+        body=b"",
+        headers={"Content-Length": "0"},
+    )
+    response = connection.getresponse()
+    payload = response.read()
+    result = response.status, payload
+    connection.close()
+    return result
+
+
 def _stop(server, thread):
     server.shutdown()
     server.server_close()
@@ -209,6 +228,36 @@ def _start_short_body_upstream():
     thread = threading.Thread(target=receive_then_truncate_response, daemon=True)
     thread.start()
     return SimpleServerAddress(listener.getsockname()), captured, thread
+
+
+class BlockingUpstreamHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length)
+        self.server.captured.append(body)
+        self.server.request_started.set()
+        assert self.server.release_response.wait(timeout=3)
+        payload = b'{"ok":true}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, format, *args):
+        return
+
+
+def _start_blocking_upstream():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), BlockingUpstreamHandler)
+    server.captured = []
+    server.request_started = threading.Event()
+    server.release_response = threading.Event()
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread
 
 
 def test_proxy_routes_fixed_path_injects_token_and_strips_hop_headers(tmp_path):
@@ -464,6 +513,130 @@ def test_new_proxy_attempt_rejects_prior_request_hash_before_second_upstream_cal
     finally:
         _stop(second_proxy, second_thread)
         _stop(upstream, upstream_thread)
+
+
+def test_finalize_waits_for_inflight_request_then_seals_exact_audit(tmp_path):
+    upstream, upstream_thread = _start_blocking_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    request_result = []
+    finalize_result = []
+    request_done = threading.Event()
+    finalize_done = threading.Event()
+
+    def make_request():
+        try:
+            request_result.append(_request(proxy))
+        finally:
+            request_done.set()
+
+    def finalize():
+        try:
+            finalize_result.append(_finalize(proxy))
+        finally:
+            finalize_done.set()
+
+    request_thread = threading.Thread(target=make_request)
+    finalize_thread = threading.Thread(target=finalize)
+    try:
+        request_thread.start()
+        assert upstream.request_started.wait(timeout=3)
+        finalize_thread.start()
+        assert proxy.finalize_started.wait(timeout=3)
+        assert not finalize_done.is_set()
+        upstream.release_response.set()
+        request_thread.join(timeout=3)
+        finalize_thread.join(timeout=3)
+        assert request_done.is_set()
+        assert finalize_done.is_set()
+        assert request_result[0][0] == 200
+        status, payload = finalize_result[0]
+        assert status == 200
+        seal = json.loads(payload)
+        audit_bytes = (tmp_path / "proxy-audit.jsonl").read_bytes()
+        assert seal == {
+            "audit_sha256": hashlib.sha256(audit_bytes).hexdigest(),
+            "record_count": 1,
+            "schema_version": 1,
+        }
+    finally:
+        upstream.release_response.set()
+        request_thread.join(timeout=3)
+        finalize_thread.join(timeout=3)
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_finalize_reports_prior_record_plus_later_audit_append_loss(
+    tmp_path, monkeypatch
+):
+    import qea.model_proxy as model_proxy
+
+    upstream, upstream_thread = _start_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    original_append = model_proxy._append_audit
+    append_calls = 0
+
+    def fail_second_append(*args, **kwargs):
+        nonlocal append_calls
+        append_calls += 1
+        if append_calls == 2:
+            raise model_proxy.ModelProxyError("synthetic audit append loss")
+        return original_append(*args, **kwargs)
+
+    monkeypatch.setattr(model_proxy, "_append_audit", fail_second_append)
+    try:
+        status, _, _ = _request(proxy, body=b"{}")
+        assert status == 400
+        with pytest.raises((http.client.RemoteDisconnected, ConnectionResetError)):
+            _request(proxy)
+        assert len(upstream.captured) == 1
+        [earlier_record] = _read_audit(tmp_path)
+        assert earlier_record["request_state"] == "not_accepted"
+        status, payload = _finalize(proxy)
+        assert status == 409
+        assert json.loads(payload)["error"]["code"] == "audit_append_failed"
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_finalize_rejects_counted_handler_without_terminal_audit_record(tmp_path):
+    upstream, upstream_thread = _start_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, _ = _request(proxy, body=b"{}")
+        assert status == 400
+        status, _, _ = _request(proxy, path="/outside-allowlist")
+        assert status == 404
+        [earlier_record] = _read_audit(tmp_path)
+        assert earlier_record["request_state"] == "not_accepted"
+
+        status, payload = _finalize(proxy)
+        assert status == 409
+        assert json.loads(payload)["error"]["code"] == (
+            "audit_stream_incomplete"
+        )
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_non_loopback_client_cannot_invoke_private_finalize():
+    from qea.model_proxy import _ModelProxyHandler
+
+    finalized = []
+    rejected = []
+    handler = object.__new__(_ModelProxyHandler)
+    handler.client_address = ("172.20.0.9", 43100)
+    handler.server = SimpleNamespace(
+        finalize_audit=lambda: finalized.append(True)
+    )
+    handler._reject = lambda status, code: rejected.append((status, code))
+
+    handler._finalize()
+
+    assert finalized == []
+    assert rejected == [(403, "finalize_loopback_only")]
 
 
 @pytest.mark.parametrize(

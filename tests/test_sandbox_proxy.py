@@ -71,6 +71,23 @@ def _audit_bytes(request_state: str) -> bytes:
     return (json.dumps(_audit_record(request_state), sort_keys=True) + "\n").encode()
 
 
+def _audit_seal(payload: bytes) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "record_count": len([line for line in payload.splitlines() if line.strip()]),
+        "audit_sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def _seal_result(payload: bytes) -> SandboxCommandResult:
+    return SandboxCommandResult(
+        0,
+        json.dumps(_audit_seal(payload), sort_keys=True),
+        "",
+        False,
+    )
+
+
 def _token_file(tmp_path: Path, *, mode: int = 0o600) -> Path:
     path = tmp_path / "model-token"
     path.write_bytes(REAL_TOKEN + b"\n")
@@ -97,10 +114,12 @@ class RecordingBackend:
         *,
         audit_payload: bytes = _audit_bytes("not_accepted"),
         failure: str | None = None,
+        finalize_result: SandboxCommandResult | None = None,
     ) -> None:
         self.lifecycle_root = lifecycle_root
         self.audit_payload = audit_payload
         self.failure = failure
+        self.finalize_result = finalize_result
         self.events: list[object] = []
         self.specs = []
         self.uploads: list[tuple[str, str, bytes]] = []
@@ -197,6 +216,9 @@ class RecordingBackend:
                 timeout_seconds,
             )
         )
+        if any("/__qea_private/finalize" in str(value) for value in argv):
+            self._fail("finalize")
+            return self.finalize_result or _seal_result(self.audit_payload)
         self._fail("readiness")
         return SandboxCommandResult(0, "ready", "", False)
 
@@ -213,21 +235,30 @@ class RecordingBackend:
         return KillResult(native_id=native_id, outcome="killed")
 
 
-def _manager(tmp_path: Path, backend: RecordingBackend, *, mode: int = 0o600):
+def _manager(
+    tmp_path: Path,
+    backend: RecordingBackend,
+    *,
+    mode: int = 0o600,
+    expect_request: bool | None = None,
+):
     from qea.executors.sandbox_proxy import SandboxProxyConfig, SandboxProxyManager
 
+    config_values = {
+        "image_ref": "sha256:" + "c" * 64,
+        "resource_contract": _resources(),
+        "token_file": _token_file(tmp_path, mode=mode),
+        "upstream_base_url": "https://openrouter.ai/api/v1",
+        "allowed_path_prefix": "/v1",
+        "allowed_model": "openai/gpt-5",
+        "listen_port": 8080,
+        "timeout_seconds": 10,
+    }
+    if expect_request is not None:
+        config_values["expect_request"] = expect_request
     return SandboxProxyManager(
         backend=backend,
-        config=SandboxProxyConfig(
-            image_ref="sha256:" + "c" * 64,
-            resource_contract=_resources(),
-            token_file=_token_file(tmp_path, mode=mode),
-            upstream_base_url="https://openrouter.ai/api/v1",
-            allowed_path_prefix="/v1",
-            allowed_model="openai/gpt-5",
-            listen_port=8080,
-            timeout_seconds=10,
-        ),
+        config=SandboxProxyConfig(**config_values),
         clock=lambda: NOW,
     )
 
@@ -474,6 +505,96 @@ def test_empty_downloaded_audit_quarantines_attempt_and_never_reopens(tmp_path):
     assert second_backend.events == []
 
 
+def test_finalize_failure_quarantines_nonempty_not_accepted_audit_prefix(tmp_path):
+    run_dir = tmp_path / "run"
+    earlier_not_accepted = _audit_bytes("not_accepted")
+    backend = RecordingBackend(
+        run_dir,
+        audit_payload=earlier_not_accepted,
+        finalize_result=SandboxCommandResult(
+            3,
+            json.dumps({"error": {"code": "audit_append_failed"}}),
+            "",
+            False,
+        ),
+    )
+    manager = _manager(tmp_path, backend)
+
+    with pytest.raises(Exception, match="finalize"):
+        with _open(manager, run_dir):
+            pass
+
+    quarantine = (
+        run_dir
+        / "attempts"
+        / "attempt-001"
+        / "proxy-audit.quarantined.json"
+    )
+    assert quarantine.is_file()
+    assert not (
+        run_dir / "attempts" / "attempt-001" / "proxy-audit.jsonl"
+    ).exists()
+    assert backend.events[-2] == ("kill", "proxy-native-1")
+    assert backend.events[-1][0] == "network-remove"
+
+
+@pytest.mark.parametrize(
+    "seal_change",
+    [
+        {"record_count": 2},
+        {"audit_sha256": "b" * 64},
+    ],
+)
+def test_manager_quarantines_seal_count_or_hash_mismatch(tmp_path, seal_change):
+    run_dir = tmp_path / "run"
+    payload = _audit_bytes("completed")
+    seal = _audit_seal(payload)
+    seal.update(seal_change)
+    backend = RecordingBackend(
+        run_dir,
+        audit_payload=payload,
+        finalize_result=SandboxCommandResult(
+            0, json.dumps(seal, sort_keys=True), "", False
+        ),
+    )
+    manager = _manager(tmp_path, backend)
+
+    with pytest.raises(Exception, match="seal"):
+        with _open(manager, run_dir):
+            pass
+
+    assert not (
+        run_dir / "attempts" / "attempt-001" / "proxy-audit.jsonl"
+    ).exists()
+    assert (
+        run_dir
+        / "attempts"
+        / "attempt-001"
+        / "proxy-audit.quarantined.json"
+    ).is_file()
+
+
+def test_sealed_zero_record_session_requires_explicit_no_request_policy(tmp_path):
+    required_run = tmp_path / "required-run"
+    required_backend = RecordingBackend(required_run, audit_payload=b"")
+    required_manager = _manager(tmp_path, required_backend)
+    with pytest.raises(Exception, match="persisted request record"):
+        with _open(required_manager, required_run):
+            pass
+
+    optional_run = tmp_path / "optional-run"
+    optional_backend = RecordingBackend(optional_run, audit_payload=b"")
+    optional_manager = _manager(
+        tmp_path, optional_backend, expect_request=False
+    )
+    with _open(optional_manager, optional_run) as session:
+        pass
+
+    assert session.audit_uri.is_file()
+    assert session.audit_uri.read_bytes() == b""
+    assert not session.audit_uri.with_suffix(".quarantined.json").exists()
+
+
 def test_completed_hash_enters_private_run_registry_and_next_attempt_config(tmp_path):
     request_identity = "a" * 64
     run_dir = tmp_path / "run"
@@ -601,5 +722,49 @@ def test_downloaded_audit_requires_exact_bounded_safe_fields(
     manager = _manager(tmp_path, backend)
 
     with pytest.raises(Exception, match=message):
+        with _open(manager, run_dir):
+            pass
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {
+            "request_state": "not_accepted",
+            "failure_class": "post_accept_transport",
+            "upstream_status_code": None,
+        },
+        {
+            "request_state": "completed",
+            "failure_class": "provider_http_error",
+            "upstream_status_code": 200,
+        },
+        {
+            "request_state": "completed",
+            "failure_class": None,
+            "upstream_status_code": 500,
+        },
+        {
+            "request_state": "quarantined",
+            "failure_class": "policy_rejection",
+            "upstream_status_code": None,
+        },
+    ],
+)
+def test_downloaded_audit_rejects_contradictory_state_failure_semantics(
+    tmp_path, changes
+):
+    run_dir = tmp_path / "run"
+    record = _audit_record("completed")
+    record.update(changes)
+    if record["request_state"] == "not_accepted":
+        record["model"] = "openai/gpt-5"
+    backend = RecordingBackend(
+        run_dir,
+        audit_payload=(json.dumps(record, sort_keys=True) + "\n").encode(),
+    )
+    manager = _manager(tmp_path, backend)
+
+    with pytest.raises(Exception, match="semantic"):
         with _open(manager, run_dir):
             pass

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import http.client
+import ipaddress
 import json
 import os
 import re
@@ -36,7 +37,9 @@ _HOP_BY_HOP = frozenset(
 )
 _TOKEN_PATH = "/run/qea-secrets/model-token"
 _MAX_TOKEN_BYTES = 16 * 1024
+_MAX_AUDIT_BYTES = 16 * 1024 * 1024
 _BUFFER_SIZE = 64 * 1024
+_FINALIZE_PATH = "/__qea_private/finalize"
 _ALLOWED_METHODS = frozenset({"GET", "POST"})
 _AUDIT_STATES = frozenset({"not_accepted", "completed", "quarantined"})
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -64,6 +67,14 @@ _MAX_DENIED_REQUEST_IDENTITIES = 10_000
 
 class ModelProxyError(RuntimeError):
     """Proxy configuration, routing, token storage, or exposure is unsafe."""
+
+
+class _AuditAppendFailed(ModelProxyError):
+    pass
+
+
+class _AuditStreamIncomplete(ModelProxyError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -259,6 +270,41 @@ def _append_audit(
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
+
+
+def _sealed_audit_bytes(path: Path) -> bytes:
+    descriptor = _open_private_audit(path)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise ModelProxyError("audit file cannot be sealed safely") from exc
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ModelProxyError("audit file must be regular")
+        if hasattr(os, "getuid") and metadata.st_uid != os.getuid():
+            raise ModelProxyError("audit file must be owned by the proxy user")
+        if stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise ModelProxyError(
+                "audit file must have no group or other permission bits"
+            )
+        payload = bytearray()
+        while True:
+            chunk = os.read(descriptor, _BUFFER_SIZE)
+            if not chunk:
+                break
+            payload.extend(chunk)
+            if len(payload) > _MAX_AUDIT_BYTES:
+                raise ModelProxyError("audit file exceeds its seal bound")
+        return bytes(payload)
+    finally:
+        os.close(descriptor)
 
 
 @dataclass(frozen=True)
@@ -754,7 +800,93 @@ class _ModelProxyServer(ThreadingHTTPServer):
     def __init__(self, address, policy: _ProxyPolicy) -> None:
         self.policy = policy
         self.audit_lock = threading.Lock()
+        self.handler_condition = threading.Condition()
+        self.active_normal_handlers = 0
+        self.normal_handler_count = 0
+        self.audit_append_failures = 0
+        self.audit_record_count = 0
+        self.finalizing = False
+        self.finalize_failure: ModelProxyError | None = None
+        self.audit_seal: dict[str, object] | None = None
+        self.finalize_started = threading.Event()
         super().__init__(address, _ModelProxyHandler)
+
+    def begin_normal_handler(self) -> bool:
+        with self.handler_condition:
+            if self.finalizing or self.audit_seal is not None:
+                return False
+            self.active_normal_handlers += 1
+            self.normal_handler_count += 1
+            return True
+
+    def finish_normal_handler(self) -> None:
+        with self.handler_condition:
+            self.active_normal_handlers -= 1
+            if self.active_normal_handlers < 0:
+                raise ModelProxyError("proxy handler accounting underflow")
+            self.handler_condition.notify_all()
+
+    def append_audit(self, record: Mapping[str, object]) -> None:
+        try:
+            _append_audit(
+                self.policy.audit_file,
+                record,
+                lock=self.audit_lock,
+            )
+        except BaseException:
+            with self.handler_condition:
+                self.audit_append_failures += 1
+                self.handler_condition.notify_all()
+            raise
+        with self.handler_condition:
+            self.audit_record_count += 1
+
+    def finalize_audit(self) -> dict[str, object]:
+        with self.handler_condition:
+            if self.audit_seal is not None:
+                return dict(self.audit_seal)
+            if self.finalize_failure is not None:
+                raise self.finalize_failure
+            if self.finalizing:
+                while self.audit_seal is None and self.finalize_failure is None:
+                    self.handler_condition.wait()
+                if self.finalize_failure is not None:
+                    raise self.finalize_failure
+                return dict(self.audit_seal or {})
+            self.finalizing = True
+            self.finalize_started.set()
+            while self.active_normal_handlers:
+                self.handler_condition.wait()
+            if self.audit_append_failures:
+                failure = _AuditAppendFailed("one or more audit appends failed")
+                self.finalize_failure = failure
+                self.handler_condition.notify_all()
+                raise failure
+            if self.audit_record_count != self.normal_handler_count:
+                failure = _AuditStreamIncomplete(
+                    "one or more normal handlers lack a terminal audit record"
+                )
+                self.finalize_failure = failure
+                self.handler_condition.notify_all()
+                raise failure
+            record_count = self.audit_record_count
+        try:
+            with self.audit_lock:
+                payload = _sealed_audit_bytes(self.policy.audit_file)
+            seal: dict[str, object] = {
+                "schema_version": 1,
+                "record_count": record_count,
+                "audit_sha256": hashlib.sha256(payload).hexdigest(),
+            }
+        except ModelProxyError as exc:
+            with self.handler_condition:
+                self.finalize_failure = exc
+                self.handler_condition.notify_all()
+            raise
+        with self.handler_condition:
+            self.audit_seal = seal
+            self.handler_condition.notify_all()
+        return dict(seal)
 
 
 class _ModelProxyHandler(BaseHTTPRequestHandler):
@@ -772,6 +904,46 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             separators=(",", ":"),
         ).encode()
         self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(payload)
+        self.close_connection = True
+
+    def _finalize(self) -> None:
+        try:
+            client_is_loopback = ipaddress.ip_address(
+                self.client_address[0]
+            ).is_loopback
+        except ValueError:
+            client_is_loopback = False
+        if not client_is_loopback:
+            self._reject(403, "finalize_loopback_only")
+            return
+        if self.command != "POST":
+            self._reject(405, "method_not_allowed")
+            return
+        if self.headers.get("Transfer-Encoding") or self.headers.get(
+            "Content-Length", "0"
+        ) != "0":
+            self._reject(400, "finalize_body_forbidden")
+            return
+        try:
+            seal = self.server.finalize_audit()
+        except _AuditAppendFailed:
+            self._reject(409, "audit_append_failed")
+            return
+        except _AuditStreamIncomplete:
+            self._reject(409, "audit_stream_incomplete")
+            return
+        except ModelProxyError:
+            self._reject(409, "audit_finalize_failed")
+            return
+        payload = json.dumps(
+            seal, sort_keys=True, separators=(",", ":")
+        ).encode()
+        self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Connection", "close")
@@ -862,8 +1034,7 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
     ) -> None:
         policy: _ProxyPolicy = self.server.policy
         elapsed = max(0.0, time.monotonic() - started_monotonic)
-        _append_audit(
-            policy.audit_file,
+        self.server.append_audit(
             {
                 "schema_version": 1,
                 "request_identity_sha256": request_identity_sha256,
@@ -879,11 +1050,10 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                 "total_tokens": total_tokens,
                 "provider_cost_usd": provider_cost_usd,
                 "failure_class": failure_class,
-            },
-            lock=self.server.audit_lock,
+            }
         )
 
-    def _proxy(self) -> None:
+    def _proxy_counted(self) -> None:
         policy: _ProxyPolicy = self.server.policy
         if self.command not in _ALLOWED_METHODS:
             self._reject(405, "method_not_allowed")
@@ -1163,11 +1333,29 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             spool.close()
             connection.close()
 
+    def _proxy(self) -> None:
+        if self.path == _FINALIZE_PATH:
+            self._finalize()
+            return
+        if not self.server.begin_normal_handler():
+            self._reject(409, "proxy_finalized")
+            return
+        try:
+            self._proxy_counted()
+        finally:
+            self.server.finish_normal_handler()
+
     do_GET = _proxy
     do_POST = _proxy
 
     def do_CONNECT(self) -> None:
-        self._reject(405, "method_not_allowed")
+        if not self.server.begin_normal_handler():
+            self._reject(409, "proxy_finalized")
+            return
+        try:
+            self._reject(405, "method_not_allowed")
+        finally:
+            self.server.finish_normal_handler()
 
     do_DELETE = do_CONNECT
     do_HEAD = do_CONNECT
