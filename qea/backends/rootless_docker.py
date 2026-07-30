@@ -313,6 +313,9 @@ class RootlessDockerBackend:
             "qea.attempt-id": spec.attempt_id,
             "qea.task-id": spec.task_id,
             "qea.spec-sha256": spec.spec_sha256,
+            "qea.network-scope-mode": (
+                "legacy" if spec.network_scope is None else "scoped"
+            ),
         }
         if spec.network_scope is not None:
             labels["qea.network-scope"] = spec.network_scope
@@ -385,6 +388,19 @@ class RootlessDockerBackend:
         if state.labels.get("qea.role") == "proxy":
             run_id = state.labels.get("qea.run-id", "")
             network_scope = state.labels.get("qea.network-scope")
+            scope_mode = state.labels.get("qea.network-scope-mode")
+            if scope_mode == "scoped" and network_scope is None:
+                raise RootlessDockerError(
+                    "scoped proxy is missing its network scope label"
+                )
+            if scope_mode == "legacy" and network_scope is not None:
+                raise RootlessDockerError(
+                    "legacy proxy has an unexpected network scope label"
+                )
+            if scope_mode not in {None, "legacy", "scoped"}:
+                raise RootlessDockerError(
+                    f"proxy has an invalid network scope mode: {scope_mode!r}"
+                )
             network_name = self._internal_network_name(run_id, network_scope)
             result = self.runner.run(
                 self._argv(
@@ -800,16 +816,23 @@ class RootlessDockerBackend:
         inspected = self._inspect_internal_network(name)
         if inspected is None:
             return False
-        native_id = inspected[0]
+        native_id, _, inspected_labels = inspected
+        required_labels = self._internal_network_labels(
+            run_id=safe_run_id,
+            network_scope=None,
+            identity_sha256=identity,
+        )
+        if "qea.network-identity-sha256" not in inspected_labels:
+            required_labels.pop("qea.network-identity-sha256")
+        if "qea.network-scope" in inspected_labels:
+            raise RootlessDockerError(
+                f"network ownership check failed for {native_id!r}"
+            )
         self._require_internal_network_identity(
             inspected,
             native_id=native_id,
             name=name,
-            labels=self._internal_network_labels(
-                run_id=safe_run_id,
-                network_scope=None,
-                identity_sha256=identity,
-            ),
+            labels=required_labels,
         )
         return self._remove_internal_network_by_id(native_id) == "killed"
 

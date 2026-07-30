@@ -82,6 +82,7 @@ def _handle(spec: SandboxSpec | None = None) -> SandboxHandle:
 
 def _labels(spec: SandboxSpec | None = None) -> dict[str, str]:
     actual = spec or _spec()
+    network_scope = getattr(actual, "network_scope", None)
     labels = {
         "qea.managed": "true",
         "qea.backend": "rootless-docker",
@@ -90,8 +91,10 @@ def _labels(spec: SandboxSpec | None = None) -> dict[str, str]:
         "qea.attempt-id": actual.attempt_id,
         "qea.task-id": actual.task_id,
         "qea.spec-sha256": actual.spec_sha256,
+        "qea.network-scope-mode": (
+            "legacy" if network_scope is None else "scoped"
+        ),
     }
-    network_scope = getattr(actual, "network_scope", None)
     if network_scope is not None:
         labels["qea.network-scope"] = network_scope
     return labels
@@ -277,8 +280,10 @@ def test_proxy_start_connects_internal_network_before_starting() -> None:
         network_policy="proxy-outbound",
         environment={"QEA_ROLE": "proxy"},
     )
+    historical_labels = _labels(spec)
+    historical_labels.pop("qea.network-scope-mode")
     runner = RecordingRunner(
-        _inspect_reply(spec),
+        _inspect_reply(spec, labels=historical_labels),
         CompletedCommand(0, b"", b""),
         CompletedCommand(0, b"container-exact-1\n", b""),
     )
@@ -294,6 +299,28 @@ def test_proxy_start_connects_internal_network_before_starting() -> None:
         "container-exact-1",
     )
     assert runner.calls[2].argv[-2:] == ("start", "container-exact-1")
+
+
+def test_scoped_proxy_missing_persisted_scope_fails_before_network_command() -> None:
+    spec = _spec(
+        role="proxy",
+        attempt_id="proxy-a",
+        network_policy="proxy-outbound",
+        network_scope="attempt-a",
+        environment={"QEA_ROLE": "proxy"},
+    )
+    inconsistent_labels = _labels(spec)
+    inconsistent_labels.pop("qea.network-scope")
+    runner = RecordingRunner(
+        _inspect_reply(spec, labels=inconsistent_labels),
+        CompletedCommand(0, b"", b""),
+        CompletedCommand(0, b"container-exact-1\n", b""),
+    )
+
+    with pytest.raises(RootlessDockerError, match="scoped.*network scope"):
+        _backend(runner).start(_handle(spec))
+
+    assert len(runner.calls) == 1
 
 
 def test_proxy_joins_only_the_network_created_for_its_scope() -> None:
@@ -594,6 +621,10 @@ def test_scoped_worker_networks_have_distinct_native_ids_names_and_routes() -> N
         "--label",
         "qea.network-scope=attempt-a",
     ) in _option_pairs(runner.calls[4].argv, "--label")
+    assert (
+        "--label",
+        "qea.network-scope-mode=scoped",
+    ) in _option_pairs(runner.calls[4].argv, "--label")
     assert ("--network", network_b.name) in _option_pairs(
         runner.calls[5].argv, "--network"
     )
@@ -736,6 +767,33 @@ def test_legacy_run_scoped_network_keeps_historical_name_and_cleanup() -> None:
         "network",
         "rm",
         "legacy-network-id",
+    )
+
+
+def test_legacy_cleanup_accepts_prechange_labels_and_removes_inspected_id() -> None:
+    prechange_labels = {
+        "qea.managed": "true",
+        "qea.backend": "rootless-docker",
+        "qea.run-id": "run-1",
+        "qea.network-policy": "internal",
+    }
+    runner = RecordingRunner(
+        _network_inspect_reply(
+            native_id="historical-network-id",
+            name="qea-run-1-internal",
+            network_scope=None,
+            identity_sha256="0" * 64,
+            labels=prechange_labels,
+        ),
+        CompletedCommand(0, b"historical-network-id\n", b""),
+    )
+
+    assert _backend(runner).remove_internal_network("run-1") is True
+    assert runner.calls[0].argv[-1] == "qea-run-1-internal"
+    assert runner.calls[1].argv[-3:] == (
+        "network",
+        "rm",
+        "historical-network-id",
     )
 
 
