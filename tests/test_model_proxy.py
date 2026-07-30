@@ -176,6 +176,41 @@ def _start_disconnect_upstream():
     return SimpleServerAddress(listener.getsockname()), captured, thread
 
 
+def _start_short_body_upstream():
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    captured = []
+
+    def receive_then_truncate_response():
+        connection, _ = listener.accept()
+        with connection:
+            payload = b""
+            while b"\r\n\r\n" not in payload:
+                payload += connection.recv(4096)
+            headers, body = payload.split(b"\r\n\r\n", 1)
+            length = 0
+            for line in headers.split(b"\r\n")[1:]:
+                name, value = line.split(b":", 1)
+                if name.lower() == b"content-length":
+                    length = int(value.strip())
+            while len(body) < length:
+                body += connection.recv(4096)
+            captured.append(headers + b"\r\n\r\n" + body)
+            connection.sendall(
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: application/json\r\n"
+                b"Content-Length: 64\r\n"
+                b"Connection: close\r\n\r\n"
+                b'{"truncated":true}'
+            )
+        listener.close()
+
+    thread = threading.Thread(target=receive_then_truncate_response, daemon=True)
+    thread.start()
+    return SimpleServerAddress(listener.getsockname()), captured, thread
+
+
 def test_proxy_routes_fixed_path_injects_token_and_strips_hop_headers(tmp_path):
     upstream, upstream_thread = _start_upstream()
     proxy, proxy_thread = _start_proxy(tmp_path, upstream)
@@ -349,6 +384,86 @@ def test_proxy_quarantines_disconnect_after_request_bytes_are_received(tmp_path)
         assert audit["upstream_status_code"] is None
     finally:
         _stop(proxy, proxy_thread)
+
+
+def test_proxy_quarantines_response_shorter_than_declared_content_length(tmp_path):
+    upstream, captured, upstream_thread = _start_short_body_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, payload = _request(proxy)
+        assert status == 502
+        assert b"incomplete_upstream_response" in payload
+        upstream_thread.join(timeout=3)
+        assert not upstream_thread.is_alive()
+        assert len(captured) == 1
+        [audit] = _read_audit(tmp_path)
+        assert audit["request_state"] == "quarantined"
+        assert audit["failure_class"] == "post_accept_transport"
+        assert audit["upstream_status_code"] == 200
+    finally:
+        _stop(proxy, proxy_thread)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'{"model":"other","model":"fixture"}',
+        b'{"model":"fixture","messages":{"role":"user","role":"system"}}',
+    ],
+)
+def test_proxy_rejects_duplicate_json_keys_before_upstream_forwarding(tmp_path, body):
+    upstream, upstream_thread = _start_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, payload = _request(proxy, body=body)
+        assert status == 400
+        assert json.loads(payload)["error"]["code"] == "duplicate_json_key"
+        assert upstream.captured == []
+        [audit] = _read_audit(tmp_path)
+        assert audit["request_state"] == "not_accepted"
+        assert audit["failure_class"] == "policy_rejection"
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_new_proxy_attempt_rejects_prior_request_hash_before_second_upstream_call(
+    tmp_path,
+):
+    upstream, upstream_thread = _start_upstream()
+    first_dir = tmp_path / "attempt-a"
+    second_dir = tmp_path / "attempt-b"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    first_proxy, first_thread = _start_proxy(first_dir, upstream)
+    try:
+        status, _, _ = _request(first_proxy)
+        assert status == 200
+        [first_audit] = _read_audit(first_dir)
+    finally:
+        _stop(first_proxy, first_thread)
+
+    second_proxy, second_thread = _start_proxy(
+        second_dir,
+        upstream,
+        denied_request_identities_sha256=(
+            first_audit["request_identity_sha256"],
+        ),
+    )
+    try:
+        status, _, payload = _request(second_proxy)
+        assert status == 409
+        assert json.loads(payload)["error"]["code"] == "request_replay_forbidden"
+        assert len(upstream.captured) == 1
+        [second_audit] = _read_audit(second_dir)
+        assert second_audit["request_identity_sha256"] == (
+            first_audit["request_identity_sha256"]
+        )
+        assert second_audit["request_state"] == "quarantined"
+        assert second_audit["failure_class"] == "replay_denied"
+    finally:
+        _stop(second_proxy, second_thread)
+        _stop(upstream, upstream_thread)
 
 
 @pytest.mark.parametrize(

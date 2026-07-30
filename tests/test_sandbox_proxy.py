@@ -95,7 +95,7 @@ class RecordingBackend:
         self,
         lifecycle_root: Path,
         *,
-        audit_payload: bytes = b"",
+        audit_payload: bytes = _audit_bytes("not_accepted"),
         failure: str | None = None,
     ) -> None:
         self.lifecycle_root = lifecycle_root
@@ -325,6 +325,22 @@ def test_start_and_transfer_failures_cleanup_exact_recorded_ids(tmp_path, failur
     assert REAL_TOKEN.decode() not in lifecycle_path.read_text()
 
 
+def test_readiness_failure_retains_token_redaction_through_lifecycle_cleanup(tmp_path):
+    run_dir = tmp_path / "run"
+    backend = RecordingBackend(run_dir, failure="readiness")
+    manager = _manager(tmp_path, backend)
+
+    with pytest.raises(Exception) as raised:
+        with _open(manager, run_dir):
+            pytest.fail("session must not be yielded")
+
+    assert REAL_TOKEN.decode() not in str(raised.value)
+    lifecycle_path = next(run_dir.rglob("proxy-sandbox-lifecycle-v2.json"))
+    assert REAL_TOKEN.decode() not in lifecycle_path.read_text()
+    assert ("kill", "proxy-native-1") in backend.events
+    assert backend.events[-1] == ("network-remove", backend.network_handles[0])
+
+
 def test_caller_exception_is_preserved_after_audit_download_and_cleanup(tmp_path):
     class CallerFailure(RuntimeError):
         pass
@@ -428,6 +444,78 @@ def test_resume_may_retry_request_proven_not_accepted(tmp_path):
     assert second_backend.events[0][0] == "network-create"
 
 
+def test_empty_downloaded_audit_quarantines_attempt_and_never_reopens(tmp_path):
+    run_dir = tmp_path / "run"
+    first_backend = RecordingBackend(run_dir, audit_payload=b"")
+    manager = _manager(tmp_path, first_backend)
+
+    with pytest.raises(Exception, match="persisted request record"):
+        with _open(manager, run_dir):
+            pass
+
+    quarantine = (
+        run_dir
+        / "attempts"
+        / "attempt-001"
+        / "proxy-audit.quarantined.json"
+    )
+    assert quarantine.is_file()
+    assert quarantine.stat().st_mode & 0o777 == 0o600
+    assert json.loads(quarantine.read_text())["request_state"] == "quarantined"
+    assert not (
+        run_dir / "attempts" / "attempt-001" / "proxy-audit.jsonl"
+    ).exists()
+
+    second_backend = RecordingBackend(run_dir)
+    manager = _manager(tmp_path, second_backend)
+    with pytest.raises(Exception, match="quarantined"):
+        with _open(manager, run_dir):
+            pytest.fail("an audit-loss attempt must not reopen")
+    assert second_backend.events == []
+
+
+def test_completed_hash_enters_private_run_registry_and_next_attempt_config(tmp_path):
+    request_identity = "a" * 64
+    run_dir = tmp_path / "run"
+    first_backend = RecordingBackend(
+        run_dir, audit_payload=_audit_bytes("completed")
+    )
+    manager = _manager(tmp_path, first_backend)
+    with _open(manager, run_dir, "attempt-a"):
+        pass
+
+    registry = run_dir / "proxy-request-registry.json"
+    assert registry.is_file()
+    assert registry.stat().st_mode & 0o777 == 0o600
+    assert json.loads(registry.read_text()) == {
+        "request_identities_sha256": [request_identity],
+        "schema_version": 1,
+    }
+
+    second_backend = RecordingBackend(run_dir)
+    manager = _manager(tmp_path, second_backend)
+    with _open(manager, run_dir, "attempt-b") as session:
+        config_upload = next(
+            payload
+            for _, path, payload in second_backend.uploads
+            if path == "/run/qea-secrets/proxy-config.json"
+        )
+        private_config = json.loads(config_upload)
+        assert private_config["denied_request_identities_sha256"] == [
+            request_identity
+        ]
+        public_surface = json.dumps(
+            {
+                "session": asdict(session),
+                "spec": second_backend.specs[0].canonical_json(),
+                "lifecycle": session.lifecycle_uri.read_text(),
+            },
+            default=str,
+            sort_keys=True,
+        )
+        assert request_identity not in public_surface
+
+
 def test_downloaded_audit_rejects_authorization_smuggled_in_safe_field(tmp_path):
     run_dir = tmp_path / "run"
     record = _audit_record("completed")
@@ -449,3 +537,69 @@ def test_downloaded_audit_rejects_authorization_smuggled_in_safe_field(tmp_path)
     ).lower()
     assert backend.events[-2] == ("kill", "proxy-native-1")
     assert backend.events[-1][0] == "network-remove"
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "model",
+        "started_at",
+        "finished_at",
+        "provider_request_id",
+        "failure_class",
+    ],
+)
+def test_downloaded_audit_rejects_token_smuggled_in_any_string_field(
+    tmp_path, field
+):
+    run_dir = tmp_path / "run"
+    record = _audit_record("completed")
+    record[field] = REAL_TOKEN.decode()
+    payload = (json.dumps(record, sort_keys=True) + "\n").encode()
+    backend = RecordingBackend(run_dir, audit_payload=payload)
+    manager = _manager(tmp_path, backend)
+
+    with pytest.raises(Exception):
+        with _open(manager, run_dir):
+            pass
+
+    assert REAL_TOKEN.decode() not in "".join(
+        path.read_text()
+        for path in run_dir.rglob("*")
+        if path.is_file()
+    )
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"model": "anthropic/other-model"}, "model"),
+        ({"model": None}, "model"),
+        ({"started_at": "not-a-timestamp"}, "timestamp"),
+        ({"started_at": "9999-01-01T00:00:00+00:00"}, "timestamp"),
+        (
+            {
+                "started_at": "2026-07-31T12:00:02+00:00",
+                "finished_at": "2026-07-31T12:00:01+00:00",
+            },
+            "timestamp",
+        ),
+        ({"failure_class": "arbitrary free form"}, "failure class"),
+        ({"provider_request_id": "x" * 513}, "provider request ID"),
+    ],
+)
+def test_downloaded_audit_requires_exact_bounded_safe_fields(
+    tmp_path, changes, message
+):
+    run_dir = tmp_path / "run"
+    record = _audit_record("completed")
+    record.update(changes)
+    backend = RecordingBackend(
+        run_dir,
+        audit_payload=(json.dumps(record, sort_keys=True) + "\n").encode(),
+    )
+    manager = _manager(tmp_path, backend)
+
+    with pytest.raises(Exception, match=message):
+        with _open(manager, run_dir):
+            pass

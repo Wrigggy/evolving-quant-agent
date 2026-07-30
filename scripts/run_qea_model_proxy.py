@@ -19,6 +19,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allowed-model", required=True)
     parser.add_argument("--token-file", required=True)
     parser.add_argument("--audit-file", required=True)
+    parser.add_argument(
+        "--denied-request-identity-sha256", action="append", default=[]
+    )
     parser.add_argument("--max-request-bytes", type=int, default=8 * 1024 * 1024)
     parser.add_argument("--max-response-bytes", type=int, default=64 * 1024 * 1024)
     parser.add_argument("--connect-timeout-seconds", type=float, default=10.0)
@@ -38,6 +41,9 @@ def main(argv: list[str] | None = None) -> int:
                 allowed_model=args.allowed_model,
                 token_file=args.token_file,
                 audit_file=args.audit_file,
+                denied_request_identities_sha256=tuple(
+                    args.denied_request_identity_sha256
+                ),
                 max_request_bytes=args.max_request_bytes,
                 max_response_bytes=args.max_response_bytes,
                 connect_timeout_seconds=args.connect_timeout_seconds,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 from contextlib import contextmanager
@@ -37,9 +38,24 @@ _PRIVATE_TOKEN_PATH = "/run/qea-secrets/model-token"
 _PRIVATE_AUDIT_PATH = "/run/qea-secrets/proxy-audit.jsonl"
 _PROXY_ALIAS = "qea-model-proxy"
 _MAX_AUDIT_BYTES = 16 * 1024 * 1024
+_MAX_AUDIT_LATENCY_MS = 7 * 24 * 60 * 60 * 1000
+_MAX_REQUEST_IDENTITIES = 10_000
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _PROVIDER_REQUEST_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,511}\Z")
 _REQUEST_STATES = frozenset({"not_accepted", "completed", "quarantined"})
+_FAILURE_CLASSES = frozenset(
+    {
+        None,
+        "policy_rejection",
+        "pre_accept_transport",
+        "post_accept_transport",
+        "unsafe_upstream_response",
+        "invalid_upstream_response",
+        "upstream_response_limit",
+        "provider_http_error",
+        "replay_denied",
+    }
+)
 _CALLER_ROLES = frozenset({"worker", "evolver"})
 _AUDIT_KEYS = frozenset(
     {
@@ -116,7 +132,7 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _safe_detail(value: BaseException, secret: bytes) -> str:
+def _safe_detail(value: BaseException, secret: bytes | bytearray) -> str:
     detail = f"{type(value).__name__}: {value}"
     if secret:
         try:
@@ -130,7 +146,7 @@ def _backend_call(
     phase: str,
     operation: Callable[[], object],
     *,
-    secret: bytes,
+    secret: bytes | bytearray,
 ):
     try:
         return operation()
@@ -189,10 +205,30 @@ def _is_optional_integer(value: object) -> bool:
     return value is None or (type(value) is int and value >= 0)
 
 
-def _parse_audit(payload: bytes, *, secret: bytes) -> tuple[Mapping[str, object], ...]:
+def _parse_audit_timestamp(value: object) -> datetime:
+    if not isinstance(value, str) or not 20 <= len(value) <= 64:
+        raise SandboxProxyError("proxy audit timestamp is invalid")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise SandboxProxyError("proxy audit timestamp is invalid") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise SandboxProxyError("proxy audit timestamp is invalid")
+    normalized = parsed.astimezone(timezone.utc)
+    if not 2000 <= normalized.year <= 2100:
+        raise SandboxProxyError("proxy audit timestamp is outside its bound")
+    return normalized
+
+
+def _parse_audit(
+    payload: bytes,
+    *,
+    secret: bytes | bytearray,
+    allowed_model: str,
+) -> tuple[Mapping[str, object], ...]:
     if not isinstance(payload, bytes) or len(payload) > _MAX_AUDIT_BYTES:
         raise SandboxProxyError("proxy audit exceeds its bounded transfer contract")
-    if secret and secret in payload:
+    if secret and payload.find(secret) >= 0:
         raise SandboxProxyError("proxy audit contains forbidden credential bytes")
     records: list[Mapping[str, object]] = []
     for line_number, line in enumerate(payload.splitlines(), start=1):
@@ -215,20 +251,31 @@ def _parse_audit(payload: bytes, *, secret: bytes) -> tuple[Mapping[str, object]
             raise SandboxProxyError("proxy audit request identity is invalid")
         if record["request_state"] not in _REQUEST_STATES:
             raise SandboxProxyError("proxy audit request state is invalid")
-        if record["model"] is not None and not isinstance(record["model"], str):
+        model = record["model"]
+        model_is_policy_rejection = (
+            model is None
+            and record["request_state"] == "not_accepted"
+            and record["failure_class"] == "policy_rejection"
+        )
+        if model != allowed_model and not model_is_policy_rejection:
             raise SandboxProxyError("proxy audit model is invalid")
-        if not isinstance(record["started_at"], str) or not isinstance(
-            record["finished_at"], str
-        ):
-            raise SandboxProxyError("proxy audit timestamps are invalid")
+        started_at = _parse_audit_timestamp(record["started_at"])
+        finished_at = _parse_audit_timestamp(record["finished_at"])
+        if finished_at < started_at:
+            raise SandboxProxyError("proxy audit timestamp order is invalid")
         latency = record["latency_ms"]
         if (
             isinstance(latency, bool)
             or not isinstance(latency, (int, float))
+            or not math.isfinite(latency)
             or latency < 0
+            or latency > _MAX_AUDIT_LATENCY_MS
         ):
             raise SandboxProxyError("proxy audit latency is invalid")
-        if not _is_optional_integer(record["upstream_status_code"]):
+        status = record["upstream_status_code"]
+        if status is not None and (
+            type(status) is not int or not 100 <= status <= 599
+        ):
             raise SandboxProxyError("proxy audit upstream status is invalid")
         provider_request_id = record["provider_request_id"]
         if provider_request_id is not None and (
@@ -241,12 +288,14 @@ def _parse_audit(payload: bytes, *, secret: bytes) -> tuple[Mapping[str, object]
                 raise SandboxProxyError(f"proxy audit {field} is invalid")
         cost = record["provider_cost_usd"]
         if cost is not None and (
-            isinstance(cost, bool) or not isinstance(cost, (int, float)) or cost < 0
+            isinstance(cost, bool)
+            or not isinstance(cost, (int, float))
+            or not math.isfinite(cost)
+            or cost < 0
+            or cost > 10**9
         ):
             raise SandboxProxyError("proxy audit provider cost is invalid")
-        if record["failure_class"] is not None and not isinstance(
-            record["failure_class"], str
-        ):
+        if record["failure_class"] not in _FAILURE_CLASSES:
             raise SandboxProxyError("proxy audit failure class is invalid")
         records.append(record)
     return tuple(records)
@@ -271,6 +320,91 @@ def _attempt_paths(run_dir: Path, attempt_id: str) -> tuple[Path, Path, Path]:
     audit = run_dir / "attempts" / attempt_id / "proxy-audit.jsonl"
     quarantine = audit.with_suffix(".quarantined.json")
     return lifecycle, audit, quarantine
+
+
+def _request_registry_path(run_dir: Path) -> Path:
+    return run_dir / "proxy-request-registry.json"
+
+
+def _read_request_registry(path: Path) -> set[str]:
+    if not path.exists() and not path.is_symlink():
+        return set()
+    _private_file_metadata(path)
+    try:
+        payload = json.loads(path.read_bytes())
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SandboxProxyError("proxy request registry is invalid JSON") from exc
+    if not isinstance(payload, dict) or set(payload) != {
+        "schema_version",
+        "request_identities_sha256",
+    }:
+        raise SandboxProxyError("proxy request registry has an unsafe schema")
+    identities = payload["request_identities_sha256"]
+    if (
+        payload["schema_version"] != 1
+        or not isinstance(identities, list)
+        or len(identities) > _MAX_REQUEST_IDENTITIES
+    ):
+        raise SandboxProxyError("proxy request registry is invalid")
+    if any(
+        not isinstance(identity, str) or _SHA256.fullmatch(identity) is None
+        for identity in identities
+    ):
+        raise SandboxProxyError("proxy request registry identity is invalid")
+    if identities != sorted(set(identities)):
+        raise SandboxProxyError("proxy request registry identities are not canonical")
+    return set(identities)
+
+
+def _write_request_registry(path: Path, identities: set[str]) -> None:
+    if len(identities) > _MAX_REQUEST_IDENTITIES or any(
+        _SHA256.fullmatch(identity) is None for identity in identities
+    ):
+        raise SandboxProxyError("proxy request registry exceeds its safe contract")
+    _atomic_private_write(
+        path,
+        (
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "request_identities_sha256": sorted(identities),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode(),
+    )
+
+
+def _collect_denied_request_identities(
+    run_dir: Path,
+    *,
+    secret: bytes | bytearray,
+    allowed_model: str,
+) -> set[str]:
+    identities = _read_request_registry(_request_registry_path(run_dir))
+    attempts_root = run_dir / "attempts"
+    if attempts_root.exists():
+        for audit_path in sorted(attempts_root.glob("*/proxy-audit.jsonl")):
+            _private_file_metadata(audit_path)
+            records = _parse_audit(
+                audit_path.read_bytes(),
+                secret=secret,
+                allowed_model=allowed_model,
+            )
+            if not records:
+                raise SandboxProxyError(
+                    "proxy audit has no persisted request record"
+                )
+            identities.update(
+                str(record["request_identity_sha256"])
+                for record in records
+                if record["request_state"] in {"completed", "quarantined"}
+            )
+    if len(identities) > _MAX_REQUEST_IDENTITIES:
+        raise SandboxProxyError("proxy request registry exceeds its safe contract")
+    return identities
 
 
 def _quarantine_marker(path: Path, *, reason: str) -> None:
@@ -331,23 +465,39 @@ class SandboxProxyManager:
             raise SandboxProxyError(str(exc)) from exc
         token_buffer = bytearray(raw_token)
         del raw_token
-        secret = bytes(token_buffer)
-        if quarantine_uri.exists():
+        try:
+            if quarantine_uri.exists():
+                raise SandboxProxyError(
+                    "quarantined request identity requires a new attempt identity"
+                )
+            if audit_uri.exists() or audit_uri.is_symlink():
+                _private_file_metadata(audit_uri)
+                records = _parse_audit(
+                    audit_uri.read_bytes(),
+                    secret=token_buffer,
+                    allowed_model=self.config.allowed_model,
+                )
+                if not records:
+                    _quarantine_marker(
+                        quarantine_uri, reason="missing_persisted_request_record"
+                    )
+                    raise SandboxProxyError(
+                        "proxy audit has no persisted request record"
+                    )
+                state = _request_state(records)
+                if state in {"completed", "quarantined"}:
+                    raise SandboxProxyError(
+                        f"{state} request identity must not reopen a proxy session"
+                    )
+            denied_request_identities = _collect_denied_request_identities(
+                run_root,
+                secret=token_buffer,
+                allowed_model=self.config.allowed_model,
+            )
+        except BaseException:
             for index in range(len(token_buffer)):
                 token_buffer[index] = 0
-            raise SandboxProxyError(
-                "quarantined request identity requires a new attempt identity"
-            )
-        if audit_uri.exists() or audit_uri.is_symlink():
-            _private_file_metadata(audit_uri)
-            records = _parse_audit(audit_uri.read_bytes(), secret=secret)
-            state = _request_state(records)
-            if state in {"completed", "quarantined"}:
-                for index in range(len(token_buffer)):
-                    token_buffer[index] = 0
-                raise SandboxProxyError(
-                    f"{state} request identity must not reopen a proxy session"
-                )
+            raise
 
         network: SandboxNetworkHandle | None = None
         handle = None
@@ -363,7 +513,7 @@ class SandboxProxyManager:
                 lambda: self.backend.create_internal_network(
                     run_id=run_id, network_scope=attempt_id
                 ),
-                secret=secret,
+                secret=token_buffer,
             )
             if not isinstance(network, SandboxNetworkHandle):
                 raise SandboxProxyError(
@@ -384,6 +534,9 @@ class SandboxProxyManager:
                 network_scope=attempt_id,
                 allowed_model=self.config.allowed_model,
                 audit_path=_PRIVATE_AUDIT_PATH,
+                denied_request_identities_sha256=tuple(
+                    sorted(denied_request_identities)
+                ),
                 writable_tmpfs_mb=self.config.resource_contract.writable_tmpfs_mb,
             )
             public_identity = json.dumps(
@@ -391,7 +544,9 @@ class SandboxProxyManager:
             ).encode()
             attempt_identity = hashlib.sha256(public_identity).hexdigest()
             handle = _backend_call(
-                "proxy.create", lambda: self.backend.create(plan.spec), secret=secret
+                "proxy.create",
+                lambda: self.backend.create(plan.spec),
+                secret=token_buffer,
             )
             _backend_call(
                 "proxy.lifecycle",
@@ -402,16 +557,18 @@ class SandboxProxyManager:
                     attempt_identity_sha256=attempt_identity,
                     at=self.clock(),
                 ),
-                secret=secret,
+                secret=token_buffer,
             )
             lifecycle_written = True
             _backend_call(
-                "proxy.start", lambda: self.backend.start(handle), secret=secret
+                "proxy.start",
+                lambda: self.backend.start(handle),
+                secret=token_buffer,
             )
             _backend_call(
                 "proxy.lifecycle",
                 lambda: mark_started(lifecycle_uri, at=self.clock()),
-                secret=secret,
+                secret=token_buffer,
             )
             config_payload = (
                 json.dumps(
@@ -424,7 +581,7 @@ class SandboxProxyManager:
                 lambda: self.backend.put_bytes(
                     handle, _PRIVATE_CONFIG_PATH, config_payload
                 ),
-                secret=secret,
+                secret=token_buffer,
             )
             transfer_token = bytes(token_buffer)
             try:
@@ -433,13 +590,10 @@ class SandboxProxyManager:
                     lambda: self.backend.put_bytes(
                         handle, _PRIVATE_TOKEN_PATH, transfer_token
                     ),
-                    secret=secret,
+                    secret=token_buffer,
                 )
             finally:
                 del transfer_token
-                for index in range(len(token_buffer)):
-                    token_buffer[index] = 0
-                secret = b""
             result = _backend_call(
                 "proxy.readiness",
                 lambda: self.backend.run(
@@ -453,14 +607,16 @@ class SandboxProxyManager:
                     environment={},
                     timeout_seconds=self.config.timeout_seconds,
                 ),
-                secret=secret,
+                secret=token_buffer,
             )
             if not isinstance(result, SandboxCommandResult):
                 raise SandboxProxyError("proxy readiness returned an invalid result")
             if result.timed_out or result.exit_code != 0:
                 detail = result.stderr or result.stdout or f"exit {result.exit_code}"
-                if secret:
-                    detail = detail.replace(secret.decode("ascii"), "[REDACTED]")
+                if token_buffer:
+                    detail = detail.replace(
+                        token_buffer.decode("ascii"), "[REDACTED]"
+                    )
                 raise SandboxProxyError(
                     "proxy readiness failed: "
                     + " ".join(detail.split())[:1000]
@@ -487,21 +643,39 @@ class SandboxProxyManager:
             if primary_error is None:
                 primary_error = exc
         finally:
-            for index in range(len(token_buffer)):
-                token_buffer[index] = 0
             if yielded and handle is not None:
                 try:
                     audit_payload = _backend_call(
                         "proxy.audit.download",
                         lambda: self.backend.read_bytes(handle, _PRIVATE_AUDIT_PATH),
-                        secret=secret,
+                        secret=token_buffer,
                     )
                     if not isinstance(audit_payload, bytes):
                         raise SandboxProxyError(
                             "proxy audit download returned non-bytes data"
                         )
-                    _parse_audit(audit_payload, secret=secret)
+                    records = _parse_audit(
+                        audit_payload,
+                        secret=token_buffer,
+                        allowed_model=self.config.allowed_model,
+                    )
+                    if not records:
+                        raise SandboxProxyError(
+                            "proxy audit has no persisted request record"
+                        )
                     _atomic_private_write(audit_uri, audit_payload)
+                    registry_identities = _read_request_registry(
+                        _request_registry_path(run_root)
+                    )
+                    registry_identities.update(
+                        str(record["request_identity_sha256"])
+                        for record in records
+                        if record["request_state"]
+                        in {"completed", "quarantined"}
+                    )
+                    _write_request_registry(
+                        _request_registry_path(run_root), registry_identities
+                    )
                 except SandboxProxyError as exc:
                     cleanup_errors.append(exc)
                     try:
@@ -516,12 +690,13 @@ class SandboxProxyManager:
                         lifecycle_uri,
                         at=self.clock(),
                         failure=(str(primary_error) if primary_error else None),
-                        forbidden_values=(secret.decode("ascii"),),
+                        forbidden_values=(token_buffer.decode("ascii"),),
                     )
                 except Exception as exc:  # noqa: BLE001 - lifecycle cleanup boundary.
                     cleanup_errors.append(
                         SandboxProxyError(
-                            "proxy.lifecycle.finish: " + _safe_detail(exc, secret)
+                            "proxy.lifecycle.finish: "
+                            + _safe_detail(exc, token_buffer)
                         )
                     )
             if handle is not None:
@@ -537,7 +712,7 @@ class SandboxProxyManager:
                 except Exception as exc:  # noqa: BLE001 - exact-ID cleanup boundary.
                     cleanup_errors.append(
                         SandboxProxyError(
-                            "proxy.cleanup: " + _safe_detail(exc, secret)
+                            "proxy.cleanup: " + _safe_detail(exc, token_buffer)
                         )
                     )
             if network is not None:
@@ -546,9 +721,12 @@ class SandboxProxyManager:
                 except Exception as exc:  # noqa: BLE001 - exact network cleanup boundary.
                     cleanup_errors.append(
                         SandboxProxyError(
-                            "proxy.network.cleanup: " + _safe_detail(exc, secret)
+                            "proxy.network.cleanup: "
+                            + _safe_detail(exc, token_buffer)
                         )
                     )
+            for index in range(len(token_buffer)):
+                token_buffer[index] = 0
 
         if cleanup_errors:
             detail = "; ".join(str(error) for error in cleanup_errors)[:2_000]
