@@ -251,6 +251,7 @@ def test_worker_uses_public_bundle_placeholder_and_persist_before_start(tmp_path
     spec = backend.specs[0]
     assert spec.role == "worker"
     assert spec.network_policy == "worker-proxy-only"
+    assert spec.network_scope is None
     assert dict(spec.environment) == {
         "LLM_API_KEY": "qea-proxy-placeholder",
         "LLM_BASE_URL": "http://qea-model-proxy:8080/v1",
@@ -289,6 +290,37 @@ def test_worker_uses_public_bundle_placeholder_and_persist_before_start(tmp_path
     )
     assert execution.cleaned_up is True
     assert not hasattr(executor, "oracle")
+
+
+def test_worker_uses_explicit_attempt_network_scope_when_supplied(tmp_path):
+    from qea.executors.sandbox_nexau import SandboxNexAUExecutor
+
+    backend = FakeBackend()
+    public_root, _ = _roots(tmp_path)
+    lifecycle_root = tmp_path / "lifecycles"
+    backend.lifecycle_root = lifecycle_root
+    attempt = _attempt()
+    executor = SandboxNexAUExecutor(
+        backend=backend,
+        lifecycle_root=lifecycle_root,
+        worker_image_ref="sha256:" + "a" * 64,
+        public_task_root=public_root,
+        resource_contract=_resources(),
+        worker_network_name="qea-run-001-attempt-network",
+        network_scope=attempt.attempt_id,
+        proxy_base_url="http://qea-model-proxy:8080/v1",
+        model_name="fixture-model",
+    )
+
+    executor.execute(
+        attempt=attempt,
+        task=_task(),
+        worker_dir=_worker(tmp_path),
+        run_dir=tmp_path / "run",
+        model_env={},
+    )
+
+    assert backend.specs[0].network_scope == attempt.attempt_id
 
 
 def test_worker_refuses_real_model_credentials(tmp_path):

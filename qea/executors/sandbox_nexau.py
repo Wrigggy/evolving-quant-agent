@@ -266,6 +266,7 @@ class SandboxNexAUExecutor:
         public_task_root: str | Path,
         resource_contract: SandboxResourceContract,
         worker_network_name: str,
+        network_scope: str | None = None,
         proxy_base_url: str,
         model_name: str,
         placeholder_api_key: str = _PLACEHOLDER_API_KEY,
@@ -287,7 +288,18 @@ class SandboxNexAUExecutor:
         self.worker_image_ref = worker_image_ref
         self.public_task_root = Path(public_task_root).expanduser().resolve()
         self.resource_contract = resource_contract
+        if not isinstance(worker_network_name, str) or not worker_network_name.strip():
+            raise SandboxInfrastructureError(
+                "worker.config", "worker network name must be non-empty"
+            )
+        if network_scope is not None and (
+            not isinstance(network_scope, str) or not network_scope.strip()
+        ):
+            raise SandboxInfrastructureError(
+                "worker.config", "network scope must be non-empty when supplied"
+            )
         self.worker_network_name = worker_network_name
+        self.network_scope = network_scope
         self.worker_environment = _worker_environment(
             proxy_base_url=proxy_base_url,
             model_name=model_name,
@@ -307,11 +319,16 @@ class SandboxNexAUExecutor:
         model_env: Mapping[str, str] | None = None,
     ) -> WorkerExecution:
         _validate_public_model_env(model_env, self.worker_environment)
-        expected_network = f"qea-{attempt.run_id}-internal"
-        if self.worker_network_name != expected_network:
+        if self.network_scope is None:
+            expected_network = f"qea-{attempt.run_id}-internal"
+            if self.worker_network_name != expected_network:
+                raise SandboxInfrastructureError(
+                    "worker.proxy",
+                    f"worker network must be the exact run network {expected_network!r}",
+                )
+        elif self.network_scope != attempt.attempt_id:
             raise SandboxInfrastructureError(
-                "worker.proxy",
-                f"worker network must be the exact run network {expected_network!r}",
+                "worker.proxy", "worker network scope must match the attempt identity"
             )
         attempt_dir = Path(run_dir).resolve() / "attempts" / attempt.attempt_id
         attempt_dir.mkdir(parents=True, exist_ok=True)
@@ -343,6 +360,7 @@ class SandboxNexAUExecutor:
             network_policy="worker-proxy-only",
             environment=self.worker_environment,
             writable_tmpfs_mb=self.resource_contract.writable_tmpfs_mb,
+            network_scope=self.network_scope,
         )
         identity = _attempt_identity(
             role="worker",
