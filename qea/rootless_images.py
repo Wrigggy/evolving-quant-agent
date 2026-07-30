@@ -25,7 +25,7 @@ from .qfbench_images import (
 )
 
 
-RootlessImageRole = Literal["base", "worker", "verifier"]
+RootlessImageRole = Literal["base", "proxy", "evolver", "worker", "verifier"]
 
 _COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 _IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -71,6 +71,7 @@ while not (config_path.is_file() and token_path.is_file()):
 config = json.loads(config_path.read_text())
 required = {
     'listen_host', 'listen_port', 'upstream_base_url', 'allowed_path_prefix',
+    'allowed_model', 'audit_file', 'denied_request_identities_sha256',
     'max_request_bytes', 'max_response_bytes', 'connect_timeout_seconds',
     'read_timeout_seconds',
 }
@@ -83,12 +84,16 @@ argv = [
     '--listen-port', str(config['listen_port']),
     '--upstream-base-url', str(config['upstream_base_url']),
     '--allowed-path-prefix', str(config['allowed_path_prefix']),
+    '--allowed-model', str(config['allowed_model']),
     '--token-file', str(token_path),
+    '--audit-file', str(config['audit_file']),
     '--max-request-bytes', str(config['max_request_bytes']),
     '--max-response-bytes', str(config['max_response_bytes']),
     '--connect-timeout-seconds', str(config['connect_timeout_seconds']),
     '--read-timeout-seconds', str(config['read_timeout_seconds']),
 ]
+for identity in config['denied_request_identities_sha256']:
+    argv.extend(['--denied-request-identity-sha256', str(identity)])
 environment = os.environ.copy()
 environment['PYTHONPATH'] = '/usr/local/lib'
 os.execve(argv[0], argv, environment)
@@ -348,6 +353,43 @@ def _task_dockerfile(
     return generated.encode("utf-8")
 
 
+def _task_neutral_dockerfile(
+    *,
+    base_image_ref: str,
+    role: Literal["proxy", "evolver"],
+) -> bytes:
+    generated = (
+        f"FROM {_dockerfile_base_ref(base_image_ref)}\n\n"
+        f"# QEA generated rootless {role} layer.\n"
+        "USER root\n"
+    )
+    if role == "evolver":
+        for command in _dependency_install_commands((NEXAU_WORKER_DEPENDENCY,)):
+            if NEXAU_WORKER_DEPENDENCY in command:
+                generated += (
+                    "RUN apt-get update && apt-get install -y "
+                    "--no-install-recommends git "
+                    "&& rm -rf /var/lib/apt/lists/*\n"
+                )
+            generated += f"RUN {command}\n"
+        generated += "RUN mkdir -p /qea\n"
+    else:
+        generated += (
+            "RUN mkdir -p /usr/local/lib/qea\n"
+            "COPY qea/__init__.py /usr/local/lib/qea/__init__.py\n"
+            "COPY qea/model_proxy.py /usr/local/lib/qea/model_proxy.py\n"
+            "COPY qea/sandbox_backend.py /usr/local/lib/qea/sandbox_backend.py\n"
+            "COPY qea/run_qea_model_proxy.py "
+            "/usr/local/lib/qea/run_qea_model_proxy.py\n"
+            "COPY qea/model-proxy-entrypoint.py "
+            f"{_MODEL_PROXY_ENTRYPOINT_PATH}\n"
+            f"RUN chmod 0555 {_MODEL_PROXY_ENTRYPOINT_PATH} "
+            "/usr/local/lib/qea/run_qea_model_proxy.py\n"
+        )
+    generated += f'LABEL org.qea.qfbench.role="{role}"\n'
+    return generated.encode("utf-8")
+
+
 def _context_file(path: str, payload: bytes, mode: int = 0o644) -> RootlessContextFile:
     _safe_relative_path(path)
     return RootlessContextFile.from_payload(path, payload, mode=mode)
@@ -372,62 +414,74 @@ def prepare_rootless_image_plan(
 ) -> RootlessImageBuildPlan:
     """Build an in-memory, content-addressed image plan without filesystem writes."""
 
-    if role not in {"base", "worker", "verifier"}:
+    if role not in {"base", "proxy", "evolver", "worker", "verifier"}:
         raise RootlessImageError(f"unsupported rootless image role: {role!r}")
     base_ref = _require_image_ref(base_image_ref)
     _require_resources(cpu_count, memory_mb, build_timeout_seconds)
     public = _verify_role_root(public_root, "public")
-    if role == "base":
+    if role in {"base", "proxy", "evolver"}:
         if task_id is not None or trusted_root is not None:
-            raise RootlessImageError("base image plan cannot name a task or trusted root")
-        source_dockerfile = public.root / "docker/sandbox.Dockerfile"
-        requirements = public.root / "docker/requirements-sandbox.txt"
-        if not source_dockerfile.is_file() or not requirements.is_file():
-            raise RootlessImageError("public root is missing QFBench base inputs")
-        dockerfile = _rewrite_single_from(
-            source_dockerfile.read_text(), base_ref
-        ).encode("utf-8")
-        dockerfile += (
-            b"COPY qea/sandbox-supervisor.py "
-            + _SUPERVISOR_PATH.encode("utf-8")
-            + b"\nRUN chmod 0555 "
-            + _SUPERVISOR_PATH.encode("utf-8")
-            + b"\nCOPY qea/model-proxy-entrypoint.py "
-            + _MODEL_PROXY_ENTRYPOINT_PATH.encode("utf-8")
-            + b"\nRUN chmod 0555 "
-            + _MODEL_PROXY_ENTRYPOINT_PATH.encode("utf-8")
-            + b"\nRUN mkdir -p /usr/local/lib/qea\n"
-            + b"COPY qea/__init__.py /usr/local/lib/qea/__init__.py\n"
-            + b"COPY qea/model_proxy.py /usr/local/lib/qea/model_proxy.py\n"
-            + b"COPY qea/sandbox_backend.py /usr/local/lib/qea/sandbox_backend.py\n"
-            + b"COPY qea/run_qea_model_proxy.py "
-            + b"/usr/local/lib/qea/run_qea_model_proxy.py\n"
-        )
-        package_root = Path(__file__).resolve().parent
-        proxy_script = package_root.parent / "scripts" / "run_qea_model_proxy.py"
-        files = (
-            _context_file("Dockerfile", dockerfile),
-            _context_file(
-                "docker/requirements-sandbox.txt", requirements.read_bytes()
-            ),
-            _context_file(
-                "qea/__init__.py", (package_root / "__init__.py").read_bytes()
-            ),
-            _context_file(
-                "qea/model-proxy-entrypoint.py", _MODEL_PROXY_ENTRYPOINT, 0o555
-            ),
-            _context_file(
-                "qea/model_proxy.py", (package_root / "model_proxy.py").read_bytes()
-            ),
-            _context_file(
-                "qea/run_qea_model_proxy.py", proxy_script.read_bytes(), 0o555
-            ),
-            _context_file(
-                "qea/sandbox_backend.py",
-                (package_root / "sandbox_backend.py").read_bytes(),
-            ),
-            _context_file("qea/sandbox-supervisor.py", _SUPERVISOR, 0o555),
-        )
+            raise RootlessImageError(
+                f"{role} image plan cannot name a task or trusted root"
+            )
+        if role == "base":
+            source_dockerfile = public.root / "docker/sandbox.Dockerfile"
+            requirements = public.root / "docker/requirements-sandbox.txt"
+            if not source_dockerfile.is_file() or not requirements.is_file():
+                raise RootlessImageError("public root is missing QFBench base inputs")
+            dockerfile = _rewrite_single_from(
+                source_dockerfile.read_text(), base_ref
+            ).encode("utf-8")
+            dockerfile += (
+                b"COPY qea/sandbox-supervisor.py "
+                + _SUPERVISOR_PATH.encode("utf-8")
+                + b"\nRUN chmod 0555 "
+                + _SUPERVISOR_PATH.encode("utf-8")
+            )
+            files = (
+                _context_file("Dockerfile", dockerfile),
+                _context_file(
+                    "docker/requirements-sandbox.txt", requirements.read_bytes()
+                ),
+                _context_file("qea/sandbox-supervisor.py", _SUPERVISOR, 0o555),
+            )
+        else:
+            dockerfile = _task_neutral_dockerfile(
+                base_image_ref=base_ref,
+                role=role,
+            )
+            if role == "evolver":
+                files = (_context_file("Dockerfile", dockerfile),)
+            else:
+                package_root = Path(__file__).resolve().parent
+                proxy_script = (
+                    package_root.parent / "scripts" / "run_qea_model_proxy.py"
+                )
+                files = (
+                    _context_file("Dockerfile", dockerfile),
+                    _context_file(
+                        "qea/__init__.py",
+                        (package_root / "__init__.py").read_bytes(),
+                    ),
+                    _context_file(
+                        "qea/model-proxy-entrypoint.py",
+                        _MODEL_PROXY_ENTRYPOINT,
+                        0o555,
+                    ),
+                    _context_file(
+                        "qea/model_proxy.py",
+                        (package_root / "model_proxy.py").read_bytes(),
+                    ),
+                    _context_file(
+                        "qea/run_qea_model_proxy.py",
+                        proxy_script.read_bytes(),
+                        0o555,
+                    ),
+                    _context_file(
+                        "qea/sandbox_backend.py",
+                        (package_root / "sandbox_backend.py").read_bytes(),
+                    ),
+                )
         verifier_hash = None
         normalized_task_id = None
     else:
@@ -455,6 +509,8 @@ def prepare_rootless_image_plan(
             test_bytes = test_script.read_bytes()
             verifier_script = test_bytes.decode("utf-8")
             verifier_hash = hashlib.sha256(test_bytes).hexdigest()
+        elif trusted_root is not None:
+            raise RootlessImageError("worker image plan cannot name a trusted root")
         dockerfile = _task_dockerfile(
             upstream.read_text(),
             base_image_ref=_dockerfile_base_ref(base_ref),
@@ -678,7 +734,7 @@ def execute_rootless_image_build(
         raise RootlessImageError("malformed Docker security options") from exc
     if not isinstance(security_options, list) or "name=rootless" not in security_options:
         raise RootlessImageError("Docker build daemon is not rootless")
-    if plan.role == "base":
+    if plan.role in {"base", "proxy"}:
         lock_command = (
             *docker_prefix,
             "run",
@@ -695,7 +751,7 @@ def execute_rootless_image_build(
     else:
         lock_path = (
             "/opt/qea/nexau-requirements.lock"
-            if plan.role == "worker"
+            if plan.role in {"worker", "evolver"}
             else "/opt/qea/verifier-requirements.lock"
         )
         lock_command = (

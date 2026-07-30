@@ -144,17 +144,126 @@ def test_base_plan_pins_from_and_contains_only_public_base_inputs(tmp_path) -> N
     assert {member.path for member in plan.context_files} == {
         "Dockerfile",
         "docker/requirements-sandbox.txt",
+        "qea/sandbox-supervisor.py",
+    }
+    assert b"/usr/local/bin/qea-sandbox-supervisor" in plan.dockerfile_bytes
+    assert b"qea-model-proxy" not in plan.dockerfile_bytes
+    assert all("tests" not in member.path for member in plan.context_files)
+
+
+def test_task_neutral_proxy_and_evolver_plans_are_role_minimal(tmp_path) -> None:
+    from qea.rootless_images import prepare_rootless_image_plan
+
+    public, _ = _role_roots(tmp_path)
+    proxy = prepare_rootless_image_plan(
+        role="proxy",
+        public_root=public,
+        base_image_ref=QFBENCH_BASE,
+        cpu_count=1,
+        memory_mb=512,
+        build_timeout_seconds=600,
+    )
+    evolver = prepare_rootless_image_plan(
+        role="evolver",
+        public_root=public,
+        base_image_ref=QFBENCH_BASE,
+        cpu_count=2,
+        memory_mb=4096,
+        build_timeout_seconds=600,
+    )
+
+    proxy_dockerfile = proxy.dockerfile_bytes.decode()
+    proxy_entrypoint = next(
+        member.payload.decode()
+        for member in proxy.context_files
+        if member.path == "qea/model-proxy-entrypoint.py"
+    )
+    assert proxy.task_id is None
+    assert proxy_dockerfile.splitlines()[0] == (
+        f"FROM qea-local-base:{'b' * 64}"
+    )
+    assert {member.path for member in proxy.context_files} == {
+        "Dockerfile",
         "qea/__init__.py",
         "qea/model-proxy-entrypoint.py",
         "qea/model_proxy.py",
         "qea/run_qea_model_proxy.py",
         "qea/sandbox_backend.py",
-        "qea/sandbox-supervisor.py",
     }
-    assert b"/usr/local/bin/qea-sandbox-supervisor" in plan.dockerfile_bytes
-    assert b"/usr/local/bin/qea-model-proxy-entrypoint" in plan.dockerfile_bytes
-    assert b"/usr/local/lib/qea/run_qea_model_proxy.py" in plan.dockerfile_bytes
-    assert all("tests" not in member.path for member in plan.context_files)
+    assert "nexau" not in proxy_dockerfile.lower()
+    assert "--allowed-model" in proxy_entrypoint
+    assert "--audit-file" in proxy_entrypoint
+    assert "--denied-request-identity-sha256" in proxy_entrypoint
+    assert all(
+        marker not in json.dumps(proxy.manifest_payload()).lower()
+        for marker in ("tasks/", "tests/", "reference", "solution")
+    )
+
+    evolver_dockerfile = evolver.dockerfile_bytes.decode()
+    assert evolver.task_id is None
+    assert evolver_dockerfile.splitlines()[0] == (
+        f"FROM qea-local-base:{'b' * 64}"
+    )
+    assert NEXAU_COMMIT in evolver_dockerfile
+    assert "/opt/qea/nexau-requirements.lock" in evolver_dockerfile
+    assert "apt-get install -y --no-install-recommends git" in evolver_dockerfile
+    assert {member.path for member in evolver.context_files} == {"Dockerfile"}
+    assert all(
+        marker not in json.dumps(evolver.manifest_payload()).lower()
+        for marker in ("tasks/", "tests/", "reference", "solution")
+    )
+
+    changed_base = prepare_rootless_image_plan(
+        role="evolver",
+        public_root=public,
+        base_image_ref="sha256:" + "d" * 64,
+        cpu_count=2,
+        memory_mb=4096,
+        build_timeout_seconds=600,
+    )
+    assert changed_base.identity_sha256 != evolver.identity_sha256
+
+
+@pytest.mark.parametrize("role", ("base", "proxy", "evolver"))
+def test_task_neutral_roles_reject_task_and_trusted_inputs(
+    tmp_path, role: str
+) -> None:
+    from qea.rootless_images import RootlessImageError, prepare_rootless_image_plan
+
+    public, trusted = _role_roots(tmp_path)
+    common = {
+        "role": role,
+        "public_root": public,
+        "base_image_ref": QFBENCH_BASE,
+        "cpu_count": 2,
+        "memory_mb": 4096,
+        "build_timeout_seconds": 600,
+    }
+    with pytest.raises(RootlessImageError, match="cannot name a task"):
+        prepare_rootless_image_plan(**common, task_id="task-a")
+    with pytest.raises(RootlessImageError, match="cannot name a task"):
+        prepare_rootless_image_plan(**common, trusted_root=trusted)
+
+
+def test_task_roles_enforce_task_and_trusted_root_matrix(tmp_path) -> None:
+    from qea.rootless_images import RootlessImageError, prepare_rootless_image_plan
+
+    public, trusted = _role_roots(tmp_path)
+    common = {
+        "public_root": public,
+        "base_image_ref": QFBENCH_BASE,
+        "cpu_count": 2,
+        "memory_mb": 4096,
+        "build_timeout_seconds": 600,
+    }
+    with pytest.raises(RootlessImageError, match="requires a valid task_id"):
+        prepare_rootless_image_plan(role="worker", **common)
+    with pytest.raises(RootlessImageError, match="cannot name a trusted root"):
+        prepare_rootless_image_plan(
+            role="worker", task_id="task-a", trusted_root=trusted, **common
+        )
+    with pytest.raises(RootlessImageError, match="requires trusted_root"):
+        prepare_rootless_image_plan(role="verifier", task_id="task-a", **common)
 
 
 def test_worker_plan_contains_public_environment_and_pinned_nexau_only(tmp_path) -> None:
@@ -430,7 +539,43 @@ def test_rootless_image_cli_plan_only_writes_nothing(tmp_path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert "identity sha256:" in result.stdout
-    assert "context files: 8" in result.stdout
+    assert "context files: 3" in result.stdout
+    assert not output.exists()
+
+
+def test_rootless_image_cli_accepts_task_neutral_evolver_role(tmp_path) -> None:
+    public, _ = _role_roots(tmp_path)
+    output = tmp_path / "images"
+    repository = Path(__file__).resolve().parents[1]
+
+    result = subprocess.run(
+        (
+            sys.executable,
+            "scripts/build_qfbench_rootless_images.py",
+            "--role",
+            "evolver",
+            "--public-root",
+            str(public),
+            "--manifest-root",
+            str(output),
+            "--base-image-ref",
+            QFBENCH_BASE,
+            "--docker-host",
+            DOCKER_HOST,
+            "--expected-uid",
+            "1013",
+            "--plan-only",
+        ),
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "role: evolver" in result.stdout
+    assert "task: None" in result.stdout
+    assert "context files: 1" in result.stdout
     assert not output.exists()
 
 

@@ -20,7 +20,11 @@ from qea.rootless_images import (
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--role", choices=("base", "worker", "verifier"), required=True)
+    parser.add_argument(
+        "--role",
+        choices=("base", "proxy", "evolver", "worker", "verifier"),
+        required=True,
+    )
     parser.add_argument("--task-id")
     parser.add_argument("--public-root", type=Path, required=True)
     parser.add_argument("--trusted-root", type=Path)
