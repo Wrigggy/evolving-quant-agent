@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+_MEM_AVAILABLE = re.compile(r"MemAvailable:\s+([0-9]+)\s+kB\s*\Z")
 _ROLE_REQUIRED_TMPFS = {
     "evolver_resources": frozenset({"/qea", "/tmp"}),
     "proxy_resources": frozenset({"/run/qea-secrets", "/tmp"}),
@@ -722,20 +723,41 @@ def _validate_capacity(
             )
 
 
+def _linux_available_memory_mb(
+    meminfo_path: Path = Path("/proc/meminfo"),
+) -> int:
+    """Return Linux reclaim-aware available memory, failing closed on drift."""
+
+    try:
+        lines = Path(meminfo_path).read_text(encoding="ascii").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise RootlessFullHarnessError(
+            "host health preflight could not read MemAvailable"
+        ) from exc
+    matches = [
+        match
+        for line in lines
+        if (match := _MEM_AVAILABLE.fullmatch(line)) is not None
+    ]
+    if len(matches) != 1:
+        raise RootlessFullHarnessError(
+            "host health preflight requires exactly one MemAvailable kB record"
+        )
+    return int(matches[0].group(1)) // 1024
+
+
 def _default_health_probe(results_root: Path):
     from .resource_lease import HostHealthSnapshot
 
     def probe() -> HostHealthSnapshot:
         try:
             load_1m = os.getloadavg()[0]
-            page_size = os.sysconf("SC_PAGE_SIZE")
-            available_pages = os.sysconf("SC_AVPHYS_PAGES")
             filesystem = os.statvfs(results_root)
         except (AttributeError, OSError, ValueError) as exc:
             raise RootlessFullHarnessError("host health preflight failed") from exc
         return HostHealthSnapshot(
             load_1m=load_1m,
-            available_memory_mb=(page_size * available_pages) // (1024 * 1024),
+            available_memory_mb=_linux_available_memory_mb(),
             free_disk_mb=(filesystem.f_bavail * filesystem.f_frsize) // (1024 * 1024),
             free_inodes=filesystem.f_favail,
         )

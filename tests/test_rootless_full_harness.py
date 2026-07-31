@@ -705,6 +705,44 @@ def test_factory_api_has_no_unbound_health_probe_injection() -> None:
     ).parameters
 
 
+def test_linux_available_memory_uses_memavailable_not_free_pages(tmp_path) -> None:
+    from qea.rootless_full_harness import _linux_available_memory_mb
+
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text(
+        "MemTotal:       131842520 kB\n"
+        "MemFree:          5035400 kB\n"
+        "MemAvailable:   105816440 kB\n"
+        "Cached:         102354352 kB\n"
+    )
+
+    assert _linux_available_memory_mb(meminfo) == 105816440 // 1024
+
+
+@pytest.mark.parametrize(
+    "payload",
+    (
+        "MemTotal: 131842520 kB\nMemFree: 5035400 kB\n",
+        "MemAvailable: unavailable kB\n",
+        "MemAvailable: 105816440 bytes\n",
+        "MemAvailable: 1 kB\nMemAvailable: 2 kB\n",
+    ),
+)
+def test_linux_available_memory_fails_closed_on_invalid_meminfo(
+    tmp_path, payload
+) -> None:
+    from qea.rootless_full_harness import (
+        RootlessFullHarnessError,
+        _linux_available_memory_mb,
+    )
+
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text(payload)
+
+    with pytest.raises(RootlessFullHarnessError, match="MemAvailable"):
+        _linux_available_memory_mb(meminfo)
+
+
 def test_factory_binds_self_consistent_trusted_reference_manifest_drift(
     tmp_path, monkeypatch
 ) -> None:
