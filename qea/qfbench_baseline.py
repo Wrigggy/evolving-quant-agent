@@ -9,6 +9,7 @@ import os
 import re
 import statistics
 from dataclasses import asdict, dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterable, Mapping, Protocol
 
@@ -20,6 +21,25 @@ from .worker_identity import WorkerIdentityError, hash_worker_directory
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+_BASELINE_CHECKPOINT_RE = re.compile(
+    r"^repetition-(?P<repetition>0[1-5])-(?P<panel>primary|diagnostic)$"
+)
+_PROXY_AUDIT_KEYS = frozenset({
+    "schema_version",
+    "request_identity_sha256",
+    "model",
+    "started_at",
+    "finished_at",
+    "latency_ms",
+    "request_state",
+    "upstream_status_code",
+    "provider_request_id",
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "provider_cost_usd",
+    "failure_class",
+})
 _T_CRITICAL_95 = {
     2: 12.706204736432095,
     3: 4.302652729696142,
@@ -292,6 +312,183 @@ def aggregate_repetitions(
             declared_summaries, declared_tasks, complete=complete
         ),
     }
+
+
+def _empty_cost_group() -> dict:
+    return {
+        "attempt_count": 0,
+        "request_count": 0,
+        "completed_request_count": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "provider_cost_usd": Decimal("0"),
+    }
+
+
+def _add_cost(group: dict, record: Mapping, cost: Decimal) -> None:
+    group["request_count"] += 1
+    if record["request_state"] == "completed":
+        group["completed_request_count"] += 1
+        group["input_tokens"] += record["input_tokens"]
+        group["output_tokens"] += record["output_tokens"]
+        group["total_tokens"] += record["total_tokens"]
+        group["provider_cost_usd"] += cost
+
+
+def _cost_json(group: dict, *, tasks: dict | None = None) -> dict:
+    payload = {
+        key: (str(value) if key == "provider_cost_usd" else value)
+        for key, value in group.items()
+    }
+    if tasks is not None:
+        payload["tasks"] = {
+            task_id: _cost_json(task_group)
+            for task_id, task_group in sorted(tasks.items())
+        }
+    return payload
+
+
+def _read_audit_records(path: Path) -> tuple[dict, ...]:
+    if not path.is_file():
+        raise BaselineConfigError(f"cost audit missing proxy ledger: {path}")
+    records = []
+    try:
+        for line_number, line in enumerate(path.read_text().splitlines(), start=1):
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if not isinstance(record, dict):
+                raise ValueError("record is not an object")
+            records.append(record)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise BaselineConfigError(f"cost audit malformed ledger {path}: {exc}") from exc
+    if not records:
+        raise BaselineConfigError(f"cost audit empty proxy ledger: {path}")
+    return tuple(records)
+
+
+def _validated_completed_cost(record: Mapping, *, source: Path) -> Decimal:
+    if set(record) != _PROXY_AUDIT_KEYS or record.get("schema_version") != 1:
+        raise BaselineConfigError(f"cost audit invalid record schema: {source}")
+    identity = record.get("request_identity_sha256")
+    if not isinstance(identity, str) or not _SHA256_RE.fullmatch(identity):
+        raise BaselineConfigError(f"cost audit invalid request identity: {source}")
+    state = record.get("request_state")
+    status = record.get("upstream_status_code")
+    if status == 200 and state != "completed":
+        raise BaselineConfigError(
+            f"cost audit HTTP-200 request is not completed: {source}"
+        )
+    if state == "quarantined":
+        raise BaselineConfigError(f"cost audit has ambiguous accepted request: {source}")
+    if state == "not_accepted":
+        if status is not None or any(
+            record.get(name) is not None
+            for name in (
+                "input_tokens",
+                "output_tokens",
+                "total_tokens",
+                "provider_cost_usd",
+            )
+        ):
+            raise BaselineConfigError(
+                f"cost audit invalid not-accepted accounting: {source}"
+            )
+        return Decimal("0")
+    if state != "completed" or status != 200:
+        raise BaselineConfigError(f"cost audit invalid terminal request state: {source}")
+    tokens = []
+    for name in ("input_tokens", "output_tokens", "total_tokens"):
+        value = record.get(name)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise BaselineConfigError(f"cost audit missing successful usage: {source}")
+        tokens.append(value)
+    if tokens[0] + tokens[1] != tokens[2]:
+        raise BaselineConfigError(f"cost audit inconsistent token usage: {source}")
+    raw_cost = record.get("provider_cost_usd")
+    if isinstance(raw_cost, bool) or not isinstance(raw_cost, (int, float, str)):
+        raise BaselineConfigError(f"cost audit missing successful cost: {source}")
+    try:
+        cost = Decimal(str(raw_cost))
+    except InvalidOperation as exc:
+        raise BaselineConfigError(f"cost audit invalid successful cost: {source}") from exc
+    if not cost.is_finite() or cost < 0:
+        raise BaselineConfigError(f"cost audit invalid successful cost: {source}")
+    return cost
+
+
+def audit_baseline_proxy_costs(
+    run_dir: str | Path, *, expected_attempts: int
+) -> dict:
+    """Strictly reconcile safe proxy ledgers against scored baseline attempts."""
+
+    if isinstance(expected_attempts, bool) or expected_attempts < 1:
+        raise BaselineConfigError("cost audit expected_attempts must be positive")
+    root = Path(run_dir).resolve()
+    attempt_paths = tuple(sorted((root / "attempts").glob("*/attempt.json")))
+    if len(attempt_paths) != expected_attempts:
+        raise BaselineConfigError(
+            "cost audit scored attempt count mismatch: "
+            f"expected {expected_attempts}, found {len(attempt_paths)}"
+        )
+
+    total = _empty_cost_group()
+    repetition_groups: dict[str, dict[str, dict]] = {}
+    seen_request_identities: set[str] = set()
+    for attempt_path in attempt_paths:
+        attempt_dir = attempt_path.parent
+        try:
+            attempt = json.loads(attempt_path.read_text())
+            score = json.loads((attempt_dir / "completed-score.json").read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise BaselineConfigError(
+                f"cost audit missing or invalid scored attempt {attempt_dir.name}: {exc}"
+            ) from exc
+        if not isinstance(attempt, dict) or attempt.get("attempt_id") != attempt_dir.name:
+            raise BaselineConfigError(f"cost audit attempt identity mismatch: {attempt_dir}")
+        task_id = attempt.get("task_id")
+        if not isinstance(task_id, str) or score.get("task_id") != task_id:
+            raise BaselineConfigError(f"cost audit score identity mismatch: {attempt_dir}")
+        match = _BASELINE_CHECKPOINT_RE.fullmatch(str(attempt.get("checkpoint", "")))
+        if match is None:
+            raise BaselineConfigError(f"cost audit checkpoint outside baseline: {attempt_dir}")
+        repetition = str(int(match.group("repetition")))
+        panel = match.group("panel")
+        if attempt.get("split") != f"baseline_{panel}":
+            raise BaselineConfigError(f"cost audit split/checkpoint mismatch: {attempt_dir}")
+
+        panel_group = repetition_groups.setdefault(repetition, {}).setdefault(
+            panel,
+            {**_empty_cost_group(), "tasks": {}},
+        )
+        task_group = panel_group["tasks"].setdefault(task_id, _empty_cost_group())
+        total["attempt_count"] += 1
+        panel_group["attempt_count"] += 1
+        task_group["attempt_count"] += 1
+        for record in _read_audit_records(attempt_dir / "proxy-audit.jsonl"):
+            cost = _validated_completed_cost(record, source=attempt_dir)
+            request_identity = record["request_identity_sha256"]
+            if request_identity in seen_request_identities:
+                raise BaselineConfigError(
+                    f"cost audit duplicate request identity: {request_identity}"
+                )
+            seen_request_identities.add(request_identity)
+            _add_cost(total, record, cost)
+            _add_cost(panel_group, record, cost)
+            _add_cost(task_group, record, cost)
+
+    payload = _cost_json(total)
+    payload["by_repetition"] = {
+        repetition: {
+            panel: _cost_json(group, tasks=group.pop("tasks"))
+            for panel, group in sorted(panels.items())
+        }
+        for repetition, panels in sorted(
+            repetition_groups.items(), key=lambda item: int(item[0])
+        )
+    }
+    return payload
 
 
 def _records_from_state(state: Mapping) -> tuple[BaselineRepetition, ...]:

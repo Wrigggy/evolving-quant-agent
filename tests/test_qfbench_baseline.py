@@ -1,5 +1,6 @@
 import json
 import math
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -280,3 +281,125 @@ def test_partial_aggregate_has_no_confidence_interval() -> None:
     assert headline["mean"] == 0.5
     assert headline["sample_sd"] is None
     assert headline["confidence_interval_95"] is None
+
+
+def _audit_record(*, identity: str, cost: float, input_tokens: int) -> dict:
+    return {
+        "schema_version": 1,
+        "request_identity_sha256": identity * 64,
+        "model": "fixture-model",
+        "started_at": "2026-07-31T12:00:00+00:00",
+        "finished_at": "2026-07-31T12:00:01+00:00",
+        "latency_ms": 1000,
+        "request_state": "completed",
+        "upstream_status_code": 200,
+        "provider_request_id": f"provider-{identity}",
+        "input_tokens": input_tokens,
+        "output_tokens": 5,
+        "total_tokens": input_tokens + 5,
+        "provider_cost_usd": cost,
+        "failure_class": None,
+    }
+
+
+def _cost_fixture(run_dir: Path) -> tuple[Path, Path]:
+    from qea.evaluation import TaskAttempt
+
+    specs = (
+        ("risk-task", "risk_credit", "baseline_primary", "repetition-01-primary"),
+        ("copy-task", "derivatives", "baseline_diagnostic", "repetition-01-diagnostic"),
+    )
+    paths = []
+    for task_id, domain, split, checkpoint in specs:
+        attempt = TaskAttempt.create(
+            run_id="baseline-five",
+            benchmark_commit=COMMIT,
+            task_id=task_id,
+            split=split,
+            checkpoint=checkpoint,
+            worker_digest="e" * 64,
+        )
+        attempt_dir = run_dir / "attempts" / attempt.attempt_id
+        attempt_dir.mkdir(parents=True)
+        (attempt_dir / "attempt.json").write_text(json.dumps(asdict(attempt)))
+        score = OfficialTaskScore(task_id=task_id, domain=domain, reward=0.5)
+        (attempt_dir / "completed-score.json").write_text(json.dumps(asdict(score)))
+        paths.append(attempt_dir)
+    paths[0].joinpath("proxy-audit.jsonl").write_text(
+        "\n".join(
+            json.dumps(record)
+            for record in (
+                _audit_record(identity="a", cost=0.01, input_tokens=10),
+                _audit_record(identity="b", cost=0.02, input_tokens=20),
+            )
+        )
+        + "\n"
+    )
+    paths[1].joinpath("proxy-audit.jsonl").write_text(
+        json.dumps(_audit_record(identity="c", cost=0.03, input_tokens=30))
+        + "\n"
+    )
+    return paths[0], paths[1]
+
+
+def test_cost_audit_reconciles_attempts_requests_tokens_and_groups(tmp_path) -> None:
+    from qea.qfbench_baseline import audit_baseline_proxy_costs
+
+    _cost_fixture(tmp_path)
+    audit = audit_baseline_proxy_costs(tmp_path, expected_attempts=2)
+
+    assert audit["attempt_count"] == 2
+    assert audit["request_count"] == 3
+    assert audit["input_tokens"] == 60
+    assert audit["output_tokens"] == 15
+    assert audit["total_tokens"] == 75
+    assert audit["provider_cost_usd"] == "0.06"
+    primary = audit["by_repetition"]["1"]["primary"]
+    assert primary["request_count"] == 2
+    assert primary["provider_cost_usd"] == "0.03"
+    assert primary["tasks"]["risk-task"]["provider_cost_usd"] == "0.03"
+    diagnostic = audit["by_repetition"]["1"]["diagnostic"]
+    assert diagnostic["request_count"] == 1
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    (
+        "missing_audit",
+        "null_success_cost",
+        "null_success_usage",
+        "noncompleted_200",
+        "unknown_checkpoint",
+        "attempt_count",
+    ),
+)
+def test_cost_audit_fails_closed_on_incomplete_or_drifted_ledger(
+    tmp_path, corruption
+) -> None:
+    from qea.qfbench_baseline import BaselineConfigError, audit_baseline_proxy_costs
+
+    primary_dir, _ = _cost_fixture(tmp_path)
+    expected_attempts = 2
+    audit_path = primary_dir / "proxy-audit.jsonl"
+    records = [json.loads(line) for line in audit_path.read_text().splitlines()]
+    if corruption == "missing_audit":
+        audit_path.unlink()
+    elif corruption == "null_success_cost":
+        records[0]["provider_cost_usd"] = None
+        audit_path.write_text("\n".join(map(json.dumps, records)) + "\n")
+    elif corruption == "null_success_usage":
+        records[0]["total_tokens"] = None
+        audit_path.write_text("\n".join(map(json.dumps, records)) + "\n")
+    elif corruption == "noncompleted_200":
+        records[0]["request_state"] = "quarantined"
+        audit_path.write_text("\n".join(map(json.dumps, records)) + "\n")
+    elif corruption == "unknown_checkpoint":
+        attempt_path = primary_dir / "attempt.json"
+        attempt = json.loads(attempt_path.read_text())
+        attempt["checkpoint"] = "seed-optimize"
+        attempt_path.write_text(json.dumps(attempt))
+    elif corruption == "attempt_count":
+        expected_attempts = 3
+
+    with pytest.raises(BaselineConfigError, match="cost audit"):
+        audit_baseline_proxy_costs(tmp_path, expected_attempts=expected_attempts)
