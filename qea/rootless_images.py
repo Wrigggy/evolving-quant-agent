@@ -151,6 +151,7 @@ class RootlessImageBuildPlan:
     memory_mb: int
     build_timeout_seconds: int
     build_network: str
+    nexau_runtime_image_ref: str | None
     identity_sha256: str
 
     def manifest_payload(self) -> dict[str, object]:
@@ -332,6 +333,12 @@ def _dockerfile_base_ref(value: str) -> str:
     return value
 
 
+def _dockerfile_nexau_ref(value: str) -> str:
+    if _IMAGE_ID.fullmatch(value) is None:
+        raise RootlessImageError("NexAU runtime image must be an immutable image ID")
+    return f"qea-local-nexau:{value.removeprefix('sha256:')}"
+
+
 def _require_resources(
     cpu_count: int,
     memory_mb: int,
@@ -364,15 +371,23 @@ def _task_dockerfile(
     base_image_ref: str,
     role: Literal["worker", "verifier"],
     verifier_test_script: str | None,
+    nexau_runtime_image_ref: str | None,
 ) -> bytes:
     generated = _rewrite_single_from(upstream, base_image_ref).rstrip() + "\n\n"
     generated += f"# QEA generated rootless {role} layer.\nUSER root\n"
+    if nexau_runtime_image_ref is not None:
+        generated += "COPY --from=qea-nexau-runtime /opt/qea /opt/qea\n"
     dependencies = (
-        (NEXAU_WORKER_DEPENDENCY,)
-        if role == "worker"
-        else ("uv==0.9.5",)
+        ()
+        if nexau_runtime_image_ref is not None
+        else (
+            (NEXAU_WORKER_DEPENDENCY,)
+            if role == "worker"
+            else ("uv==0.9.5",)
+        )
     )
-    for command in _dependency_install_commands(dependencies):
+    commands = _dependency_install_commands(dependencies) if dependencies else ()
+    for command in commands:
         if role == "worker" and NEXAU_WORKER_DEPENDENCY in command:
             generated += (
                 "RUN apt-get update && apt-get install -y "
@@ -398,6 +413,12 @@ def _task_dockerfile(
         )
         generated += "RUN cp -a /opt/qea/uv-cache /opt/qea/uv-cache-seed\n"
     generated += f'LABEL org.qea.qfbench.role="{role}"\n'
+    if nexau_runtime_image_ref is not None:
+        generated = (
+            f"FROM {_dockerfile_nexau_ref(nexau_runtime_image_ref)} "
+            "AS qea-nexau-runtime\n\n"
+            + generated
+        )
     return generated.encode("utf-8")
 
 
@@ -494,6 +515,7 @@ def prepare_rootless_image_plan(
     task_id: str | None = None,
     trusted_root: str | Path | None = None,
     build_network: str = "default",
+    nexau_runtime_image_ref: str | None = None,
 ) -> RootlessImageBuildPlan:
     """Build an in-memory, content-addressed image plan without filesystem writes."""
 
@@ -505,6 +527,15 @@ def prepare_rootless_image_plan(
         raise RootlessImageError(
             "build network must be 'default' or 'host'"
         )
+    if nexau_runtime_image_ref is not None:
+        if role != "worker":
+            raise RootlessImageError(
+                "only a worker image plan may name a NexAU runtime image"
+            )
+        if _IMAGE_ID.fullmatch(nexau_runtime_image_ref) is None:
+            raise RootlessImageError(
+                "NexAU runtime image must be an immutable image ID"
+            )
     public = _verify_role_root(public_root, "public")
     if role in {"base", "proxy", "evolver"}:
         if task_id is not None or trusted_root is not None:
@@ -603,6 +634,7 @@ def prepare_rootless_image_plan(
             base_image_ref=_dockerfile_base_ref(base_ref),
             role=role,
             verifier_test_script=verifier_script,
+            nexau_runtime_image_ref=nexau_runtime_image_ref,
         )
         context: list[RootlessContextFile] = [
             _context_file("Dockerfile", dockerfile)
@@ -644,6 +676,7 @@ def prepare_rootless_image_plan(
         memory_mb=memory_mb,
         build_timeout_seconds=build_timeout_seconds,
         build_network=build_network,
+        nexau_runtime_image_ref=nexau_runtime_image_ref,
         identity_sha256=identity,
     )
 
@@ -759,6 +792,44 @@ def execute_rootless_image_build(
             plan.base_image_ref,
             operation="local base tag inspection",
         )
+    local_nexau_runtime_tag: str | None = None
+    if plan.nexau_runtime_image_ref is not None:
+        local_nexau_runtime_tag = _dockerfile_nexau_ref(
+            plan.nexau_runtime_image_ref
+        )
+        expected_from = (
+            f"FROM {local_nexau_runtime_tag} AS qea-nexau-runtime\n"
+        ).encode()
+        if expected_from not in plan.dockerfile_bytes:
+            raise RootlessImageError(
+                "local NexAU runtime tag differs from planned Dockerfile"
+            )
+        _require_docker_image_id(
+            command_runner,
+            docker_prefix,
+            plan.nexau_runtime_image_ref,
+            plan.nexau_runtime_image_ref,
+            operation="NexAU runtime image inspection",
+        )
+        _docker_checked(
+            command_runner,
+            (
+                *docker_prefix,
+                "image",
+                "tag",
+                plan.nexau_runtime_image_ref,
+                local_nexau_runtime_tag,
+            ),
+            timeout_seconds=30,
+            operation="NexAU runtime image tagging",
+        )
+        _require_docker_image_id(
+            command_runner,
+            docker_prefix,
+            local_nexau_runtime_tag,
+            plan.nexau_runtime_image_ref,
+            operation="local NexAU runtime tag inspection",
+        )
     root.mkdir(parents=True, exist_ok=True)
     staging.mkdir()
     context = staging / "context"
@@ -867,6 +938,15 @@ def execute_rootless_image_build(
             plan.base_image_ref,
             operation="post-build local base tag inspection",
         )
+    if local_nexau_runtime_tag is not None:
+        assert plan.nexau_runtime_image_ref is not None
+        _require_docker_image_id(
+            command_runner,
+            docker_prefix,
+            local_nexau_runtime_tag,
+            plan.nexau_runtime_image_ref,
+            operation="post-build local NexAU runtime tag inspection",
+        )
     timestamp = at or datetime.now(timezone.utc)
     if timestamp.tzinfo is None or timestamp.utcoffset() is None:
         raise RootlessImageError("build timestamp must be timezone-aware")
@@ -890,6 +970,8 @@ def execute_rootless_image_build(
         "build_tag": tag,
         "local_base_tag": local_base_tag,
         "local_base_image_id": plan.base_image_ref if local_base_tag else None,
+        "local_nexau_runtime_tag": local_nexau_runtime_tag,
+        "local_nexau_runtime_image_id": plan.nexau_runtime_image_ref,
         "docker_version": docker_version,
         "docker_security_options": security_options,
         "dependency_lock_sha256": dependency_lock_sha256,

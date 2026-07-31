@@ -272,6 +272,53 @@ def test_trusted_host_build_network_is_explicit_and_identity_bound(tmp_path) -> 
         prepare_rootless_image_plan(**common, build_network="bridge")
 
 
+def test_worker_plan_can_bind_an_immutable_task_neutral_nexau_runtime(
+    tmp_path,
+) -> None:
+    from qea.rootless_images import RootlessImageError, prepare_rootless_image_plan
+
+    public, _ = _role_roots(tmp_path)
+    donor = "sha256:" + "e" * 64
+    common = {
+        "role": "worker",
+        "task_id": "task-a",
+        "public_root": public,
+        "base_image_ref": QFBENCH_BASE,
+        "cpu_count": 2,
+        "memory_mb": 4096,
+        "build_timeout_seconds": 600,
+        "build_network": "host",
+    }
+
+    online = prepare_rootless_image_plan(**common)
+    offline = prepare_rootless_image_plan(
+        **common,
+        nexau_runtime_image_ref=donor,
+    )
+    dockerfile = offline.dockerfile_bytes.decode()
+
+    assert offline.nexau_runtime_image_ref == donor
+    assert offline.identity_sha256 != online.identity_sha256
+    assert dockerfile.startswith(
+        "FROM qea-local-nexau:" + "e" * 64 + " AS qea-nexau-runtime\n"
+    )
+    assert "FROM qea-local-base:" + "b" * 64 in dockerfile
+    assert "COPY --from=qea-nexau-runtime /opt/qea /opt/qea" in dockerfile
+    assert "git+https://github.com/nex-agi/NexAU.git" not in dockerfile
+    assert "uv python install" not in dockerfile
+
+    with pytest.raises(RootlessImageError, match="NexAU runtime image"):
+        prepare_rootless_image_plan(
+            **common,
+            nexau_runtime_image_ref="qea/nexau:mutable",
+        )
+    with pytest.raises(RootlessImageError, match="worker image plan"):
+        prepare_rootless_image_plan(
+            **{**common, "role": "evolver", "task_id": None},
+            nexau_runtime_image_ref=donor,
+        )
+
+
 @pytest.mark.parametrize("role", ("base", "proxy", "evolver"))
 def test_task_neutral_roles_reject_task_and_trusted_inputs(
     tmp_path, role: str
@@ -511,6 +558,68 @@ def test_execute_build_records_final_image_and_dependency_lock(tmp_path) -> None
     assert (result.output_dir / "context/Dockerfile").is_file()
     assert not result.output_dir.with_name(plan.identity_sha256 + ".partial").exists()
     assert runner.calls[-1].argv[-1] == local_base_tag
+
+
+def test_execute_worker_build_measures_immutable_nexau_runtime_donor(
+    tmp_path,
+) -> None:
+    from qea.rootless_images import (
+        execute_rootless_image_build,
+        prepare_rootless_image_plan,
+    )
+
+    public, _ = _role_roots(tmp_path)
+    donor = "sha256:" + "e" * 64
+    donor_tag = "qea-local-nexau:" + "e" * 64
+    image_id = "sha256:" + "c" * 64
+    plan = prepare_rootless_image_plan(
+        role="worker",
+        task_id="task-a",
+        public_root=public,
+        base_image_ref=QFBENCH_BASE,
+        cpu_count=2,
+        memory_mb=4096,
+        build_timeout_seconds=600,
+        build_network="host",
+        nexau_runtime_image_ref=donor,
+    )
+    runner = RecordingRunner(
+        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
+        CompletedCommand(0, b"", b""),
+        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
+        CompletedCommand(0, (donor + "\n").encode(), b""),
+        CompletedCommand(0, b"", b""),
+        CompletedCommand(0, (donor + "\n").encode(), b""),
+        CompletedCommand(0, (image_id + "\n").encode(), b""),
+        CompletedCommand(
+            0,
+            json.dumps({"Id": image_id, "RepoDigests": []}).encode(),
+            b"",
+        ),
+        CompletedCommand(0, b"29.4.1\n", b""),
+        CompletedCommand(0, b'["name=rootless"]\n', b""),
+        CompletedCommand(0, b"nexau==0.3.9\n", b""),
+        CompletedCommand(0, (QFBENCH_BASE + "\n").encode(), b""),
+        CompletedCommand(0, (donor + "\n").encode(), b""),
+    )
+
+    result = execute_rootless_image_build(
+        plan,
+        output_root=tmp_path / "images",
+        docker_host=DOCKER_HOST,
+        expected_uid=1013,
+        runner=runner,
+        at=datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert runner.calls[3].argv[-1] == donor
+    assert runner.calls[4].argv[-3:] == ("tag", donor, donor_tag)
+    assert runner.calls[5].argv[-1] == donor_tag
+    assert _pair(runner.calls[6].argv, "--network") == ("--network", "host")
+    assert runner.calls[-1].argv[-1] == donor_tag
+    manifest = json.loads(result.manifest_path.read_text())
+    assert manifest["local_nexau_runtime_tag"] == donor_tag
+    assert manifest["local_nexau_runtime_image_id"] == donor
 
 
 def test_execute_build_result_identity_changes_with_measured_lock(tmp_path) -> None:

@@ -41,6 +41,10 @@ def build_parser() -> argparse.ArgumentParser:
         default="default",
         help="Docker build network; use host only on an explicitly trusted host",
     )
+    parser.add_argument(
+        "--nexau-runtime-image-ref",
+        help="Immutable task-neutral NexAU donor image ID for offline worker builds",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--plan-only", action="store_true")
     mode.add_argument("--build", action="store_true")
@@ -61,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
             memory_mb=args.memory_mb,
             build_timeout_seconds=args.build_timeout_seconds,
             build_network=args.build_network,
+            nexau_runtime_image_ref=args.nexau_runtime_image_ref,
         )
         print(f"role: {plan.role}")
         print(f"task: {plan.task_id}")
