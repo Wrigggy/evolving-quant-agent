@@ -799,13 +799,9 @@ def _bounded_nonnegative_cost(value: object) -> int | float | None:
     return None
 
 
-def _response_usage(
-    payload: bytes,
+def _decoded_usage(
+    decoded: object,
 ) -> tuple[int | None, int | None, int | None, int | float | None]:
-    try:
-        decoded = json.loads(payload)
-    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
-        return None, None, None, None
     if not isinstance(decoded, dict) or not isinstance(decoded.get("usage"), dict):
         return None, None, None, None
     usage = decoded["usage"]
@@ -820,6 +816,35 @@ def _response_usage(
         usage.get("cost", usage.get("provider_cost_usd"))
     )
     return input_tokens, output_tokens, total_tokens, cost
+
+
+def _response_usage(
+    payload: bytes,
+) -> tuple[int | None, int | None, int | None, int | float | None]:
+    try:
+        decoded = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        decoded = None
+    if decoded is not None:
+        return _decoded_usage(decoded)
+
+    # OpenRouter puts usage in the final JSON SSE event for streaming calls.
+    # Parse only top-level ``data:`` JSON objects and retain no response text.
+    latest = (None, None, None, None)
+    for line in payload.splitlines():
+        if not line.startswith(b"data:"):
+            continue
+        event = line[len(b"data:") :].lstrip(b" ")
+        if not event or event == b"[DONE]":
+            continue
+        try:
+            decoded_event = json.loads(event)
+        except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+            continue
+        candidate = _decoded_usage(decoded_event)
+        if any(value is not None for value in candidate):
+            latest = candidate
+    return latest
 
 
 def _provider_request_id(headers, *, forbidden: str) -> str | None:

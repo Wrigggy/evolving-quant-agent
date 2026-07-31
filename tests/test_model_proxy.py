@@ -32,8 +32,22 @@ class UpstreamHandler(BaseHTTPRequestHandler):
         )
         if self.path.endswith("/echo-token"):
             payload = f'{{"authorization":"Bearer {REAL_TOKEN}"}}'.encode()
+            content_type = "application/json"
         elif self.path.endswith("/large"):
             payload = b"x" * 128
+            content_type = "application/json"
+        elif self.path.endswith("/stream"):
+            payload = b"".join(
+                (
+                    b'data: {"choices":[{"delta":{"content":"private"}}],'
+                    b'"usage":null}\n\n',
+                    b'data: {"choices":[],"usage":{"prompt_tokens":41,'
+                    b'"completion_tokens":13,"total_tokens":54,'
+                    b'"cost":0.0042}}\n\n',
+                    b'data: [DONE]\n\n',
+                )
+            )
+            content_type = "text/event-stream"
         else:
             payload = json.dumps(
                 {
@@ -48,8 +62,9 @@ class UpstreamHandler(BaseHTTPRequestHandler):
                 },
                 sort_keys=True,
             ).encode()
+            content_type = "application/json"
         self.send_response(200)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", content_type)
         self.send_header(
             "X-Request-Id",
             (
@@ -375,6 +390,45 @@ def test_proxy_audit_has_only_safe_completed_request_fields(tmp_path):
         assert REAL_TOKEN not in encoded
         assert "authorization" not in encoded.lower()
         assert (tmp_path / "proxy-audit.jsonl").stat().st_mode & 0o777 == 0o600
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_response_usage_reads_final_openrouter_stream_event_without_content():
+    from qea.model_proxy import _response_usage
+
+    payload = b"".join(
+        (
+            b': OPENROUTER PROCESSING\n\n',
+            b'data: {"choices":[{"delta":{"content":"private"}}],'
+            b'"usage":null}\n\n',
+            b'data: malformed-provider-event\n\n',
+            b'data: {"choices":[],"usage":{"prompt_tokens":41,'
+            b'"completion_tokens":13,"total_tokens":54,'
+            b'"cost":0.0042}}\n\n',
+            b'data: [DONE]\n\n',
+        )
+    )
+
+    assert _response_usage(payload) == (41, 13, 54, 0.0042)
+
+
+def test_proxy_audit_extracts_usage_from_stream_without_logging_content(tmp_path):
+    upstream, upstream_thread = _start_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, payload = _request(proxy, path="/v1/stream")
+
+        assert status == 200
+        assert b'"content":"private"' in payload
+        [audit] = _read_audit(tmp_path)
+        assert audit["request_state"] == "completed"
+        assert audit["input_tokens"] == 41
+        assert audit["output_tokens"] == 13
+        assert audit["total_tokens"] == 54
+        assert audit["provider_cost_usd"] == 0.0042
+        assert "private" not in (tmp_path / "proxy-audit.jsonl").read_text()
     finally:
         _stop(proxy, proxy_thread)
         _stop(upstream, upstream_thread)
