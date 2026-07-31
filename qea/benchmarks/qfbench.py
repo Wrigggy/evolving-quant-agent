@@ -79,6 +79,7 @@ class QFBenchTask:
     cpus: int
     memory_mb: int
     copy_oracle: bool = False
+    resource_source: str = "upstream"
 
 
 @dataclass(frozen=True)
@@ -104,6 +105,29 @@ class QFBenchSnapshot:
     @property
     def tasks(self) -> tuple[QFBenchTask, ...]:
         return self.optimize.tasks + self.held_out.tasks
+
+    def task(self, task_id: str) -> QFBenchTask:
+        for task in self.tasks:
+            if task.task_id == task_id:
+                return task
+        raise KeyError(task_id)
+
+
+@dataclass(frozen=True)
+class QFBenchBaselineSnapshot:
+    root: Path
+    repository_url: str
+    commit: str
+    primary: QFBenchSplit
+    diagnostic: QFBenchSplit
+    structural_exclusions: frozenset[str]
+    copy_oracle_tasks: frozenset[str]
+    inoperable_tasks: frozenset[str]
+    resource_fallback_task_ids: frozenset[str]
+
+    @property
+    def tasks(self) -> tuple[QFBenchTask, ...]:
+        return self.primary.tasks + self.diagnostic.tasks
 
     def task(self, task_id: str) -> QFBenchTask:
         for task in self.tasks:
@@ -784,7 +808,12 @@ def _require_string(entry: dict, key: str, task_id: str) -> str:
     return value.strip()
 
 
-def _task_resource_contract(task_root: Path, task_id: str) -> dict[str, int]:
+def _task_resource_contract(
+    task_root: Path,
+    task_id: str,
+    *,
+    fallback: object = None,
+) -> dict[str, int]:
     """Read the small scalar resource contract from QFBench's task.toml."""
 
     text = (task_root / "task.toml").read_text()
@@ -818,6 +847,33 @@ def _task_resource_contract(task_root: Path, task_id: str) -> dict[str, int]:
             )
         return int(value)
 
+    required_sections = ("agent", "verifier", "environment")
+    has_upstream_contract = all(
+        re.search(rf"(?m)^\[{re.escape(section)}\]\s*$", text)
+        for section in required_sections
+    )
+    if not has_upstream_contract:
+        keys = {
+            "agent_timeout_seconds",
+            "verifier_timeout_seconds",
+            "build_timeout_seconds",
+            "cpus",
+            "memory_mb",
+        }
+        if not isinstance(fallback, dict) or set(fallback) != keys:
+            raise QFBenchConfigError(
+                f"task {task_id!r} requires a complete fallback resource contract"
+            )
+        if any(type(fallback[key]) is not int or fallback[key] <= 0 for key in keys):
+            raise QFBenchConfigError(
+                f"task {task_id!r} has an invalid fallback resource contract"
+            )
+        return {key: int(fallback[key]) for key in keys}
+    if fallback is not None:
+        raise QFBenchConfigError(
+            f"task {task_id!r} cannot override its upstream resource contract"
+        )
+
     memory_raw = scalar("environment", "memory").strip('"\'').upper()
     memory_match = re.fullmatch(r"([1-9][0-9]*)(M|G)", memory_raw)
     if memory_match is None:
@@ -840,11 +896,13 @@ def _load_task(
     entry: dict,
     copy_oracles: frozenset[str],
     inoperable: frozenset[str],
+    *,
+    allow_copy_oracle: bool = False,
 ) -> QFBenchTask:
     if not isinstance(entry, dict):
         raise QFBenchConfigError("pilot task entries must be objects")
     task_id = _require_string(entry, "task_id", "<unknown>")
-    if task_id in copy_oracles:
+    if task_id in copy_oracles and not allow_copy_oracle:
         raise QFBenchConfigError(f"copy-oracle task {task_id!r} cannot enter a pilot split")
     if task_id in inoperable:
         raise QFBenchConfigError(
@@ -859,7 +917,17 @@ def _load_task(
             raise QFBenchConfigError(f"task {task_id!r} is missing {relative}")
 
     instruction = (task_root / "instruction.md").resolve()
-    resources = _task_resource_contract(task_root, task_id)
+    resource_source = entry.get("resource_source", "upstream")
+    if resource_source not in {"upstream", "qea_fallback"}:
+        raise QFBenchConfigError(
+            f"task {task_id!r} has invalid resource_source {resource_source!r}"
+        )
+    fallback = entry.get("resources") if resource_source == "qea_fallback" else None
+    if resource_source == "upstream" and "resources" in entry:
+        raise QFBenchConfigError(
+            f"task {task_id!r} has fallback resources with upstream resource_source"
+        )
+    resources = _task_resource_contract(task_root, task_id, fallback=fallback)
     worker_files = _files_under(task_root / "environment" / "data") + (instruction,)
     worker_files = tuple(sorted(worker_files, key=lambda path: path.relative_to(task_root).as_posix()))
     verifier_files = _files_under(task_root / "tests")
@@ -874,6 +942,8 @@ def _load_task(
         dockerfile_path=(task_root / "environment" / "Dockerfile").resolve(),
         worker_files=worker_files,
         verifier_files=verifier_files,
+        copy_oracle=task_id in copy_oracles,
+        resource_source=resource_source,
         **resources,
     )
 
@@ -884,8 +954,19 @@ def _load_split(
     entries: Iterable[dict],
     copy_oracles: frozenset[str],
     inoperable: frozenset[str],
+    *,
+    allow_copy_oracle: bool = False,
 ) -> QFBenchSplit:
-    tasks = tuple(_load_task(root, entry, copy_oracles, inoperable) for entry in entries)
+    tasks = tuple(
+        _load_task(
+            root,
+            entry,
+            copy_oracles,
+            inoperable,
+            allow_copy_oracle=allow_copy_oracle,
+        )
+        for entry in entries
+    )
     task_ids = [task.task_id for task in tasks]
     if len(task_ids) != len(set(task_ids)):
         raise QFBenchConfigError(f"duplicate task in {name} split")
@@ -997,4 +1078,120 @@ def load_qfbench_snapshot(
         held_out=held_out,
         copy_oracle_tasks=copy_oracles,
         inoperable_tasks=inoperable,
+    )
+
+
+def load_qfbench_baseline_snapshot(
+    root: str | Path,
+    *,
+    manifest_path: str | Path,
+) -> QFBenchBaselineSnapshot:
+    """Load the preregistered all-task baseline and its diagnostic panel."""
+
+    root_path = Path(root).expanduser().resolve()
+    manifest_file = Path(manifest_path).expanduser().resolve()
+    try:
+        manifest = json.loads(manifest_file.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise QFBenchConfigError(
+            f"cannot load QFBench manifest {manifest_file}: {exc}"
+        ) from exc
+    if manifest.get("schema_version") != 1:
+        raise QFBenchConfigError("unsupported QFBench manifest schema")
+    expected_commit = str(manifest.get("commit", "")).lower()
+    if not _COMMIT_RE.fullmatch(expected_commit):
+        raise QFBenchConfigError("manifest commit must be a full 40-character SHA")
+    actual_commit = _snapshot_revision(root_path)
+    if actual_commit != expected_commit:
+        raise QFBenchConfigError(
+            f"QFBench commit mismatch: expected {expected_commit}, found {actual_commit}"
+        )
+
+    copy_oracles = frozenset(
+        str(item) for item in manifest.get("copy_oracle_tasks", ())
+    )
+    inoperable_entries = manifest.get("inoperable_tasks", [])
+    if not isinstance(inoperable_entries, list):
+        raise QFBenchConfigError("manifest inoperable_tasks must be an array")
+    inoperable_ids = []
+    for entry in inoperable_entries:
+        if not isinstance(entry, dict):
+            raise QFBenchConfigError("inoperable task entries must be objects")
+        task_id = _require_string(entry, "task_id", "<inoperable>")
+        _require_string(entry, "reason", task_id)
+        inoperable_ids.append(task_id)
+    inoperable = frozenset(inoperable_ids)
+
+    baseline = manifest.get("baseline")
+    if not isinstance(baseline, dict):
+        raise QFBenchConfigError("manifest must contain a baseline object")
+    primary_entries = baseline.get("primary", ())
+    diagnostic_entries = baseline.get("diagnostic", ())
+    primary_ids = {
+        _require_string(entry, "task_id", "<primary>")
+        for entry in primary_entries
+        if isinstance(entry, dict)
+    }
+    invalid_primary = sorted(primary_ids & copy_oracles)
+    if invalid_primary:
+        raise QFBenchConfigError(
+            f"copy-oracle tasks cannot enter baseline primary: {invalid_primary}"
+        )
+    primary = _load_split(
+        root_path,
+        "baseline primary",
+        primary_entries,
+        copy_oracles,
+        inoperable,
+    )
+    diagnostic = _load_split(
+        root_path,
+        "baseline diagnostic",
+        diagnostic_entries,
+        copy_oracles,
+        inoperable,
+        allow_copy_oracle=True,
+    )
+    if set(diagnostic.task_ids) != copy_oracles:
+        raise QFBenchConfigError(
+            "baseline diagnostic tasks must equal the registered copy-oracle set"
+        )
+    overlap = set(primary.task_ids) & set(diagnostic.task_ids)
+    if overlap:
+        raise QFBenchConfigError(
+            f"task overlap between baseline panels: {sorted(overlap)}"
+        )
+
+    structural_entries = baseline.get("structural_exclusions", ())
+    if not isinstance(structural_entries, list):
+        raise QFBenchConfigError("baseline structural_exclusions must be an array")
+    structural_ids = []
+    for entry in structural_entries:
+        if not isinstance(entry, dict):
+            raise QFBenchConfigError("structural exclusion entries must be objects")
+        task_id = _require_string(entry, "task_id", "<structural-exclusion>")
+        _require_string(entry, "reason", task_id)
+        structural_ids.append(task_id)
+    structural = frozenset(structural_ids)
+    if structural != inoperable:
+        raise QFBenchConfigError(
+            "baseline structural exclusions must equal registered inoperable tasks"
+        )
+
+    repository_url = manifest.get("repository_url")
+    if not isinstance(repository_url, str) or not repository_url:
+        raise QFBenchConfigError("manifest repository_url must be non-empty")
+    fallback_ids = frozenset(
+        task.task_id for task in primary.tasks if task.resource_source == "qea_fallback"
+    )
+    return QFBenchBaselineSnapshot(
+        root=root_path,
+        repository_url=repository_url,
+        commit=actual_commit,
+        primary=primary,
+        diagnostic=diagnostic,
+        structural_exclusions=structural,
+        copy_oracle_tasks=copy_oracles,
+        inoperable_tasks=inoperable,
+        resource_fallback_task_ids=fallback_ids,
     )

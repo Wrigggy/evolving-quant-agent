@@ -291,3 +291,40 @@ def test_rootless_materializer_cli_plans_without_downloading(tmp_path) -> None:
     assert "denied solution files: 1" in result.stdout
     assert not public_root.exists()
     assert not trusted_root.exists()
+
+
+def test_rootless_materializer_cli_accepts_baseline_panels_without_exclusions(
+    tmp_path,
+) -> None:
+    source, commit = _write_source(tmp_path)
+    manifest = tmp_path / "baseline-panel.json"
+    manifest.write_text(json.dumps({
+        "schema_version": 1,
+        "repository_url": "https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+        "commit": commit,
+        "baseline": {
+            "primary": [{"task_id": "task-a"}],
+            "diagnostic": [],
+            "structural_exclusions": [{"task_id": "task-b", "reason": "broken"}],
+        },
+    }))
+    repository = Path(__file__).resolve().parents[1]
+
+    result = subprocess.run(
+        (
+            sys.executable,
+            "scripts/materialize_qfbench_rootless_snapshot.py",
+            "--source-tree", str(source),
+            "--task-panel-manifest", str(manifest),
+            "--public-root", str(tmp_path / "public"),
+            "--trusted-root", str(tmp_path / "trusted"),
+            "--plan-only",
+        ),
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "tasks: 1" in result.stdout

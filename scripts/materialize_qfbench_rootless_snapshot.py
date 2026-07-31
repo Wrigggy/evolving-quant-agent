@@ -47,13 +47,19 @@ def _panel_contract(path: Path) -> tuple[str, str, tuple[str, ...]]:
     repository_url = payload.get("repository_url")
     commit = payload.get("commit")
     pilot = payload.get("pilot")
+    baseline = payload.get("baseline")
     if not isinstance(repository_url, str) or not repository_url:
         raise QFBenchConfigError("task panel repository_url must be non-empty")
     if not isinstance(commit, str) or not commit:
         raise QFBenchConfigError("task panel commit must be non-empty")
-    if not isinstance(pilot, dict):
-        raise QFBenchConfigError("task panel must contain pilot splits")
-    entries = [*pilot.get("optimize", ()), *pilot.get("held_out", ())]
+    if isinstance(pilot, dict) == isinstance(baseline, dict):
+        raise QFBenchConfigError(
+            "task panel must contain exactly one of pilot or baseline splits"
+        )
+    if isinstance(pilot, dict):
+        entries = [*pilot.get("optimize", ()), *pilot.get("held_out", ())]
+    else:
+        entries = [*baseline.get("primary", ()), *baseline.get("diagnostic", ())]
     if not entries or any(not isinstance(entry, dict) for entry in entries):
         raise QFBenchConfigError("task panel splits must contain task objects")
     task_ids = tuple(str(entry.get("task_id", "")) for entry in entries)
