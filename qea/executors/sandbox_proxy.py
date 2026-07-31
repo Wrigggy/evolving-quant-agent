@@ -38,6 +38,7 @@ _PRIVATE_CONFIG_PATH = "/run/qea-secrets/proxy-config.json"
 _PRIVATE_TOKEN_PATH = "/run/qea-secrets/model-token"
 _PRIVATE_AUDIT_PATH = "/run/qea-secrets/proxy-audit.jsonl"
 _PROXY_ALIAS = "qea-model-proxy"
+_READY_TIMEOUT_SECONDS = 30
 _MAX_AUDIT_BYTES = 16 * 1024 * 1024
 _MAX_AUDIT_LATENCY_MS = 7 * 24 * 60 * 60 * 1000
 _MAX_REQUEST_IDENTITIES = 10_000
@@ -83,9 +84,25 @@ _AUDIT_KEYS = frozenset(
 _READY_CODE = """
 import socket
 import sys
+import time
 
-with socket.create_connection(('127.0.0.1', int(sys.argv[1])), timeout=2):
-    pass
+port = int(sys.argv[1])
+deadline = time.monotonic() + float(sys.argv[2])
+last_error = None
+connected = False
+while time.monotonic() < deadline:
+    remaining = deadline - time.monotonic()
+    try:
+        with socket.create_connection(
+            ('127.0.0.1', port), timeout=min(2, max(0.1, remaining))
+        ):
+            connected = True
+        break
+    except OSError as exc:
+        last_error = exc
+        time.sleep(min(0.1, max(0, deadline - time.monotonic())))
+if not connected:
+    raise last_error or TimeoutError('proxy readiness deadline expired')
 """.strip()
 _FINALIZE_CODE = """
 import http.client
@@ -697,6 +714,12 @@ class SandboxProxyManager:
                         "-c",
                         _READY_CODE,
                         str(self.config.listen_port),
+                        str(
+                            min(
+                                _READY_TIMEOUT_SECONDS,
+                                self.config.timeout_seconds,
+                            )
+                        ),
                     ),
                     environment={},
                     timeout_seconds=self.config.timeout_seconds,

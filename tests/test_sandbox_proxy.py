@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
+import types
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -380,6 +382,46 @@ def test_readiness_failure_retains_token_redaction_through_lifecycle_cleanup(tmp
     assert REAL_TOKEN.decode() not in lifecycle_path.read_text()
     assert ("kill", "proxy-native-1") in backend.events
     assert backend.events[-1] == ("network-remove", backend.network_handles[0])
+
+
+def test_readiness_code_retries_until_delayed_proxy_bind(monkeypatch):
+    from qea.executors.sandbox_proxy import _READY_CODE
+
+    attempts = 0
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    def create_connection(*_, **__):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise ConnectionRefusedError("delayed bind")
+        return Connection()
+
+    clock = 0.0
+
+    def monotonic():
+        nonlocal clock
+        clock += 0.01
+        return clock
+
+    fake_socket = types.ModuleType("socket")
+    fake_socket.create_connection = create_connection
+    fake_time = types.ModuleType("time")
+    fake_time.monotonic = monotonic
+    fake_time.sleep = lambda _: None
+    monkeypatch.setitem(sys.modules, "socket", fake_socket)
+    monkeypatch.setitem(sys.modules, "time", fake_time)
+    monkeypatch.setattr(sys, "argv", ["ready", "8080", "1"])
+
+    exec(_READY_CODE, {})
+
+    assert attempts == 3
 
 
 def test_caller_exception_is_preserved_after_audit_download_and_cleanup(tmp_path):
