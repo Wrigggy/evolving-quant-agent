@@ -1,7 +1,7 @@
 # QEA Repository Memory
 
 > Canonical research and architecture memory for future contributors and agents.
-> Last updated: 2026-07-27. This file records current decisions, not merely historical discussion.
+> Last updated: 2026-07-31. This file records current decisions, not merely historical discussion.
 
 ## How to Use This Memory
 
@@ -79,10 +79,10 @@ High-parallel memory pressure primarily comes from one NexAU `Agent` per task, 2
 
 Adopt the original AHE pattern in stages:
 
-1. **First choice:** keep the QEA coordinator local or on a small persistent CPU host, but run the complete NexAU worker process, task shell, raw trace, QFBench environment, verifier, and document rendering in remote E2B sandboxes.
+1. **Current default:** keep the trusted QEA coordinator on the persistent `bc-server` user account and run evolver, worker, credential-proxy, and independent offline-verifier roles in attempt-isolated rootless Docker containers.
 2. Return only compact answer-free summaries, rewards, artifact manifests, and trace URIs to the coordinator.
-3. Use a global account-level concurrency lease. Historical runs hit E2B 429 errors at the nominal 20-sandbox cap; begin around 12–16, including verifier/renderer sandboxes.
-4. Consider moving the coordinator itself to E2B only after Level-B gains complete checkpoint/resume, task idempotency, external durable storage, orphan cleanup, and strict secret isolation.
+3. Use the host-local weighted resource lease and preserve CPU, memory, PID, tmpfs, disk, and Docker headroom. Start scored fan-out conservatively; never infer safe concurrency from nominal core count alone.
+4. Keep the coordinator outside task containers because it owns checkpoints, trusted verifier inputs, admission, and exact-ID cleanup. E2B remains an explicit fallback and historical reference, not the operational default.
 
 Task environments support two immutable runtime transports: a registry-visible `image@sha256:digest`, or a published E2B base template/build ID extended with validated task `WORKDIR`/`COPY`/`RUN` operations. The E2B base-build route removes the private-registry dependency and freezes the published filesystem, but it is not rebuild-reproducible from the mutable upstream parent tag and ranged requirements. Manifests are publish-once identities, carry the exact pinned `task.toml` CPU/memory/timeout contract, and reject runtime mismatches. Reuse recorded build IDs; prefer the registry digest route when available. The E2B-template route has now passed live five-task publication, isolated oracle parity, force-kill/reap/resume, and a 16-attempt pilot.
 
@@ -96,7 +96,7 @@ Moving the whole coordinator to E2B is feasible but not the first optimization. 
 
 ### Sandbox Provider Selection
 
-E2B remains the only **measured** QFBench backend and was the immutable runtime for the completed Control/Rich A/B; never change providers within an experiment arm. For post-A/B work, implement a provider-neutral backend while preserving provider-native image and lifecycle identities. Evaluate **Daytona Linux VM first** as the lowest-migration-cost alternative, then run a matched **Vercel Sandbox** cost pilot because its Active CPU billing may benefit model-wait-heavy workers. Keep E2B as the parity reference until a replacement passes exact resources, secret non-exposure, hard offline-verifier, official-test parity, force-kill/reaper/resume, and billing-telemetry gates.
+E2B was the immutable measured backend for the completed Control/Rich A/B and remains an explicit fallback and historical reference; never change providers within an experiment arm. The approved direct cutover makes self-hosted rootless Docker the operational default for new QFBench full-harness work. The 2026-07-31 five-task run measured a complete fresh evolver/worker/offline-verifier path on rootless Docker, but it did not measure E2B-matched performance or authoritative full-run cost. Daytona, Vercel, and other providers remain future alternatives and must preserve provider-native image/lifecycle identities plus the same firewall and recovery contract.
 
 Do not use Daytona's default container runtime for official scoring, and do not assume its Tier 1/2 `networkBlockAll` behavior is air-gapped until a raw DNS/TCP/HTTPS canary proves it. Do not use Blaxel for official verification while its public-preview filtering depends on `HTTP_PROXY`/`HTTPS_PROXY`; tools that ignore the proxy can bypass the filter. Modal is a secure but higher-cost fallback. Sprites is suitable for persistent development agents but its fixed 8-vCPU/100-GB shape cannot preserve QFBench resource identity. Full rationale, source audit, cost break-even, and canary order: [2026-07-27 sandbox provider decision](decisions/2026-07-27-sandbox-provider-selection-and-parity-plan.md).
 
@@ -136,7 +136,7 @@ Still required before a formal QFBench evolution-gain claim:
 1. Repeat the matched 30-task Control/Rich protocol across at least three independent preregistered model seeds. More tasks reduce cross-task sampling error but do not by themselves estimate model-run variance.
 2. Instrument model token/cost, sandbox lifecycle duration, and provider billing totals in durable run artifacts; current runs do not expose authoritative cost totals.
 3. Independently rebuild or continue excluding the eight copy-oracle tasks and the pinned inoperable `sec-8k-event-alpha` verifier.
-4. Before migrating from E2B, run the preregistered sandbox-backend parity gates in the 2026-07-27 provider decision; documentation review alone is not compatibility evidence.
+4. Before migrating an experiment arm to any other provider, run provider-specific isolation, resource, recovery, and billing gates; documentation review alone is not compatibility evidence. A new matched E2B panel is not required for continued rootless operation.
 5. Preserve the historical 14 contaminated scores. Repair them only if historical score authority is worth a separately identified superseding rescore; the corrected full A/B runs now supply current evidence without rewriting history.
 
 ### 2026-07-30 Rootless Self-Hosted Backend Canary
@@ -147,7 +147,18 @@ The one authorized fresh model request did **not** complete: OpenRouter returned
 
 Official tests and test reference data from QFBench commit `024921eb507fcc0c4ffe3e0a96802724be1ae84a` remain verifier-only under `/home/julius/qea/runtime/trusted-verifier/024921eb-five-task` with modes `700/600`. A final audit found three executable `test.sh` files had initially retained `0700`; they were normalized to `0600`, and follow-up commit `dbff80d` now enforces owner-only, non-executable trusted files before promotion. This did not change file bytes, hashes, or the measured parity result. Audits found zero trusted payload/hash, secret, forbidden path, or official-solution exposure to worker surfaces. No official solutions were downloaded, uploaded, checked out, or run.
 
-**Current decision:** the rootless backend is retained as a verifier-parity/isolation candidate but is not accepted for formal scoring. E2B remains the only measured formal-scoring backend. Before another paid single-task canary, preregister either a compliant model-proxy egress that preserves `openai/gpt-5`, or a region-available model treated as a new infrastructure-only identity. Do not expand to the five-task panel, 30 tasks, or repetitions until a fresh worker-to-verifier loop and cost telemetry pass. See the [gate decision](decisions/2026-07-30-qfbench-rootless-backend-gate.md) and [experiment report](reports/2026-07-30-qfbench-rootless-backend-canary-report.md).
+**Decision at that date (superseded):** the rootless backend was retained as a verifier-parity/isolation candidate but was not accepted for formal scoring. E2B remained the only measured formal-scoring backend. Before another paid single-task canary, the gate required either a compliant model-proxy egress that preserved `openai/gpt-5`, or a region-available model treated as a new infrastructure-only identity. See the [gate decision](decisions/2026-07-30-qfbench-rootless-backend-gate.md) and [experiment report](reports/2026-07-30-qfbench-rootless-backend-canary-report.md).
+
+This paragraph records the dated 2026-07-30 gate and is superseded by the
+2026-07-31 decision below.
+
+### 2026-07-31 Rootless Five-Task Full-Harness Gate
+
+The approved [direct-cutover design](superpowers/specs/2026-07-30-qfbench-rootless-direct-cutover-design.md) makes self-hosted rootless Docker the default for new QFBench full-harness development and staged scoring; E2B is an explicit fallback, and a new matched E2B run is not a prerequisite. Run `qfbench-rootless-five-rich-1x-20260731-r3` completed one Rich proposal and all 10 scheduled five-task official scores using `deepseek/deepseek-v4-pro`. Optimize macro remained `0.95833325`, held-out seed/final remained `1.0`, and the admitted candidate was rolled back. This is end-to-end backend evidence, not an evolution-gain claim.
+
+The run preserved optimize-only answer-free feedback, independent no-network official verification, verifier-only trusted inputs, credential mediation, exact attempt identities, and final zero managed containers/networks. Scans found no credential, official-test/reference, held-out, or solution exposure. Proxy-readiness and replay-quarantine bugs discovered during the run were fixed in commits `b7d1a2f` and `33e2294`; completed work was reused on resume. All 123 canonical provider requests ended HTTP 200, but their cost/token fields are unavailable and must remain `null`, not reported as zero.
+
+Rootless is accepted only through the five-task one-iteration stage. Before five-task three-iteration or 30-task work, complete a deliberate production full-harness coordinator-kill, exact-ID reaper/resume exercise and authoritative provider-cost reconciliation. The shared-host administrator remains a documented residual risk, and rootless Docker is not microVM-equivalent. Full evidence and the current gate are in the [2026-07-31 decision](decisions/2026-07-31-qfbench-rootless-five-task-full-harness-gate.md).
 
 No report may describe adapter compatibility, E2B parity, AutoDL performance, or seed-worker QFBench score as measured until the corresponding run artifact exists.
 

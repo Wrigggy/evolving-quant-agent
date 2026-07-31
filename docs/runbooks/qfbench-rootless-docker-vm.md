@@ -1,6 +1,6 @@
 # QFBench Rootless Docker VM Runbook
 
-This runbook deploys the committed `qfbench-selfhosted-vm-backend` branch to the shared `bc` host and runs only the staged five-task backend canary. It does not authorize formal 30-task or five-iteration scoring. Keep local Git as the source of truth; use the VM only as a Linux/rootless-Docker execution node.
+This runbook deploys a committed rootless-backend branch to the shared `bc` host and runs staged QFBench full-harness experiments. Rootless Docker is the default backend; E2B is an explicit fallback. The current gate permits the five-task one-iteration protocol only. Keep local Git as the source of truth and use the VM as a trusted coordinator plus Linux/rootless-Docker execution node.
 
 ## Safety Boundaries
 
@@ -9,7 +9,7 @@ This runbook deploys the committed `qfbench-selfhosted-vm-backend` branch to the
 - Keep official tests only under `~/qea/runtime/trusted-verifier/`, mode `700`; workers receive only the separate public root.
 - Use only `unix:///run/user/1013/docker.sock`. `/var/run/docker.sock`, privileged containers, host networking, and host mounts are forbidden.
 - Never run `docker system prune`, wildcard cleanup, or label-wide deletion. Record and remove exact QEA container/network IDs only.
-- Do not merge this branch. Stop after the one fresh seed-worker canary; do not start 30×5 scoring.
+- Do not merge this branch. Stop after the currently accepted rollout stage; do not start three iterations, 30 tasks, or 30×5 scoring until the newest decision's recovery and cost gates pass.
 
 ## 1. Verify the Route, SSH, Identity, and Capacity
 
@@ -78,14 +78,18 @@ git -C "$HOME/qea/worktrees/qfbench-selfhosted-vm-backend" status --short --bran
 git -C "$HOME/qea/worktrees/qfbench-selfhosted-vm-backend" rev-parse HEAD
 ```
 
-If a tested follow-up commit is required after the worktree exists, use a non-checked-out incoming ref:
+If a tested follow-up commit is required after the worktree exists, push a new,
+non-checked-out branch and switch the clean execution worktree to it:
 
 ```bash
-git push bc:~/qea/git/evolving-quant-agent.git HEAD:refs/heads/qfbench-selfhosted-vm-backend-incoming
-ssh bc 'git -C "$HOME/qea/worktrees/qfbench-selfhosted-vm-backend" merge --ff-only qfbench-selfhosted-vm-backend-incoming'
+git push bc:~/qea/git/evolving-quant-agent.git HEAD:refs/heads/qfbench-rootless-reviewed-COMMIT
+ssh bc 'git -C "$HOME/qea/worktrees/qfbench-selfhosted-vm-backend" status --short'
+ssh bc 'git -C "$HOME/qea/worktrees/qfbench-selfhosted-vm-backend" switch qfbench-rootless-reviewed-COMMIT'
 ```
 
-Do not push over a checked-out ref, use `rsync` for the repo, or create a second source of truth on the VM.
+Replace `COMMIT` with a short immutable commit identity. Stop if the remote
+worktree is dirty. Do not push over a checked-out ref, merge experiment branches,
+use `rsync` for the repo, or create a second source of truth on the VM.
 
 ## 4. Create a Blob-Filtered QFBench Object Store
 
@@ -231,7 +235,7 @@ For `historical-var-data-prep`, plan the worker and verifier separately:
 
 Inspect both plans, then repeat the exact worker command with `--build`; after it completes, repeat the exact verifier command with `--build`. Do not build roles concurrently.
 
-## 8. Advance the Canary One Gate at a Time
+## 8. Advance Infrastructure Canaries One Gate at a Time
 
 The canary defaults to plan-only and has no formal-scoring command:
 
@@ -255,9 +259,79 @@ printf 'coordinator_pid=%s\n' "$$"
   --apply --through-stage force-kill-reap-resume
 ```
 
-After every stage, inspect its JSON, record exact container/network IDs and hashes, and require an empty managed-container inventory before advancing. Verifier replay and the one paid fresh seed-worker are separate later approvals in the execution plan; this runbook does not combine them with formal scoring.
+After every stage, inspect its JSON, record exact container/network IDs and hashes, and require an empty managed-container inventory before advancing. A canary result is infrastructure evidence and does not replace the production full-harness stage below.
 
-## 9. Exact-ID Recovery and Rollback
+## 9. Run the Staged Rootless Full Harness
+
+Use the production CLI; `rootless-docker` is explicit here even though it is the
+QFBench default. Keep every runtime config, image-set manifest, feedback
+manifest, criteria map, and provider token outside Git with owner-only modes.
+Record their hashes before launch:
+
+```bash
+export QEA_ROOTLESS_CONFIG=/owner-only/path/rootless-config.json
+export QEA_IMAGE_SET=/owner-only/path/image-set.json
+export QEA_FEEDBACK_MANIFEST=/owner-only/path/optimize-feedback.json
+export QEA_CRITERIA_MAP=/owner-only/path/verifier-criteria.json
+export QEA_RUN_ID=qfbench-rootless-five-rich-1x-YYYYMMDD-rN
+chmod 600 "$QEA_ROOTLESS_CONFIG" "$QEA_IMAGE_SET" "$QEA_FEEDBACK_MANIFEST" "$QEA_CRITERIA_MAP"
+sha256sum "$QEA_ROOTLESS_CONFIG" "$QEA_IMAGE_SET" "$QEA_FEEDBACK_MANIFEST" "$QEA_CRITERIA_MAP"
+stat -c '%a:%u:%n' "$HOME/qea/runtime/secrets/model-token"
+```
+
+Preflight the host, require an empty QEA-managed inventory, and inspect the
+configured worker/verifier concurrency plus weighted host limits. The current
+measured host policy reserved 48 CPU, 96 GiB, and 24 simultaneous sandboxes,
+with worker and verifier concurrency four; treat these as a measured ceiling,
+not a mandatory setting.
+
+Launch from the committed worktree so relative worker paths resolve correctly:
+
+```bash
+cd "$QEA_REPO"
+"$QEA_PYTHON" run.py \
+  --benchmark qfbench --executor rootless-docker \
+  --qfbench-root "$QFBENCH_PUBLIC" \
+  --qfbench-manifest data/qfbench/MANIFEST.json \
+  --rootless-config "$QEA_ROOTLESS_CONFIG" \
+  --rootless-image-set-manifest "$QEA_IMAGE_SET" \
+  --feedback-mode rich \
+  --feedback-manifest "$QEA_FEEDBACK_MANIFEST" \
+  --verifier-criteria-map "$QEA_CRITERIA_MAP" \
+  --run-id "$QEA_RUN_ID" --iters 1 \
+  --results-dir "$HOME/qea/runs" --approve-external-run
+```
+
+Use `tmux` when available. Otherwise use a detached owner-only log/PID wrapper,
+but still `cd` into the worktree before starting. Never pass the token value in
+argv or the container environment. The credential proxy alone reads the token
+file and injects authorization.
+
+To resume, first verify the exact run ID, immutable config hashes, source
+commit, empty-or-reconciled lifecycle inventory, and provider-request state.
+Then repeat the exact command with `--resume`. A request quarantined after
+possible upstream acceptance must not be retried under the same attempt
+identity. A pre-upstream connection/readiness failure may be archived and
+retried exactly once after its audit proves `upstream_status` is absent.
+
+After completion require:
+
+- the preregistered score count and split schedule;
+- independent `--network none` verifier lifecycles and trusted-input hashes;
+- zero official tests/reference data, solutions, credentials, `.env`, or
+  held-out evidence on worker/evolver surfaces;
+- canonical request states reconciled with any archived quarantine records;
+- zero recorded unfinished containers and zero run-owned networks;
+- provider usage and cost persisted as numbers, or explicitly `null` when the
+  provider does not expose them. Never translate unavailable cost to zero.
+
+Stop immediately on identity drift, unexpected task IDs, missing dependency
+locks, verifier egress, trusted-data exposure, ambiguous request acceptance,
+host-capacity failure, or broad cleanup pressure. Under the 2026-07-31 gate,
+also stop before three iterations or any 30-task run until a deliberate
+production coordinator-kill/reaper/resume and cost reconciliation are recorded.
+
+## 10. Exact-ID Recovery and Rollback
 
 The canary lifecycle files under `~/qea/runs/qfbench-rootless-canary-20260728/` are authoritative. Use the canary's built-in dry reaper/apply sequence. For manual incident inspection, record an exact ID from one lifecycle, then verify all ownership labels before removal:
 
