@@ -62,6 +62,14 @@ _AUDIT_STATUS_RULES: Mapping[tuple[str, str | None], str] = {
 }
 _REQUEST_STATES = frozenset(state for state, _ in _AUDIT_STATUS_RULES)
 _FAILURE_CLASSES = frozenset(failure for _, failure in _AUDIT_STATUS_RULES)
+_CROSS_ATTEMPT_DENIAL_FAILURES = frozenset(
+    {
+        "post_accept_transport",
+        "unsafe_upstream_response",
+        "invalid_upstream_response",
+        "upstream_response_limit",
+    }
+)
 _CALLER_ROLES = frozenset({"worker", "evolver"})
 _AUDIT_KEYS = frozenset(
     {
@@ -422,6 +430,24 @@ def _request_state(records: Sequence[Mapping[str, object]]) -> str:
     return "not_accepted"
 
 
+def _requires_cross_attempt_denial(record: Mapping[str, object]) -> bool:
+    return (
+        record.get("request_state") == "quarantined"
+        and record.get("failure_class") in _CROSS_ATTEMPT_DENIAL_FAILURES
+    )
+
+
+def _is_retryable_replay_denial(
+    records: Sequence[Mapping[str, object]],
+) -> bool:
+    return bool(records) and all(
+        record.get("request_state") == "quarantined"
+        and record.get("failure_class") == "replay_denied"
+        and record.get("upstream_status_code") is None
+        for record in records
+    )
+
+
 def _attempt_paths(run_dir: Path, attempt_id: str) -> tuple[Path, Path, Path]:
     lifecycle = (
         run_dir
@@ -495,7 +521,9 @@ def _collect_denied_request_identities(
     secret: bytes | bytearray,
     allowed_model: str,
 ) -> set[str]:
-    identities = _read_request_registry(_request_registry_path(run_dir))
+    recorded_registry = _read_request_registry(_request_registry_path(run_dir))
+    persisted_identities: set[str] = set()
+    denied_identities: set[str] = set()
     attempts_root = run_dir / "attempts"
     if attempts_root.exists():
         for audit_path in sorted(attempts_root.glob("*/proxy-audit.jsonl")):
@@ -505,18 +533,38 @@ def _collect_denied_request_identities(
                 secret=secret,
                 allowed_model=allowed_model,
             )
-            if not records:
-                raise SandboxProxyError(
-                    "proxy audit has no persisted request record"
-                )
-            identities.update(
-                str(record["request_identity_sha256"])
-                for record in records
-                if record["request_state"] in {"completed", "quarantined"}
-            )
-    if len(identities) > _MAX_REQUEST_IDENTITIES:
+            for record in records:
+                if record["request_state"] in {"completed", "quarantined"}:
+                    persisted_identities.add(
+                        str(record["request_identity_sha256"])
+                    )
+                if _requires_cross_attempt_denial(record):
+                    denied_identities.add(
+                        str(record["request_identity_sha256"])
+                    )
+    orphaned = recorded_registry - persisted_identities
+    if orphaned:
+        raise SandboxProxyError(
+            "proxy request registry contains an identity without a persisted audit"
+        )
+    if len(denied_identities) > _MAX_REQUEST_IDENTITIES:
         raise SandboxProxyError("proxy request registry exceeds its safe contract")
-    return identities
+    return denied_identities
+
+
+def _archive_retryable_replay_denial(path: Path) -> Path:
+    archive = path.with_name("proxy-audit.replay-denied-v1.jsonl")
+    if archive.exists() or archive.is_symlink():
+        raise SandboxProxyError(
+            "retryable replay-denial audit was already archived once"
+        )
+    os.replace(path, archive)
+    directory_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+    return archive
 
 
 def _quarantine_marker(path: Path, *, reason: str) -> None:
@@ -597,7 +645,9 @@ class SandboxProxyManager:
                         "proxy audit has no persisted request record"
                     )
                 state = _request_state(records)
-                if state in {"completed", "quarantined"}:
+                if _is_retryable_replay_denial(records):
+                    _archive_retryable_replay_denial(audit_uri)
+                elif state in {"completed", "quarantined"}:
                     raise SandboxProxyError(
                         f"{state} request identity must not reopen a proxy session"
                     )
@@ -831,14 +881,10 @@ class SandboxProxyManager:
                             "proxy audit has no persisted request record"
                         )
                     _atomic_private_write(audit_uri, audit_payload)
-                    registry_identities = _read_request_registry(
-                        _request_registry_path(run_root)
-                    )
-                    registry_identities.update(
-                        str(record["request_identity_sha256"])
-                        for record in records
-                        if record["request_state"]
-                        in {"completed", "quarantined"}
+                    registry_identities = _collect_denied_request_identities(
+                        run_root,
+                        secret=token_buffer,
+                        allowed_model=self.config.allowed_model,
                     )
                     _write_request_registry(
                         _request_registry_path(run_root), registry_identities

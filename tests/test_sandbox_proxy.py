@@ -647,7 +647,7 @@ def test_sealed_zero_record_session_requires_explicit_no_request_policy(tmp_path
     assert not session.audit_uri.with_suffix(".quarantined.json").exists()
 
 
-def test_completed_hash_enters_private_run_registry_and_next_attempt_config(tmp_path):
+def test_completed_hash_does_not_block_an_independent_attempt(tmp_path):
     request_identity = "a" * 64
     run_dir = tmp_path / "run"
     first_backend = RecordingBackend(
@@ -661,7 +661,7 @@ def test_completed_hash_enters_private_run_registry_and_next_attempt_config(tmp_
     assert registry.is_file()
     assert registry.stat().st_mode & 0o777 == 0o600
     assert json.loads(registry.read_text()) == {
-        "request_identities_sha256": [request_identity],
+        "request_identities_sha256": [],
         "schema_version": 1,
     }
 
@@ -674,9 +674,7 @@ def test_completed_hash_enters_private_run_registry_and_next_attempt_config(tmp_
             if path == "/run/qea-secrets/proxy-config.json"
         )
         private_config = json.loads(config_upload)
-        assert private_config["denied_request_identities_sha256"] == [
-            request_identity
-        ]
+        assert private_config["denied_request_identities_sha256"] == []
         assert hashlib.sha256(config_upload.rstrip(b"\n")).hexdigest() == (
             session.public_config_sha256
         )
@@ -694,6 +692,96 @@ def test_completed_hash_enters_private_run_registry_and_next_attempt_config(tmp_
             sort_keys=True,
         )
         assert request_identity not in public_surface
+
+
+def test_legacy_completed_registry_entry_is_migrated_without_blocking(tmp_path):
+    request_identity = "a" * 64
+    run_dir = tmp_path / "run"
+    first_backend = RecordingBackend(
+        run_dir, audit_payload=_audit_bytes("completed")
+    )
+    manager = _manager(tmp_path, first_backend)
+    with _open(manager, run_dir, "attempt-a"):
+        pass
+
+    registry = run_dir / "proxy-request-registry.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "request_identities_sha256": [request_identity],
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    registry.chmod(0o600)
+
+    second_backend = RecordingBackend(run_dir)
+    manager = _manager(tmp_path, second_backend)
+    with _open(manager, run_dir, "attempt-b"):
+        config_upload = next(
+            payload
+            for _, path, payload in second_backend.uploads
+            if path == "/run/qea-secrets/proxy-config.json"
+        )
+        assert json.loads(config_upload)[
+            "denied_request_identities_sha256"
+        ] == []
+
+    assert json.loads(registry.read_text())["request_identities_sha256"] == []
+
+
+def test_post_accept_quarantine_enters_registry_and_blocks_new_attempt(tmp_path):
+    request_identity = "a" * 64
+    run_dir = tmp_path / "run"
+    first_backend = RecordingBackend(
+        run_dir, audit_payload=_audit_bytes("quarantined")
+    )
+    manager = _manager(tmp_path, first_backend)
+    with _open(manager, run_dir, "attempt-a"):
+        pass
+
+    registry = json.loads((run_dir / "proxy-request-registry.json").read_text())
+    assert registry["request_identities_sha256"] == [request_identity]
+
+    second_backend = RecordingBackend(run_dir)
+    manager = _manager(tmp_path, second_backend)
+    with _open(manager, run_dir, "attempt-b"):
+        config_upload = next(
+            payload
+            for _, path, payload in second_backend.uploads
+            if path == "/run/qea-secrets/proxy-config.json"
+        )
+        private_config = json.loads(config_upload)
+        assert private_config["denied_request_identities_sha256"] == [
+            request_identity
+        ]
+
+
+def test_pre_upstream_replay_denial_is_archived_once_and_safely_retried(tmp_path):
+    run_dir = tmp_path / "run"
+    record = _audit_record("quarantined")
+    record.update(
+        {
+            "failure_class": "replay_denied",
+            "upstream_status_code": None,
+        }
+    )
+    payload = (json.dumps(record, sort_keys=True) + "\n").encode()
+    first_backend = RecordingBackend(run_dir, audit_payload=payload)
+    manager = _manager(tmp_path, first_backend)
+    with _open(manager, run_dir, "attempt-a"):
+        pass
+
+    second_backend = RecordingBackend(run_dir)
+    manager = _manager(tmp_path, second_backend)
+    with _open(manager, run_dir, "attempt-a") as retried:
+        assert retried.native_id == "proxy-native-1"
+
+    attempt_dir = run_dir / "attempts" / "attempt-a"
+    assert (attempt_dir / "proxy-audit.replay-denied-v1.jsonl").is_file()
+    assert (attempt_dir / "proxy-audit.jsonl").is_file()
 
 
 def test_downloaded_audit_rejects_authorization_smuggled_in_safe_field(tmp_path):
