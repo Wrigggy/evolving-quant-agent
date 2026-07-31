@@ -378,6 +378,210 @@ def test_approved_rootless_path_binds_runtime_and_scheduler_identities(
     assert captured["runner"]["evaluator"] is runtime.evaluator
 
 
+def _baseline_plan():
+    primary = tuple(
+        SimpleNamespace(
+            task_id=f"primary-{index}",
+            domain="risk_credit",
+            reward_kind="binary",
+            resource_source="upstream",
+        )
+        for index in range(77)
+    )
+    diagnostic = tuple(
+        SimpleNamespace(
+            task_id=f"diagnostic-{index}",
+            domain="derivatives",
+            reward_kind="binary",
+            resource_source="upstream",
+        )
+        for index in range(8)
+    )
+    snapshot = SimpleNamespace(
+        commit="0" * 40,
+        primary=primary,
+        diagnostic=diagnostic,
+        tasks=primary + diagnostic,
+        resource_fallback_task_ids=frozenset(),
+    )
+    return SimpleNamespace(
+        snapshot=snapshot,
+        run_id="baseline-cli",
+        repetitions=5,
+        estimated_attempts=425,
+        task_manifest_digest="3" * 64,
+        results_root=Path("/tmp/results"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    (
+        (["--executor", "e2b"], "rootless"),
+        (["--feedback-mode", "rich"], "feedback"),
+        (["--iters", "1"], "iters"),
+        (["--repetitions", "3"], "five"),
+        (["--stop-after-repetition", "0"], "stop-after"),
+        (["--stop-after-repetition", "6"], "stop-after"),
+        ([], "qfbench-root"),
+    ),
+)
+def test_baseline_cli_rejects_unsafe_or_incomplete_configuration(argv, message):
+    import run
+
+    common = [
+        "--benchmark", "qfbench",
+        "--qfbench-baseline",
+        "--qfbench-root", "/tmp/qfbench",
+        "--qfbench-manifest", "/tmp/baseline.json",
+        "--rootless-config", "/tmp/rootless.json",
+        "--rootless-image-set-manifest", "/tmp/image-set.json",
+        "--run-id", "baseline-cli",
+        "--repetitions", "5",
+    ]
+    if not argv:
+        common[common.index("--qfbench-root"):common.index("--qfbench-root") + 2] = []
+    elif argv[0] == "--repetitions":
+        index = common.index("--repetitions")
+        common[index:index + 2] = argv
+    else:
+        common.extend(argv)
+    args = run.build_parser().parse_args(common)
+
+    with pytest.raises(ValueError, match=message):
+        run.validate_qfbench_baseline_args(args)
+
+
+def test_baseline_dry_run_reports_425_attempts_850_lifecycles_and_zero_evolvers(
+    monkeypatch, capsys
+) -> None:
+    import qea.rootless_full_harness as rootless_full_harness
+    import run
+
+    class GuardedEnvironment(dict):
+        def get(self, key, default=None):
+            if key in {"E2B_API_KEY", "OPENROUTER_API_KEY", "LLM_API_KEY"}:
+                raise AssertionError(f"forbidden environment key read: {key}")
+            return super().get(key, default)
+
+    monkeypatch.setattr(
+        run, "_prepare_qfbench_baseline_run", lambda args: _baseline_plan()
+    )
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "load_rootless_full_harness_config",
+        lambda path: _CliRootlessConfig(worker_concurrency=4, verifier_concurrency=3),
+    )
+    monkeypatch.setattr(run.os, "environ", GuardedEnvironment())
+    args = run.build_parser().parse_args([
+        "--benchmark", "qfbench",
+        "--qfbench-baseline",
+        "--qfbench-root", "/tmp/qfbench",
+        "--qfbench-manifest", "/tmp/baseline.json",
+        "--rootless-config", "/tmp/rootless.json",
+        "--rootless-image-set-manifest", "/tmp/image-set.json",
+        "--run-id", "baseline-cli",
+        "--repetitions", "5",
+        "--stop-after-repetition", "1",
+    ])
+
+    assert run._run_qfbench_rootless_baseline(args) == 2
+    output = capsys.readouterr().out
+    assert "85" in output
+    assert "425" in output
+    assert "850" in output
+    assert "evolver lifecycles: 0" in output
+    assert "E2B" not in output
+
+
+def test_approved_baseline_path_uses_only_evaluator_and_binds_identities(
+    monkeypatch,
+) -> None:
+    import qea.qfbench_baseline as qfbench_baseline
+    import qea.rootless_full_harness as rootless_full_harness
+    import run
+
+    config = _CliRootlessConfig(worker_concurrency=4, verifier_concurrency=3)
+
+    class Runtime:
+        backend = SimpleNamespace(backend_name="rootless-docker")
+        evaluator = object()
+        image_identity_digest = "4" * 64
+        scheduler_identity_digest = "5" * 64
+        runtime_identity_digest = "6" * 64
+
+        @property
+        def proposer(self):
+            raise AssertionError("baseline must never access the evolver")
+
+        def close(self):
+            pass
+
+    runtime = Runtime()
+    captured = {}
+    monkeypatch.setattr(run, "_prepare_qfbench_baseline_run", lambda args: _baseline_plan())
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "load_rootless_full_harness_config",
+        lambda path: config,
+    )
+    def fake_factory(**kwargs):
+        captured["factory"] = kwargs
+        return runtime
+
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "build_rootless_full_harness_runtime",
+        fake_factory,
+    )
+
+    def fake_run(configuration, **kwargs):
+        captured["configuration"] = configuration
+        captured["runner"] = kwargs
+        return SimpleNamespace(
+            run_id="baseline-cli",
+            run_dir=Path("/tmp/results/baseline-cli"),
+            complete=False,
+            repetitions=(object(),),
+            aggregate={"primary": {"repeat_domain_macro": {"mean": 0.5}}},
+        )
+
+    monkeypatch.setattr(qfbench_baseline, "run_qfbench_baseline", fake_run)
+    monkeypatch.setattr(
+        qfbench_baseline,
+        "audit_baseline_proxy_costs",
+        lambda *args, **kwargs: {
+            "provider_cost_usd": "1.25",
+            "request_count": 10,
+            "total_tokens": 100,
+        },
+    )
+    args = run.build_parser().parse_args([
+        "--benchmark", "qfbench",
+        "--qfbench-baseline",
+        "--qfbench-root", "/tmp/qfbench",
+        "--qfbench-manifest", "/tmp/baseline.json",
+        "--rootless-config", "/tmp/rootless.json",
+        "--rootless-image-set-manifest", "/tmp/image-set.json",
+        "--run-id", "baseline-cli",
+        "--repetitions", "5",
+        "--stop-after-repetition", "1",
+        "--approve-external-run",
+    ])
+
+    assert run._run_qfbench_rootless_baseline(args) == 0
+    assert len(captured["factory"]["tasks"]) == 85
+    baseline_config = captured["configuration"]
+    assert baseline_config.scheduler_identity_digest == "5" * 64
+    assert baseline_config.runtime_identity_digest == "6" * 64
+    assert baseline_config.template_identity_digest == "4" * 64
+    assert len(baseline_config.model_identity) == 64
+    assert captured["runner"]["evaluator"] is runtime.evaluator
+    assert len(captured["runner"]["primary_tasks"]) == 77
+    assert len(captured["runner"]["diagnostic_tasks"]) == 8
+    assert captured["runner"]["stop_after_repetition"] == 1
+
+
 def test_load_evolver_template_requires_published_matching_identity(tmp_path):
     import json
     import run

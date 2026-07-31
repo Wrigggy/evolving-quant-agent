@@ -156,6 +156,27 @@ def test_calibration_stop_then_resume_starts_at_repetition_two(tmp_path) -> None
     assert len(resumed.calls) == 8
 
 
+def test_stop_after_fifth_repetition_finishes_complete_run(tmp_path) -> None:
+    from qea.qfbench_baseline import run_qfbench_baseline
+
+    worker = tmp_path / "worker"
+    worker.mkdir()
+    (worker / "agent.yaml").write_text("name: base\n")
+    primary, diagnostic = _tasks()
+
+    result = run_qfbench_baseline(
+        _config(tmp_path, worker),
+        primary_tasks=primary,
+        diagnostic_tasks=diagnostic,
+        benchmark_commit=COMMIT,
+        evaluator=RecordingEvaluator(),
+        stop_after_repetition=5,
+    )
+
+    assert result.complete is True
+    assert len(result.repetitions) == 5
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

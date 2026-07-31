@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass, replace
+from decimal import Decimal
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,6 +33,11 @@ def build_parser() -> argparse.ArgumentParser:
                       help="real mode: Level-B evolution (file-editing evolve agent edits the NexAU worker dir)")
     ap.add_argument("--benchmark", choices=("qfbench",), help="run a benchmark-specific evolution path")
     ap.add_argument(
+        "--qfbench-baseline",
+        action="store_true",
+        help="evaluate one immutable base worker repeatedly without an evolver",
+    )
+    ap.add_argument(
         "--executor",
         choices=("rootless-docker", "e2b"),
         default="rootless-docker",
@@ -40,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--qfbench-manifest",
         type=Path,
-        default=Path("data/qfbench/MANIFEST_30.json"),
+        default=None,
     )
     ap.add_argument("--template-manifest-dir", type=Path)
     ap.add_argument("--evolver-template-manifest", type=Path)
@@ -65,6 +71,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--worker-no-internet", action="store_true",
                     help="disable all worker network (requires an in-sandbox/local model endpoint)")
     ap.add_argument("--iters", type=int, default=None)
+    ap.add_argument("--repetitions", type=int, default=None)
+    ap.add_argument("--stop-after-repetition", type=int, default=None)
     ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--core", action="store_true", help="real mode: ~25 core finance occupations instead of ~30 broad")
     ap.add_argument("--resume", action="store_true", help="continue a prior run from its checkpoint")
@@ -262,6 +270,49 @@ def validate_qfbench_full_harness_args(args) -> None:
         )
 
 
+def validate_qfbench_baseline_args(args) -> None:
+    """Fail closed when a pure baseline is mixed with evolution or E2B flags."""
+
+    if args.benchmark != "qfbench" or not args.qfbench_baseline:
+        raise ValueError("QFBench baseline mode must be selected explicitly")
+    if args.executor != "rootless-docker":
+        raise ValueError("QFBench baseline currently requires rootless-docker")
+    for attribute, flag in (
+        ("qfbench_root", "--qfbench-root"),
+        ("qfbench_manifest", "--qfbench-manifest"),
+        ("rootless_config", "--rootless-config"),
+        ("rootless_image_set_manifest", "--rootless-image-set-manifest"),
+        ("run_id", "--run-id"),
+    ):
+        if getattr(args, attribute, None) is None:
+            raise ValueError(f"{flag} is required for the QFBench baseline")
+    if args.repetitions != 5:
+        raise ValueError("QFBench baseline requires exactly five repetitions")
+    if args.stop_after_repetition is not None and not (
+        1 <= args.stop_after_repetition <= 5
+    ):
+        raise ValueError("--stop-after-repetition must be between 1 and 5")
+    if args.iters is not None:
+        raise ValueError("--iters is an evolver-only flag in QFBench baseline mode")
+    if any(
+        getattr(args, name, None) is not None
+        for name in (
+            "feedback_mode",
+            "feedback_manifest",
+            "verifier_criteria_map",
+            "template_manifest_dir",
+            "evolver_template_manifest",
+        )
+    ):
+        raise ValueError("feedback/evolver-only flags are forbidden in baseline mode")
+    if args.allow_verifier_network:
+        raise ValueError("rootless verifier network must remain disabled")
+    if args.worker_no_internet:
+        raise ValueError(
+            "--worker-no-internet is E2B-only; rootless workers use proxy-only egress"
+        )
+
+
 def resolve_qfbench_concurrency(args, *, config=None) -> tuple[int, int]:
     """Resolve the compatibility alias into distinct worker/verifier limits."""
 
@@ -307,6 +358,16 @@ class _QFBenchRunPlan:
     results_root: Path
 
 
+@dataclass(frozen=True)
+class _QFBenchBaselinePlan:
+    snapshot: object
+    run_id: str
+    repetitions: int
+    estimated_attempts: int
+    task_manifest_digest: str
+    results_root: Path
+
+
 def _prepare_qfbench_run(args) -> _QFBenchRunPlan:
     """Validate and resolve provider-neutral QFBench run inputs."""
 
@@ -322,9 +383,8 @@ def _prepare_qfbench_run(args) -> _QFBenchRunPlan:
     if args.resume and not args.run_id:
         raise ValueError("--run-id is required with --resume")
     iterations = resolve_iterations(args)
-    snapshot = load_qfbench_snapshot(
-        args.qfbench_root, manifest_path=args.qfbench_manifest
-    )
+    manifest_path = args.qfbench_manifest or Path("data/qfbench/MANIFEST_30.json")
+    snapshot = load_qfbench_snapshot(args.qfbench_root, manifest_path=manifest_path)
     run_id = args.run_id or datetime.now(timezone.utc).strftime(
         "qfbench-%Y%m%dT%H%M%SZ"
     )
@@ -340,7 +400,7 @@ def _prepare_qfbench_run(args) -> _QFBenchRunPlan:
         forbidden_content=sorted(snapshot.held_out.task_ids)
     ).digest()
     task_manifest_digest = hashlib.sha256(
-        Path(args.qfbench_manifest).resolve().read_bytes()
+        Path(manifest_path).resolve().read_bytes()
     ).hexdigest()
     return _QFBenchRunPlan(
         snapshot=snapshot,
@@ -350,6 +410,30 @@ def _prepare_qfbench_run(args) -> _QFBenchRunPlan:
         contract_digest=contract_digest,
         admission_digest=admission_digest,
         task_manifest_digest=task_manifest_digest,
+        results_root=Path(args.results_dir).resolve(),
+    )
+
+
+def _prepare_qfbench_baseline_run(args) -> _QFBenchBaselinePlan:
+    from qea.benchmarks.qfbench import load_qfbench_baseline_snapshot
+
+    if args.mock or args.real or args.levelb:
+        raise ValueError("--benchmark qfbench cannot be combined with legacy mode flags")
+    validate_qfbench_baseline_args(args)
+    snapshot = load_qfbench_baseline_snapshot(
+        args.qfbench_root, manifest_path=args.qfbench_manifest
+    )
+    task_count = len(snapshot.primary) + len(snapshot.diagnostic)
+    if task_count != 85:
+        raise ValueError(f"QFBench baseline manifest must resolve 85 tasks, found {task_count}")
+    return _QFBenchBaselinePlan(
+        snapshot=snapshot,
+        run_id=args.run_id,
+        repetitions=args.repetitions,
+        estimated_attempts=task_count * args.repetitions,
+        task_manifest_digest=hashlib.sha256(
+            Path(args.qfbench_manifest).resolve().read_bytes()
+        ).hexdigest(),
         results_root=Path(args.results_dir).resolve(),
     )
 
@@ -371,6 +455,23 @@ def _print_qfbench_plan(plan, args, *, backend: str) -> None:
     )
     print(f"  feedback contract: {plan.contract_digest}")
     print(f"  admission policy: {plan.admission_digest}")
+    print(f"  output: {plan.results_root / plan.run_id}")
+
+
+def _print_qfbench_baseline_plan(plan, *, backend: str) -> None:
+    snapshot = plan.snapshot
+    task_count = len(snapshot.primary) + len(snapshot.diagnostic)
+    print("[qfbench] resolved repeated base-worker baseline")
+    print(f"  backend: {backend}")
+    print(f"  commit: {snapshot.commit}")
+    print(
+        f"  task panels: {len(snapshot.primary)} primary + "
+        f"{len(snapshot.diagnostic)} diagnostic = {task_count}"
+    )
+    print(f"  repetitions: {plan.repetitions}")
+    print(f"  official scoring attempts: {plan.estimated_attempts}")
+    print(f"  maximum worker/verifier lifecycles: {plan.estimated_attempts * 2}")
+    print("  evolver lifecycles: 0")
     print(f"  output: {plan.results_root / plan.run_id}")
 
 
@@ -408,6 +509,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     if args.benchmark == "qfbench":
+        if args.qfbench_baseline:
+            return _run_qfbench_rootless_baseline(args)
         if args.executor == "e2b":
             _load_dotenv()
             return _run_qfbench_e2b(args)
@@ -560,6 +663,117 @@ def _run_qfbench_rootless(args) -> int:
         return 0
     finally:
         runtime.close()
+
+
+def _run_qfbench_rootless_baseline(args) -> int:
+    from qea.qfbench_baseline import (
+        BaselineConfig,
+        audit_baseline_proxy_costs,
+        run_qfbench_baseline,
+    )
+    from qea.rootless_full_harness import (
+        build_rootless_full_harness_runtime,
+        load_rootless_full_harness_config,
+        rootless_model_route_identity,
+    )
+
+    plan = _prepare_qfbench_baseline_run(args)
+    config = load_rootless_full_harness_config(args.rootless_config)
+    worker_concurrency, verifier_concurrency = resolve_qfbench_concurrency(
+        args, config=config
+    )
+    config = replace(
+        config,
+        worker_concurrency=worker_concurrency,
+        verifier_concurrency=verifier_concurrency,
+    )
+    _print_qfbench_baseline_plan(plan, backend="rootless-docker")
+    print("  verifier network: disabled")
+    print(f"  model upstream base: {config.upstream_base_url}")
+    print(f"  model caller prefix: {config.allowed_path_prefix}")
+    print(f"  model identity: {config.allowed_model}")
+    approval_surface = qfbench_external_run_approval_text("rootless-docker")
+    auto_approved = os.environ.get("QEA_PAID_EVAL_AUTO_APPROVE") == "1"
+    if not (args.approve_external_run or auto_approved):
+        print(
+            "  NOT STARTED: pass --approve-external-run to authorize "
+            + approval_surface
+        )
+        return 2
+    print(
+        "  execution approval: "
+        + ("standing auto-approval" if auto_approved else "explicit CLI approval")
+        + f" ({approval_surface})"
+    )
+
+    runtime = build_rootless_full_harness_runtime(
+        config=config,
+        image_set_manifest=args.rootless_image_set_manifest,
+        benchmark_commit=plan.snapshot.commit,
+        tasks=plan.snapshot.tasks,
+        run_id=plan.run_id,
+        results_root=plan.results_root,
+    )
+    try:
+        print(f"  runtime backend: {runtime.backend.backend_name}")
+        print(f"  image identity: {runtime.image_identity_digest}")
+        print(f"  scheduler identity: {runtime.scheduler_identity_digest}")
+        print(f"  runtime identity: {runtime.runtime_identity_digest}")
+        model_identity = rootless_model_route_identity(
+            upstream_base_url=config.upstream_base_url,
+            allowed_path_prefix=config.allowed_path_prefix,
+            allowed_model=config.allowed_model,
+        )
+        result = run_qfbench_baseline(
+            BaselineConfig(
+                run_id=plan.run_id,
+                repetitions=plan.repetitions,
+                results_dir=plan.results_root,
+                seed_worker_dir=Path("qea/worker_gdpval_weak"),
+                model_identity=model_identity,
+                task_manifest_digest=plan.task_manifest_digest,
+                runtime_identity_digest=runtime.runtime_identity_digest,
+                scheduler_identity_digest=runtime.scheduler_identity_digest,
+                template_identity_digest=runtime.image_identity_digest,
+                worker_concurrency=worker_concurrency,
+                verifier_concurrency=verifier_concurrency,
+                resume=args.resume,
+            ),
+            primary_tasks=plan.snapshot.primary,
+            diagnostic_tasks=plan.snapshot.diagnostic,
+            benchmark_commit=plan.snapshot.commit,
+            evaluator=runtime.evaluator,
+            stop_after_repetition=args.stop_after_repetition,
+        )
+    finally:
+        runtime.close()
+
+    completed_repetitions = len(result.repetitions)
+    expected_attempts = completed_repetitions * (
+        len(plan.snapshot.primary) + len(plan.snapshot.diagnostic)
+    )
+    cost = audit_baseline_proxy_costs(
+        result.run_dir, expected_attempts=expected_attempts
+    )
+    observed_cost = Decimal(cost["provider_cost_usd"])
+    projected_cost = (
+        observed_cost / completed_repetitions * plan.repetitions
+    )
+    print(f"  completed repetitions: {completed_repetitions}/{plan.repetitions}")
+    print(
+        "  primary domain-macro mean: "
+        f"{result.aggregate['primary']['repeat_domain_macro']['mean']:.6f}"
+    )
+    print(
+        f"  provider ledger: {cost['request_count']} requests, "
+        f"{cost['total_tokens']} tokens, USD {observed_cost}"
+    )
+    print(f"  projected five-repetition provider cost: USD {projected_cost}")
+    if projected_cost > Decimal("60"):
+        print("  continuation cost gate: FAIL (projected total exceeds USD 60)")
+        return 3
+    print("  continuation cost gate: PASS")
+    return 0
 
 
 def _run_qfbench_e2b(args) -> int:

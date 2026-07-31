@@ -566,9 +566,9 @@ def run_qfbench_baseline(
     if not _COMMIT_RE.fullmatch(benchmark_commit):
         raise BaselineConfigError("benchmark_commit must be a full lowercase SHA")
     if stop_after_repetition is not None and not (
-        1 <= stop_after_repetition < config.repetitions
+        1 <= stop_after_repetition <= config.repetitions
     ):
-        raise BaselineConfigError("stop_after_repetition must be between 1 and 4")
+        raise BaselineConfigError("stop_after_repetition must be between 1 and 5")
     primary = tuple(primary_tasks)
     diagnostic = tuple(diagnostic_tasks)
     _validate_tasks(primary, diagnostic)
