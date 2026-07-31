@@ -399,8 +399,16 @@ def _baseline_plan():
     )
     snapshot = SimpleNamespace(
         commit="0" * 40,
-        primary=primary,
-        diagnostic=diagnostic,
+        primary=SimpleNamespace(
+            name="baseline_primary",
+            tasks=primary,
+            task_ids=tuple(task.task_id for task in primary),
+        ),
+        diagnostic=SimpleNamespace(
+            name="baseline_diagnostic",
+            tasks=diagnostic,
+            task_ids=tuple(task.task_id for task in diagnostic),
+        ),
         tasks=primary + diagnostic,
         resource_fallback_task_ids=frozenset(),
     )

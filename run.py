@@ -423,7 +423,7 @@ def _prepare_qfbench_baseline_run(args) -> _QFBenchBaselinePlan:
     snapshot = load_qfbench_baseline_snapshot(
         args.qfbench_root, manifest_path=args.qfbench_manifest
     )
-    task_count = len(snapshot.primary) + len(snapshot.diagnostic)
+    task_count = len(snapshot.primary.tasks) + len(snapshot.diagnostic.tasks)
     if task_count != 85:
         raise ValueError(f"QFBench baseline manifest must resolve 85 tasks, found {task_count}")
     return _QFBenchBaselinePlan(
@@ -460,13 +460,13 @@ def _print_qfbench_plan(plan, args, *, backend: str) -> None:
 
 def _print_qfbench_baseline_plan(plan, *, backend: str) -> None:
     snapshot = plan.snapshot
-    task_count = len(snapshot.primary) + len(snapshot.diagnostic)
+    task_count = len(snapshot.primary.tasks) + len(snapshot.diagnostic.tasks)
     print("[qfbench] resolved repeated base-worker baseline")
     print(f"  backend: {backend}")
     print(f"  commit: {snapshot.commit}")
     print(
-        f"  task panels: {len(snapshot.primary)} primary + "
-        f"{len(snapshot.diagnostic)} diagnostic = {task_count}"
+        f"  task panels: {len(snapshot.primary.tasks)} primary + "
+        f"{len(snapshot.diagnostic.tasks)} diagnostic = {task_count}"
     )
     print(f"  repetitions: {plan.repetitions}")
     print(f"  official scoring attempts: {plan.estimated_attempts}")
@@ -739,8 +739,8 @@ def _run_qfbench_rootless_baseline(args) -> int:
                 verifier_concurrency=verifier_concurrency,
                 resume=args.resume,
             ),
-            primary_tasks=plan.snapshot.primary,
-            diagnostic_tasks=plan.snapshot.diagnostic,
+            primary_tasks=plan.snapshot.primary.tasks,
+            diagnostic_tasks=plan.snapshot.diagnostic.tasks,
             benchmark_commit=plan.snapshot.commit,
             evaluator=runtime.evaluator,
             stop_after_repetition=args.stop_after_repetition,
@@ -750,7 +750,7 @@ def _run_qfbench_rootless_baseline(args) -> int:
 
     completed_repetitions = len(result.repetitions)
     expected_attempts = completed_repetitions * (
-        len(plan.snapshot.primary) + len(plan.snapshot.diagnostic)
+        len(plan.snapshot.primary.tasks) + len(plan.snapshot.diagnostic.tasks)
     )
     cost = audit_baseline_proxy_costs(
         result.run_dir, expected_attempts=expected_attempts
