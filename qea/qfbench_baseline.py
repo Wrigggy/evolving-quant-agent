@@ -7,6 +7,7 @@ import json
 import math
 import os
 import re
+import stat
 import statistics
 from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
@@ -181,6 +182,32 @@ def _identity(
         "primary_tasks": _task_contract(primary_tasks),
         "diagnostic_tasks": _task_contract(diagnostic_tasks),
     }
+
+
+def _is_pristine_runtime_scaffold(run_dir: Path) -> bool:
+    """Recognize the exact empty scaffold created by the rootless runtime."""
+
+    try:
+        run_metadata = run_dir.lstat()
+        entries = {entry.name: entry for entry in run_dir.iterdir()}
+        if set(entries) != {".coordinator.lock", "lifecycles"}:
+            return False
+        lock_metadata = entries[".coordinator.lock"].lstat()
+        lifecycle_metadata = entries["lifecycles"].lstat()
+        return (
+            stat.S_ISDIR(run_metadata.st_mode)
+            and run_metadata.st_uid == os.geteuid()
+            and stat.S_ISREG(lock_metadata.st_mode)
+            and stat.S_IMODE(lock_metadata.st_mode) == 0o600
+            and lock_metadata.st_uid == os.geteuid()
+            and lock_metadata.st_nlink == 1
+            and stat.S_ISDIR(lifecycle_metadata.st_mode)
+            and stat.S_IMODE(lifecycle_metadata.st_mode) == 0o700
+            and lifecycle_metadata.st_uid == os.geteuid()
+            and not any(entries["lifecycles"].iterdir())
+        )
+    except OSError:
+        return False
 
 
 def _validate_tasks(primary_tasks: tuple, diagnostic_tasks: tuple) -> None:
@@ -600,7 +627,12 @@ def run_qfbench_baseline(
         diagnostic_tasks=diagnostic,
     )
 
-    if run_dir.exists():
+    pristine_runtime_scaffold = (
+        run_dir.exists()
+        and not resume_path.exists()
+        and _is_pristine_runtime_scaffold(run_dir)
+    )
+    if run_dir.exists() and not pristine_runtime_scaffold:
         if not config.resume:
             raise BaselineConfigError(f"run directory already exists: {run_dir}")
         if not resume_path.is_file():
@@ -632,7 +664,7 @@ def run_qfbench_baseline(
             state["phase"] = "primary"
             _atomic_json(resume_path, state)
     else:
-        run_dir.mkdir(parents=True)
+        run_dir.mkdir(parents=True, exist_ok=pristine_runtime_scaffold)
         snapshot_dir(source_worker, seed_worker)
         _require_seed_worker_digest(seed_worker, worker_digest)
         state = {

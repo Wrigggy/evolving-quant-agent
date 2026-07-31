@@ -112,6 +112,66 @@ def test_runs_primary_then_diagnostic_for_five_repetitions_without_evolver(
     assert not (result.run_dir / "iteration-01").exists()
 
 
+def test_fresh_run_accepts_only_pristine_rootless_runtime_scaffold(tmp_path) -> None:
+    from qea.qfbench_baseline import run_qfbench_baseline
+
+    worker = tmp_path / "worker"
+    worker.mkdir()
+    (worker / "agent.yaml").write_text("name: base\n")
+    run_dir = tmp_path / "results" / "baseline-five"
+    run_dir.mkdir(parents=True)
+    lock = run_dir / ".coordinator.lock"
+    lock.touch(mode=0o600)
+    lock.chmod(0o600)
+    lifecycles = run_dir / "lifecycles"
+    lifecycles.mkdir(mode=0o700)
+    primary, diagnostic = _tasks()
+
+    result = run_qfbench_baseline(
+        _config(tmp_path, worker, resume=False),
+        primary_tasks=primary,
+        diagnostic_tasks=diagnostic,
+        benchmark_commit=COMMIT,
+        evaluator=RecordingEvaluator(),
+        stop_after_repetition=1,
+    )
+
+    assert result.run_dir == run_dir
+    assert (run_dir / "resume.json").is_file()
+
+
+@pytest.mark.parametrize("unexpected", ["attempts", "proxy-audit.jsonl"])
+def test_fresh_run_rejects_non_pristine_runtime_scaffold(
+    tmp_path, unexpected
+) -> None:
+    from qea.qfbench_baseline import BaselineConfigError, run_qfbench_baseline
+
+    worker = tmp_path / "worker"
+    worker.mkdir()
+    (worker / "agent.yaml").write_text("name: base\n")
+    run_dir = tmp_path / "results" / "baseline-five"
+    run_dir.mkdir(parents=True)
+    lock = run_dir / ".coordinator.lock"
+    lock.touch(mode=0o600)
+    lock.chmod(0o600)
+    (run_dir / "lifecycles").mkdir(mode=0o700)
+    unexpected_path = run_dir / unexpected
+    if unexpected == "attempts":
+        unexpected_path.mkdir()
+    else:
+        unexpected_path.write_text("stale\n")
+    primary, diagnostic = _tasks()
+
+    with pytest.raises(BaselineConfigError, match="already exists"):
+        run_qfbench_baseline(
+            _config(tmp_path, worker, resume=False),
+            primary_tasks=primary,
+            diagnostic_tasks=diagnostic,
+            benchmark_commit=COMMIT,
+            evaluator=RecordingEvaluator(),
+        )
+
+
 def test_calibration_stop_then_resume_starts_at_repetition_two(tmp_path) -> None:
     from qea.qfbench_baseline import run_qfbench_baseline
 
