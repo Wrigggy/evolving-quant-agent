@@ -19,6 +19,10 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from qea.benchmarks.qfbench import QFBenchConfigError, _task_resource_contract
+from qea.backends.rootless_docker import (
+    RootlessDockerBackend,
+    SubprocessCommandRunner,
+)
 from qea.rootless_image_set import RootlessImageSetError
 from qea.rootless_images import (
     RootlessImageBuildPlan,
@@ -407,6 +411,51 @@ def _recover_result_manifest(
     return matches[0] if matches else None
 
 
+def _daemon_image_validator(
+    panel: PanelBuildPlan,
+) -> Callable[[PanelBuildPlan, dict], None]:
+    """Return an exact-ID validator bound to the selected rootless daemon."""
+
+    runner = SubprocessCommandRunner()
+    try:
+        RootlessDockerBackend(
+            docker_host=panel.docker_host,
+            expected_uid=panel.expected_uid,
+            runner=runner,
+        )
+    except Exception as exc:
+        raise PanelBuildError(
+            f"rootless Docker socket validation failed: {exc}"
+        ) from exc
+
+    def validate(selected_panel: PanelBuildPlan, payload: dict) -> None:
+        if selected_panel is not panel:
+            raise PanelBuildError("daemon image validator panel identity differs")
+        image_id = payload.get("image_id")
+        if not isinstance(image_id, str) or not _IMAGE_ID_RE.fullmatch(image_id):
+            raise PanelBuildError("completed manifest has no immutable image ID")
+        result = runner.run(
+            (
+                "docker",
+                "--host",
+                panel.docker_host,
+                "image",
+                "inspect",
+                "--format",
+                "{{.Id}}",
+                image_id,
+            ),
+            timeout_seconds=30,
+        )
+        observed = result.stdout.decode("utf-8", errors="replace").strip()
+        if result.returncode != 0 or observed != image_id:
+            raise PanelBuildError(
+                f"daemon image is unavailable: {image_id}"
+            )
+
+    return validate
+
+
 def _checkpoint_result(
     panel: PanelBuildPlan,
     state: dict,
@@ -438,12 +487,19 @@ def execute_panel_build(
     *,
     builder: Callable = execute_rootless_image_build,
     assembler: Callable = assemble_image_set,
+    image_validator: Callable[[PanelBuildPlan, dict], None] | None = None,
 ) -> Path:
     """Build missing roles, checkpoint each result, then assemble the exact set."""
 
     persist_panel_build_plan(panel)
     state = validate_completed_build_state(panel)
     by_key = {record.key: record for record in panel.records}
+    validate_image = image_validator or _daemon_image_validator(panel)
+    for key, entry in state["completed"].items():
+        payload = _validate_result_manifest(
+            by_key[key], Path(entry["manifest_path"]).resolve()
+        )
+        validate_image(panel, payload)
     pending = []
     for record in panel.records:
         if record.key in state["completed"]:
@@ -451,6 +507,7 @@ def execute_panel_build(
         recovered = _recover_result_manifest(panel, record)
         if recovered is not None:
             recovered_payload = _validate_result_manifest(record, recovered)
+            validate_image(panel, recovered_payload)
             _checkpoint_result(
                 panel,
                 state,
@@ -482,6 +539,9 @@ def execute_panel_build(
     try:
         for record, result in completed:
             manifest_path = Path(result.manifest_path).resolve()
+            validate_image(
+                panel, _validate_result_manifest(record, manifest_path)
+            )
             _checkpoint_result(
                 panel,
                 state,

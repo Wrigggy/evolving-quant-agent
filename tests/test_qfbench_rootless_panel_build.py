@@ -228,7 +228,12 @@ def test_build_resumes_completed_roles_and_assembles_only_after_exact_panel(
         assembled.append(kwargs)
         return SimpleNamespace(write=lambda path: Path(path))
 
-    output = execute_panel_build(panel, builder=builder, assembler=assembler)
+    output = execute_panel_build(
+        panel,
+        builder=builder,
+        assembler=assembler,
+        image_validator=lambda panel, payload: None,
+    )
     assert output == panel.output_image_set
     assert built == [
         ("task-a", "worker"),
@@ -239,7 +244,12 @@ def test_build_resumes_completed_roles_and_assembles_only_after_exact_panel(
     assert len(assembled[0]["manifest_paths"]) == 7
 
     built.clear()
-    execute_panel_build(panel, builder=builder, assembler=assembler)
+    execute_panel_build(
+        panel,
+        builder=builder,
+        assembler=assembler,
+        image_validator=lambda panel, payload: None,
+    )
     assert built == []
 
 
@@ -287,7 +297,50 @@ def test_build_recovers_result_manifest_written_before_state_checkpoint(
         panel,
         builder=builder,
         assembler=lambda **kwargs: SimpleNamespace(write=lambda path: Path(path)),
+        image_validator=lambda panel, payload: None,
     )
 
     assert (first.task_id, first.role) not in built
     assert len(built) == 3
+
+
+def test_build_rejects_recovered_manifest_when_daemon_image_is_missing(
+    tmp_path,
+) -> None:
+    from scripts.build_qfbench_rootless_panel import (
+        PanelBuildError,
+        execute_panel_build,
+    )
+
+    panel, _ = _panel(tmp_path)
+    first = panel.records[0]
+    recovered = tmp_path / "manifests" / "recovered" / "MANIFEST.json"
+    recovered.parent.mkdir(parents=True)
+    recovered.write_text(json.dumps({
+        "role": first.role,
+        "task_id": first.task_id,
+        "plan_identity_sha256": first.plan.identity_sha256,
+        "result_identity_sha256": "e" * 64,
+        "identity_kind": "measured-result",
+        "image_id": "sha256:" + "9" * 64,
+        "docker_version": "fixture",
+        "docker_security_options": ["name=rootless"],
+    }))
+    built = []
+
+    def reject_missing_image(panel, payload):
+        raise PanelBuildError(
+            f"daemon image is unavailable: {payload['image_id']}"
+        )
+
+    with pytest.raises(PanelBuildError, match="daemon image is unavailable"):
+        execute_panel_build(
+            panel,
+            builder=lambda plan, **kwargs: built.append(plan),
+            assembler=lambda **kwargs: pytest.fail(
+                "a missing recovered image must block assembly"
+            ),
+            image_validator=reject_missing_image,
+        )
+
+    assert built == []
