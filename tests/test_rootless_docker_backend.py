@@ -617,6 +617,7 @@ def test_list_requires_managed_filter_and_returns_exact_inspected_states() -> No
     assert ("--filter", "label=qea.managed=true") in _option_pairs(
         runner.calls[0].argv, "--filter"
     )
+    assert "--no-trunc" in runner.calls[0].argv
 
 
 def test_scoped_worker_networks_have_distinct_native_ids_names_and_routes() -> None:

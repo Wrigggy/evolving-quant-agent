@@ -730,7 +730,13 @@ class RootlessDockerBackend:
                 raise RootlessDockerError(f"unsafe Docker label filter: {name!r}")
             if any(character in value for character in ("\x00", "\n", "\r", "=")):
                 raise RootlessDockerError(f"unsafe Docker label value for {name!r}")
-        arguments: list[str] = ["container", "ls", "--all", "--quiet"]
+        arguments: list[str] = [
+            "container",
+            "ls",
+            "--all",
+            "--quiet",
+            "--no-trunc",
+        ]
         for name, value in sorted(labels.items()):
             arguments.extend(("--filter", f"label={name}={value}"))
         result = self._checked(
