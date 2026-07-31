@@ -128,6 +128,16 @@ def test_panel_plan_is_sorted_resource_exact_and_does_not_connect_to_docker(
     assert panel.task_role_build_count == 4
 
 
+def test_panel_cli_defaults_to_preregistered_two_concurrent_builds() -> None:
+    from scripts.build_qfbench_rootless_panel import build_parser
+
+    parser = build_parser()
+    action = next(
+        action for action in parser._actions if action.dest == "build_concurrency"
+    )
+    assert action.default == 2
+
+
 def test_existing_panel_plan_rejects_source_resource_or_daemon_identity_drift(
     tmp_path,
 ) -> None:

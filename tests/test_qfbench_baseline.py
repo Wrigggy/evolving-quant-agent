@@ -213,8 +213,6 @@ def test_resume_rejects_immutable_identity_change(tmp_path, field, value) -> Non
             benchmark_commit=COMMIT,
             evaluator=RecordingEvaluator(),
         )
-
-
 def test_resume_rejects_worker_digest_and_benchmark_changes(tmp_path) -> None:
     from qea.qfbench_baseline import BaselineConfigError, run_qfbench_baseline
 
@@ -248,6 +246,33 @@ def test_resume_rejects_worker_digest_and_benchmark_changes(tmp_path) -> None:
             primary_tasks=primary,
             diagnostic_tasks=diagnostic,
             benchmark_commit="f" * 40,
+            evaluator=RecordingEvaluator(),
+        )
+
+
+def test_resume_rejects_mutated_seed_worker_snapshot(tmp_path) -> None:
+    from qea.qfbench_baseline import BaselineConfigError, run_qfbench_baseline
+
+    worker = tmp_path / "worker"
+    worker.mkdir()
+    (worker / "agent.yaml").write_text("name: base\n")
+    primary, diagnostic = _tasks()
+    partial = run_qfbench_baseline(
+        _config(tmp_path, worker),
+        primary_tasks=primary,
+        diagnostic_tasks=diagnostic,
+        benchmark_commit=COMMIT,
+        evaluator=RecordingEvaluator(),
+        stop_after_repetition=1,
+    )
+    (partial.seed_worker_dir / "agent.yaml").write_text("name: tampered\n")
+
+    with pytest.raises(BaselineConfigError, match="seed worker snapshot digest"):
+        run_qfbench_baseline(
+            _config(tmp_path, worker),
+            primary_tasks=primary,
+            diagnostic_tasks=diagnostic,
+            benchmark_commit=COMMIT,
             evaluator=RecordingEvaluator(),
         )
 

@@ -502,6 +502,18 @@ def _records_from_state(state: Mapping) -> tuple[BaselineRepetition, ...]:
     )
 
 
+def _require_seed_worker_digest(seed_worker: Path, expected_digest: str) -> None:
+    try:
+        actual_digest = hash_worker_directory(seed_worker)
+    except WorkerIdentityError as exc:
+        raise BaselineConfigError(str(exc)) from exc
+    if actual_digest != expected_digest:
+        raise BaselineConfigError(
+            "seed worker snapshot digest mismatch: "
+            f"expected {expected_digest}, found {actual_digest}"
+        )
+
+
 def _result(
     config: BaselineConfig,
     *,
@@ -615,12 +627,14 @@ def run_qfbench_baseline(
             raise BaselineConfigError("resume immutable identity mismatch")
         if not seed_worker.is_dir():
             raise BaselineConfigError("resume seed worker snapshot is missing")
+        _require_seed_worker_digest(seed_worker, worker_digest)
         if state.get("phase") == "calibration_stop":
             state["phase"] = "primary"
             _atomic_json(resume_path, state)
     else:
         run_dir.mkdir(parents=True)
         snapshot_dir(source_worker, seed_worker)
+        _require_seed_worker_digest(seed_worker, worker_digest)
         state = {
             "schema_version": 1,
             "run_id": config.run_id,
@@ -637,6 +651,7 @@ def run_qfbench_baseline(
     while state["next_repetition"] <= config.repetitions:
         repetition = int(state["next_repetition"])
         if state["phase"] == "primary":
+            _require_seed_worker_digest(seed_worker, worker_digest)
             primary_summary = evaluator.evaluate(
                 worker_dir=seed_worker,
                 tasks=primary,
@@ -648,6 +663,7 @@ def run_qfbench_baseline(
             state["phase"] = "diagnostic"
             _atomic_json(resume_path, state)
         if state["phase"] == "diagnostic":
+            _require_seed_worker_digest(seed_worker, worker_digest)
             diagnostic_summary = evaluator.evaluate(
                 worker_dir=seed_worker,
                 tasks=diagnostic,

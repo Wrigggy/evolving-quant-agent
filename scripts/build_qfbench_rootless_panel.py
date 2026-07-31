@@ -550,7 +550,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-image-ref", required=True)
     parser.add_argument("--nexau-runtime-image-ref", required=True)
     parser.add_argument("--build-network", choices=("default", "host"), default="host")
-    parser.add_argument("--build-concurrency", type=int, default=4)
+    parser.add_argument("--build-concurrency", type=int, default=2)
     parser.add_argument("--output-image-set", type=Path, required=True)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--plan-only", action="store_true")
