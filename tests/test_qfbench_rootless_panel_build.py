@@ -17,6 +17,7 @@ class _FakeImagePlan:
     memory_mb: int
     build_timeout_seconds: int
     identity_sha256: str
+    source_manifest_sha256: str
 
     def manifest_payload(self):
         return {
@@ -27,6 +28,7 @@ class _FakeImagePlan:
             "memory_mb": self.memory_mb,
             "build_timeout_seconds": self.build_timeout_seconds,
             "identity_sha256": self.identity_sha256,
+            "source_manifest_sha256": self.source_manifest_sha256,
         }
 
 
@@ -47,7 +49,9 @@ def _tasks():
     )
 
 
-def _neutral_manifests(tmp_path: Path) -> tuple[Path, ...]:
+def _neutral_manifests(
+    tmp_path: Path, *, source_manifest_sha256: str = "1" * 64
+) -> tuple[Path, ...]:
     paths = []
     for role in ("base", "proxy", "evolver"):
         path = tmp_path / f"{role}.json"
@@ -60,6 +64,7 @@ def _neutral_manifests(tmp_path: Path) -> tuple[Path, ...]:
                 "sha256:" + ("d" if role == "base" else "b") * 64
             ),
             "identity_kind": "measured-result",
+            "source_manifest_sha256": source_manifest_sha256,
         }))
         paths.append(path)
     return tuple(paths)
@@ -70,6 +75,8 @@ def _panel(
     *,
     docker_host="unix:///run/user/1000/docker.sock",
     build_concurrency=1,
+    neutral_source_manifest_sha256="1" * 64,
+    plan_source_manifest_sha256="1" * 64,
 ):
     from scripts.build_qfbench_rootless_panel import prepare_panel_build_plan
 
@@ -86,6 +93,7 @@ def _panel(
             memory_mb=kwargs["memory_mb"],
             build_timeout_seconds=kwargs["build_timeout_seconds"],
             identity_sha256=f"{index:x}" * 64,
+            source_manifest_sha256=plan_source_manifest_sha256,
         )
 
     panel = prepare_panel_build_plan(
@@ -94,7 +102,10 @@ def _panel(
         public_root=tmp_path / "public",
         trusted_root=tmp_path / "trusted",
         manifest_root=tmp_path / "manifests",
-        neutral_manifests=_neutral_manifests(tmp_path),
+        neutral_manifests=_neutral_manifests(
+            tmp_path,
+            source_manifest_sha256=neutral_source_manifest_sha256,
+        ),
         docker_host=docker_host,
         expected_uid=1000,
         base_image_ref="sha256:" + "b" * 64,
@@ -158,6 +169,19 @@ def test_existing_panel_plan_rejects_source_resource_or_daemon_identity_drift(
     changed_concurrency, _ = _panel(tmp_path, build_concurrency=4)
     with pytest.raises(PanelBuildError, match="identity differs"):
         persist_panel_build_plan(changed_concurrency)
+
+
+def test_panel_rejects_neutral_images_from_another_public_materialization(
+    tmp_path,
+) -> None:
+    from scripts.build_qfbench_rootless_panel import PanelBuildError
+
+    with pytest.raises(PanelBuildError, match="source manifest differs"):
+        _panel(
+            tmp_path,
+            neutral_source_manifest_sha256="2" * 64,
+            plan_source_manifest_sha256="1" * 64,
+        )
 
 
 def test_completed_state_rejects_manifest_with_other_plan_identity(tmp_path) -> None:
