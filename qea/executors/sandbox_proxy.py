@@ -679,6 +679,7 @@ class SandboxProxyManager:
         network_lifecycle_written = False
         yielded = False
         primary_error: BaseException | None = None
+        audit_policy_error: SandboxProxyError | None = None
         cleanup_errors: list[SandboxProxyError] = []
         session: SandboxProxySession | None = None
 
@@ -912,6 +913,13 @@ class SandboxProxyManager:
                     _write_request_registry(
                         _request_registry_path(run_root), registry_identities
                     )
+                    if any(
+                        _requires_cross_attempt_denial(record)
+                        for record in records
+                    ):
+                        audit_policy_error = SandboxProxyError(
+                            "proxy audit contains an ambiguous accepted request"
+                        )
                 except SandboxProxyError as exc:
                     cleanup_errors.append(exc)
                     try:
@@ -985,6 +993,10 @@ class SandboxProxyManager:
                     f"proxy session failed and cleanup was incomplete: {detail}"
                 ) from primary_error
             raise SandboxProxyError(f"proxy cleanup was incomplete: {detail}")
+        if audit_policy_error is not None:
+            if primary_error is not None:
+                raise audit_policy_error from primary_error
+            raise audit_policy_error
         if primary_error is not None:
             raise primary_error.with_traceback(primary_error.__traceback__)
 

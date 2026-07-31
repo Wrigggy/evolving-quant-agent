@@ -514,8 +514,13 @@ def test_resume_never_reopens_completed_or_quarantined_request_identity(
         run_dir, audit_payload=_audit_bytes(request_state)
     )
     manager = _manager(tmp_path, first_backend)
-    with _open(manager, run_dir):
-        pass
+    if request_state == "quarantined":
+        with pytest.raises(Exception, match="ambiguous accepted"):
+            with _open(manager, run_dir):
+                pass
+    else:
+        with _open(manager, run_dir):
+            pass
 
     second_backend = RecordingBackend(run_dir)
     manager = _manager(tmp_path, second_backend)
@@ -753,8 +758,9 @@ def test_post_accept_quarantine_enters_registry_and_blocks_new_attempt(tmp_path)
         run_dir, audit_payload=_audit_bytes("quarantined")
     )
     manager = _manager(tmp_path, first_backend)
-    with _open(manager, run_dir, "attempt-a"):
-        pass
+    with pytest.raises(Exception, match="ambiguous accepted"):
+        with _open(manager, run_dir, "attempt-a"):
+            pass
 
     registry = json.loads((run_dir / "proxy-request-registry.json").read_text())
     assert registry["request_identities_sha256"] == [request_identity]
@@ -1106,8 +1112,19 @@ def test_downloaded_audit_accepts_every_produced_semantic_tuple(
     backend = RecordingBackend(run_dir, audit_payload=payload)
     manager = _manager(tmp_path, backend)
 
-    with _open(manager, run_dir) as session:
-        pass
+    ambiguous = failure_class in {
+        "post_accept_transport",
+        "unsafe_upstream_response",
+        "invalid_upstream_response",
+        "upstream_response_limit",
+    }
+    if ambiguous:
+        with pytest.raises(Exception, match="ambiguous accepted"):
+            with _open(manager, run_dir) as session:
+                pass
+    else:
+        with _open(manager, run_dir) as session:
+            pass
 
     [persisted] = [
         json.loads(line) for line in session.audit_uri.read_text().splitlines()
