@@ -13,6 +13,16 @@ if __package__ in {None, ""}:
 from qea.rootless_image_set import RootlessImageSet, RootlessImageSetError
 
 
+def assemble_image_set(*, benchmark_commit, task_ids, manifest_paths):
+    """Assemble an immutable image set for CLI and batch-builder callers."""
+
+    return RootlessImageSet.from_manifest_paths(
+        benchmark_commit=benchmark_commit,
+        task_ids=task_ids,
+        manifest_paths=manifest_paths,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--benchmark-commit", required=True)
@@ -32,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        image_set = RootlessImageSet.from_manifest_paths(
+        image_set = assemble_image_set(
             benchmark_commit=args.benchmark_commit,
             task_ids=args.task_id,
             manifest_paths=args.manifest,
