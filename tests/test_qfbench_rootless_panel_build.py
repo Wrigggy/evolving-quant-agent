@@ -171,17 +171,16 @@ def test_existing_panel_plan_rejects_source_resource_or_daemon_identity_drift(
         persist_panel_build_plan(changed_concurrency)
 
 
-def test_panel_rejects_neutral_images_from_another_public_materialization(
+def test_panel_allows_task_neutral_images_from_same_benchmark_commit(
     tmp_path,
 ) -> None:
-    from scripts.build_qfbench_rootless_panel import PanelBuildError
+    panel, _ = _panel(
+        tmp_path,
+        neutral_source_manifest_sha256="2" * 64,
+        plan_source_manifest_sha256="1" * 64,
+    )
 
-    with pytest.raises(PanelBuildError, match="source manifest differs"):
-        _panel(
-            tmp_path,
-            neutral_source_manifest_sha256="2" * 64,
-            plan_source_manifest_sha256="1" * 64,
-        )
+    assert len(panel.records) == 4
 
 
 def test_completed_state_rejects_manifest_with_other_plan_identity(tmp_path) -> None:

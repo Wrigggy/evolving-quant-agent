@@ -521,11 +521,6 @@ def _verify_benchmark_materials(
         raise RootlessFullHarnessError(
             "benchmark material commit or exact task panel differs"
         )
-    for entry in _selected_image_entries(image_set):
-        if entry.get("source_manifest_sha256") != public.manifest_sha256:
-            raise RootlessFullHarnessError(
-                "public material manifest differs from selected image sources"
-            )
     selected_tasks = {
         str(task["task_id"]): task
         for task in image_set.tasks
@@ -535,6 +530,17 @@ def _verify_benchmark_materials(
         raise RootlessFullHarnessError(
             "selected image task membership differs from benchmark materials"
         )
+    for task in selected_tasks.values():
+        for role in ("worker", "verifier"):
+            entry = task.get(role)
+            if (
+                not isinstance(entry, Mapping)
+                or entry.get("source_manifest_sha256")
+                != public.manifest_sha256
+            ):
+                raise RootlessFullHarnessError(
+                    "public material manifest differs from selected task images"
+                )
     trusted_task_identities: list[dict[str, str]] = []
     for task_id in panel:
         prefix = f"tasks/{task_id}/"

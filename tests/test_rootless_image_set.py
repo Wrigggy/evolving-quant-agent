@@ -222,11 +222,30 @@ def test_image_set_assembles_explicit_sorted_immutable_index(tmp_path) -> None:
 def test_real_image_set_preserves_verifier_material_identity_for_factory(
     tmp_path, monkeypatch
 ) -> None:
-    from qea.rootless_full_harness import _verify_benchmark_materials
+    from qea.rootless_full_harness import (
+        RootlessFullHarnessError,
+        _verify_benchmark_materials,
+    )
     from qea.rootless_image_set import RootlessImageSet
     import qea.rootless_images as rootless_images
 
     manifests = _image_manifests(tmp_path / "manifests", task_ids=("task-a",))
+    rewritten_manifests = []
+    for manifest_path in manifests:
+        manifest = json.loads(manifest_path.read_text())
+        if manifest["role"] in {"base", "proxy", "evolver"}:
+            manifest["source_manifest_sha256"] = "a" * 64
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True, indent=2)
+            )
+            manifest = _rehash_manifest(manifest_path)
+            publication = (
+                manifest_path.parent.parent / manifest["result_identity_sha256"]
+            )
+            manifest_path.parent.rename(publication)
+            manifest_path = publication / "MANIFEST.json"
+        rewritten_manifests.append(manifest_path)
+    manifests = tuple(rewritten_manifests)
     selected = RootlessImageSet.from_manifest_paths(
         benchmark_commit=COMMIT,
         task_ids=("task-a",),
@@ -276,6 +295,33 @@ def test_real_image_set_preserves_verifier_material_identity_for_factory(
     )
 
     assert len(identity) == 64
+
+    drifted_worker = dict(loaded.tasks[0]["worker"])
+    drifted_worker["source_manifest_sha256"] = "f" * 64
+    drifted_image_set = SimpleNamespace(
+        base=loaded.base,
+        proxy=loaded.proxy,
+        evolver=loaded.evolver,
+        tasks=(
+            {
+                "task_id": "task-a",
+                "worker": drifted_worker,
+                "verifier": loaded.tasks[0]["verifier"],
+            },
+        ),
+    )
+    with pytest.raises(
+        RootlessFullHarnessError, match="selected task images"
+    ):
+        _verify_benchmark_materials(
+            config=SimpleNamespace(
+                public_root=tmp_path / "public",
+                trusted_root=tmp_path / "trusted",
+            ),
+            image_set=drifted_image_set,
+            benchmark_commit=COMMIT,
+            task_ids=("task-a",),
+        )
 
 
 @pytest.mark.parametrize(

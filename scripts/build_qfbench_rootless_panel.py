@@ -153,7 +153,6 @@ def _validate_neutral_manifests(
     *,
     benchmark_commit: str,
     base_image_ref: str,
-    source_manifest_sha256: str,
 ) -> None:
     by_role = {}
     for path in paths:
@@ -166,8 +165,6 @@ def _validate_neutral_manifests(
             or payload.get("identity_kind") != "measured-result"
         ):
             raise PanelBuildError(f"neutral manifest identity differs: {path}")
-        if payload.get("source_manifest_sha256") != source_manifest_sha256:
-            raise PanelBuildError(f"neutral source manifest differs: {path}")
     if by_role["base"].get("image_id") != base_image_ref:
         raise PanelBuildError("selected base manifest image differs from base_image_ref")
     for role in ("proxy", "evolver"):
@@ -242,16 +239,10 @@ def prepare_panel_build_plan(
                 )
             records.append(PanelBuildRecord(task.task_id, role, plan))
 
-    source_manifests = {
-        record.plan.source_manifest_sha256 for record in records
-    }
-    if len(source_manifests) != 1:
-        raise PanelBuildError("task plans have different source manifests")
     _validate_neutral_manifests(
         neutral,
         benchmark_commit=benchmark_commit,
         base_image_ref=base_image_ref,
-        source_manifest_sha256=next(iter(source_manifests)),
     )
 
     unsigned = {
