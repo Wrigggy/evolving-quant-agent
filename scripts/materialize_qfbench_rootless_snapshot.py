@@ -21,6 +21,32 @@ from qea.benchmarks.qfbench import (
 OFFICIAL_REPOSITORY = "https://github.com/QF-Bench/QuantitativeFinance-Bench.git"
 
 
+def _local_source_fetcher(source_tree: str | Path):
+    """Read only regular blobs confined to an already-verified source tree."""
+
+    root = Path(source_tree).expanduser().resolve()
+
+    def fetch(path: str) -> bytes:
+        relative = Path(path)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise QFBenchConfigError(f"local blob path is outside source tree: {path}")
+        candidate = root / relative
+        if candidate.is_symlink() or not candidate.is_file():
+            raise QFBenchConfigError(
+                f"local blob must be a regular non-symlink file: {path}"
+            )
+        resolved = candidate.resolve()
+        try:
+            resolved.relative_to(root)
+        except ValueError as exc:
+            raise QFBenchConfigError(
+                f"local blob path is outside source tree: {path}"
+            ) from exc
+        return resolved.read_bytes()
+
+    return fetch
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-tree", type=Path, required=True)
@@ -31,6 +57,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--commit")
     parser.add_argument("--public-root", type=Path, required=True)
     parser.add_argument("--trusted-root", type=Path, required=True)
+    parser.add_argument(
+        "--local-source-blobs",
+        action="store_true",
+        help="read blobs from the verified source tree instead of GitHub raw",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--plan-only", action="store_true")
     mode.add_argument("--apply", action="store_true")
@@ -104,6 +135,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"public root: {args.public_root.resolve()}")
         print(f"trusted root: {args.trusted_root.resolve()}")
         if args.apply:
+            fetch_blob = (
+                _local_source_fetcher(args.source_tree)
+                if args.local_source_blobs
+                else None
+            )
             result = materialize_qfbench_role_snapshot(
                 args.source_tree,
                 args.public_root,
@@ -111,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
                 repository_url=repository_url,
                 commit=commit,
                 task_ids=task_ids,
+                fetch_blob=fetch_blob,
             )
             print(f"materialized public: {result.public_root}")
             print(f"materialized trusted: {result.trusted_root}")

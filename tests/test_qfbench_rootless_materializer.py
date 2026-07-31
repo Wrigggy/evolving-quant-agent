@@ -328,3 +328,61 @@ def test_rootless_materializer_cli_accepts_baseline_panels_without_exclusions(
 
     assert result.returncode == 0, result.stderr
     assert "tasks: 1" in result.stdout
+
+
+def test_local_source_blob_fetcher_is_confined_to_regular_source_files(
+    tmp_path,
+) -> None:
+    from qea.benchmarks.qfbench import QFBenchConfigError
+    from scripts.materialize_qfbench_rootless_snapshot import _local_source_fetcher
+
+    source, _ = _write_source(tmp_path)
+    fetch = _local_source_fetcher(source)
+
+    assert fetch("tasks/task-a/instruction.md") == (
+        source / "tasks/task-a/instruction.md"
+    ).read_bytes()
+    with pytest.raises(QFBenchConfigError, match="outside source tree"):
+        fetch("../outside")
+    linked = source / "tasks/task-a/environment/linked.csv"
+    linked.symlink_to("data/input.csv")
+    with pytest.raises(QFBenchConfigError, match="regular non-symlink"):
+        fetch("tasks/task-a/environment/linked.csv")
+
+
+def test_rootless_materializer_cli_applies_from_local_source_blobs(tmp_path) -> None:
+    source, commit = _write_source(tmp_path)
+    manifest = tmp_path / "panel.json"
+    manifest.write_text(json.dumps({
+        "schema_version": 1,
+        "repository_url": "https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+        "commit": commit,
+        "pilot": {
+            "optimize": [{"task_id": "task-a"}],
+            "held_out": [],
+        },
+    }))
+    public_root = tmp_path / "public"
+    trusted_root = tmp_path / "trusted"
+    repository = Path(__file__).resolve().parents[1]
+
+    result = subprocess.run(
+        (
+            sys.executable,
+            "scripts/materialize_qfbench_rootless_snapshot.py",
+            "--source-tree", str(source),
+            "--task-panel-manifest", str(manifest),
+            "--public-root", str(public_root),
+            "--trusted-root", str(trusted_root),
+            "--local-source-blobs",
+            "--apply",
+        ),
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (public_root / "tasks/task-a/instruction.md").is_file()
+    assert (trusted_root / "tasks/task-a/tests/test.sh").is_file()
