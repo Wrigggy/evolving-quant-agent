@@ -979,14 +979,12 @@ class RootlessDockerBackend:
         )
         return self._remove_internal_network_by_id(native_id) == "killed"
 
-    def remove_internal_network(
+    def inspect_internal_network(
         self,
-        handle: SandboxNetworkHandle | str,
-    ) -> KillOutcome | bool:
-        """Remove only the exact recorded network, with legacy run compatibility."""
+        handle: SandboxNetworkHandle,
+    ) -> bool:
+        """Return presence only after validating the complete network handle."""
 
-        if isinstance(handle, str):
-            return self._remove_legacy_internal_network(handle)
         if not isinstance(handle, SandboxNetworkHandle):
             raise RootlessDockerError("invalid sandbox network handle")
         if handle.backend != self.backend_name:
@@ -1011,7 +1009,7 @@ class RootlessDockerBackend:
             raise RootlessDockerError("network handle identity check failed")
         inspected = self._inspect_internal_network(native_id)
         if inspected is None:
-            return "already_absent"
+            return False
         self._require_internal_network_identity(
             inspected,
             native_id=native_id,
@@ -1022,4 +1020,18 @@ class RootlessDockerBackend:
                 identity_sha256=expected_identity,
             ),
         )
-        return self._remove_internal_network_by_id(native_id)
+        return True
+
+    def remove_internal_network(
+        self,
+        handle: SandboxNetworkHandle | str,
+    ) -> KillOutcome | bool:
+        """Remove only the exact recorded network, with legacy run compatibility."""
+
+        if isinstance(handle, str):
+            return self._remove_legacy_internal_network(handle)
+        if not self.inspect_internal_network(handle):
+            return "already_absent"
+        return self._remove_internal_network_by_id(
+            _safe_native_id(handle.native_id)
+        )

@@ -14,6 +14,12 @@ from .sandbox_lifecycle import (
     load_lifecycle,
     mark_cleaned,
 )
+from .sandbox_network_lifecycle import (
+    SandboxNetworkLifecycle,
+    SandboxNetworkLifecycleError,
+    load_network_lifecycle,
+    mark_network_cleaned,
+)
 
 
 class SandboxReaperError(RuntimeError):
@@ -27,6 +33,16 @@ class SandboxReaperReport:
     killed_ids: tuple[str, ...]
     absent_ids: tuple[str, ...]
     identity_mismatch_ids: tuple[str, ...]
+    failed: Mapping[str, str]
+    apply: bool
+
+
+@dataclass(frozen=True)
+class SandboxNetworkReaperReport:
+    scanned_manifests: int
+    pending_ids: tuple[str, ...]
+    removed_ids: tuple[str, ...]
+    absent_ids: tuple[str, ...]
     failed: Mapping[str, str]
     apply: bool
 
@@ -164,6 +180,131 @@ def reap_sandboxes(
         killed_ids=tuple(killed),
         absent_ids=tuple(absent),
         identity_mismatch_ids=tuple(mismatched),
+        failed=dict(sorted(failed.items())),
+        apply=apply,
+    )
+
+
+def _load_pending_networks(
+    root: Path,
+    *,
+    backend_name: str,
+) -> tuple[int, dict[str, tuple[Path, SandboxNetworkLifecycle]]]:
+    manifests = tuple(sorted(root.rglob("*network-lifecycle-v1.json")))
+    pending: dict[str, tuple[Path, SandboxNetworkLifecycle]] = {}
+    for discovered_path in manifests:
+        resolved_path = discovered_path.resolve()
+        try:
+            resolved_path.relative_to(root)
+        except ValueError as exc:
+            raise SandboxReaperError(
+                f"network lifecycle path escapes requested root: {discovered_path}"
+            ) from exc
+        if discovered_path.is_symlink():
+            raise SandboxReaperError(
+                f"symlink network lifecycle documents are forbidden: {discovered_path}"
+            )
+        try:
+            lifecycle = load_network_lifecycle(resolved_path)
+        except SandboxNetworkLifecycleError as exc:
+            raise SandboxReaperError(str(exc)) from exc
+        if lifecycle.backend != backend_name:
+            raise SandboxReaperError(
+                f"network lifecycle backend mismatch at {resolved_path}: "
+                f"{lifecycle.backend!r} != {backend_name!r}"
+            )
+        if lifecycle.cleaned_up:
+            continue
+        if lifecycle.native_id in pending:
+            raise SandboxReaperError(
+                "duplicate network native ID "
+                f"{lifecycle.native_id!r} in lifecycle manifests"
+            )
+        pending[lifecycle.native_id] = (resolved_path, lifecycle)
+    return len(manifests), pending
+
+
+def reap_sandbox_networks(
+    results_root: str | Path,
+    *,
+    backend: SandboxBackend,
+    apply: bool = False,
+    at: datetime | None = None,
+) -> SandboxNetworkReaperReport:
+    """Inspect or remove only persisted scoped-network handles."""
+
+    root = Path(results_root).resolve()
+    if not root.is_dir():
+        raise SandboxReaperError(f"results root does not exist: {root}")
+    backend_name = getattr(backend, "backend_name", None)
+    inspect_network = getattr(backend, "inspect_internal_network", None)
+    remove_network = getattr(backend, "remove_internal_network", None)
+    if not isinstance(backend_name, str) or not backend_name:
+        raise SandboxReaperError("backend exposes no stable backend_name")
+    if not callable(inspect_network) or not callable(remove_network):
+        raise SandboxReaperError(
+            "backend does not expose exact scoped-network inspection and removal"
+        )
+    scanned, pending = _load_pending_networks(
+        root, backend_name=backend_name
+    )
+    candidates: list[str] = []
+    removed: list[str] = []
+    absent: list[str] = []
+    failed: dict[str, str] = {}
+
+    for native_id in sorted(pending):
+        path, lifecycle = pending[native_id]
+        handle = lifecycle.to_handle()
+        try:
+            present = inspect_network(handle)
+            if type(present) is not bool:
+                raise SandboxReaperError(
+                    "backend returned an invalid network inspection result"
+                )
+        except Exception as exc:  # noqa: BLE001 - retain per-ID evidence.
+            failed[native_id] = f"inspect {type(exc).__name__}: {exc}"
+            continue
+        if not present:
+            absent.append(native_id)
+            if apply:
+                try:
+                    mark_network_cleaned(
+                        path,
+                        cleanup_method="reaper",
+                        cleanup_result="already_absent",
+                        at=at,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    failed[native_id] = f"persist {type(exc).__name__}: {exc}"
+            continue
+        candidates.append(native_id)
+        if not apply:
+            continue
+        try:
+            outcome = remove_network(handle)
+            if outcome not in {"killed", "already_absent"}:
+                raise SandboxReaperError(
+                    f"unsupported network removal outcome: {outcome!r}"
+                )
+            if outcome == "killed":
+                removed.append(native_id)
+            else:
+                absent.append(native_id)
+            mark_network_cleaned(
+                path,
+                cleanup_method="reaper",
+                cleanup_result=outcome,
+                at=at,
+            )
+        except Exception as exc:  # noqa: BLE001 - retain per-ID evidence.
+            failed[native_id] = f"remove {type(exc).__name__}: {exc}"
+
+    return SandboxNetworkReaperReport(
+        scanned_manifests=scanned,
+        pending_ids=tuple(candidates),
+        removed_ids=tuple(removed),
+        absent_ids=tuple(absent),
         failed=dict(sorted(failed.items())),
         apply=apply,
     )

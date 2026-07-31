@@ -419,7 +419,7 @@ def _exact_reap(run_dir: Path) -> dict:
 def _exact_rootless_reap(run_dir: Path, config_path: Path) -> dict:
     from qea.backends.rootless_docker import RootlessDockerBackend
     from qea.rootless_full_harness import load_rootless_full_harness_config
-    from qea.sandbox_reaper import reap_sandboxes
+    from qea.sandbox_reaper import reap_sandbox_networks, reap_sandboxes
 
     config = load_rootless_full_harness_config(config_path)
     backend = RootlessDockerBackend(
@@ -428,6 +428,10 @@ def _exact_rootless_reap(run_dir: Path, config_path: Path) -> dict:
     )
     applied = reap_sandboxes(run_dir, backend=backend, apply=True)
     final = reap_sandboxes(run_dir, backend=backend)
+    applied_networks = reap_sandbox_networks(
+        run_dir, backend=backend, apply=True
+    )
+    final_networks = reap_sandbox_networks(run_dir, backend=backend)
     inventory = backend.list(
         {"qea.managed": "true", "qea.run-id": run_dir.name}
     )
@@ -435,6 +439,8 @@ def _exact_rootless_reap(run_dir: Path, config_path: Path) -> dict:
         final.pending_ids
         or final.identity_mismatch_ids
         or final.failed
+        or final_networks.pending_ids
+        or final_networks.failed
         or inventory
     ):
         raise RuntimeError("rootless exact-ID cleanup left managed resources")
@@ -443,6 +449,8 @@ def _exact_rootless_reap(run_dir: Path, config_path: Path) -> dict:
         "backend": backend.backend_name,
         "final_pending_ids": list(final.pending_ids),
         "final_inventory_ids": [state.native_id for state in inventory],
+        "network_reaper": asdict(applied_networks),
+        "final_pending_network_ids": list(final_networks.pending_ids),
     }
 
 

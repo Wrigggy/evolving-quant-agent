@@ -1,21 +1,49 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
 from qea.sandbox_backend import (
     KillResult,
     SandboxHandle,
+    SandboxNetworkHandle,
     SandboxSpec,
     SandboxState,
 )
 from qea.sandbox_lifecycle import create_lifecycle, load_lifecycle
-from qea.sandbox_reaper import SandboxReaperError, reap_sandboxes
+from qea.sandbox_network_lifecycle import (
+    create_network_lifecycle,
+    load_network_lifecycle,
+)
+from qea.sandbox_reaper import (
+    SandboxReaperError,
+    reap_sandbox_networks,
+    reap_sandboxes,
+)
 
 
 NOW = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)
+
+
+def test_rootless_reaper_script_is_directly_invokable() -> None:
+    repo = Path(__file__).resolve().parents[1]
+    process = subprocess.run(
+        [sys.executable, "scripts/reap_qfbench_rootless.py", "--help"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert process.returncode == 0, process.stderr
+    assert "--rootless-config" in process.stdout
+    assert "--results-dir" in process.stdout
+    assert "--apply" in process.stdout
 
 
 class FakeBackend:
@@ -38,6 +66,25 @@ class FakeBackend:
             native_id=native_id,
             outcome="killed" if existed else "already_absent",
         )
+
+
+class FakeNetworkBackend:
+    backend_name = "rootless-docker"
+
+    def __init__(self, present: bool = True) -> None:
+        self.present = present
+        self.inspected: list[SandboxNetworkHandle] = []
+        self.removed: list[SandboxNetworkHandle] = []
+
+    def inspect_internal_network(self, handle: SandboxNetworkHandle) -> bool:
+        self.inspected.append(handle)
+        return self.present
+
+    def remove_internal_network(self, handle: SandboxNetworkHandle) -> str:
+        self.removed.append(handle)
+        existed = self.present
+        self.present = False
+        return "killed" if existed else "already_absent"
 
 
 def _spec(*, attempt_id: str = "attempt-1") -> SandboxSpec:
@@ -111,6 +158,42 @@ def test_reaper_is_dry_run_by_default_and_applies_only_exact_id(tmp_path) -> Non
     assert applied.killed_ids == ("container-exact-1",)
     assert backend.killed_ids == ["container-exact-1"]
     lifecycle = load_lifecycle(lifecycle_path)
+    assert lifecycle.cleaned_up is True
+    assert lifecycle.cleanup_method == "reaper"
+    assert lifecycle.cleanup_result == "killed"
+
+
+def test_network_reaper_is_dry_run_and_removes_only_persisted_exact_handle(
+    tmp_path,
+) -> None:
+    handle = SandboxNetworkHandle(
+        backend="rootless-docker",
+        native_id="network-exact-1",
+        name="qea-run-1-attempt-1-aabbccddeeff-internal",
+        run_id="run-1",
+        network_scope="attempt-1",
+        identity_sha256="c" * 64,
+    )
+    lifecycle_path = (
+        tmp_path / "attempt-1" / "proxy-network-lifecycle-v1.json"
+    )
+    create_network_lifecycle(lifecycle_path, handle=handle, at=NOW)
+    backend = FakeNetworkBackend()
+
+    dry = reap_sandbox_networks(tmp_path, backend=backend)
+
+    assert dry.pending_ids == ("network-exact-1",)
+    assert dry.removed_ids == ()
+    assert backend.removed == []
+    assert load_network_lifecycle(lifecycle_path).cleaned_up is False
+
+    applied = reap_sandbox_networks(
+        tmp_path, backend=backend, apply=True, at=NOW
+    )
+
+    assert applied.removed_ids == ("network-exact-1",)
+    assert backend.removed == [handle]
+    lifecycle = load_network_lifecycle(lifecycle_path)
     assert lifecycle.cleaned_up is True
     assert lifecycle.cleanup_method == "reaper"
     assert lifecycle.cleanup_result == "killed"

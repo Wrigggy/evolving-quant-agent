@@ -330,6 +330,20 @@ def test_session_uses_one_scoped_network_and_private_token_transfer(tmp_path):
     assert lifecycle["attempt_identity_sha256"] == (
         session.attempt_identity_sha256
     )
+    network_lifecycle_path = (
+        run_dir
+        / "lifecycles"
+        / "attempt-001"
+        / "proxy-network-lifecycle-v1.json"
+    )
+    network_lifecycle = json.loads(network_lifecycle_path.read_text())
+    assert network_lifecycle["native_id"] == session.network_id
+    assert network_lifecycle["identity_sha256"] == (
+        backend.network_handles[0].identity_sha256
+    )
+    assert network_lifecycle["cleaned_up"] is True
+    assert network_lifecycle["cleanup_method"] == "exact-id"
+    assert network_lifecycle["cleanup_result"] == "killed"
 
 
 def test_two_attempts_in_one_run_never_share_proxy_or_network_ids(tmp_path):

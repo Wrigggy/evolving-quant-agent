@@ -31,6 +31,10 @@ from ..sandbox_lifecycle import (
     mark_finished,
     mark_started,
 )
+from ..sandbox_network_lifecycle import (
+    create_network_lifecycle,
+    mark_network_cleaned,
+)
 from .sandbox_nexau import SandboxResourceContract
 
 
@@ -448,16 +452,21 @@ def _is_retryable_replay_denial(
     )
 
 
-def _attempt_paths(run_dir: Path, attempt_id: str) -> tuple[Path, Path, Path]:
+def _attempt_paths(
+    run_dir: Path, attempt_id: str
+) -> tuple[Path, Path, Path, Path]:
     lifecycle = (
         run_dir
         / "lifecycles"
         / attempt_id
         / "proxy-sandbox-lifecycle-v2.json"
     )
+    network_lifecycle = lifecycle.with_name(
+        "proxy-network-lifecycle-v1.json"
+    )
     audit = run_dir / "attempts" / attempt_id / "proxy-audit.jsonl"
     quarantine = audit.with_suffix(".quarantined.json")
-    return lifecycle, audit, quarantine
+    return lifecycle, network_lifecycle, audit, quarantine
 
 
 def _request_registry_path(run_dir: Path) -> Path:
@@ -616,9 +625,12 @@ class SandboxProxyManager:
                 "sandbox backend must implement the ScopedNetworkBackend contract"
             )
         run_root = Path(run_dir).expanduser().resolve()
-        lifecycle_uri, audit_uri, quarantine_uri = _attempt_paths(
-            run_root, attempt_id
-        )
+        (
+            lifecycle_uri,
+            network_lifecycle_uri,
+            audit_uri,
+            quarantine_uri,
+        ) = _attempt_paths(run_root, attempt_id)
         try:
             raw_token = _read_token_bytes(self.config.token_file)
         except ModelProxyError as exc:
@@ -664,6 +676,7 @@ class SandboxProxyManager:
         network: SandboxNetworkHandle | None = None
         handle = None
         lifecycle_written = False
+        network_lifecycle_written = False
         yielded = False
         primary_error: BaseException | None = None
         cleanup_errors: list[SandboxProxyError] = []
@@ -681,6 +694,16 @@ class SandboxProxyManager:
                 raise SandboxProxyError(
                     "scoped network backend returned an invalid network handle"
                 )
+            _backend_call(
+                "proxy.network.lifecycle",
+                lambda: create_network_lifecycle(
+                    network_lifecycle_uri,
+                    handle=network,
+                    at=self.clock(),
+                ),
+                secret=token_buffer,
+            )
+            network_lifecycle_written = True
             plan = build_model_proxy_sandbox_plan(
                 run_id=run_id,
                 attempt_id=attempt_id,
@@ -930,7 +953,21 @@ class SandboxProxyManager:
                     )
             if network is not None:
                 try:
-                    self.backend.remove_internal_network(network)
+                    outcome = self.backend.remove_internal_network(network)
+                    if outcome not in {"killed", "already_absent"}:
+                        raise SandboxProxyError(
+                            "proxy network cleanup returned an invalid outcome"
+                        )
+                    if (
+                        network_lifecycle_written
+                        and network_lifecycle_uri.is_file()
+                    ):
+                        mark_network_cleaned(
+                            network_lifecycle_uri,
+                            cleanup_method="exact-id",
+                            cleanup_result=outcome,
+                            at=self.clock(),
+                        )
                 except Exception as exc:  # noqa: BLE001 - exact network cleanup boundary.
                     cleanup_errors.append(
                         SandboxProxyError(
