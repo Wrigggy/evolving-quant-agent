@@ -248,6 +248,30 @@ def test_task_neutral_proxy_and_evolver_plans_are_role_minimal(tmp_path) -> None
     assert changed_base.identity_sha256 != evolver.identity_sha256
 
 
+def test_trusted_host_build_network_is_explicit_and_identity_bound(tmp_path) -> None:
+    from qea.rootless_images import RootlessImageError, prepare_rootless_image_plan
+
+    public, _ = _role_roots(tmp_path)
+    common = {
+        "role": "evolver",
+        "public_root": public,
+        "base_image_ref": QFBENCH_BASE,
+        "cpu_count": 2,
+        "memory_mb": 4096,
+        "build_timeout_seconds": 600,
+    }
+
+    default = prepare_rootless_image_plan(**common)
+    trusted_host = prepare_rootless_image_plan(**common, build_network="host")
+
+    assert default.build_network == "default"
+    assert trusted_host.build_network == "host"
+    assert trusted_host.identity_sha256 != default.identity_sha256
+    assert trusted_host.manifest_payload()["build_network"] == "host"
+    with pytest.raises(RootlessImageError, match="build network"):
+        prepare_rootless_image_plan(**common, build_network="bridge")
+
+
 @pytest.mark.parametrize("role", ("base", "proxy", "evolver"))
 def test_task_neutral_roles_reject_task_and_trusted_inputs(
     tmp_path, role: str
@@ -629,6 +653,8 @@ def test_rootless_image_cli_accepts_task_neutral_evolver_role(tmp_path) -> None:
             DOCKER_HOST,
             "--expected-uid",
             "1013",
+            "--build-network",
+            "host",
             "--plan-only",
         ),
         cwd=repository,
@@ -641,6 +667,7 @@ def test_rootless_image_cli_accepts_task_neutral_evolver_role(tmp_path) -> None:
     assert "role: evolver" in result.stdout
     assert "task: None" in result.stdout
     assert "context files: 1" in result.stdout
+    assert "build network: host" in result.stdout
     assert not output.exists()
 
 

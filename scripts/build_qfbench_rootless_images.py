@@ -35,6 +35,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cpu-count", type=int, default=2)
     parser.add_argument("--memory-mb", type=int, default=4096)
     parser.add_argument("--build-timeout-seconds", type=int, default=1800)
+    parser.add_argument(
+        "--build-network",
+        choices=("default", "host"),
+        default="default",
+        help="Docker build network; use host only on an explicitly trusted host",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--plan-only", action="store_true")
     mode.add_argument("--build", action="store_true")
@@ -54,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
             cpu_count=args.cpu_count,
             memory_mb=args.memory_mb,
             build_timeout_seconds=args.build_timeout_seconds,
+            build_network=args.build_network,
         )
         print(f"role: {plan.role}")
         print(f"task: {plan.task_id}")
@@ -61,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"identity sha256: {plan.identity_sha256}")
         print(f"context files: {len(plan.context_files)}")
         print(f"base image: {plan.base_image_ref}")
+        print(f"build network: {plan.build_network}")
         if args.build:
             result = execute_rootless_image_build(
                 plan,

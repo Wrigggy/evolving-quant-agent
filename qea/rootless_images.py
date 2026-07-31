@@ -493,6 +493,7 @@ def prepare_rootless_image_plan(
     build_timeout_seconds: int,
     task_id: str | None = None,
     trusted_root: str | Path | None = None,
+    build_network: str = "default",
 ) -> RootlessImageBuildPlan:
     """Build an in-memory, content-addressed image plan without filesystem writes."""
 
@@ -500,6 +501,10 @@ def prepare_rootless_image_plan(
         raise RootlessImageError(f"unsupported rootless image role: {role!r}")
     base_ref = _require_image_ref(base_image_ref)
     _require_resources(cpu_count, memory_mb, build_timeout_seconds)
+    if build_network not in {"default", "host"}:
+        raise RootlessImageError(
+            "build network must be 'default' or 'host'"
+        )
     public = _verify_role_root(public_root, "public")
     if role in {"base", "proxy", "evolver"}:
         if task_id is not None or trusted_root is not None:
@@ -623,7 +628,7 @@ def prepare_rootless_image_plan(
         "cpu_count": cpu_count,
         "memory_mb": memory_mb,
         "build_timeout_seconds": build_timeout_seconds,
-        "build_network": "default",
+        "build_network": build_network,
     }
     identity = _plan_identity(identity_payload)
     return RootlessImageBuildPlan(
@@ -638,7 +643,7 @@ def prepare_rootless_image_plan(
         cpu_count=cpu_count,
         memory_mb=memory_mb,
         build_timeout_seconds=build_timeout_seconds,
-        build_network="default",
+        build_network=build_network,
         identity_sha256=identity,
     )
 
