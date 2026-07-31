@@ -131,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"tasks: {len(plan.task_ids)}")
         print(f"public files: {len(plan.public_blobs)}")
         print(f"trusted verifier files: {len(plan.trusted_verifier_blobs)}")
+        print(f"denied answer-only files: {len(plan.denied_answer_blobs)}")
         print(f"denied solution files: {len(plan.denied_solution_blobs)}")
         print(f"public root: {args.public_root.resolve()}")
         print(f"trusted root: {args.trusted_root.resolve()}")

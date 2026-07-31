@@ -175,6 +175,62 @@ def test_materializer_rejects_wrong_blob_without_promoting_either_root(tmp_path)
     assert not trusted_root.exists()
 
 
+def test_materializer_explicitly_denies_answer_only_auxiliary_paths(tmp_path) -> None:
+    from qea.benchmarks.qfbench import (
+        materialize_qfbench_role_snapshot,
+        plan_qfbench_role_snapshot,
+    )
+
+    source, _ = _write_source(tmp_path)
+    task = source / "tasks/task-a"
+    (task / "oracle_logs").mkdir()
+    (task / "oracle_logs/reward.txt").write_text("1\n")
+    (task / "oracle_output").mkdir()
+    (task / "oracle_output/solution.json").write_text('{"answer": 17}\n')
+    (task / "dev").mkdir()
+    (task / "dev/reference.json").write_text('{"expected": 17}\n')
+    (task / "backtest.py").write_text("# full answer implementation\n")
+    _git(source, "add", ".")
+    _git(source, "commit", "-m", "answer auxiliaries")
+    commit = _git(source, "rev-parse", "HEAD")
+
+    plan = plan_qfbench_role_snapshot(
+        source,
+        repository_url="https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+        commit=commit,
+        task_ids=("task-a",),
+    )
+    denied = {blob.path for blob in plan.denied_answer_blobs}
+    assert denied == {
+        "tasks/task-a/backtest.py",
+        "tasks/task-a/dev/reference.json",
+        "tasks/task-a/oracle_logs/reward.txt",
+        "tasks/task-a/oracle_output/solution.json",
+        "tasks/task-a/solution/solve.sh",
+    }
+
+    public = tmp_path / "public"
+    trusted = tmp_path / "trusted"
+    materialize_qfbench_role_snapshot(
+        source,
+        public,
+        trusted,
+        repository_url="https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+        commit=commit,
+        task_ids=("task-a",),
+        fetch_blob=lambda path: (source / path).read_bytes(),
+    )
+    for relative in (
+        "tasks/task-a/backtest.py",
+        "tasks/task-a/dev",
+        "tasks/task-a/oracle_logs",
+        "tasks/task-a/oracle_output",
+        "tasks/task-a/solution",
+    ):
+        assert not (public / relative).exists()
+        assert not (trusted / relative).exists()
+
+
 def test_materializer_fails_closed_on_unknown_task_root_path(tmp_path) -> None:
     from qea.benchmarks.qfbench import (
         QFBenchConfigError,

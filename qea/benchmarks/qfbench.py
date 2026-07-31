@@ -50,7 +50,16 @@ class QFBenchRoleSnapshotPlan:
     task_ids: tuple[str, ...]
     public_blobs: tuple[PinnedBlob, ...]
     trusted_verifier_blobs: tuple[PinnedBlob, ...]
-    denied_solution_blobs: tuple[PinnedBlob, ...]
+    denied_answer_blobs: tuple[PinnedBlob, ...]
+
+    @property
+    def denied_solution_blobs(self) -> tuple[PinnedBlob, ...]:
+        """Compatibility view of the denied canonical solution directory."""
+
+        return tuple(
+            blob for blob in self.denied_answer_blobs
+            if "solution" in PurePosixPath(blob.path).parts
+        )
 
 
 @dataclass(frozen=True)
@@ -461,15 +470,22 @@ def classify_qfbench_path(
     return "deny"
 
 
-def _is_selected_solution(path: str, task_ids: frozenset[str]) -> bool:
+def _is_selected_answer_material(path: str, task_ids: frozenset[str]) -> bool:
     pure = PurePosixPath(path)
-    return (
-        not pure.is_absolute()
-        and len(pure.parts) >= 4
-        and pure.parts[0] == "tasks"
-        and pure.parts[1] in task_ids
-        and pure.parts[2] == "solution"
-    )
+    if (
+        pure.is_absolute()
+        or len(pure.parts) < 3
+        or pure.parts[0] != "tasks"
+        or pure.parts[1] not in task_ids
+    ):
+        return False
+    task_path = pure.parts[2:]
+    return task_path[0] in {
+        "solution",
+        "oracle_logs",
+        "oracle_output",
+        "dev",
+    } or task_path == ("backtest.py",)
 
 
 def plan_qfbench_role_snapshot(
@@ -491,12 +507,12 @@ def plan_qfbench_role_snapshot(
     blobs = list_qfbench_tree_blobs(source_repo, revision, selected)
     public: list[PinnedBlob] = []
     trusted: list[PinnedBlob] = []
-    denied_solutions: list[PinnedBlob] = []
+    denied_answers: list[PinnedBlob] = []
     for blob in blobs:
         role = classify_qfbench_path(blob.path, task_ids=selected)
         if role == "deny":
-            if _is_selected_solution(blob.path, selected_set):
-                denied_solutions.append(blob)
+            if _is_selected_answer_material(blob.path, selected_set):
+                denied_answers.append(blob)
                 continue
             raise QFBenchConfigError(
                 f"unexpected task path is denied by role materializer: {blob.path!r}"
@@ -532,7 +548,7 @@ def plan_qfbench_role_snapshot(
         task_ids=selected,
         public_blobs=tuple(public),
         trusted_verifier_blobs=tuple(trusted),
-        denied_solution_blobs=tuple(denied_solutions),
+        denied_answer_blobs=tuple(denied_answers),
     )
 
 
