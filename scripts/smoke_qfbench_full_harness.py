@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the no-model import or one-task paid Rich full-harness E2B canary."""
+"""Run a no-model import or paid Rich full-harness canary."""
 
 from __future__ import annotations
 
@@ -18,21 +18,8 @@ if __package__ in {None, ""}:
 
 import run as run_cli
 from qea.candidate_admission import AdmissionPolicy, admit_candidate
-from qea.e2b_lease import E2BLeasePool
-from qea.e2b_reaper import reap_e2b_sandboxes
 from qea.evaluation import TaskAttempt
-from qea.executors.e2b_evolver import E2BEvolverConfig, E2BFullHarnessProposer
-from qea.executors.e2b_nexau import (
-    E2BNexAUConfig,
-    E2BNexAUExecutor,
-    E2BQFBenchVerifier,
-    _command_payload,
-    _read_optional_text,
-    _run_checked,
-    _write_json,
-    _write_sandbox_file,
-)
-from qea.executors.e2b_protocol import E2BSandboxFactory, SDKSandboxFactory
+from qea.executors.sandbox_runtime import atomic_json as _write_json
 from qea.evolution_feedback import PublicTaskRubric, load_feedback_manifest
 from qea.evolve_runtime import snapshot_dir
 from qea.loop_benchmark import hash_worker_directory
@@ -149,6 +136,14 @@ def run_import_canary(
 ) -> dict:
     """Load a local tool binding in the pinned template without calling a model."""
 
+    from qea.executors.e2b_nexau import (
+        _command_payload,
+        _read_optional_text,
+        _run_checked,
+        _write_sandbox_file,
+    )
+    from qea.executors.e2b_protocol import SDKSandboxFactory
+
     root = Path(run_dir).resolve()
     root.mkdir(parents=True, exist_ok=True)
     factory = sandbox_factory or SDKSandboxFactory()
@@ -244,6 +239,157 @@ def run_import_canary(
     return output
 
 
+def run_rootless_import_canary(
+    *,
+    runtime,
+    task,
+    run_id: str,
+    run_dir: str | Path,
+) -> dict:
+    """Load NexAU and a local tool in one network-isolated rootless worker."""
+
+    from qea.sandbox_backend import SandboxSpec
+    from qea.sandbox_lifecycle import (
+        create_lifecycle,
+        mark_cleaned,
+        mark_finished,
+        mark_started,
+    )
+
+    root = Path(run_dir).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        task_runtime = runtime.evaluator.executor.catalog.tasks[task.task_id]
+    except (AttributeError, KeyError, TypeError) as exc:
+        raise ValueError("rootless runtime has no selected worker for the task") from exc
+    resources = task_runtime.worker_resources
+    identity_seed = (
+        f"{run_id}:{task.task_id}:{task_runtime.worker_image_ref}:"
+        f"{hashlib.sha256(_IMPORT_RUNNER.encode()).hexdigest()}"
+    )
+    import_digest = hashlib.sha256(identity_seed.encode()).hexdigest()
+    attempt_id = "import-" + import_digest[:24]
+    spec = SandboxSpec(
+        role="worker",
+        run_id=run_id,
+        attempt_id=attempt_id,
+        task_id=task.task_id,
+        image_ref=task_runtime.worker_image_ref,
+        cpu_count=resources.cpu_count,
+        memory_mb=resources.memory_mb,
+        pids_limit=resources.pids_limit,
+        timeout_seconds=resources.timeout_seconds,
+        network_policy="worker-proxy-only",
+        environment={},
+        writable_tmpfs_mb=resources.writable_tmpfs_mb,
+        network_scope=attempt_id,
+    )
+    attempt_identity = hashlib.sha256(
+        f"{spec.spec_sha256}:{import_digest}".encode()
+    ).hexdigest()
+    backend = runtime.backend
+    lifecycle_path = root / "worker-import-sandbox-lifecycle-v2.json"
+    network = None
+    handle = None
+    primary_error: BaseException | None = None
+    cleanup_result = None
+    try:
+        network = backend.create_internal_network(
+            run_id,
+            network_scope=attempt_id,
+        )
+        handle = backend.create(spec)
+        create_lifecycle(
+            lifecycle_path,
+            handle=handle,
+            spec=spec,
+            attempt_identity_sha256=attempt_identity,
+        )
+        backend.start(handle)
+        mark_started(lifecycle_path)
+        setup = backend.run(
+            handle,
+            ("mkdir", "-p", "/qea/import-worker/tools", "/qea/import-worker/tool_descriptions"),
+            environment={},
+            timeout_seconds=min(60, resources.timeout_seconds),
+        )
+        if setup.timed_out or setup.exit_code != 0:
+            raise RuntimeError("rootless import setup failed")
+        files = {
+            "/qea/import-worker/agent.yaml": _IMPORT_AGENT,
+            "/qea/import-worker/systemprompt.md": "Import-only canary.\n",
+            "/qea/import-worker/tools/__init__.py": "",
+            "/qea/import-worker/tools/fixture.py": (
+                "def echo(value):\n    return {'value': value}\n"
+            ),
+            "/qea/import-worker/tool_descriptions/echo.tool.yaml": _IMPORT_DESCRIPTION,
+            "/qea/import_canary.py": _IMPORT_RUNNER,
+        }
+        for path, payload in files.items():
+            backend.put_bytes(handle, path, payload.encode())
+        command = backend.run(
+            handle,
+            (
+                NEXAU_RUNTIME_PYTHON,
+                "/qea/import_canary.py",
+                "--worker-dir",
+                "/qea/import-worker",
+            ),
+            environment={},
+            timeout_seconds=min(120, resources.timeout_seconds),
+        )
+        if (
+            command.timed_out
+            or command.exit_code != 0
+            or "IMPORT_OK" not in command.stdout
+        ):
+            raise RuntimeError("rootless NexAU/local-tool import failed")
+        mark_finished(lifecycle_path)
+    except BaseException as exc:  # noqa: BLE001 - preserve exact cleanup on interruption.
+        primary_error = exc
+        if lifecycle_path.is_file():
+            mark_finished(lifecycle_path, failure=f"{type(exc).__name__}: {exc}")
+        raise
+    finally:
+        cleanup_error = None
+        if handle is not None:
+            try:
+                cleanup_result = backend.kill(handle.native_id).outcome
+                mark_cleaned(
+                    lifecycle_path,
+                    cleanup_method="exact-id",
+                    cleanup_result=cleanup_result,
+                )
+            except BaseException as exc:  # noqa: BLE001
+                cleanup_error = exc
+        if network is not None:
+            try:
+                backend.remove_internal_network(network)
+            except BaseException as exc:  # noqa: BLE001
+                if cleanup_error is None:
+                    cleanup_error = exc
+        if primary_error is None and cleanup_error is not None:
+            raise cleanup_error
+
+    pending = backend.list(
+        {"qea.managed": "true", "qea.run-id": run_id}
+    )
+    if pending:
+        raise RuntimeError("rootless import canary left managed containers")
+    output = {
+        "run_id": run_id,
+        "task_id": task.task_id,
+        "sandbox_id": handle.native_id,
+        "network_id": network.native_id,
+        "import_ok": True,
+        "model_calls": 0,
+        "network_enabled": False,
+        "cleaned_up": cleanup_result in {"killed", "already_absent"},
+    }
+    _write_json(root / "result.json", output)
+    return output
+
+
 def _model_env() -> dict[str, str]:
     key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
     if not key:
@@ -259,6 +405,8 @@ def _model_env() -> dict[str, str]:
 
 
 def _exact_reap(run_dir: Path) -> dict:
+    from qea.e2b_reaper import reap_e2b_sandboxes
+
     def kill(sandbox_id: str) -> bool:
         from e2b import Sandbox
 
@@ -268,7 +416,45 @@ def _exact_reap(run_dir: Path) -> dict:
     return asdict(report)
 
 
+def _exact_rootless_reap(run_dir: Path, config_path: Path) -> dict:
+    from qea.backends.rootless_docker import RootlessDockerBackend
+    from qea.rootless_full_harness import load_rootless_full_harness_config
+    from qea.sandbox_reaper import reap_sandboxes
+
+    config = load_rootless_full_harness_config(config_path)
+    backend = RootlessDockerBackend(
+        docker_host=config.docker_host,
+        expected_uid=config.expected_uid,
+    )
+    applied = reap_sandboxes(run_dir, backend=backend, apply=True)
+    final = reap_sandboxes(run_dir, backend=backend)
+    inventory = backend.list(
+        {"qea.managed": "true", "qea.run-id": run_dir.name}
+    )
+    if (
+        final.pending_ids
+        or final.identity_mismatch_ids
+        or final.failed
+        or inventory
+    ):
+        raise RuntimeError("rootless exact-ID cleanup left managed resources")
+    return {
+        **asdict(applied),
+        "backend": backend.backend_name,
+        "final_pending_ids": list(final.pending_ids),
+        "final_inventory_ids": [state.native_id for state in inventory],
+    }
+
+
 def run_paid_rich_canary(args, *, snapshot, task, run_dir: Path) -> dict:
+    from qea.e2b_lease import E2BLeasePool
+    from qea.executors.e2b_evolver import E2BEvolverConfig, E2BFullHarnessProposer
+    from qea.executors.e2b_nexau import (
+        E2BNexAUConfig,
+        E2BNexAUExecutor,
+        E2BQFBenchVerifier,
+    )
+
     worker_templates, verifier_templates = run_cli.load_template_ids(
         args.template_manifest_dir,
         (task,),
@@ -359,56 +545,171 @@ def run_paid_rich_canary(args, *, snapshot, task, run_dir: Path) -> dict:
     }
 
 
+def run_rootless_canary(args, *, snapshot, task, run_dir: Path) -> dict:
+    """Assemble the production rootless runtime and run its selected smoke."""
+
+    if args.mode == "paid-rich":
+        if args.verifier_criteria_map is None:
+            raise ValueError(
+                "--verifier-criteria-map is required for rootless paid-rich"
+            )
+        production_args = [
+            "--benchmark",
+            "qfbench",
+            "--executor",
+            "rootless-docker",
+            "--qfbench-root",
+            str(args.qfbench_root),
+            "--qfbench-manifest",
+            str(args.manifest),
+            "--rootless-config",
+            str(args.rootless_config),
+            "--rootless-image-set-manifest",
+            str(args.rootless_image_set_manifest),
+            "--feedback-mode",
+            "rich",
+            "--feedback-manifest",
+            str(args.feedback_manifest),
+            "--verifier-criteria-map",
+            str(args.verifier_criteria_map),
+            "--run-id",
+            args.run_id,
+            "--iters",
+            "1",
+            "--results-dir",
+            str(args.results_dir),
+            "--approve-external-run",
+        ]
+        exit_code = run_cli.main(production_args)
+        if exit_code != 0:
+            raise RuntimeError(
+                f"rootless production runner exited with status {exit_code}"
+            )
+        return {
+            "run_id": args.run_id,
+            "executor": "rootless-docker",
+            "mode": "paid-rich",
+            "iterations": 1,
+            "production_runner_exit_code": exit_code,
+        }
+
+    from qea.rootless_full_harness import (
+        build_rootless_full_harness_runtime,
+        load_rootless_full_harness_config,
+    )
+
+    config = load_rootless_full_harness_config(args.rootless_config)
+    runtime = build_rootless_full_harness_runtime(
+        config=config,
+        image_set_manifest=args.rootless_image_set_manifest,
+        benchmark_commit=snapshot.commit,
+        tasks=snapshot.tasks,
+        run_id=args.run_id,
+        results_root=args.results_dir,
+    )
+    try:
+        result = run_rootless_import_canary(
+            runtime=runtime,
+            task=task,
+            run_id=args.run_id,
+            run_dir=run_dir,
+        )
+        return {
+            **result,
+            "image_identity_digest": runtime.image_identity_digest,
+            "scheduler_identity_digest": runtime.scheduler_identity_digest,
+            "runtime_identity_digest": runtime.runtime_identity_digest,
+        }
+    finally:
+        runtime.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--executor",
+        choices=("rootless-docker", "e2b"),
+        default="rootless-docker",
+    )
     parser.add_argument("--mode", choices=("import", "paid-rich"), required=True)
     parser.add_argument("--qfbench-root", type=Path, required=True)
     parser.add_argument(
         "--manifest", type=Path, default=Path("data/qfbench/MANIFEST_30.json")
     )
-    parser.add_argument("--template-manifest-dir", type=Path, required=True)
+    parser.add_argument("--rootless-config", type=Path)
+    parser.add_argument("--rootless-image-set-manifest", type=Path)
+    parser.add_argument("--template-manifest-dir", type=Path)
     parser.add_argument("--evolver-template-manifest", type=Path)
     parser.add_argument(
         "--feedback-manifest",
         type=Path,
         default=Path("data/qfbench/FEEDBACK_30.json"),
     )
+    parser.add_argument("--verifier-criteria-map", type=Path)
     parser.add_argument("--task", default="historical-var-data-prep")
     parser.add_argument("--run-id")
     parser.add_argument(
         "--results-dir", type=Path, default=Path("results/qfbench-full-harness-canary")
     )
     parser.add_argument("--global-e2b-cap", type=int, default=12)
+    parser.add_argument("--approve-external-run", action="store_true")
     parser.add_argument("--approve-paid-e2b", action="store_true")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    run_cli._load_dotenv()
+    if args.executor == "rootless-docker" and args.rootless_config is None:
+        raise ValueError("--rootless-config is required for rootless-docker")
+    if (
+        args.executor == "rootless-docker"
+        and args.rootless_image_set_manifest is None
+    ):
+        raise ValueError(
+            "--rootless-image-set-manifest is required for rootless-docker"
+        )
+    if args.executor == "e2b":
+        run_cli._load_dotenv()
     from qea.benchmarks.qfbench import load_qfbench_snapshot
 
     snapshot = load_qfbench_snapshot(args.qfbench_root, manifest_path=args.manifest)
     task = snapshot.task(args.task)
     if args.mode == "paid-rich" and task.task_id not in snapshot.optimize.task_ids:
         raise ValueError("paid-rich canary task must be in the optimize split")
-    if args.mode == "paid-rich" and args.evolver_template_manifest is None:
+    if (
+        args.executor == "e2b"
+        and args.mode == "paid-rich"
+        and args.evolver_template_manifest is None
+    ):
         raise ValueError("--evolver-template-manifest is required for paid-rich")
-    approved = args.approve_paid_e2b or os.environ.get(
-        "QEA_PAID_EVAL_AUTO_APPROVE"
-    ) == "1"
-    if not approved:
-        print("NOT STARTED: pass --approve-paid-e2b or set standing auto-approval")
+    approved = (
+        args.approve_external_run
+        or (args.executor == "e2b" and args.approve_paid_e2b)
+        or os.environ.get("QEA_PAID_EVAL_AUTO_APPROVE") == "1"
+    )
+    if args.mode == "paid-rich" and not approved:
+        print(
+            "NOT STARTED: pass --approve-external-run or set standing "
+            "auto-approval"
+        )
         return 2
     args.run_id = args.run_id or (
         "qfbench-full-harness-canary-"
         + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     )
     run_dir = args.results_dir.resolve() / args.run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    run_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     status = None
     try:
-        if args.mode == "import":
+        if args.executor == "rootless-docker":
+            status = run_rootless_canary(
+                args, snapshot=snapshot, task=task, run_dir=run_dir
+            )
+        elif args.mode == "import":
+            from qea.e2b_lease import E2BLeasePool
+
+            if args.template_manifest_dir is None:
+                raise ValueError("--template-manifest-dir is required for E2B")
             workers, _ = run_cli.load_template_ids(
                 args.template_manifest_dir,
                 (task,),
@@ -428,8 +729,13 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 0
     finally:
-        reaper = _exact_reap(run_dir)
+        reaper = (
+            _exact_reap(run_dir)
+            if args.executor == "e2b"
+            else _exact_rootless_reap(run_dir, args.rootless_config)
+        )
         _write_json(run_dir / "run_status.json", {
+            "executor": args.executor,
             "mode": args.mode,
             "run_id": args.run_id,
             "status": status,

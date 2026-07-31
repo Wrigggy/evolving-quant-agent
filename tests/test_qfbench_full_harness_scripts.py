@@ -4,6 +4,71 @@ import subprocess
 import sys
 from types import SimpleNamespace
 
+import pytest
+
+
+class FakeRootlessImportBackend:
+    backend_name = "rootless-docker"
+
+    def __init__(self):
+        self.network = None
+        self.specs = []
+        self.uploads = []
+        self.commands = []
+        self.killed = []
+        self.removed_networks = []
+
+    def create_internal_network(self, run_id, *, network_scope=None):
+        self.network = SimpleNamespace(
+            backend=self.backend_name,
+            native_id="a" * 64,
+            name="qea-import-network",
+            run_id=run_id,
+            network_scope=network_scope,
+            identity_sha256="b" * 64,
+        )
+        return self.network
+
+    def create(self, spec):
+        self.specs.append(spec)
+        return SimpleNamespace(
+            backend=self.backend_name,
+            native_id="c" * 64,
+            immutable_image_ref=spec.image_ref,
+            spec_sha256=spec.spec_sha256,
+        )
+
+    def start(self, handle):
+        self.started = handle.native_id
+
+    def put_bytes(self, handle, path, payload):
+        self.uploads.append((handle.native_id, path, payload))
+
+    def run(self, handle, argv, *, environment, timeout_seconds):
+        self.commands.append((tuple(argv), dict(environment), timeout_seconds))
+        stdout = (
+            "IMPORT_OK\n"
+            if any(value.endswith("import_canary.py") for value in argv)
+            else ""
+        )
+        return SimpleNamespace(
+            exit_code=0,
+            stdout=stdout,
+            stderr="",
+            timed_out=False,
+        )
+
+    def kill(self, native_id):
+        self.killed.append(native_id)
+        return SimpleNamespace(native_id=native_id, outcome="killed")
+
+    def remove_internal_network(self, handle):
+        self.removed_networks.append(handle.native_id)
+        return "killed"
+
+    def list(self, labels):
+        return ()
+
 
 def test_full_harness_canary_script_is_directly_invokable():
     proc = subprocess.run(
@@ -16,8 +81,331 @@ def test_full_harness_canary_script_is_directly_invokable():
     assert proc.returncode == 0, proc.stderr
     assert "import" in proc.stdout
     assert "paid-rich" in proc.stdout
-    assert "--evolver-template-manifest" in proc.stdout
+    assert "--executor {rootless-docker,e2b}" in proc.stdout
+    assert "--rootless-config" in proc.stdout
+    assert "--rootless-image-set-manifest" in proc.stdout
 
+
+def test_full_harness_canary_rootless_help_does_not_import_e2b_modules():
+    repo = Path(__file__).resolve().parents[1]
+    code = """
+import builtins
+import runpy
+import sys
+
+real_import = builtins.__import__
+
+def reject_e2b(name, *args, **kwargs):
+    if (
+        name == "e2b"
+        or name.startswith("qea.e2b_")
+        or name.startswith("qea.executors.e2b_")
+    ):
+        raise AssertionError(f"rootless help imported {name}")
+    return real_import(name, *args, **kwargs)
+
+builtins.__import__ = reject_e2b
+sys.argv = [
+    "scripts/smoke_qfbench_full_harness.py",
+    "--help",
+]
+runpy.run_path(sys.argv[0], run_name="__main__")
+"""
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "--executor {rootless-docker,e2b}" in proc.stdout
+
+
+def test_rootless_canary_requires_runtime_inputs_without_loading_dotenv(
+    monkeypatch, tmp_path
+):
+    from scripts import smoke_qfbench_full_harness as smoke
+
+    def fail_dotenv():
+        raise AssertionError("rootless canary must not load .env")
+
+    monkeypatch.setattr(smoke.run_cli, "_load_dotenv", fail_dotenv)
+    with pytest.raises(ValueError, match="--rootless-config"):
+        smoke.main(
+            [
+                "--executor",
+                "rootless-docker",
+                "--mode",
+                "import",
+                "--qfbench-root",
+                str(tmp_path),
+            ]
+        )
+
+    with pytest.raises(ValueError, match="--rootless-image-set-manifest"):
+        smoke.main(
+            [
+                "--executor",
+                "rootless-docker",
+                "--mode",
+                "import",
+                "--qfbench-root",
+                str(tmp_path),
+                "--rootless-config",
+                str(tmp_path / "rootless.json"),
+            ]
+        )
+
+
+def test_rootless_import_uses_internal_network_without_model_and_exact_cleanup(
+    tmp_path,
+):
+    from qea.executors.sandbox_nexau import SandboxResourceContract
+    from scripts.smoke_qfbench_full_harness import run_rootless_import_canary
+
+    backend = FakeRootlessImportBackend()
+    task_runtime = SimpleNamespace(
+        worker_image_ref="sha256:" + "d" * 64,
+        worker_resources=SandboxResourceContract(
+            cpu_count=2,
+            memory_mb=4096,
+            pids_limit=256,
+            timeout_seconds=300,
+            writable_tmpfs_mb={"/app": 2048, "/qea": 512, "/tmp": 256},
+        ),
+    )
+    runtime = SimpleNamespace(
+        backend=backend,
+        evaluator=SimpleNamespace(
+            executor=SimpleNamespace(
+                catalog=SimpleNamespace(tasks={"task-a": task_runtime})
+            )
+        ),
+    )
+
+    result = run_rootless_import_canary(
+        runtime=runtime,
+        task=SimpleNamespace(task_id="task-a"),
+        run_id="rootless-import-test",
+        run_dir=tmp_path / "run",
+    )
+
+    assert result["import_ok"] is True
+    assert result["model_calls"] == 0
+    assert result["network_enabled"] is False
+    assert len(backend.specs) == 1
+    spec = backend.specs[0]
+    assert spec.role == "worker"
+    assert spec.network_policy == "worker-proxy-only"
+    assert spec.environment == {}
+    assert spec.network_scope == spec.attempt_id
+    assert all("proxy" not in argv for argv, _, _ in backend.commands)
+    assert backend.killed == ["c" * 64]
+    assert backend.removed_networks == ["a" * 64]
+    lifecycle = json.loads(
+        (tmp_path / "run" / "worker-import-sandbox-lifecycle-v2.json").read_text()
+    )
+    assert lifecycle["cleaned_up"] is True
+    assert lifecycle["cleanup_result"] == "killed"
+
+
+def test_rootless_import_main_builds_production_runtime_and_closes(
+    monkeypatch, tmp_path
+):
+    import qea.benchmarks.qfbench as benchmark_module
+    import qea.rootless_full_harness as rootless_module
+    from qea.executors.sandbox_nexau import SandboxResourceContract
+    from scripts import smoke_qfbench_full_harness as smoke
+
+    backend = FakeRootlessImportBackend()
+    task = SimpleNamespace(task_id="task-a")
+    task_runtime = SimpleNamespace(
+        worker_image_ref="sha256:" + "d" * 64,
+        worker_resources=SandboxResourceContract(
+            cpu_count=2,
+            memory_mb=4096,
+            pids_limit=256,
+            timeout_seconds=300,
+            writable_tmpfs_mb={"/app": 2048, "/qea": 512, "/tmp": 256},
+        ),
+    )
+    runtime = SimpleNamespace(
+        backend=backend,
+        evaluator=SimpleNamespace(
+            executor=SimpleNamespace(
+                catalog=SimpleNamespace(tasks={"task-a": task_runtime})
+            )
+        ),
+        image_identity_digest="1" * 64,
+        scheduler_identity_digest="2" * 64,
+        runtime_identity_digest="3" * 64,
+        closed=False,
+    )
+
+    def close_runtime():
+        runtime.closed = True
+
+    runtime.close = close_runtime
+    snapshot = SimpleNamespace(
+        commit="0" * 40,
+        tasks=(task,),
+        optimize=SimpleNamespace(task_ids=("task-a",)),
+        task=lambda task_id: task if task_id == "task-a" else None,
+    )
+    monkeypatch.setattr(
+        benchmark_module, "load_qfbench_snapshot", lambda *args, **kwargs: snapshot
+    )
+    monkeypatch.setattr(
+        rootless_module,
+        "load_rootless_full_harness_config",
+        lambda path: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        rootless_module,
+        "build_rootless_full_harness_runtime",
+        lambda **kwargs: runtime,
+    )
+    monkeypatch.setattr(
+        smoke,
+        "_exact_reap",
+        lambda path: (_ for _ in ()).throw(
+            AssertionError("rootless import used the E2B reaper")
+        ),
+    )
+    rootless_reaps = []
+    monkeypatch.setattr(
+        smoke,
+        "_exact_rootless_reap",
+        lambda run_dir, config_path: rootless_reaps.append(
+            (run_dir, config_path)
+        )
+        or {
+            "backend": "rootless-docker",
+            "apply": True,
+            "pending_ids": [],
+            "failed": {},
+        },
+    )
+
+    result = smoke.main(
+        [
+            "--executor",
+            "rootless-docker",
+            "--mode",
+            "import",
+            "--qfbench-root",
+            str(tmp_path / "snapshot"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+            "--rootless-config",
+            str(tmp_path / "rootless.json"),
+            "--rootless-image-set-manifest",
+            str(tmp_path / "images.json"),
+            "--run-id",
+            "rootless-import-main",
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--task",
+            "task-a",
+        ]
+    )
+
+    assert result == 0
+    assert runtime.closed is True
+    assert rootless_reaps == [
+        (
+            tmp_path / "results" / "rootless-import-main",
+            tmp_path / "rootless.json",
+        )
+    ]
+    status = json.loads(
+        (
+            tmp_path
+            / "results"
+            / "rootless-import-main"
+            / "run_status.json"
+        ).read_text()
+    )
+    assert status["executor"] == "rootless-docker"
+    assert status["status"]["model_calls"] == 0
+
+
+def test_rootless_paid_rich_delegates_to_one_iteration_production_runner(
+    monkeypatch, tmp_path
+):
+    import qea.benchmarks.qfbench as benchmark_module
+    from scripts import smoke_qfbench_full_harness as smoke
+
+    task = SimpleNamespace(task_id="task-a")
+    snapshot = SimpleNamespace(
+        commit="0" * 40,
+        tasks=(task,),
+        optimize=SimpleNamespace(task_ids=("task-a",)),
+        task=lambda task_id: task if task_id == "task-a" else None,
+    )
+    monkeypatch.setattr(
+        benchmark_module, "load_qfbench_snapshot", lambda *args, **kwargs: snapshot
+    )
+    calls = []
+
+    def run_production(argv):
+        calls.append(tuple(argv))
+        return 0
+
+    monkeypatch.setattr(smoke.run_cli, "main", run_production)
+    monkeypatch.setattr(
+        smoke,
+        "_exact_rootless_reap",
+        lambda *args: {
+            "backend": "rootless-docker",
+            "apply": True,
+            "pending_ids": [],
+            "failed": {},
+        },
+    )
+
+    result = smoke.main(
+        [
+            "--executor",
+            "rootless-docker",
+            "--mode",
+            "paid-rich",
+            "--qfbench-root",
+            str(tmp_path / "snapshot"),
+            "--manifest",
+            str(tmp_path / "manifest.json"),
+            "--rootless-config",
+            str(tmp_path / "rootless.json"),
+            "--rootless-image-set-manifest",
+            str(tmp_path / "images.json"),
+            "--feedback-manifest",
+            str(tmp_path / "feedback.json"),
+            "--verifier-criteria-map",
+            str(tmp_path / "criteria.json"),
+            "--run-id",
+            "rootless-rich-main",
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--task",
+            "task-a",
+            "--approve-external-run",
+        ]
+    )
+
+    assert result == 0
+    assert len(calls) == 1
+    argv = calls[0]
+    assert argv[:4] == (
+        "--benchmark",
+        "qfbench",
+        "--executor",
+        "rootless-docker",
+    )
+    assert ("--iters", "1") == (argv[argv.index("--iters")], argv[argv.index("--iters") + 1])
+    assert "--approve-external-run" in argv
+    assert "--template-manifest-dir" not in argv
+    assert "--evolver-template-manifest" not in argv
 
 def test_synthetic_rich_canary_evidence_contains_only_public_worker_files(tmp_path):
     from qea.evolution_feedback import PublicCriterion, PublicTaskRubric
