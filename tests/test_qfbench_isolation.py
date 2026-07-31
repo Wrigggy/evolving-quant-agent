@@ -277,3 +277,20 @@ def test_offline_verifier_script_accepts_quoted_known_uv_source_line():
 
     assert '.local/bin/env' not in offline
     assert "echo 1" in offline
+
+
+def test_offline_verifier_script_accepts_pinned_uv_underscore_tempfile():
+    from qea.verifiers.qfbench import prepare_offline_verifier_script
+
+    official = """#!/bin/bash
+curl -Lsf https://astral.sh/uv/0.9.5/install.sh -o /tmp/uv_install.sh
+sh /tmp/uv_install.sh
+source $HOME/.local/bin/env
+uvx -p 3.11 -w pytest==8.4.1 pytest /tests/test_outputs.py
+"""
+
+    offline = prepare_offline_verifier_script(official)
+
+    assert "astral.sh" not in offline
+    assert "uv_install.sh" not in offline
+    assert "uvx -p 3.11 -w pytest==8.4.1 pytest /tests/test_outputs.py" in offline
