@@ -301,6 +301,46 @@ def test_worker_uses_public_bundle_placeholder_and_persist_before_start(tmp_path
     assert not hasattr(executor, "oracle")
 
 
+def test_worker_setup_accepts_official_task_without_data_directory(tmp_path):
+    backend = FakeBackend()
+    executor = _executor(tmp_path, backend)
+    data_root = (
+        executor.public_task_root
+        / "tasks"
+        / "fixture-task"
+        / "environment"
+        / "data"
+    )
+    (data_root / "input.csv").unlink()
+    data_root.rmdir()
+
+    executor.execute(
+        attempt=_attempt(),
+        task=_task(),
+        worker_dir=_worker(tmp_path),
+        run_dir=tmp_path / "run",
+        model_env={},
+    )
+
+    members = _tar_members(backend.uploads[("worker", "/qea/worker-input.tar")])
+    assert members == (
+        "task/instruction.md",
+        "worker/agent.yaml",
+        "worker/systemprompt.md",
+    )
+    setup_commands = [
+        event[1]
+        for event in backend.events
+        if isinstance(event, tuple) and event[0] == "run:worker:setup"
+    ]
+    assert (
+        "sh",
+        "-c",
+        "if [ -d /qea/task/environment/data ]; then "
+        "cp -R /qea/task/environment/data/. /app/data/; fi",
+    ) in setup_commands
+
+
 def test_worker_uses_explicit_attempt_network_scope_when_supplied(tmp_path):
     from qea.executors.sandbox_nexau import SandboxNexAUExecutor
 

@@ -146,7 +146,15 @@ def _worker_task_view(public_root: Path, task_id: str):
             "worker.input", f"missing public instruction {instruction}"
         )
     data_root = root / "environment" / "data"
-    data_files = _regular_files(data_root, phase="worker.input")
+    if data_root.is_symlink():
+        raise SandboxInfrastructureError(
+            "worker.input", f"symlink is forbidden: {data_root}"
+        )
+    data_files = (
+        _regular_files(data_root, phase="worker.input")
+        if data_root.exists()
+        else ()
+    )
     return SimpleNamespace(
         task_id=task_id,
         root=root,
@@ -426,7 +434,12 @@ class SandboxNexAUExecutor:
             for argv in (
                 ("mkdir", "-p", "/qea/result", "/app/data", "/app/output"),
                 ("tar", "-xf", "/qea/worker-input.tar", "-C", "/qea"),
-                ("cp", "-R", "/qea/task/environment/data/.", "/app/data/"),
+                (
+                    "sh",
+                    "-c",
+                    "if [ -d /qea/task/environment/data ]; then "
+                    "cp -R /qea/task/environment/data/. /app/data/; fi",
+                ),
             ):
                 _run_required(
                     self.backend,
