@@ -488,6 +488,119 @@ def test_sandbox_evaluator_recovers_persisted_timeout_without_external_calls(
     }
 
 
+def test_sandbox_evaluator_mixed_state_resume_runs_only_pending_worker(tmp_path):
+    from qea.executors.execution_record import persist_worker_execution
+    from qea.loop_benchmark import QFBenchSandboxEvaluator, hash_worker_directory
+
+    tasks = tuple(
+        SimpleNamespace(task_id=task_id, domain="derivatives", lineage=task_id)
+        for task_id in (
+            "task-scored",
+            "task-worker",
+            "task-timeout",
+            "task-pending",
+        )
+    )
+    worker = _seed_worker(tmp_path)
+    worker_digest = hash_worker_directory(worker)
+    run_dir = tmp_path / "run"
+    attempts = {}
+    for task in tasks:
+        attempt = TaskAttempt.create(
+            run_id="mixed-state-resume",
+            benchmark_commit="0" * 40,
+            task_id=task.task_id,
+            split="optimize",
+            checkpoint="seed-optimize",
+            worker_digest=worker_digest,
+        )
+        attempt_dir = run_dir / "attempts" / attempt.attempt_id
+        attempt_dir.mkdir(parents=True)
+        (attempt_dir / "attempt.json").write_text(json.dumps(attempt.__dict__))
+        attempts[task.task_id] = (attempt, attempt_dir)
+
+    scored_attempt, scored_dir = attempts["task-scored"]
+    scored = OfficialTaskScore(
+        task_id=scored_attempt.task_id,
+        domain="derivatives",
+        reward=1.0,
+    )
+    (scored_dir / "completed-score.json").write_text(json.dumps(scored.__dict__))
+
+    worker_task = tasks[1]
+    worker_attempt, worker_dir = attempts[worker_task.task_id]
+    persist_worker_execution(
+        _execution_for(worker_attempt, run_dir, worker_task), worker_dir
+    )
+
+    _, timeout_dir = attempts["task-timeout"]
+    _persist_timeout_evidence(timeout_dir)
+
+    class RecordingExecutor:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, *, attempt, task, worker_dir, run_dir, model_env):
+            self.calls.append(task.task_id)
+            return _execution_for(attempt, run_dir, task)
+
+    class RecordingVerifier:
+        def __init__(self):
+            self.calls = []
+
+        def verify(self, *, attempt, task, execution, run_dir):
+            self.calls.append(task.task_id)
+            return OfficialTaskScore(
+                task_id=task.task_id,
+                domain=task.domain,
+                reward=0.5,
+            )
+
+    executor = RecordingExecutor()
+    verifier = RecordingVerifier()
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="mixed-state-resume",
+        executor=executor,
+        verifier=verifier,
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+
+    first = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=tasks,
+        split="optimize",
+        checkpoint="seed-optimize",
+        run_dir=run_dir,
+    )
+
+    assert executor.calls == ["task-pending"]
+    assert verifier.calls == ["task-worker", "task-pending"]
+    assert [score.task_id for score in first.scores] == [
+        task.task_id for task in tasks
+    ]
+    assert first.task_rewards == {
+        "task-scored": 1.0,
+        "task-worker": 0.5,
+        "task-timeout": 0.0,
+        "task-pending": 0.5,
+    }
+
+    second = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=tasks,
+        split="optimize",
+        checkpoint="seed-optimize",
+        run_dir=run_dir,
+    )
+
+    assert second == first
+    assert executor.calls == ["task-pending"]
+    assert verifier.calls == ["task-worker", "task-pending"]
+
+
 @pytest.mark.parametrize(
     ("changes", "message"),
     [
