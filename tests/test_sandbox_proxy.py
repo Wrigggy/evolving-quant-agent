@@ -243,6 +243,7 @@ def _manager(
     *,
     mode: int = 0o600,
     expect_request: bool | None = None,
+    required_provider: str | None = None,
 ):
     from qea.executors.sandbox_proxy import SandboxProxyConfig, SandboxProxyManager
 
@@ -258,6 +259,8 @@ def _manager(
     }
     if expect_request is not None:
         config_values["expect_request"] = expect_request
+    if required_provider is not None:
+        config_values["required_provider"] = required_provider
     return SandboxProxyManager(
         backend=backend,
         config=SandboxProxyConfig(**config_values),
@@ -344,6 +347,37 @@ def test_session_uses_one_scoped_network_and_private_token_transfer(tmp_path):
     assert network_lifecycle["cleaned_up"] is True
     assert network_lifecycle["cleanup_method"] == "exact-id"
     assert network_lifecycle["cleanup_result"] == "killed"
+
+
+def test_session_binds_required_provider_into_private_config_and_identity(tmp_path):
+    run_dir = tmp_path / "run"
+    backend = RecordingBackend(run_dir, audit_payload=_audit_bytes("completed"))
+    manager = _manager(
+        tmp_path,
+        backend,
+        required_provider="deepseek",
+    )
+
+    with _open(manager, run_dir) as session:
+        config_upload = next(
+            payload
+            for _, path, payload in backend.uploads
+            if path == "/run/qea-secrets/proxy-config.json"
+        )
+        assert json.loads(config_upload)["required_provider"] == "deepseek"
+        assert session.required_provider == "deepseek"
+
+    unpinned_root = tmp_path / "unpinned"
+    unpinned_root.mkdir()
+    unpinned_backend = RecordingBackend(
+        unpinned_root,
+        audit_payload=_audit_bytes("completed"),
+    )
+    unpinned_manager = _manager(unpinned_root, unpinned_backend)
+    with _open(unpinned_manager, unpinned_root) as unpinned_session:
+        pass
+    assert session.public_config_sha256 != unpinned_session.public_config_sha256
+    assert session.attempt_identity_sha256 != unpinned_session.attempt_identity_sha256
 
 
 def test_two_attempts_in_one_run_never_share_proxy_or_network_ids(tmp_path):

@@ -16,6 +16,7 @@ from typing import Callable, Iterator, Literal, Mapping, Sequence
 from ..model_proxy import (
     ModelProxyError,
     _read_token_bytes,
+    _validate_provider_slug,
     build_model_proxy_sandbox_plan,
     model_proxy_plan_identity,
 )
@@ -150,6 +151,7 @@ class SandboxProxyConfig:
     listen_port: int = 8080
     timeout_seconds: int = 120
     expect_request: bool = True
+    required_provider: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.resource_contract, SandboxResourceContract):
@@ -167,6 +169,16 @@ class SandboxProxyConfig:
             raise SandboxProxyError("timeout_seconds must be a positive integer")
         if type(self.expect_request) is not bool:
             raise SandboxProxyError("expect_request must be a boolean")
+        if self.required_provider is not None:
+            try:
+                normalized_provider = _validate_provider_slug(
+                    self.required_provider
+                )
+            except ModelProxyError as exc:
+                raise SandboxProxyError(str(exc)) from exc
+            object.__setattr__(
+                self, "required_provider", normalized_provider
+            )
         object.__setattr__(self, "token_file", Path(self.token_file).expanduser())
 
 
@@ -180,6 +192,7 @@ class SandboxProxySession:
     lifecycle_uri: Path
     audit_uri: Path
     allowed_model: str
+    required_provider: str | None
     immutable_image_ref: str
     spec_sha256: str
     public_plan_sha256: str
@@ -719,6 +732,7 @@ class SandboxProxyManager:
                 timeout_seconds=self.config.resource_contract.timeout_seconds,
                 network_scope=attempt_id,
                 allowed_model=self.config.allowed_model,
+                required_provider=self.config.required_provider,
                 audit_path=_PRIVATE_AUDIT_PATH,
                 denied_request_identities_sha256=tuple(
                     sorted(denied_request_identities)
@@ -824,6 +838,7 @@ class SandboxProxyManager:
                 lifecycle_uri=lifecycle_uri,
                 audit_uri=audit_uri,
                 allowed_model=self.config.allowed_model,
+                required_provider=self.config.required_provider,
                 immutable_image_ref=handle.immutable_image_ref,
                 spec_sha256=handle.spec_sha256,
                 public_plan_sha256=public_plan_sha256,

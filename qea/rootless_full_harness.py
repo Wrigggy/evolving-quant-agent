@@ -98,7 +98,8 @@ def _validate_provider_route(
     upstream_base_url: str,
     allowed_path_prefix: str,
     allowed_model: str,
-) -> tuple[str, str, str]:
+    required_provider: str | None,
+) -> tuple[str, str, str, str | None]:
     """Validate the fixed upstream base path and independent caller prefix."""
 
     from .model_proxy import (
@@ -106,6 +107,7 @@ def _validate_provider_route(
         _parse_upstream,
         _validate_model,
         _validate_prefix,
+        _validate_provider_slug,
     )
 
     if (
@@ -169,25 +171,49 @@ def _validate_provider_route(
     try:
         normalized_prefix = _validate_prefix(allowed_path_prefix)
         normalized_model = _validate_model(allowed_model)
+        normalized_provider = (
+            None
+            if required_provider is None
+            else _validate_provider_slug(required_provider)
+        )
     except ModelProxyError as exc:
-        label = "allowed_model" if "model" in str(exc) else "allowed path prefix"
+        if "provider" in str(exc):
+            label = "required_provider"
+        elif "model" in str(exc):
+            label = "allowed_model"
+        else:
+            label = "allowed path prefix"
         raise ValueError(f"{label} is invalid: {exc}") from exc
-    return normalized_upstream, normalized_prefix, normalized_model
+    return (
+        normalized_upstream,
+        normalized_prefix,
+        normalized_model,
+        normalized_provider,
+    )
 
 
 def rootless_model_route_identity(
-    *, upstream_base_url: str, allowed_path_prefix: str, allowed_model: str
+    *,
+    upstream_base_url: str,
+    allowed_path_prefix: str,
+    allowed_model: str,
+    required_provider: str | None = None,
 ) -> str:
     """Return the canonical answer-free identity of the fixed model route."""
 
-    return _canonical_digest(
-        {
-            "schema_version": 1,
-            "upstream_base_url": upstream_base_url,
-            "allowed_path_prefix": allowed_path_prefix,
-            "allowed_model": allowed_model,
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "upstream_base_url": upstream_base_url,
+        "allowed_path_prefix": allowed_path_prefix,
+        "allowed_model": allowed_model,
+    }
+    if required_provider is not None:
+        payload["schema_version"] = 2
+        payload["provider_routing"] = {
+            "only": [required_provider],
+            "allow_fallbacks": False,
         }
-    )
+    return _canonical_digest(payload)
 
 
 class _CoordinatorLock:
@@ -323,6 +349,7 @@ class RootlessFullHarnessConfig:
     headroom: HostHeadroomPolicy
     worker_concurrency: int
     verifier_concurrency: int
+    required_provider: str | None = None
 
     def __post_init__(self) -> None:
         if type(self.expected_uid) is not int or self.expected_uid <= 0:
@@ -348,11 +375,17 @@ class RootlessFullHarnessConfig:
         if _is_within(token_file, public_root) or _is_within(token_file, trusted_root):
             raise ValueError("token_file must remain outside public and trusted roots")
 
-        upstream_base_url, allowed_path_prefix, allowed_model = (
+        (
+            upstream_base_url,
+            allowed_path_prefix,
+            allowed_model,
+            required_provider,
+        ) = (
             _validate_provider_route(
                 self.upstream_base_url,
                 self.allowed_path_prefix,
                 self.allowed_model,
+                self.required_provider,
             )
         )
         for name in ("evolver_resources", "proxy_resources"):
@@ -390,9 +423,10 @@ class RootlessFullHarnessConfig:
         object.__setattr__(self, "upstream_base_url", upstream_base_url)
         object.__setattr__(self, "allowed_path_prefix", allowed_path_prefix)
         object.__setattr__(self, "allowed_model", allowed_model)
+        object.__setattr__(self, "required_provider", required_provider)
 
 
-_CONFIG_KEYS = frozenset(
+_CONFIG_KEYS_V1 = frozenset(
     {
         "schema_version",
         "docker_host",
@@ -413,6 +447,7 @@ _CONFIG_KEYS = frozenset(
         "verifier_concurrency",
     }
 )
+_CONFIG_KEYS_V2 = _CONFIG_KEYS_V1 | {"required_provider"}
 
 
 def load_rootless_full_harness_config(
@@ -427,10 +462,23 @@ def load_rootless_full_harness_config(
         payload = json.loads(config_path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError("rootless config is not valid JSON") from exc
-    if not isinstance(payload, dict) or set(payload) != _CONFIG_KEYS:
+    if not isinstance(payload, dict):
         raise ValueError("rootless config has unknown or missing fields")
-    if payload["schema_version"] != 1:
-        raise ValueError("rootless config schema_version must be 1")
+    schema_version = payload.get("schema_version")
+    if type(schema_version) is not int:
+        raise ValueError("rootless config schema_version must be an integer")
+    expected_keys = {
+        1: _CONFIG_KEYS_V1,
+        2: _CONFIG_KEYS_V2,
+    }.get(schema_version)
+    if expected_keys is None:
+        raise ValueError("rootless config schema_version must be 1 or 2")
+    if set(payload) != expected_keys:
+        raise ValueError("rootless config has unknown or missing fields")
+    if schema_version == 2 and not isinstance(
+        payload["required_provider"], str
+    ):
+        raise ValueError("rootless config required_provider must be a string")
     try:
         return RootlessFullHarnessConfig(
             docker_host=payload["docker_host"],
@@ -449,6 +497,7 @@ def load_rootless_full_harness_config(
             headroom=HostHeadroomPolicy(**payload["headroom"]),
             worker_concurrency=payload["worker_concurrency"],
             verifier_concurrency=payload["verifier_concurrency"],
+            required_provider=payload.get("required_provider"),
         )
     except (KeyError, TypeError) as exc:
         raise ValueError("rootless config field types are invalid") from exc
@@ -916,6 +965,7 @@ def build_rootless_full_harness_runtime(
             upstream_base_url=config.upstream_base_url,
             allowed_path_prefix=config.allowed_path_prefix,
             allowed_model=config.allowed_model,
+            required_provider=config.required_provider,
         )
         proxy_manager = SandboxProxyManager(
             backend=backend,
@@ -985,6 +1035,23 @@ def build_rootless_full_harness_runtime(
             }
             for task in sorted(selected_tasks, key=lambda item: item.task_id)
         ]
+        model_egress_policy: dict[str, object] = {
+            "upstream_base_url": config.upstream_base_url,
+            "allowed_path_prefix": config.allowed_path_prefix,
+            "allowed_model": config.allowed_model,
+            "token_file": str(config.token_file),
+            "identity_sha256": rootless_model_route_identity(
+                upstream_base_url=config.upstream_base_url,
+                allowed_path_prefix=config.allowed_path_prefix,
+                allowed_model=config.allowed_model,
+                required_provider=config.required_provider,
+            ),
+        }
+        if config.required_provider is not None:
+            model_egress_policy["provider_routing"] = {
+                "only": [config.required_provider],
+                "allow_fallbacks": False,
+            }
         runtime_identity = _canonical_digest(
             {
                 "schema_version": 1,
@@ -1014,17 +1081,7 @@ def build_rootless_full_harness_runtime(
                 "proxy_resources": _resource_payload(config.proxy_resources),
                 "worker_limits": _limits_payload(config.worker_limits),
                 "verifier_limits": _limits_payload(config.verifier_limits),
-                "model_egress_policy": {
-                    "upstream_base_url": config.upstream_base_url,
-                    "allowed_path_prefix": config.allowed_path_prefix,
-                    "allowed_model": config.allowed_model,
-                    "token_file": str(config.token_file),
-                    "identity_sha256": rootless_model_route_identity(
-                        upstream_base_url=config.upstream_base_url,
-                        allowed_path_prefix=config.allowed_path_prefix,
-                        allowed_model=config.allowed_model,
-                    ),
-                },
+                "model_egress_policy": model_egress_policy,
                 "proxy_runtime_policy": {
                     "listen_port": proxy_config.listen_port,
                     "timeout_seconds": proxy_config.timeout_seconds,

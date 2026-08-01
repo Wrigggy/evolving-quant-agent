@@ -478,6 +478,7 @@ def test_rootless_config_preserves_openrouter_base_path_and_proxy_route(tmp_path
         prefix=config.allowed_path_prefix,
         token="fixture-token",
         allowed_model=config.allowed_model,
+        required_provider="deepseek",
         audit_file=tmp_path / "unused-audit.jsonl",
         denied_request_identities_sha256=frozenset(),
         max_request_bytes=1,
@@ -491,6 +492,13 @@ def test_rootless_config_preserves_openrouter_base_path_and_proxy_route(tmp_path
     assert handler._route("/v1/chat/completions", policy) == (
         "/api/v1/chat/completions"
     )
+
+
+def test_rootless_config_rejects_unsafe_required_provider(tmp_path) -> None:
+    config = _valid_config(tmp_path)
+
+    with pytest.raises((ValueError, RuntimeError), match="provider"):
+        replace(config, required_provider=" DeepSeek")
 
 
 @pytest.mark.parametrize(
@@ -606,6 +614,25 @@ def test_rootless_config_loader_rejects_secret_value_and_parses_paths(tmp_path) 
 
     loaded = load_rootless_full_harness_config(path)
     assert loaded == config
+    assert loaded.required_provider is None
+
+    for invalid_schema in (True, 1.0, 2.0):
+        payload["schema_version"] = invalid_schema
+        path.write_text(json.dumps(payload))
+        with pytest.raises((ValueError, RuntimeError), match="schema_version"):
+            load_rootless_full_harness_config(path)
+
+    payload["schema_version"] = 2
+    payload["required_provider"] = "deepseek"
+    path.write_text(json.dumps(payload))
+    official = load_rootless_full_harness_config(path)
+    assert official.required_provider == "deepseek"
+
+    payload["required_provider"] = None
+    path.write_text(json.dumps(payload))
+    with pytest.raises((ValueError, RuntimeError), match="provider"):
+        load_rootless_full_harness_config(path)
+    payload["required_provider"] = "deepseek"
 
     payload["model_token"] = "forbidden-inline-secret"
     path.write_text(json.dumps(payload))
@@ -951,6 +978,10 @@ def test_factory_binds_runtime_scheduler_and_catalog_identity(tmp_path, monkeypa
 
     baseline = build(config, suffix="base")
     model = build(replace(config, allowed_model="provider/other"), suffix="model")
+    provider = build(
+        replace(config, required_provider="deepseek"),
+        suffix="provider",
+    )
     limits = build(
         replace(
             config,
@@ -964,6 +995,8 @@ def test_factory_binds_runtime_scheduler_and_catalog_identity(tmp_path, monkeypa
 
     assert model.runtime_identity_digest != baseline.runtime_identity_digest
     assert model.scheduler_identity_digest == baseline.scheduler_identity_digest
+    assert provider.runtime_identity_digest != baseline.runtime_identity_digest
+    assert provider.scheduler_identity_digest == baseline.scheduler_identity_digest
     assert limits.runtime_identity_digest != baseline.runtime_identity_digest
     assert scheduling.runtime_identity_digest != baseline.runtime_identity_digest
     assert scheduling.scheduler_identity_digest != baseline.scheduler_identity_digest

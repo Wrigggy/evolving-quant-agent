@@ -43,6 +43,9 @@ _FINALIZE_PATH = "/__qea_private/finalize"
 _ALLOWED_METHODS = frozenset({"GET", "POST"})
 _AUDIT_STATES = frozenset({"not_accepted", "completed", "quarantined"})
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+_PROVIDER_SLUG = re.compile(
+    r"[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)?\Z"
+)
 _AUDIT_KEYS = frozenset(
     {
         "schema_version",
@@ -181,6 +184,16 @@ def _validate_model(value: object) -> str:
         or any(ord(character) < 0x21 or ord(character) > 0x7E for character in value)
     ):
         raise ModelProxyError("allowed model must be one bounded printable identity")
+    return value
+
+
+def _validate_provider_slug(value: object) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) > 128
+        or _PROVIDER_SLUG.fullmatch(value) is None
+    ):
+        raise ModelProxyError("required provider must be one bounded safe slug")
     return value
 
 
@@ -323,6 +336,7 @@ class ModelProxyConfig:
     max_response_bytes: int = 64 * 1024 * 1024
     connect_timeout_seconds: float = 10.0
     read_timeout_seconds: float = 300.0
+    required_provider: str | None = None
 
     def __post_init__(self) -> None:
         if self.listen_host not in {"127.0.0.1", "0.0.0.0"}:
@@ -334,6 +348,12 @@ class ModelProxyConfig:
             self, "allowed_path_prefix", _validate_prefix(self.allowed_path_prefix)
         )
         object.__setattr__(self, "allowed_model", _validate_model(self.allowed_model))
+        if self.required_provider is not None:
+            object.__setattr__(
+                self,
+                "required_provider",
+                _validate_provider_slug(self.required_provider),
+            )
         token_path = Path(self.token_file).expanduser()
         _read_token(token_path)
         object.__setattr__(self, "token_file", token_path)
@@ -456,6 +476,7 @@ class ModelProxySandboxPlan:
     audit_path: str | None = None
     network_scope: str | None = None
     denied_request_identities_sha256: tuple[str, ...] = ()
+    required_provider: str | None = None
 
     def config_payload(self) -> dict[str, object]:
         """Return the public config uploaded before the token appears."""
@@ -472,6 +493,8 @@ class ModelProxySandboxPlan:
         }
         if self.allowed_model is not None:
             payload["allowed_model"] = self.allowed_model
+            if self.required_provider is not None:
+                payload["required_provider"] = self.required_provider
             payload["audit_file"] = self.audit_path
             payload["denied_request_identities_sha256"] = list(
                 self.denied_request_identities_sha256
@@ -479,7 +502,7 @@ class ModelProxySandboxPlan:
         return payload
 
     def public_payload(self) -> dict[str, object]:
-        return {
+        payload = {
             "schema_version": 1,
             "spec": {
                 "role": self.spec.role,
@@ -508,6 +531,9 @@ class ModelProxySandboxPlan:
                 self.denied_request_identities_sha256
             ),
         }
+        if self.required_provider is not None:
+            payload["required_provider"] = self.required_provider
+        return payload
 
 
 def model_proxy_attempt_identity(
@@ -576,6 +602,7 @@ def build_model_proxy_sandbox_plan(
     timeout_seconds: int,
     network_scope: str | None = None,
     allowed_model: str | None = None,
+    required_provider: str | None = None,
     audit_path: str | None = None,
     denied_request_identities_sha256: Sequence[str] = (),
     writable_tmpfs_mb: Mapping[str, int] | None = None,
@@ -595,8 +622,14 @@ def build_model_proxy_sandbox_plan(
         )
     if allowed_model is not None:
         allowed_model = _validate_model(allowed_model)
+        if required_provider is not None:
+            required_provider = _validate_provider_slug(required_provider)
         if not isinstance(audit_path, str) or not audit_path.startswith("/"):
             raise ModelProxyError("proxy plan audit path must be absolute")
+    elif required_provider is not None:
+        raise ModelProxyError(
+            "required provider requires the complete scoped proxy policy"
+        )
     denied_identities = _validate_denied_request_identities(
         denied_request_identities_sha256
     )
@@ -651,6 +684,7 @@ def build_model_proxy_sandbox_plan(
         audit_path=audit_path,
         network_scope=network_scope,
         denied_request_identities_sha256=denied_identities,
+        required_provider=required_provider,
     )
 
 
@@ -739,6 +773,7 @@ class _ProxyPolicy:
     prefix: str
     token: str
     allowed_model: str
+    required_provider: str | None
     audit_file: Path
     denied_request_identities_sha256: frozenset[str]
     max_request_bytes: int
@@ -1207,6 +1242,41 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             )
             self._reject(400, "model_not_allowed")
             return
+        outbound_body = body
+        if policy.required_provider is not None:
+            if "provider" in request_payload:
+                self._audit(
+                    request_identity_sha256=request_identity,
+                    model=None,
+                    started_at=started_at,
+                    started_monotonic=started_monotonic,
+                    request_state="not_accepted",
+                    failure_class="policy_rejection",
+                )
+                self._reject(400, "provider_forbidden")
+                return
+            request_payload["provider"] = {
+                "only": [policy.required_provider],
+                "allow_fallbacks": False,
+            }
+            outbound_body = json.dumps(
+                request_payload,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8")
+            request_identity = self._request_identity(target, outbound_body)
+            if len(outbound_body) > policy.max_request_bytes:
+                self._audit(
+                    request_identity_sha256=request_identity,
+                    model=None,
+                    started_at=started_at,
+                    started_monotonic=started_monotonic,
+                    request_state="not_accepted",
+                    failure_class="policy_rejection",
+                )
+                self._reject(413, "request_limit")
+                return
         if request_identity in policy.denied_request_identities_sha256:
             self._audit(
                 request_identity_sha256=request_identity,
@@ -1218,7 +1288,9 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             )
             self._reject(409, "request_replay_forbidden")
             return
-        headers = _filtered_request_headers(self.headers, policy, len(body))
+        headers = _filtered_request_headers(
+            self.headers, policy, len(outbound_body)
+        )
         connection = self._open_upstream(policy)
         spool = tempfile.SpooledTemporaryFile(
             max_size=min(policy.max_response_bytes, 1024 * 1024), mode="w+b"
@@ -1230,7 +1302,12 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
         try:
             connection.connect()
             request_transmission_started = True
-            connection.request(self.command, target, body=body, headers=headers)
+            connection.request(
+                self.command,
+                target,
+                body=outbound_body,
+                headers=headers,
+            )
             if connection.sock is not None:
                 connection.sock.settimeout(policy.read_timeout_seconds)
             response = connection.getresponse()
@@ -1454,6 +1531,7 @@ def create_proxy_server(config: ModelProxyConfig) -> ThreadingHTTPServer:
         prefix=config.allowed_path_prefix,
         token=_read_token(Path(config.token_file)),
         allowed_model=config.allowed_model,
+        required_provider=config.required_provider,
         audit_file=audit_file,
         denied_request_identities_sha256=frozenset(
             config.denied_request_identities_sha256

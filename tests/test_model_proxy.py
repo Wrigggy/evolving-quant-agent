@@ -317,6 +317,124 @@ def test_proxy_routes_fixed_path_injects_token_and_strips_hop_headers(tmp_path):
         _stop(upstream, upstream_thread)
 
 
+def test_required_provider_injects_strict_routing_and_binds_forwarded_body(
+    tmp_path,
+):
+    upstream, upstream_thread = _start_upstream()
+    proxy, proxy_thread = _start_proxy(
+        tmp_path,
+        upstream,
+        required_provider="deepseek",
+    )
+    body = b'{"model":"fixture","messages":[{"role":"user","content":"hi"}]}'
+    try:
+        status, _, _ = _request(proxy, body=body)
+
+        assert status == 200
+        [captured] = upstream.captured
+        forwarded = json.loads(captured["body"])
+        assert forwarded["provider"] == {
+            "only": ["deepseek"],
+            "allow_fallbacks": False,
+        }
+        assert captured["headers"]["content-length"] == str(
+            len(captured["body"])
+        )
+        assert captured["body"] != body
+        expected_identity = hashlib.sha256(
+            b"POST\x00/api/v1/chat/completions\x00" + captured["body"]
+        ).hexdigest()
+        [audit] = _read_audit(tmp_path)
+        assert audit["request_identity_sha256"] == expected_identity
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_required_provider_rejects_worker_routing_before_upstream(tmp_path):
+    upstream, upstream_thread = _start_upstream()
+    proxy, proxy_thread = _start_proxy(
+        tmp_path,
+        upstream,
+        required_provider="deepseek",
+    )
+    body = json.dumps(
+        {
+            "model": "fixture",
+            "provider": {"sort": "throughput"},
+        },
+        separators=(",", ":"),
+    ).encode()
+    try:
+        status, _, payload = _request(proxy, body=body)
+
+        assert status == 400
+        assert json.loads(payload)["error"]["code"] == "provider_forbidden"
+        assert upstream.captured == []
+        [audit] = _read_audit(tmp_path)
+        assert audit["request_state"] == "not_accepted"
+        assert audit["failure_class"] == "policy_rejection"
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_required_provider_rejection_binds_rewritten_oversize_body(tmp_path):
+    upstream, upstream_thread = _start_upstream()
+    body = b'{"model":"fixture"}'
+    proxy, proxy_thread = _start_proxy(
+        tmp_path,
+        upstream,
+        required_provider="deepseek",
+        max_request_bytes=len(body),
+    )
+    rewritten = json.dumps(
+        {
+            "model": "fixture",
+            "provider": {
+                "only": ["deepseek"],
+                "allow_fallbacks": False,
+            },
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    try:
+        status, _, payload = _request(proxy, body=body)
+
+        assert status == 413
+        assert json.loads(payload)["error"]["code"] == "request_limit"
+        assert upstream.captured == []
+        expected_identity = hashlib.sha256(
+            b"POST\x00/api/v1/chat/completions\x00" + rewritten
+        ).hexdigest()
+        [audit] = _read_audit(tmp_path)
+        assert audit["request_identity_sha256"] == expected_identity
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+@pytest.mark.parametrize(
+    "required_provider",
+    ["", " DeepSeek", "deepseek\n", "deepseek//turbo", "deepseek?fallback=1"],
+)
+def test_required_provider_rejects_unsafe_slugs(tmp_path, required_provider):
+    from qea.model_proxy import ModelProxyConfig, ModelProxyError
+
+    with pytest.raises(ModelProxyError, match="provider"):
+        ModelProxyConfig(
+            listen_host="127.0.0.1",
+            listen_port=0,
+            upstream_base_url="https://openrouter.ai/api/v1",
+            allowed_path_prefix="/v1",
+            allowed_model="fixture",
+            token_file=_token_file(tmp_path),
+            audit_file=tmp_path / "proxy-audit.jsonl",
+            required_provider=required_provider,
+        )
+
+
 @pytest.mark.parametrize(
     ("body", "expected_code"),
     [
@@ -549,6 +667,48 @@ def test_new_proxy_attempt_rejects_prior_request_hash_before_second_upstream_cal
     second_proxy, second_thread = _start_proxy(
         second_dir,
         upstream,
+        denied_request_identities_sha256=(
+            first_audit["request_identity_sha256"],
+        ),
+    )
+    try:
+        status, _, payload = _request(second_proxy)
+        assert status == 409
+        assert json.loads(payload)["error"]["code"] == "request_replay_forbidden"
+        assert len(upstream.captured) == 1
+        [second_audit] = _read_audit(second_dir)
+        assert second_audit["request_identity_sha256"] == (
+            first_audit["request_identity_sha256"]
+        )
+        assert second_audit["request_state"] == "quarantined"
+        assert second_audit["failure_class"] == "replay_denied"
+    finally:
+        _stop(second_proxy, second_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_pinned_proxy_replay_denial_uses_rewritten_request_identity(tmp_path):
+    upstream, upstream_thread = _start_upstream()
+    first_dir = tmp_path / "attempt-a"
+    second_dir = tmp_path / "attempt-b"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    first_proxy, first_thread = _start_proxy(
+        first_dir,
+        upstream,
+        required_provider="deepseek",
+    )
+    try:
+        status, _, _ = _request(first_proxy)
+        assert status == 200
+        [first_audit] = _read_audit(first_dir)
+    finally:
+        _stop(first_proxy, first_thread)
+
+    second_proxy, second_thread = _start_proxy(
+        second_dir,
+        upstream,
+        required_provider="deepseek",
         denied_request_identities_sha256=(
             first_audit["request_identity_sha256"],
         ),
@@ -1098,6 +1258,8 @@ def test_cli_requires_and_forwards_model_and_audit_policy(tmp_path, monkeypatch)
             "/v1",
             "--allowed-model",
             "openai/gpt-5",
+            "--required-provider",
+            "deepseek",
             "--token-file",
             str(token),
             "--audit-file",
@@ -1105,5 +1267,6 @@ def test_cli_requires_and_forwards_model_and_audit_policy(tmp_path, monkeypatch)
         ]
     ) == 0
     assert captured["config"]["allowed_model"] == "openai/gpt-5"
+    assert captured["config"]["required_provider"] == "deepseek"
     assert captured["config"]["audit_file"] == str(audit)
     assert captured["closed"] is True

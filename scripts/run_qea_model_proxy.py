@@ -17,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--upstream-base-url", required=True)
     parser.add_argument("--allowed-path-prefix", default="/v1")
     parser.add_argument("--allowed-model", required=True)
+    parser.add_argument("--required-provider")
     parser.add_argument("--token-file", required=True)
     parser.add_argument("--audit-file", required=True)
     parser.add_argument(
@@ -39,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
                 upstream_base_url=args.upstream_base_url,
                 allowed_path_prefix=args.allowed_path_prefix,
                 allowed_model=args.allowed_model,
+                required_provider=args.required_provider,
                 token_file=args.token_file,
                 audit_file=args.audit_file,
                 denied_request_identities_sha256=tuple(

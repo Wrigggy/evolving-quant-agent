@@ -75,7 +75,7 @@ required = {
     'max_request_bytes', 'max_response_bytes', 'connect_timeout_seconds',
     'read_timeout_seconds',
 }
-if set(config) != required:
+if set(config) not in (required, required | {'required_provider'}):
     raise SystemExit(78)
 argv = [
     '/usr/local/bin/python3',
@@ -92,6 +92,8 @@ argv = [
     '--connect-timeout-seconds', str(config['connect_timeout_seconds']),
     '--read-timeout-seconds', str(config['read_timeout_seconds']),
 ]
+if 'required_provider' in config:
+    argv.extend(['--required-provider', str(config['required_provider'])])
 for identity in config['denied_request_identities_sha256']:
     argv.extend(['--denied-request-identity-sha256', str(identity)])
 environment = os.environ.copy()

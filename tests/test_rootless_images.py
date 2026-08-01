@@ -216,6 +216,8 @@ def test_task_neutral_proxy_and_evolver_plans_are_role_minimal(tmp_path) -> None
     }
     assert "nexau" not in proxy_dockerfile.lower()
     assert "--allowed-model" in proxy_entrypoint
+    assert "--required-provider" in proxy_entrypoint
+    assert "required_provider" in proxy_entrypoint
     assert "--audit-file" in proxy_entrypoint
     assert "--denied-request-identity-sha256" in proxy_entrypoint
     assert all(
@@ -236,7 +238,6 @@ def test_task_neutral_proxy_and_evolver_plans_are_role_minimal(tmp_path) -> None
         marker not in json.dumps(evolver.manifest_payload()).lower()
         for marker in ("tasks/", "tests/", "reference", "solution")
     )
-
     changed_base = prepare_rootless_image_plan(
         role="evolver",
         public_root=public,
@@ -246,6 +247,60 @@ def test_task_neutral_proxy_and_evolver_plans_are_role_minimal(tmp_path) -> None
         build_timeout_seconds=600,
     )
     assert changed_base.identity_sha256 != evolver.identity_sha256
+
+
+def test_proxy_entrypoint_emits_required_provider_only_when_configured(
+    tmp_path, monkeypatch
+) -> None:
+    import qea.rootless_images as images
+
+    config_path = tmp_path / "proxy-config.json"
+    token_path = tmp_path / "model-token"
+    token_path.write_text("fixture-token\n")
+    source = images._MODEL_PROXY_ENTRYPOINT.decode()
+    source = source.replace(
+        "Path('/run/qea-secrets/proxy-config.json')",
+        f"Path({str(config_path)!r})",
+    ).replace(
+        "Path('/run/qea-secrets/model-token')",
+        f"Path({str(token_path)!r})",
+    )
+    base_config = {
+        "listen_host": "0.0.0.0",
+        "listen_port": 8080,
+        "upstream_base_url": "https://openrouter.ai/api/v1",
+        "allowed_path_prefix": "/v1",
+        "allowed_model": "deepseek/deepseek-v4-pro",
+        "audit_file": "/run/qea-secrets/proxy-audit.jsonl",
+        "denied_request_identities_sha256": [],
+        "max_request_bytes": 1024,
+        "max_response_bytes": 4096,
+        "connect_timeout_seconds": 10.0,
+        "read_timeout_seconds": 300.0,
+    }
+    captured = []
+
+    def fake_execve(executable, argv, environment):
+        captured.append((executable, tuple(argv), dict(environment)))
+        raise SystemExit(0)
+
+    monkeypatch.setattr(os, "execve", fake_execve)
+    for required_provider in (None, "deepseek"):
+        payload = dict(base_config)
+        if required_provider is not None:
+            payload["required_provider"] = required_provider
+        config_path.write_text(json.dumps(payload))
+        with pytest.raises(SystemExit, match="0"):
+            exec(compile(source, "model-proxy-entrypoint.py", "exec"), {})
+
+    legacy_argv = captured[0][1]
+    pinned_argv = captured[1][1]
+    assert "--required-provider" not in legacy_argv
+    index = pinned_argv.index("--required-provider")
+    assert pinned_argv[index : index + 2] == (
+        "--required-provider",
+        "deepseek",
+    )
 
 
 def test_trusted_host_build_network_is_explicit_and_identity_bound(tmp_path) -> None:
