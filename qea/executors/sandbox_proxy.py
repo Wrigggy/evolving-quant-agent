@@ -36,6 +36,7 @@ from ..sandbox_network_lifecycle import (
     create_network_lifecycle,
     mark_network_cleaned,
 )
+from .execution_record import WorkerBehaviorTimeout
 from .sandbox_nexau import SandboxResourceContract
 
 
@@ -693,6 +694,7 @@ class SandboxProxyManager:
         yielded = False
         primary_error: BaseException | None = None
         audit_policy_error: SandboxProxyError | None = None
+        audit_errors: list[SandboxProxyError] = []
         cleanup_errors: list[SandboxProxyError] = []
         session: SandboxProxySession | None = None
 
@@ -936,7 +938,7 @@ class SandboxProxyManager:
                             "proxy audit contains an ambiguous accepted request"
                         )
                 except SandboxProxyError as exc:
-                    cleanup_errors.append(exc)
+                    audit_errors.append(exc)
                     try:
                         _quarantine_marker(
                             quarantine_uri, reason="audit_download_or_validation_failed"
@@ -1009,9 +1011,20 @@ class SandboxProxyManager:
                 ) from primary_error
             raise SandboxProxyError(f"proxy cleanup was incomplete: {detail}")
         if audit_policy_error is not None:
-            if primary_error is not None:
-                raise audit_policy_error from primary_error
-            raise audit_policy_error
+            audit_errors.append(audit_policy_error)
+        if audit_errors:
+            if isinstance(primary_error, WorkerBehaviorTimeout):
+                primary_error.proxy_audit_failures = tuple(
+                    str(error)[:2_000] for error in audit_errors
+                )
+            else:
+                detail = "; ".join(str(error) for error in audit_errors)[:2_000]
+                audit_error = SandboxProxyError(
+                    f"proxy audit was incomplete: {detail}"
+                )
+                if primary_error is not None:
+                    raise audit_error from primary_error
+                raise audit_error
         if primary_error is not None:
             raise primary_error.with_traceback(primary_error.__traceback__)
 

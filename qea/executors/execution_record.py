@@ -21,6 +21,7 @@ class WorkerBehaviorTimeout(WorkerExecutionError):
     def __init__(self, message: str, *, log_uri: str | None = None) -> None:
         super().__init__(message)
         self.log_uri = log_uri
+        self.proxy_audit_failures: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

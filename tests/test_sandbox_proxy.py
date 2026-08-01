@@ -491,6 +491,63 @@ def test_caller_exception_is_preserved_after_audit_download_and_cleanup(tmp_path
     assert backend.events[-1][0] == "network-remove"
 
 
+def test_worker_timeout_survives_proxy_finalize_failure_after_exact_cleanup(
+    tmp_path,
+):
+    from qea.executors.execution_record import WorkerBehaviorTimeout
+
+    run_dir = tmp_path / "run"
+    backend = RecordingBackend(
+        run_dir,
+        finalize_result=SandboxCommandResult(124, "", "", True),
+    )
+    manager = _manager(tmp_path, backend)
+    timeout = WorkerBehaviorTimeout(
+        "worker exceeded the official agent timeout (2400s)",
+        log_uri=str(run_dir / "worker-command.json"),
+    )
+
+    with pytest.raises(WorkerBehaviorTimeout) as raised:
+        with _open(manager, run_dir):
+            raise timeout
+
+    assert raised.value is timeout
+    assert raised.value.proxy_audit_failures == (
+        "proxy audit finalize failed: exit 124",
+    )
+    quarantine = (
+        run_dir
+        / "attempts"
+        / "attempt-001"
+        / "proxy-audit.quarantined.json"
+    )
+    assert quarantine.is_file()
+    assert json.loads(quarantine.read_text()) == {
+        "reason": "audit_download_or_validation_failed",
+        "request_state": "quarantined",
+        "schema_version": 1,
+    }
+    assert backend.events[-2] == ("kill", "proxy-native-1")
+    assert backend.events[-1][0] == "network-remove"
+
+
+def test_worker_timeout_does_not_hide_exact_proxy_cleanup_failure(tmp_path):
+    from qea.executors.execution_record import WorkerBehaviorTimeout
+    from qea.executors.sandbox_proxy import SandboxProxyError
+
+    run_dir = tmp_path / "run"
+    backend = RecordingBackend(run_dir, failure="kill")
+    manager = _manager(tmp_path, backend)
+    timeout = WorkerBehaviorTimeout("official timeout")
+
+    with pytest.raises(SandboxProxyError, match="proxy.cleanup") as raised:
+        with _open(manager, run_dir):
+            raise timeout
+
+    assert raised.value.__cause__ is timeout
+    assert backend.events[-1][0] == "network-remove"
+
+
 class BackendWithoutScopedNetwork:
     backend_name = "missing-scoped-network"
 
