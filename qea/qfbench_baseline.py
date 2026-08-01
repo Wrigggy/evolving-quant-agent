@@ -445,6 +445,53 @@ def _validated_completed_cost(record: Mapping, *, source: Path) -> Decimal:
     return cost
 
 
+def _validated_timeout_quarantine(
+    score: Mapping,
+    marker_path: Path,
+    *,
+    source: Path,
+) -> str:
+    reward = score.get("reward")
+    tags = score.get("diagnostic_tags")
+    try:
+        validated_score = OfficialTaskScore(
+            **{
+                **score,
+                "diagnostic_tags": tuple(tags) if isinstance(tags, list) else tags,
+            }
+        )
+    except (TypeError, ValueError) as exc:
+        raise BaselineConfigError(
+            f"cost audit invalid timeout score: {source}"
+        ) from exc
+    if (
+        isinstance(reward, bool)
+        or not isinstance(reward, (int, float))
+        or float(reward) != 0.0
+        or not isinstance(tags, list)
+        or "timeout" not in validated_score.diagnostic_tags
+    ):
+        raise BaselineConfigError(
+            f"cost audit missing ledger is not bound to a timeout score: {source}"
+        )
+    try:
+        marker = json.loads(marker_path.read_text())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BaselineConfigError(
+            f"cost audit missing or malformed quarantine marker: {source}"
+        ) from exc
+    expected = {
+        "schema_version": 1,
+        "request_state": "quarantined",
+        "reason": "audit_download_or_validation_failed",
+    }
+    if marker != expected:
+        raise BaselineConfigError(
+            f"cost audit unsupported quarantine marker: {source}"
+        )
+    return str(marker["reason"])
+
+
 def audit_baseline_proxy_costs(
     run_dir: str | Path, *, expected_attempts: int
 ) -> dict:
@@ -463,6 +510,7 @@ def audit_baseline_proxy_costs(
     total = _empty_cost_group()
     repetition_groups: dict[str, dict[str, dict]] = {}
     seen_request_identities: set[str] = set()
+    unreconciled_attempts: list[dict] = []
     for attempt_path in attempt_paths:
         attempt_dir = attempt_path.parent
         try:
@@ -472,7 +520,11 @@ def audit_baseline_proxy_costs(
             raise BaselineConfigError(
                 f"cost audit missing or invalid scored attempt {attempt_dir.name}: {exc}"
             ) from exc
-        if not isinstance(attempt, dict) or attempt.get("attempt_id") != attempt_dir.name:
+        if (
+            not isinstance(attempt, dict)
+            or not isinstance(score, dict)
+            or attempt.get("attempt_id") != attempt_dir.name
+        ):
             raise BaselineConfigError(f"cost audit attempt identity mismatch: {attempt_dir}")
         task_id = attempt.get("task_id")
         if not isinstance(task_id, str) or score.get("task_id") != task_id:
@@ -493,7 +545,28 @@ def audit_baseline_proxy_costs(
         total["attempt_count"] += 1
         panel_group["attempt_count"] += 1
         task_group["attempt_count"] += 1
-        for record in _read_audit_records(attempt_dir / "proxy-audit.jsonl"):
+        audit_path = attempt_dir / "proxy-audit.jsonl"
+        quarantine_path = attempt_dir / "proxy-audit.quarantined.json"
+        if audit_path.is_file() and quarantine_path.exists():
+            raise BaselineConfigError(
+                f"cost audit has both canonical and quarantined ledgers: {attempt_dir}"
+            )
+        if not audit_path.is_file():
+            reason = _validated_timeout_quarantine(
+                score,
+                quarantine_path,
+                source=attempt_dir,
+            )
+            unreconciled_attempts.append({
+                "attempt_id": attempt_dir.name,
+                "checkpoint": str(attempt["checkpoint"]),
+                "panel": panel,
+                "repetition": int(repetition),
+                "task_id": task_id,
+                "reason": reason,
+            })
+            continue
+        for record in _read_audit_records(audit_path):
             cost = _validated_completed_cost(record, source=attempt_dir)
             request_identity = record["request_identity_sha256"]
             if request_identity in seen_request_identities:
@@ -506,6 +579,10 @@ def audit_baseline_proxy_costs(
             _add_cost(task_group, record, cost)
 
     payload = _cost_json(total)
+    payload["cost_complete"] = not unreconciled_attempts
+    payload["provider_cost_is_lower_bound"] = bool(unreconciled_attempts)
+    payload["unreconciled_attempt_count"] = len(unreconciled_attempts)
+    payload["unreconciled_attempts"] = unreconciled_attempts
     payload["by_repetition"] = {
         repetition: {
             panel: _cost_json(group, tasks=group.pop("tasks"))

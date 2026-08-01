@@ -448,6 +448,35 @@ def _cost_fixture(run_dir: Path) -> tuple[Path, Path]:
     return paths[0], paths[1]
 
 
+def _add_timeout_cost_attempt(run_dir: Path) -> Path:
+    from qea.evaluation import TaskAttempt
+
+    attempt = TaskAttempt.create(
+        run_id="baseline-five",
+        benchmark_commit=COMMIT,
+        task_id="slow-task",
+        split="baseline_primary",
+        checkpoint="repetition-01-primary",
+        worker_digest="e" * 64,
+    )
+    attempt_dir = run_dir / "attempts" / attempt.attempt_id
+    attempt_dir.mkdir(parents=True)
+    (attempt_dir / "attempt.json").write_text(json.dumps(asdict(attempt)))
+    score = OfficialTaskScore(
+        task_id="slow-task",
+        domain="derivatives",
+        reward=0.0,
+        diagnostic_tags=("timeout",),
+    )
+    (attempt_dir / "completed-score.json").write_text(json.dumps(asdict(score)))
+    (attempt_dir / "proxy-audit.quarantined.json").write_text(json.dumps({
+        "schema_version": 1,
+        "request_state": "quarantined",
+        "reason": "audit_download_or_validation_failed",
+    }))
+    return attempt_dir
+
+
 def test_cost_audit_reconciles_attempts_requests_tokens_and_groups(tmp_path) -> None:
     from qea.qfbench_baseline import audit_baseline_proxy_costs
 
@@ -460,12 +489,88 @@ def test_cost_audit_reconciles_attempts_requests_tokens_and_groups(tmp_path) -> 
     assert audit["output_tokens"] == 15
     assert audit["total_tokens"] == 75
     assert audit["provider_cost_usd"] == "0.06"
+    assert audit["cost_complete"] is True
+    assert audit["provider_cost_is_lower_bound"] is False
+    assert audit["unreconciled_attempt_count"] == 0
+    assert audit["unreconciled_attempts"] == []
     primary = audit["by_repetition"]["1"]["primary"]
     assert primary["request_count"] == 2
     assert primary["provider_cost_usd"] == "0.03"
     assert primary["tasks"]["risk-task"]["provider_cost_usd"] == "0.03"
     diagnostic = audit["by_repetition"]["1"]["diagnostic"]
     assert diagnostic["request_count"] == 1
+
+
+def test_cost_audit_reports_timeout_ledger_as_explicit_lower_bound(tmp_path) -> None:
+    from qea.qfbench_baseline import audit_baseline_proxy_costs
+
+    _cost_fixture(tmp_path)
+    timeout_dir = _add_timeout_cost_attempt(tmp_path)
+
+    audit = audit_baseline_proxy_costs(tmp_path, expected_attempts=3)
+
+    assert audit["attempt_count"] == 3
+    assert audit["request_count"] == 3
+    assert audit["input_tokens"] == 60
+    assert audit["output_tokens"] == 15
+    assert audit["total_tokens"] == 75
+    assert audit["provider_cost_usd"] == "0.06"
+    assert audit["cost_complete"] is False
+    assert audit["provider_cost_is_lower_bound"] is True
+    assert audit["unreconciled_attempt_count"] == 1
+    assert audit["unreconciled_attempts"] == [{
+        "attempt_id": timeout_dir.name,
+        "checkpoint": "repetition-01-primary",
+        "panel": "primary",
+        "repetition": 1,
+        "task_id": "slow-task",
+        "reason": "audit_download_or_validation_failed",
+    }]
+    slow = audit["by_repetition"]["1"]["primary"]["tasks"]["slow-task"]
+    assert slow["attempt_count"] == 1
+    assert slow["request_count"] == 0
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    (
+        "reward_one",
+        "missing_timeout_tag",
+        "malformed_marker",
+        "both_marker_and_audit",
+        "missing_marker",
+    ),
+)
+def test_cost_audit_rejects_non_timeout_or_ambiguous_missing_ledgers(
+    tmp_path, corruption
+) -> None:
+    from qea.qfbench_baseline import BaselineConfigError, audit_baseline_proxy_costs
+
+    _cost_fixture(tmp_path)
+    timeout_dir = _add_timeout_cost_attempt(tmp_path)
+    score_path = timeout_dir / "completed-score.json"
+    score = json.loads(score_path.read_text())
+    marker_path = timeout_dir / "proxy-audit.quarantined.json"
+    if corruption == "reward_one":
+        score["reward"] = 1.0
+        score_path.write_text(json.dumps(score))
+    elif corruption == "missing_timeout_tag":
+        score["diagnostic_tags"] = []
+        score_path.write_text(json.dumps(score))
+    elif corruption == "malformed_marker":
+        marker = json.loads(marker_path.read_text())
+        marker["unexpected"] = True
+        marker_path.write_text(json.dumps(marker))
+    elif corruption == "both_marker_and_audit":
+        (timeout_dir / "proxy-audit.jsonl").write_text(
+            json.dumps(_audit_record(identity="d", cost=0.04, input_tokens=40))
+            + "\n"
+        )
+    elif corruption == "missing_marker":
+        marker_path.unlink()
+
+    with pytest.raises(BaselineConfigError, match="cost audit"):
+        audit_baseline_proxy_costs(tmp_path, expected_attempts=3)
 
 
 @pytest.mark.parametrize(
