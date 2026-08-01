@@ -33,7 +33,9 @@ from .evolve_runtime import diff_signature, dir_unified_diff, run_evolve_agent, 
 from .executors.execution_record import (
     WorkerBehaviorTimeout,
     WorkerExecution,
+    load_persisted_worker_timeout,
     load_worker_execution,
+    persist_timeout_recovery,
     persist_worker_execution,
 )
 from .worker_identity import (
@@ -496,6 +498,21 @@ class QFBenchSandboxEvaluator:
 
         execution = load_worker_execution(attempt, run_dir)
         if execution is None:
+            persisted_timeout = load_persisted_worker_timeout(attempt, run_dir)
+            if persisted_timeout is not None:
+                attempt_dir = run_dir / "attempts" / attempt.attempt_id
+                persist_timeout_recovery(attempt_dir, persisted_timeout)
+                score = OfficialTaskScore(
+                    task_id=task.task_id,
+                    domain=task.domain,
+                    reward=0.0,
+                    diagnostic_tags=("timeout",),
+                    log_uri=persisted_timeout.log_uri,
+                )
+                _atomic_json(
+                    self._completed_score_path(run_dir, attempt), asdict(score)
+                )
+                return score
             try:
                 execution = self.executor.execute(
                     attempt=attempt,

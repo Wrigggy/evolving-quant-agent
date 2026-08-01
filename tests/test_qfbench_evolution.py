@@ -1,3 +1,4 @@
+import hashlib
 import json
 from threading import Event
 from types import SimpleNamespace
@@ -385,6 +386,169 @@ def test_sandbox_evaluator_resume_reuses_worker_manifest_after_verifier_failure(
     assert executor.calls.count("task-b") == 1
     assert verifier.calls.count("task-b") == 2
     assert len(tuple((run_dir / "attempts").glob("*/worker-execution.json"))) == 2
+
+
+def _persist_timeout_evidence(
+    attempt_dir,
+    *,
+    command_changes=None,
+    quarantine_changes=None,
+    write_command=True,
+    write_quarantine=True,
+    write_audit=False,
+):
+    command = {
+        "exit_code": 124,
+        "stderr": "",
+        "stdout": "",
+        "timed_out": True,
+    }
+    command.update(command_changes or {})
+    quarantine = {
+        "reason": "audit_download_or_validation_failed",
+        "request_state": "quarantined",
+        "schema_version": 1,
+    }
+    quarantine.update(quarantine_changes or {})
+    command_bytes = (json.dumps(command, sort_keys=True) + "\n").encode()
+    quarantine_bytes = (json.dumps(quarantine, sort_keys=True) + "\n").encode()
+    if write_command:
+        (attempt_dir / "worker-command.json").write_bytes(command_bytes)
+    if write_quarantine:
+        (attempt_dir / "proxy-audit.quarantined.json").write_bytes(
+            quarantine_bytes
+        )
+    if write_audit:
+        (attempt_dir / "proxy-audit.jsonl").write_text("{}\n")
+    return command_bytes, quarantine_bytes
+
+
+def test_sandbox_evaluator_recovers_persisted_timeout_without_external_calls(
+    tmp_path,
+):
+    from qea.loop_benchmark import QFBenchSandboxEvaluator, hash_worker_directory
+
+    task = SimpleNamespace(task_id="slow-task", domain="derivatives", lineage="slow")
+    worker = _seed_worker(tmp_path)
+    attempt = TaskAttempt.create(
+        run_id="timeout-resume",
+        benchmark_commit="0" * 40,
+        task_id=task.task_id,
+        split="optimize",
+        checkpoint="seed-optimize",
+        worker_digest=hash_worker_directory(worker),
+    )
+    run_dir = tmp_path / "run"
+    attempt_dir = run_dir / "attempts" / attempt.attempt_id
+    attempt_dir.mkdir(parents=True)
+    (attempt_dir / "attempt.json").write_text(json.dumps(attempt.__dict__))
+    command_bytes, quarantine_bytes = _persist_timeout_evidence(attempt_dir)
+
+    class RefusingExecutor:
+        def execute(self, **kwargs):
+            raise AssertionError("persisted timeout must not resample the model")
+
+    class RefusingVerifier:
+        def verify(self, **kwargs):
+            raise AssertionError("persisted timeout must not enter the verifier")
+
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="timeout-resume",
+        executor=RefusingExecutor(),
+        verifier=RefusingVerifier(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+
+    summary = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=(task,),
+        split="optimize",
+        checkpoint="seed-optimize",
+        run_dir=run_dir,
+    )
+
+    assert summary.overall == 0.0
+    assert summary.scores[0].diagnostic_tags == ("timeout",)
+    score = json.loads((attempt_dir / "completed-score.json").read_text())
+    assert score["reward"] == 0.0
+    assert score["log_uri"] == str(
+        (attempt_dir / "worker-command.json").resolve()
+    )
+    recovery = json.loads((attempt_dir / "timeout-recovery.json").read_text())
+    assert recovery == {
+        "attempt_id": attempt.attempt_id,
+        "command_sha256": hashlib.sha256(command_bytes).hexdigest(),
+        "outcome": "official_worker_timeout_zero",
+        "quarantine_reason": "audit_download_or_validation_failed",
+        "quarantine_sha256": hashlib.sha256(quarantine_bytes).hexdigest(),
+        "schema_version": 1,
+    }
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"write_command": False}, "paired"),
+        ({"write_quarantine": False}, "paired"),
+        ({"command_changes": {"timed_out": False}}, "timed_out"),
+        ({"command_changes": {"exit_code": 1}}, "exit code"),
+        ({"command_changes": {"extra": "field"}}, "schema"),
+        ({"write_audit": True}, "canonical proxy audit"),
+        (
+            {"quarantine_changes": {"reason": "different_reason"}},
+            "quarantine reason",
+        ),
+    ],
+)
+def test_sandbox_evaluator_rejects_invalid_persisted_timeout_before_external_calls(
+    tmp_path,
+    changes,
+    message,
+):
+    from qea.executors.execution_record import WorkerExecutionError
+    from qea.loop_benchmark import QFBenchSandboxEvaluator, hash_worker_directory
+
+    task = SimpleNamespace(task_id="slow-task", domain="derivatives", lineage="slow")
+    worker = _seed_worker(tmp_path)
+    attempt = TaskAttempt.create(
+        run_id="invalid-timeout-resume",
+        benchmark_commit="0" * 40,
+        task_id=task.task_id,
+        split="optimize",
+        checkpoint="seed-optimize",
+        worker_digest=hash_worker_directory(worker),
+    )
+    run_dir = tmp_path / "run"
+    attempt_dir = run_dir / "attempts" / attempt.attempt_id
+    attempt_dir.mkdir(parents=True)
+    (attempt_dir / "attempt.json").write_text(json.dumps(attempt.__dict__))
+    _persist_timeout_evidence(attempt_dir, **changes)
+
+    class RefusingExecutor:
+        def execute(self, **kwargs):
+            raise AssertionError("invalid timeout evidence must fail before execution")
+
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="invalid-timeout-resume",
+        executor=RefusingExecutor(),
+        verifier=SimpleNamespace(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+
+    with pytest.raises(WorkerExecutionError, match=message):
+        evaluator.evaluate(
+            worker_dir=worker,
+            tasks=(task,),
+            split="optimize",
+            checkpoint="seed-optimize",
+            run_dir=run_dir,
+        )
 
 
 def test_sandbox_evaluator_rejects_mismatched_persisted_attempt_identity(tmp_path):
