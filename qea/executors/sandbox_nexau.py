@@ -77,6 +77,41 @@ _OFFLINE_VERIFIER_ENV = {
     "UV_TOOL_BIN_DIR": "/opt/qea/uv-bin",
     "PATH": "/opt/qea/uv-bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin",
 }
+# Keep uv metadata writable while reusing the image's immutable package archives.
+_VERIFIER_CACHE_OVERLAY_CODE = """\
+# QEA_WRITABLE_UV_CACHE_OVERLAY_V1
+import os
+import shutil
+from pathlib import Path
+
+source = Path("/opt/qea/uv-cache-seed")
+destination = Path("/opt/qea/uv-cache")
+ignored_top_level = {"archive-v0"}
+
+
+def ignore_immutable_archives(directory, names):
+    if Path(directory) != source:
+        return set()
+    return ignored_top_level.intersection(names)
+
+
+shutil.copytree(
+    source,
+    destination,
+    dirs_exist_ok=True,
+    symlinks=True,
+    ignore=ignore_immutable_archives,
+)
+(destination / "archive-v0").mkdir(exist_ok=True)
+archive_source = source / "archive-v0"
+if archive_source.is_dir():
+    for entry in sorted(archive_source.iterdir(), key=lambda path: path.name):
+        os.symlink(
+            entry,
+            destination / "archive-v0" / entry.name,
+            target_is_directory=entry.is_dir(),
+        )
+"""
 _ARTIFACT_INTEGRITY_CODE = """\
 import hashlib, json
 from pathlib import Path
@@ -726,12 +761,7 @@ class SandboxQFBenchVerifier:
                 ("tar", "-xf", "/qea/verifier-input.tar", "-C", "/qea"),
                 ("cp", "-R", "/qea/tests/.", "/tests/"),
                 ("cp", "-R", "/qea/artifacts/.", "/app/output/"),
-                (
-                    "cp",
-                    "-a",
-                    "/opt/qea/uv-cache-seed/.",
-                    "/opt/qea/uv-cache/",
-                ),
+                ("python3", "-c", _VERIFIER_CACHE_OVERLAY_CODE),
             ):
                 _run_required(
                     self.backend,

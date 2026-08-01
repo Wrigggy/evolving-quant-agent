@@ -127,6 +127,13 @@ class FakeBackend:
             event = "task"
         elif command == ("bash", "/tmp/qea-offline-test.sh"):
             event = "verifier"
+        elif (
+            command
+            and command[0] == "python3"
+            and len(command) > 2
+            and "QEA_WRITABLE_UV_CACHE_OVERLAY_V1" in command[2]
+        ):
+            event = "setup"
         elif command and command[0] == "python3":
             event = "artifact-integrity"
         else:
@@ -511,16 +518,26 @@ def test_verifier_is_independent_offline_and_rehashes_artifacts(tmp_path):
         isinstance(event, tuple) and event[0] == "run:verifier:artifact-integrity"
         for event in verifier_backend.events
     )
-    cache_copy = (
-        "cp",
-        "-a",
-        "/opt/qea/uv-cache-seed/.",
-        "/opt/qea/uv-cache/",
-    )
-    cache_copy_index = next(
-        index
+    cache_copy_index, cache_copy_event = next(
+        (index, event)
         for index, event in enumerate(verifier_backend.events)
-        if isinstance(event, tuple) and event[1] == cache_copy
+        if isinstance(event, tuple)
+        and event[0] == "run:verifier:setup"
+        and event[1][:2] == ("python3", "-c")
+        and "QEA_WRITABLE_UV_CACHE_OVERLAY_V1" in event[1][2]
+    )
+    cache_copy_code = cache_copy_event[1][2]
+    assert 'source = Path("/opt/qea/uv-cache-seed")' in cache_copy_code
+    assert 'destination = Path("/opt/qea/uv-cache")' in cache_copy_code
+    assert 'ignored_top_level = {"archive-v0"}' in cache_copy_code
+    assert "os.symlink(" in cache_copy_code
+    assert 'destination / "archive-v0" / entry.name' in cache_copy_code
+    assert cache_copy_event[2] == {}
+    assert not any(
+        isinstance(event, tuple)
+        and event[1]
+        == ("cp", "-a", "/opt/qea/uv-cache-seed/.", "/opt/qea/uv-cache/")
+        for event in verifier_backend.events
     )
     verifier_index, verifier_event = next(
         (index, event)
