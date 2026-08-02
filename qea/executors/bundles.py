@@ -12,7 +12,7 @@ from typing import Iterable
 
 DEFAULT_MAX_FILES = 2_000
 DEFAULT_MAX_BYTES = 512 * 1024 * 1024
-_SKIP_PARTS = frozenset({".git", "__pycache__"})
+_SKIP_PARTS = frozenset({".git"})
 
 
 class BundleError(ValueError):
@@ -49,13 +49,17 @@ def _safe_name(value: str) -> str:
     return path.as_posix()
 
 
-def _tree_files(root: Path) -> tuple[Path, ...]:
+def _tree_files(root: Path, *, skip_cache: bool = True) -> tuple[Path, ...]:
     if not root.is_dir():
         raise BundleError(f"bundle root is not a directory: {root}")
     files: list[Path] = []
     for path in root.rglob("*"):
         relative = path.relative_to(root)
-        if any(part in _SKIP_PARTS for part in relative.parts) or path.name == ".DS_Store":
+        if (
+            any(part in _SKIP_PARTS for part in relative.parts)
+            or (skip_cache and "__pycache__" in relative.parts)
+            or path.name == ".DS_Store"
+        ):
             continue
         if path.is_symlink():
             raise BundleError(f"symlinks are forbidden in bundles: {path}")
@@ -164,7 +168,7 @@ def build_verifier_bundle(
         if not relative.parts or relative.parts[0] != "tests":
             raise BundleError(f"verifier file must live below tests/: {relative}")
         entries.append((Path(source).resolve(), relative.as_posix()))
-    for source in _tree_files(artifact_root):
+    for source in _tree_files(artifact_root, skip_cache=False):
         relative = source.relative_to(artifact_root)
         entries.append((source, f"artifacts/{relative.as_posix()}"))
     return _build_bundle(entries, destination, max_files=max_files, max_bytes=max_bytes)

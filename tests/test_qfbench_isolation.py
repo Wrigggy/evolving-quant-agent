@@ -83,6 +83,25 @@ def test_verifier_bundle_contains_artifacts_and_tests_but_no_worker_or_solution(
     assert not any("worker" in member or "solution" in member for member in bundle.members)
 
 
+def test_verifier_bundle_preserves_declared_python_cache_artifact(tmp_path):
+    from qea.executors.bundles import build_verifier_bundle
+
+    task = _task_fixture(tmp_path)
+    artifacts = tmp_path / "artifacts"
+    cache = artifacts / "__pycache__"
+    cache.mkdir(parents=True)
+    (artifacts / "function-under-new-api.py").write_text("VALUE = 1\n")
+    (cache / "function-under-new-api.cpython-311.pyc").write_bytes(b"pyc")
+
+    bundle = build_verifier_bundle(task, artifacts, tmp_path / "verifier.tar")
+
+    assert "artifacts/function-under-new-api.py" in bundle.members
+    assert (
+        "artifacts/__pycache__/function-under-new-api.cpython-311.pyc"
+        in bundle.members
+    )
+
+
 def test_oracle_bundle_is_trusted_and_contains_solution_but_no_tests(tmp_path):
     from qea.executors.bundles import build_oracle_bundle
 
