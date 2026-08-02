@@ -1,0 +1,16 @@
+[Unit]
+Description=QEA QFBench rootless run sentinel
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/julius/qea/deploy/current
+ExecStart=/usr/bin/python3 /home/julius/qea/deploy/current/scripts/run_qfbench_rootless_sentinel.py --config /home/julius/qea/runtime/supervisor/config.json --interval-seconds 30
+Restart=on-failure
+RestartSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
