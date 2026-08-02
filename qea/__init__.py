@@ -9,3 +9,20 @@ See PLAN.md for the design and the four iron laws.
 """
 
 __version__ = "0.0.1"
+
+from .repair_supervisor import (  # noqa: E402
+    Classification,
+    ExpectedIdentity,
+    Incident,
+    IncidentState,
+    IncidentStore,
+)
+
+__all__ = [
+    "Classification",
+    "ExpectedIdentity",
+    "Incident",
+    "IncidentState",
+    "IncidentStore",
+    "__version__",
+]
