@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.qea.qfbench-repair-supervisor</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-i</string>
+    <string>/Users/kevinwu/Coding/evolving-quant-agent/.venv-nexau/bin/python</string>
+    <string>/Users/kevinwu/Coding/evolving-quant-agent/.claude/worktrees/qfbench-selfhosted-vm-backend/scripts/run_qfbench_repair_controller.py</string>
+    <string>--config</string>
+    <string>/Users/kevinwu/Coding/evolving-quant-agent/.claude/worktrees/qfbench-selfhosted-vm-backend/runtime/qfbench-supervisor/controller.json</string>
+    <string>--once</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/kevinwu/Coding/evolving-quant-agent/.claude/worktrees/qfbench-selfhosted-vm-backend</string>
+  <key>StartInterval</key>
+  <integer>60</integer>
+  <key>KeepAlive</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/Users/kevinwu/Coding/evolving-quant-agent/.claude/worktrees/qfbench-selfhosted-vm-backend/runtime/qfbench-supervisor/launchd.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/kevinwu/Coding/evolving-quant-agent/.claude/worktrees/qfbench-selfhosted-vm-backend/runtime/qfbench-supervisor/launchd.stderr.log</string>
+</dict>
+</plist>
