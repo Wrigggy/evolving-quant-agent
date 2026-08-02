@@ -105,6 +105,27 @@ def _argv(value: object, label: str) -> tuple[str, ...]:
     return tuple(_safe_argument(item, label) for item in value)
 
 
+def _deploy_adapter_argv(value: object) -> tuple[str, ...]:
+    argv = _argv(value, "deploy_argv_prefix")
+    adapter = Path(argv[0]).expanduser()
+    try:
+        metadata = adapter.lstat()
+    except OSError as exc:
+        raise ControllerConfigError(
+            f"deploy adapter is unavailable: {exc}"
+        ) from exc
+    if (
+        not adapter.is_absolute()
+        or stat.S_ISLNK(metadata.st_mode)
+        or not stat.S_ISREG(metadata.st_mode)
+        or not os.access(adapter, os.X_OK)
+    ):
+        raise ControllerConfigError(
+            "deploy adapter must be an absolute executable regular file"
+        )
+    return argv
+
+
 def _repo_path(value: object, label: str) -> str:
     path = PurePosixPath(_safe_argument(value, label))
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
@@ -202,7 +223,7 @@ def load_config(path: str | Path) -> ControllerConfig:
         owned_paths=tuple(_repo_path(item, "owned_paths") for item in owned),
         test_argvs=tuple(_argv(item, "test_argvs") for item in test_argvs),
         push_argv=_argv(parsed["push_argv"], "push_argv"),
-        deploy_argv_prefix=_argv(parsed["deploy_argv_prefix"], "deploy_argv_prefix"),
+        deploy_argv_prefix=_deploy_adapter_argv(parsed["deploy_argv_prefix"]),
         canary_argv=_argv(parsed["canary_argv"], "canary_argv"),
         resume_argv=_argv(parsed["resume_argv"], "resume_argv"),
         state_dir=state_dir,

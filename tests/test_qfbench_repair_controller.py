@@ -37,6 +37,9 @@ def _incident_payload(category="artifact_integrity"):
 
 
 def _config_payload(tmp_path):
+    deploy_adapter = tmp_path / "deploy-exact"
+    deploy_adapter.write_text("#!/bin/sh\nexit 0\n")
+    os.chmod(deploy_adapter, 0o700)
     return {
         "schema_version": 1,
         "run_id": "formal-r1",
@@ -51,7 +54,7 @@ def _config_payload(tmp_path):
         "owned_paths": ["qea", "scripts", "tests", "deploy"],
         "test_argvs": [["python", "-m", "pytest", "-q", "tests/test_owned.py"]],
         "push_argv": ["git", "push", "origin", "qfbench-selfhosted-vm-backend"],
-        "deploy_argv_prefix": ["ssh", "bc", "qea-deploy-exact"],
+        "deploy_argv_prefix": [str(deploy_adapter)],
         "canary_argv": ["ssh", "bc", "qea-run-verifier-canary"],
         "resume_argv": ["ssh", "bc", "qea-resume-formal-r1"],
         "state_dir": str(tmp_path / "controller-state"),
@@ -242,4 +245,20 @@ def test_config_rejects_group_readable_file_and_shell_metacharacters(tmp_path):
     payload["resume_argv"] = ["ssh", "bc; touch /tmp/bad"]
     path.write_text(json.dumps(payload))
     with pytest.raises(ControllerConfigError, match="argument"):
+        load_config(path)
+
+
+def test_config_rejects_unmaterialized_deploy_command_placeholder(tmp_path):
+    """Catch enabling launchd with a test-only deploy command name."""
+
+    from scripts.run_qfbench_repair_controller import ControllerConfigError, load_config
+
+    (tmp_path / "worktree").mkdir()
+    path = tmp_path / "controller.json"
+    payload = _config_payload(tmp_path)
+    payload["deploy_argv_prefix"] = ["ssh", "bc", "qea-deploy-exact"]
+    path.write_text(json.dumps(payload))
+    os.chmod(path, 0o600)
+
+    with pytest.raises(ControllerConfigError, match="deploy adapter"):
         load_config(path)
