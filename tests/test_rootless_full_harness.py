@@ -959,6 +959,8 @@ def test_factory_lock_is_exclusive_for_the_complete_runtime_lifetime(
 
 
 def test_factory_binds_runtime_scheduler_and_catalog_identity(tmp_path, monkeypatch) -> None:
+    import qea.rootless_full_harness as rootless_full_harness
+
     from qea.rootless_full_harness import build_rootless_full_harness_runtime
     selected = _catalog()
     config = _valid_config(tmp_path / "config")
@@ -1005,6 +1007,43 @@ def test_factory_binds_runtime_scheduler_and_catalog_identity(tmp_path, monkeypa
     _patch_catalog(monkeypatch, changed_catalog, config=config)
     catalog_drift = build(config, suffix="catalog")
     assert catalog_drift.runtime_identity_digest != baseline.runtime_identity_digest
+
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "_runtime_adapter_identity",
+        lambda: {
+            "schema_version": 1,
+            "identity_sha256": "e" * 64,
+            "files": [],
+        },
+    )
+    adapter_drift = build(config, suffix="adapter")
+    assert adapter_drift.runtime_identity_digest != baseline.runtime_identity_digest
+
+
+def test_runtime_adapter_identity_hashes_exact_uploaded_worker_bytes() -> None:
+    import hashlib
+
+    from qea.executors import sandbox_evolver, sandbox_nexau
+    from qea.rootless_full_harness import _runtime_adapter_identity
+
+    identity = _runtime_adapter_identity()
+    files = {record["role"]: record for record in identity["files"]}
+
+    assert set(files) == {
+        "evolver_runner",
+        "worker_runner",
+        "worker_runtime_bridge",
+    }
+    assert files["worker_runner"]["sha256"] == hashlib.sha256(
+        sandbox_nexau._REMOTE_RUNNER.read_bytes()
+    ).hexdigest()
+    assert files["worker_runtime_bridge"]["sha256"] == hashlib.sha256(
+        sandbox_nexau._RUNTIME_BRIDGE.read_bytes()
+    ).hexdigest()
+    assert files["evolver_runner"]["sha256"] == hashlib.sha256(
+        sandbox_evolver._REMOTE_RUNNER.read_bytes()
+    ).hexdigest()
 
 
 def test_factory_fails_before_construction_on_uid_task_or_capacity_drift(

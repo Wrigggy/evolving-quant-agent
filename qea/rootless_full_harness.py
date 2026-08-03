@@ -57,6 +57,42 @@ def _canonical_digest(payload: object) -> str:
     ).hexdigest()
 
 
+def _runtime_adapter_identity() -> dict[str, object]:
+    """Bind coordinator-uploaded executable adapters into the run identity."""
+
+    from .executors import sandbox_evolver, sandbox_nexau
+
+    paths = {
+        "evolver_runner": sandbox_evolver._REMOTE_RUNNER,
+        "worker_runner": sandbox_nexau._REMOTE_RUNNER,
+        "worker_runtime_bridge": sandbox_nexau._RUNTIME_BRIDGE,
+    }
+    files: list[dict[str, object]] = []
+    for role, path in sorted(paths.items()):
+        path = Path(path)
+        if path.is_symlink() or not path.is_file():
+            raise RootlessFullHarnessError(
+                f"runtime adapter {role!r} is not one regular file"
+            )
+        payload = path.read_bytes()
+        if not payload or len(payload) > 4 * 1024 * 1024:
+            raise RootlessFullHarnessError(
+                f"runtime adapter {role!r} has an unsafe size"
+            )
+        files.append(
+            {
+                "role": role,
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "size_bytes": len(payload),
+            }
+        )
+    identity_payload = {"schema_version": 1, "files": files}
+    return {
+        **identity_payload,
+        "identity_sha256": _canonical_digest(identity_payload),
+    }
+
+
 def _resource_payload(resource: SandboxResourceContract) -> dict[str, object]:
     return {
         "cpu_count": resource.cpu_count,
@@ -1106,6 +1142,7 @@ def build_rootless_full_harness_runtime(
                     ),
                     "public_model_environment": dict(model_env),
                 },
+                "coordinator_uploaded_adapters": _runtime_adapter_identity(),
                 "public_root": str(config.public_root),
                 "trusted_root": str(config.trusted_root),
                 "scheduler_identity_sha256": scheduler_identity,

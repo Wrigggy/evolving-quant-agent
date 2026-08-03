@@ -40,6 +40,11 @@ The worker runtime now pins one model transmission per turn: OpenAI SDK
 falsy-value omission and verifies the constructed client. Provider ambiguity
 fails closed; it does not obtain another sample.
 
+The rootless runtime identity also binds the SHA-256 and byte length of the
+exact coordinator-uploaded worker runner, worker runtime bridge, and evolver
+runner. The adapter repair therefore changes the formal runtime digest even
+when images, task materials, model route, and seed-worker bytes remain fixed.
+
 After local, no-model, and paid worker/verifier canaries pass, launch
 `qfbench-rootless-base-85x5-official-deepseek-noreplay-20260803` from
 repetition 01 and stop after repetition 02. The new run reuses the benchmark,
