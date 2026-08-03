@@ -51,6 +51,7 @@ class SentinelError(RuntimeError):
 class SentinelConfig:
     run_id: str
     run_dir: Path
+    supervisor_dir: Path
     source_commit: str
     expected_identity: ExpectedIdentity
     coordinator_pid_file: Path
@@ -74,25 +75,25 @@ def _regular_config_path(path: str | Path) -> Path:
     return candidate.resolve()
 
 
-def _run_owned_path(value: object, run_dir: Path, label: str) -> Path:
+def _owned_path(value: object, root: Path, root_label: str, label: str) -> Path:
     if not isinstance(value, str) or not value:
         raise SentinelError(f"{label} must be a path string")
     candidate = Path(value).expanduser()
     resolved = candidate.resolve(strict=False)
-    if not resolved.is_relative_to(run_dir):
-        raise SentinelError(f"{label} must stay below run_dir")
+    if not resolved.is_relative_to(root):
+        raise SentinelError(f"{label} must stay below {root_label}")
     return candidate
 
 
 def load_config(path: str | Path) -> SentinelConfig:
-    """Load one exact schema-v1 sentinel configuration."""
+    """Load an exact sentinel configuration with bounded evidence roots."""
 
     config_path = _regular_config_path(path)
     try:
         payload = json.loads(config_path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise SentinelError(f"config is unreadable: {exc}") from exc
-    expected = {
+    expected_v1 = {
         "schema_version",
         "run_id",
         "run_dir",
@@ -105,9 +106,15 @@ def load_config(path: str | Path) -> SentinelConfig:
         "completion_marker",
         "state_dir",
     }
-    if not isinstance(payload, dict) or set(payload) != expected:
+    expected_v2 = expected_v1 | {"supervisor_dir"}
+    if not isinstance(payload, dict):
         raise SentinelError("sentinel config schema is invalid")
-    if payload["schema_version"] != 1:
+    version = payload.get("schema_version")
+    if (version == 1 and set(payload) != expected_v1) or (
+        version == 2 and set(payload) != expected_v2
+    ):
+        raise SentinelError("sentinel config schema is invalid")
+    if version not in {1, 2}:
         raise SentinelError("sentinel config schema version is unsupported")
     run_id = payload["run_id"]
     if not isinstance(run_id, str) or not _RUN_ID.fullmatch(run_id):
@@ -121,6 +128,18 @@ def load_config(path: str | Path) -> SentinelConfig:
     run_dir = Path(run_dir_value).expanduser().resolve()
     if not run_dir.is_dir():
         raise SentinelError("run_dir is unavailable")
+    if version == 2:
+        supervisor_value = payload["supervisor_dir"]
+        if not isinstance(supervisor_value, str):
+            raise SentinelError("supervisor_dir must be a path string")
+        supervisor_candidate = Path(supervisor_value).expanduser()
+        if supervisor_candidate.is_symlink():
+            raise SentinelError("supervisor_dir must not be a symlink")
+        supervisor_dir = supervisor_candidate.resolve()
+        if not supervisor_dir.is_dir():
+            raise SentinelError("supervisor_dir is unavailable")
+    else:
+        supervisor_dir = run_dir
     command_token = payload["coordinator_command_token"]
     if (
         not isinstance(command_token, str)
@@ -139,18 +158,33 @@ def load_config(path: str | Path) -> SentinelConfig:
     return SentinelConfig(
         run_id=run_id,
         run_dir=run_dir,
+        supervisor_dir=supervisor_dir,
         source_commit=source_commit,
         expected_identity=expected_identity,
-        coordinator_pid_file=_run_owned_path(
-            payload["coordinator_pid_file"], run_dir, "coordinator_pid_file"
+        coordinator_pid_file=_owned_path(
+            payload["coordinator_pid_file"],
+            supervisor_dir,
+            "supervisor_dir" if version == 2 else "run_dir",
+            "coordinator_pid_file",
         ),
         coordinator_command_token=command_token,
-        exit_code_file=_run_owned_path(
-            payload["exit_code_file"], run_dir, "exit_code_file"
+        exit_code_file=_owned_path(
+            payload["exit_code_file"],
+            supervisor_dir,
+            "supervisor_dir" if version == 2 else "run_dir",
+            "exit_code_file",
         ),
-        failure_log=_run_owned_path(payload["failure_log"], run_dir, "failure_log"),
-        completion_marker=_run_owned_path(
-            payload["completion_marker"], run_dir, "completion_marker"
+        failure_log=_owned_path(
+            payload["failure_log"],
+            supervisor_dir,
+            "supervisor_dir" if version == 2 else "run_dir",
+            "failure_log",
+        ),
+        completion_marker=_owned_path(
+            payload["completion_marker"],
+            supervisor_dir,
+            "supervisor_dir" if version == 2 else "run_dir",
+            "completion_marker",
         ),
         state_dir=Path(state_value).expanduser().resolve(),
     )

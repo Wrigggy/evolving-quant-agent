@@ -530,7 +530,6 @@ def audit_baseline_proxy_costs(
 
     total = _empty_cost_group()
     repetition_groups: dict[str, dict[str, dict]] = {}
-    seen_request_identities: set[str] = set()
     unreconciled_attempts: list[dict] = []
     unreconciled_requests: list[dict] = []
     for attempt_path in attempt_paths:
@@ -588,6 +587,7 @@ def audit_baseline_proxy_costs(
                 "reason": reason,
             })
             continue
+        seen_request_identities: set[str] = set()
         for record in _read_audit_records(audit_path):
             cost = _validated_completed_cost(record, source=attempt_dir)
             request_identity = record["request_identity_sha256"]

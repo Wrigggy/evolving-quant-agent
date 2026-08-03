@@ -1298,7 +1298,15 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
         response = None
         total = 0
         request_transmission_started = False
+        response_read_completed = False
+        downstream_delivery_started = False
         audit_written = False
+        upstream_status_code = None
+        safe_provider_request_id = None
+        input_tokens = None
+        output_tokens = None
+        total_tokens = None
+        provider_cost = None
         try:
             connection.connect()
             request_transmission_started = True
@@ -1311,6 +1319,10 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             if connection.sock is not None:
                 connection.sock.settimeout(policy.read_timeout_seconds)
             response = connection.getresponse()
+            upstream_status_code = response.status
+            safe_provider_request_id = _provider_request_id(
+                response.headers, forbidden=policy.token
+            )
             token_bytes = policy.token.encode("ascii")
             if any(
                 token_bytes in name.encode("utf-8", errors="replace")
@@ -1436,25 +1448,8 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             input_tokens, output_tokens, total_tokens, provider_cost = (
                 _response_usage(response_payload)
             )
-            self._audit(
-                request_identity_sha256=request_identity,
-                model=policy.allowed_model,
-                started_at=started_at,
-                started_monotonic=started_monotonic,
-                request_state="completed",
-                upstream_status_code=response.status,
-                provider_request_id=_provider_request_id(
-                    response.headers, forbidden=policy.token
-                ),
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                total_tokens=total_tokens,
-                provider_cost_usd=provider_cost,
-                failure_class=(
-                    "provider_http_error" if response.status >= 400 else None
-                ),
-            )
-            audit_written = True
+            response_read_completed = True
+            downstream_delivery_started = True
             self.send_response(response.status)
             for name, value in _filtered_response_headers(response.headers):
                 self.send_header(name, value)
@@ -1465,26 +1460,63 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                 if not chunk:
                     break
                 self.wfile.write(chunk)
+            self.wfile.flush()
+            self._audit(
+                request_identity_sha256=request_identity,
+                model=policy.allowed_model,
+                started_at=started_at,
+                started_monotonic=started_monotonic,
+                request_state="completed",
+                upstream_status_code=upstream_status_code,
+                provider_request_id=safe_provider_request_id,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+                provider_cost_usd=provider_cost,
+                failure_class=(
+                    "provider_http_error" if response.status >= 400 else None
+                ),
+            )
+            audit_written = True
         except (OSError, TimeoutError, http.client.HTTPException):
             if not audit_written:
-                self._audit(
-                    request_identity_sha256=request_identity,
-                    model=policy.allowed_model,
-                    started_at=started_at,
-                    started_monotonic=started_monotonic,
-                    request_state=(
-                        "quarantined"
-                        if request_transmission_started
-                        else "not_accepted"
-                    ),
-                    failure_class=(
-                        "post_accept_transport"
-                        if request_transmission_started
-                        else "pre_accept_transport"
-                    ),
-                )
-            if not self.wfile.closed:
-                self._reject(502, "upstream_failure")
+                if response_read_completed and downstream_delivery_started:
+                    self._audit(
+                        request_identity_sha256=request_identity,
+                        model=policy.allowed_model,
+                        started_at=started_at,
+                        started_monotonic=started_monotonic,
+                        request_state="quarantined",
+                        upstream_status_code=upstream_status_code,
+                        provider_request_id=safe_provider_request_id,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        total_tokens=total_tokens,
+                        provider_cost_usd=provider_cost,
+                        failure_class="downstream_delivery",
+                    )
+                else:
+                    self._audit(
+                        request_identity_sha256=request_identity,
+                        model=policy.allowed_model,
+                        started_at=started_at,
+                        started_monotonic=started_monotonic,
+                        request_state=(
+                            "quarantined"
+                            if request_transmission_started
+                            else "not_accepted"
+                        ),
+                        failure_class=(
+                            "post_accept_transport"
+                            if request_transmission_started
+                            else "pre_accept_transport"
+                        ),
+                    )
+            if not downstream_delivery_started and not self.wfile.closed:
+                try:
+                    self._reject(502, "upstream_failure")
+                except OSError:
+                    pass
         finally:
             spool.close()
             connection.close()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one bounded Mac-side autonomous QFBench repair-controller poll."""
+"""Run a bounded Mac-side autonomous QFBench repair-controller monitor."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Callable, Iterator, Sequence
@@ -564,11 +565,37 @@ class RepairController:
             return 20
 
 
+def run_controller_loop(
+    controller: RepairController,
+    *,
+    once: bool,
+    dry_run: bool,
+    interval_seconds: int,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> int:
+    """Poll continuously until an explicit terminal controller result."""
+
+    if (
+        isinstance(interval_seconds, bool)
+        or not isinstance(interval_seconds, int)
+        or not 5 <= interval_seconds <= 3600
+    ):
+        raise ControllerConfigError(
+            "interval_seconds must be between 5 and 3600"
+        )
+    while True:
+        result = controller.run_once(dry_run=dry_run)
+        if once or result in {20, 30}:
+            return result
+        sleeper(interval_seconds)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--interval-seconds", type=int, default=60)
     return parser
 
 
@@ -579,7 +606,12 @@ def main(argv: list[str] | None = None) -> int:
     with controller_lock(lock_path) as acquired:
         if not acquired:
             return 0
-        return RepairController(config).run_once(dry_run=args.dry_run)
+        return run_controller_loop(
+            RepairController(config),
+            once=args.once or args.dry_run,
+            dry_run=args.dry_run,
+            interval_seconds=args.interval_seconds,
+        )
 
 
 if __name__ == "__main__":

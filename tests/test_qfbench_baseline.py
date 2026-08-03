@@ -501,6 +501,61 @@ def test_cost_audit_reconciles_attempts_requests_tokens_and_groups(tmp_path) -> 
     assert diagnostic["request_count"] == 1
 
 
+def test_cost_audit_allows_same_request_identity_in_distinct_repetitions(
+    tmp_path,
+) -> None:
+    """Catch treating a content hash as globally unique across independent samples."""
+
+    from qea.evaluation import TaskAttempt
+    from qea.qfbench_baseline import audit_baseline_proxy_costs
+
+    primary_dir, _ = _cost_fixture(tmp_path)
+    first_record = json.loads(
+        primary_dir.joinpath("proxy-audit.jsonl").read_text().splitlines()[0]
+    )
+    attempt = TaskAttempt.create(
+        run_id="baseline-five",
+        benchmark_commit=COMMIT,
+        task_id="risk-task",
+        split="baseline_primary",
+        checkpoint="repetition-02-primary",
+        worker_digest="e" * 64,
+    )
+    attempt_dir = tmp_path / "attempts" / attempt.attempt_id
+    attempt_dir.mkdir(parents=True)
+    (attempt_dir / "attempt.json").write_text(json.dumps(asdict(attempt)))
+    score = OfficialTaskScore(
+        task_id="risk-task", domain="risk_credit", reward=0.5
+    )
+    (attempt_dir / "completed-score.json").write_text(json.dumps(asdict(score)))
+    (attempt_dir / "proxy-audit.jsonl").write_text(
+        json.dumps(first_record) + "\n"
+    )
+
+    audit = audit_baseline_proxy_costs(tmp_path, expected_attempts=3)
+
+    assert audit["request_count"] == 4
+    assert audit["by_repetition"]["1"]["primary"]["request_count"] == 2
+    assert audit["by_repetition"]["2"]["primary"]["request_count"] == 1
+
+
+def test_cost_audit_rejects_same_request_identity_twice_within_one_attempt(
+    tmp_path,
+) -> None:
+    """Catch an SDK or outer-agent replay of one stochastic turn."""
+
+    from qea.qfbench_baseline import BaselineConfigError, audit_baseline_proxy_costs
+
+    primary_dir, _ = _cost_fixture(tmp_path)
+    audit_path = primary_dir / "proxy-audit.jsonl"
+    first_record = audit_path.read_text().splitlines()[0]
+    with audit_path.open("a") as handle:
+        handle.write(first_record + "\n")
+
+    with pytest.raises(BaselineConfigError, match="duplicate request identity"):
+        audit_baseline_proxy_costs(tmp_path, expected_attempts=2)
+
+
 def test_cost_audit_reports_completed_request_without_accounting_as_lower_bound(
     tmp_path,
 ) -> None:

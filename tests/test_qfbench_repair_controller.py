@@ -173,6 +173,57 @@ def test_controller_lock_is_exclusive(tmp_path):
             assert second is False
 
 
+def test_poll_loop_survives_ssh_retry_until_a_terminal_hard_stop():
+    """Catch a monitor silently exiting after one transient or empty poll."""
+
+    from scripts.run_qfbench_repair_controller import run_controller_loop
+
+    class SequenceController:
+        def __init__(self):
+            self.codes = iter((10, 0, 20))
+            self.calls = 0
+
+        def run_once(self, *, dry_run=False):
+            assert dry_run is False
+            self.calls += 1
+            return next(self.codes)
+
+    controller = SequenceController()
+    sleeps = []
+
+    result = run_controller_loop(
+        controller,
+        once=False,
+        dry_run=False,
+        interval_seconds=60,
+        sleeper=sleeps.append,
+    )
+
+    assert result == 20
+    assert controller.calls == 3
+    assert sleeps == [60, 60]
+
+
+def test_poll_loop_once_returns_without_starting_a_sleep_cycle():
+    from scripts.run_qfbench_repair_controller import run_controller_loop
+
+    class OneController:
+        def run_once(self, *, dry_run=False):
+            assert dry_run is True
+            return 10
+
+    sleeps = []
+
+    assert run_controller_loop(
+        OneController(),
+        once=True,
+        dry_run=True,
+        interval_seconds=60,
+        sleeper=sleeps.append,
+    ) == 10
+    assert sleeps == []
+
+
 def test_successful_repair_runs_codex_tests_exact_deploy_canary_and_resume(tmp_path):
     from scripts.run_qfbench_repair_controller import RepairController
 

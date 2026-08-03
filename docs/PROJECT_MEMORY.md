@@ -1,7 +1,7 @@
 # QEA Repository Memory
 
 > Canonical research and architecture memory for future contributors and agents.
-> Last updated: 2026-07-31. This file records current decisions, not merely historical discussion.
+> Last updated: 2026-08-03. This file records current decisions, not merely historical discussion.
 
 ## How to Use This Memory
 
@@ -165,6 +165,25 @@ Rootless is accepted only through the five-task one-iteration stage. Before five
 The repetition-01 accounting canary for `qfbench-rootless-base-85x5-official-deepseek-20260801` found 15 duplicated completed request identities across 13 attempts, representing 17 extra HTTP-200 provider calls. Thirteen groups align with the 180-second client timeout while the proxy could wait 300 seconds; two followed completed empty/unusable responses. The run's 85 scores remain immutable engineering evidence, but the run is invalid for repeated baseline performance and must not resume into repetition 02.
 
 The coordinator-uploaded worker adapter now enforces OpenAI SDK `max_retries=0`, NexAU outer `retry_attempts=1`, and a 360-second client-timeout floor. A new content-addressed run must restart at repetition 01 and stop after repetition 02 only after no-model and paid worker/verifier canaries. Historical completed duplicates remain fatal; they are not reclassified as a cost-only exception. See the [superseding decision](decisions/2026-08-03-qfbench-baseline-restart-after-model-replay.md).
+
+This V4 Pro restart action is superseded by the V4 Flash decision below.
+
+### 2026-08-03 V4 Flash Five-Repetition Restart
+
+The stopped V4 Pro no-replay run exited during repetition 01 with seven official
+scores and one unscored attempt whose provider calls completed but whose worker
+execution did not. Preserve it as engineering evidence; do not import its scores
+or artifacts into another model arm. The proxy must record `completed` only after
+the full response has been delivered and flushed to the worker.
+
+OpenRouter identifies the requested model as `deepseek/deepseek-v4-flash`. The
+new formal arm pins that model to provider `deepseek` with fallbacks disabled and
+starts from repetition 01. It runs five independent repetitions of all 85
+runnable tasks. Replay uniqueness is attempt-scoped: duplicate request content
+within one attempt is fatal, while the same content hash across distinct
+preregistered repetitions is valid. The remote sentinel, Mac repair controller,
+and continuous run-scoped no-sleep assertion must be bound to the new run before
+launch. See the [superseding decision](decisions/2026-08-03-qfbench-v4-flash-five-repeat-restart.md).
 
 No report may describe adapter compatibility, E2B parity, AutoDL performance, or seed-worker QFBench score as measured until the corresponding run artifact exists.
 

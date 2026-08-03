@@ -52,6 +52,29 @@ def _load(tmp_path, payload=None):
     return load_config(path)
 
 
+def _external_supervisor_config(tmp_path):
+    payload = _sentinel_config(tmp_path)
+    supervisor_dir = tmp_path / "launches" / "formal-r1-launch-01"
+    supervisor_dir.mkdir(parents=True)
+    paths = {
+        "coordinator_pid_file": supervisor_dir / "coordinator.pid",
+        "exit_code_file": supervisor_dir / "coordinator.exit",
+        "failure_log": supervisor_dir / "coordinator.stderr",
+        "completion_marker": supervisor_dir / "formal-complete.json",
+    }
+    paths["coordinator_pid_file"].write_text("4242\n")
+    paths["exit_code_file"].write_text("1\n")
+    paths["failure_log"].write_text("Traceback: worker transport failed\n")
+    payload.update(
+        {
+            "schema_version": 2,
+            "supervisor_dir": str(supervisor_dir),
+            **{key: str(value) for key, value in paths.items()},
+        }
+    )
+    return payload
+
+
 def test_running_matching_coordinator_does_not_create_incident(tmp_path):
     from scripts.run_qfbench_rootless_sentinel import observe
 
@@ -64,6 +87,23 @@ def test_running_matching_coordinator_does_not_create_incident(tmp_path):
 
     assert result is None
     assert not (config.state_dir / "incidents").exists()
+
+
+def test_external_supervisor_exit_freezes_incident_for_dead_coordinator(tmp_path):
+    """Catch ignoring a real exit because launcher evidence sits outside run_dir."""
+
+    from qea.repair_supervisor import IncidentState, IncidentStore
+    from scripts.run_qfbench_rootless_sentinel import observe
+
+    config = _load(tmp_path, _external_supervisor_config(tmp_path))
+
+    incident = observe(config, pid_alive=lambda pid: False)
+
+    assert incident.exit_code == 1
+    assert incident.category == "harness_bug"
+    assert IncidentStore(config.state_dir).load(incident.incident_id).state is (
+        IncidentState.FROZEN
+    )
 
 
 def test_completion_marker_precedes_stopped_coordinator(tmp_path):
@@ -159,4 +199,18 @@ def test_config_rejects_extra_keys_and_paths_outside_run_root(tmp_path):
     payload["failure_log"] = str(tmp_path / "outside.log")
     path.write_text(json.dumps(payload))
     with pytest.raises(SentinelError, match="run_dir"):
+        load_config(path)
+
+
+def test_external_supervisor_schema_rejects_evidence_outside_supervisor_root(
+    tmp_path,
+):
+    from scripts.run_qfbench_rootless_sentinel import SentinelError, load_config
+
+    payload = _external_supervisor_config(tmp_path)
+    payload["failure_log"] = str(tmp_path / "outside.log")
+    path = tmp_path / "external-outside.json"
+    path.write_text(json.dumps(payload))
+
+    with pytest.raises(SentinelError, match="supervisor_dir"):
         load_config(path)

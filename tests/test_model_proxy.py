@@ -4,7 +4,9 @@ import json
 import os
 import signal
 import socket
+import struct
 import threading
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -179,7 +181,15 @@ def _stop(server, thread):
 
 def _read_audit(tmp_path):
     path = tmp_path / "proxy-audit.jsonl"
-    return [json.loads(line) for line in path.read_text().splitlines()]
+    deadline = time.monotonic() + 3
+    while True:
+        if path.is_file():
+            lines = [line for line in path.read_text().splitlines() if line.strip()]
+            if lines:
+                return [json.loads(line) for line in lines]
+        if time.monotonic() >= deadline:
+            raise AssertionError("proxy audit record did not become durable")
+        time.sleep(0.01)
 
 
 def _start_disconnect_upstream():
@@ -254,7 +264,10 @@ class BlockingUpstreamHandler(BaseHTTPRequestHandler):
         self.server.captured.append(body)
         self.server.request_started.set()
         assert self.server.release_response.wait(timeout=3)
-        payload = b'{"ok":true}'
+        payload = (
+            b'{"ok":true,"usage":{"prompt_tokens":11,'
+            b'"completion_tokens":7,"total_tokens":18,"cost":0.00125}}'
+        )
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(payload)))
@@ -474,6 +487,8 @@ def test_proxy_audit_has_only_safe_completed_request_fields(tmp_path):
     try:
         status, _, _ = _request(proxy, body=body)
         assert status == 200
+        finalize_status, _ = _finalize(proxy)
+        assert finalize_status == 200
         [audit] = _read_audit(tmp_path)
         assert set(audit) == {
             "schema_version",
@@ -513,6 +528,51 @@ def test_proxy_audit_has_only_safe_completed_request_fields(tmp_path):
         _stop(upstream, upstream_thread)
 
 
+def test_provider_response_is_quarantined_when_downstream_delivery_fails(
+    tmp_path,
+) -> None:
+    """Catch marking a provider-accepted response complete before worker delivery."""
+
+    upstream, upstream_thread = _start_blocking_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    body = b'{"model":"fixture"}'
+    client = socket.socket()
+    try:
+        client.connect(("127.0.0.1", proxy.server_address[1]))
+        client.sendall(
+            b"POST /v1/chat/completions HTTP/1.1\r\n"
+            b"Host: 127.0.0.1\r\n"
+            b"Authorization: Bearer qea-proxy-placeholder\r\n"
+            b"Content-Type: application/json\r\n"
+            + f"Content-Length: {len(body)}\r\n\r\n".encode()
+            + body
+        )
+        assert upstream.request_started.wait(timeout=3)
+        client.setsockopt(
+            socket.SOL_SOCKET,
+            socket.SO_LINGER,
+            struct.pack("ii", 1, 0),
+        )
+        client.close()
+        upstream.release_response.set()
+
+        status, _ = _finalize(proxy)
+        assert status == 200
+        [audit] = _read_audit(tmp_path)
+        assert audit["request_state"] == "quarantined"
+        assert audit["failure_class"] == "downstream_delivery"
+        assert audit["upstream_status_code"] == 200
+        assert audit["input_tokens"] == 11
+        assert audit["output_tokens"] == 7
+        assert audit["total_tokens"] == 18
+        assert audit["provider_cost_usd"] == 0.00125
+    finally:
+        upstream.release_response.set()
+        client.close()
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
 def test_response_usage_reads_final_openrouter_stream_event_without_content():
     from qea.model_proxy import _response_usage
 
@@ -540,6 +600,8 @@ def test_proxy_audit_extracts_usage_from_stream_without_logging_content(tmp_path
 
         assert status == 200
         assert b'"content":"private"' in payload
+        finalize_status, _ = _finalize(proxy)
+        assert finalize_status == 200
         [audit] = _read_audit(tmp_path)
         assert audit["request_state"] == "completed"
         assert audit["input_tokens"] == 41
@@ -801,8 +863,8 @@ def test_finalize_reports_prior_record_plus_later_audit_append_loss(
     try:
         status, _, _ = _request(proxy, body=b"{}")
         assert status == 400
-        with pytest.raises((http.client.RemoteDisconnected, ConnectionResetError)):
-            _request(proxy)
+        status, _, _ = _request(proxy)
+        assert status == 200
         assert len(upstream.captured) == 1
         [earlier_record] = _read_audit(tmp_path)
         assert earlier_record["request_state"] == "not_accepted"
