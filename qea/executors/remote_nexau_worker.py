@@ -13,6 +13,8 @@ from pathlib import Path
 
 
 _MIN_MODEL_CLIENT_TIMEOUT_SECONDS = 360.0
+_EMPTY_MODEL_RESPONSE = "No response content or tool calls"
+_EMPTY_MODEL_EXECUTION_ERROR = f"Error in agent execution: {_EMPTY_MODEL_RESPONSE}"
 
 
 def _pin_no_replay_policy(config) -> None:
@@ -88,6 +90,15 @@ def _message_text(message) -> str:
         return str(getattr(message, "content", "") or "")
 
 
+def _is_empty_model_response_error(exc: BaseException) -> bool:
+    """Recognize the pinned NexAU 0.3.9 empty-turn exception chain only."""
+
+    if type(exc) is not RuntimeError or str(exc) != _EMPTY_MODEL_EXECUTION_ERROR:
+        return False
+    cause = exc.__cause__
+    return type(cause) is Exception and str(cause) == _EMPTY_MODEL_RESPONSE
+
+
 def run(task_dir: Path, worker_dir: Path, work_dir: Path, output_dir: Path, result_dir: Path) -> int:
     from nexau import Agent, AgentConfig
 
@@ -123,7 +134,17 @@ def run(task_dir: Path, worker_dir: Path, work_dir: Path, output_dir: Path, resu
         "working_directory": str(work_dir),
     }
     context["env_content"] = dict(context)
-    response = agent.run(message=message, context=context)
+    outcome = "completed"
+    try:
+        response = agent.run(message=message, context=context)
+    except RuntimeError as exc:
+        if not _is_empty_model_response_error(exc):
+            raise
+        # This is a consumed stochastic sample, not a transport retry. Preserve
+        # any artifacts and trace produced before the empty turn so the
+        # independent official verifier can score the attempt normally.
+        response = ""
+        outcome = "model_empty_response"
     final_text = response if isinstance(response, str) else (response[0] if response else "")
     (result_dir / "final.txt").write_text(_redact(str(final_text)))
 
@@ -142,6 +163,7 @@ def run(task_dir: Path, worker_dir: Path, work_dir: Path, output_dir: Path, resu
                     tool_errors += 1
     files = sum(1 for path in output_dir.rglob("*") if path.is_file())
     (result_dir / "summary.json").write_text(json.dumps({
+        "outcome": outcome,
         "turns": turns,
         "tool_calls": tool_calls,
         "tool_errors": tool_errors,

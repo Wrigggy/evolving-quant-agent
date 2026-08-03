@@ -114,6 +114,131 @@ def test_remote_runner_imports_worker_local_tool_before_loading_config(
     assert json.loads((result / "summary.json").read_text())["files"] == 0
 
 
+def test_remote_runner_preserves_artifacts_for_official_verification_after_empty_model_response(
+    tmp_path, monkeypatch
+):
+    """A completed but empty model turn must not discard this sampled attempt."""
+
+    from qea.executors import remote_nexau_worker
+
+    task = tmp_path / "task"
+    worker = tmp_path / "worker"
+    work = tmp_path / "work"
+    output = tmp_path / "output"
+    result = tmp_path / "result"
+    task.mkdir()
+    worker.mkdir()
+    work.mkdir()
+    (task / "instruction.md").write_text("Produce the requested artifacts.\n")
+    (worker / "agent.yaml").write_text("name: fixture\n")
+
+    class FakeAgentConfig:
+        def __init__(self):
+            self.retry_attempts = 5
+            self.llm_config = SimpleNamespace(
+                max_retries=3,
+                timeout=180,
+                to_client_kwargs=lambda: {"timeout": 180},
+            )
+            self.sub_agents = {}
+
+        @classmethod
+        def from_yaml(cls, *, config_path):
+            assert config_path == worker / "agent.yaml"
+            return cls()
+
+    class FakeAgent:
+        def __init__(self, config):
+            client_kwargs = config.llm_config.to_client_kwargs()
+            self.openai_client = SimpleNamespace(
+                max_retries=client_kwargs["max_retries"]
+            )
+            self.sandbox_manager = SimpleNamespace(
+                instance=SimpleNamespace(work_dir=None)
+            )
+            self.full_trace = [
+                SimpleNamespace(
+                    role="assistant",
+                    get_text_content=lambda: "partial work before the empty turn",
+                )
+            ]
+
+        def run(self, *, message, context):
+            output.mkdir(parents=True, exist_ok=True)
+            (output / "partial.json").write_text('{"status":"partial"}\n')
+            cause = Exception("No response content or tool calls")
+            raise RuntimeError(
+                "Error in agent execution: No response content or tool calls"
+            ) from cause
+
+    monkeypatch.setitem(
+        sys.modules,
+        "nexau",
+        SimpleNamespace(Agent=FakeAgent, AgentConfig=FakeAgentConfig),
+    )
+
+    assert remote_nexau_worker.run(task, worker, work, output, result) == 0
+    assert (result / "final.txt").read_text() == ""
+    assert (output / "partial.json").is_file()
+    summary = json.loads((result / "summary.json").read_text())
+    assert summary["outcome"] == "model_empty_response"
+    assert summary["files"] == 1
+    assert summary["turns"] == 1
+    assert "partial work" in (result / "raw_trace.jsonl").read_text()
+
+
+def test_remote_runner_does_not_swallow_other_agent_failures(tmp_path, monkeypatch):
+    from qea.executors import remote_nexau_worker
+
+    task = tmp_path / "task"
+    worker = tmp_path / "worker"
+    work = tmp_path / "work"
+    output = tmp_path / "output"
+    result = tmp_path / "result"
+    task.mkdir()
+    worker.mkdir()
+    work.mkdir()
+    (task / "instruction.md").write_text("Produce the requested artifacts.\n")
+    (worker / "agent.yaml").write_text("name: fixture\n")
+
+    class FakeAgentConfig:
+        def __init__(self):
+            self.retry_attempts = 5
+            self.llm_config = SimpleNamespace(
+                max_retries=3,
+                timeout=180,
+                to_client_kwargs=lambda: {"timeout": 180},
+            )
+            self.sub_agents = {}
+
+        @classmethod
+        def from_yaml(cls, *, config_path):
+            return cls()
+
+    class FakeAgent:
+        def __init__(self, config):
+            client_kwargs = config.llm_config.to_client_kwargs()
+            self.openai_client = SimpleNamespace(
+                max_retries=client_kwargs["max_retries"]
+            )
+            self.sandbox_manager = SimpleNamespace(
+                instance=SimpleNamespace(work_dir=None)
+            )
+            self.full_trace = []
+
+        def run(self, *, message, context):
+            raise RuntimeError("dependency import failed")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "nexau",
+        SimpleNamespace(Agent=FakeAgent, AgentConfig=FakeAgentConfig),
+    )
+
+    with pytest.raises(RuntimeError, match="dependency import failed"):
+        remote_nexau_worker.run(task, worker, work, output, result)
+
+
 def test_task_python_bridge_runs_argv_with_minimal_environment(tmp_path):
     from qea.runtime_bridge import task_python
 
