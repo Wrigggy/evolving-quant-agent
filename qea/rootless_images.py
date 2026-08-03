@@ -593,6 +593,10 @@ def prepare_rootless_image_plan(
                         (package_root / "model_proxy.py").read_bytes(),
                     ),
                     _context_file(
+                        "qea/repair_supervisor.py",
+                        (package_root / "repair_supervisor.py").read_bytes(),
+                    ),
+                    _context_file(
                         "qea/run_qea_model_proxy.py",
                         proxy_script.read_bytes(),
                         0o555,

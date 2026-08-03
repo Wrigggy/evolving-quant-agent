@@ -211,6 +211,7 @@ def test_task_neutral_proxy_and_evolver_plans_are_role_minimal(tmp_path) -> None
         "qea/__init__.py",
         "qea/model-proxy-entrypoint.py",
         "qea/model_proxy.py",
+        "qea/repair_supervisor.py",
         "qea/run_qea_model_proxy.py",
         "qea/sandbox_backend.py",
     }
