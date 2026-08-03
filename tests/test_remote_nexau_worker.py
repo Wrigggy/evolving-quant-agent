@@ -6,6 +6,46 @@ from types import SimpleNamespace
 import pytest
 
 
+def test_no_replay_policy_overrides_nested_nexau_and_sdk_retries():
+    from qea.executors import remote_nexau_worker
+
+    class FakeLLMConfig:
+        def __init__(self):
+            self.max_retries = 3
+            self.timeout = 180
+
+        def to_client_kwargs(self):
+            return {"api_key": "placeholder", "timeout": self.timeout}
+
+    child = SimpleNamespace(
+        retry_attempts=5,
+        llm_config=FakeLLMConfig(),
+        sub_agents={},
+    )
+    config = SimpleNamespace(
+        retry_attempts=5,
+        llm_config=FakeLLMConfig(),
+        sub_agents={"child": child},
+    )
+
+    remote_nexau_worker._pin_no_replay_policy(config)
+
+    for item in (config, child):
+        assert item.retry_attempts == 1
+        assert item.llm_config.max_retries == 0
+        assert item.llm_config.timeout == 360.0
+        assert item.llm_config.to_client_kwargs()["max_retries"] == 0
+
+
+def test_no_replay_policy_rejects_constructed_client_retry_drift():
+    from qea.executors import remote_nexau_worker
+
+    with pytest.raises(RuntimeError, match="retry policy drifted"):
+        remote_nexau_worker._verify_no_replay_client(
+            SimpleNamespace(openai_client=SimpleNamespace(max_retries=2))
+        )
+
+
 def test_remote_runner_imports_worker_local_tool_before_loading_config(
     tmp_path, monkeypatch
 ):
@@ -27,6 +67,15 @@ def test_remote_runner_imports_worker_local_tool_before_loading_config(
     )
 
     class FakeAgentConfig:
+        def __init__(self):
+            self.retry_attempts = 5
+            self.llm_config = SimpleNamespace(
+                max_retries=3,
+                timeout=180,
+                to_client_kwargs=lambda: {"timeout": 180},
+            )
+            self.sub_agents = {}
+
         @classmethod
         def from_yaml(cls, *, config_path):
             from tools.fixture import echo
@@ -38,6 +87,10 @@ def test_remote_runner_imports_worker_local_tool_before_loading_config(
     class FakeAgent:
         def __init__(self, config):
             self.config = config
+            client_kwargs = config.llm_config.to_client_kwargs()
+            self.openai_client = SimpleNamespace(
+                max_retries=client_kwargs["max_retries"]
+            )
             self.sandbox_manager = SimpleNamespace(
                 instance=SimpleNamespace(work_dir=None)
             )

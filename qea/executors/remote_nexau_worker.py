@@ -4,10 +4,73 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
+from collections.abc import Mapping
 from pathlib import Path
+
+
+_MIN_MODEL_CLIENT_TIMEOUT_SECONDS = 360.0
+
+
+def _pin_no_replay_policy(config) -> None:
+    """Force one SDK call per NexAU model turn, including sub-agent configs."""
+
+    pending = [config]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        llm_config = getattr(current, "llm_config", None)
+        if llm_config is None or not callable(
+            getattr(llm_config, "to_client_kwargs", None)
+        ):
+            raise RuntimeError("NexAU no-replay policy requires an LLM config")
+
+        current.retry_attempts = 1
+        llm_config.max_retries = 0
+        timeout = getattr(llm_config, "timeout", None)
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            timeout = _MIN_MODEL_CLIENT_TIMEOUT_SECONDS
+        llm_config.timeout = max(
+            float(timeout), _MIN_MODEL_CLIENT_TIMEOUT_SECONDS
+        )
+
+        original_client_kwargs = llm_config.to_client_kwargs
+
+        def exact_client_kwargs(
+            original_client_kwargs=original_client_kwargs,
+            llm_config=llm_config,
+        ):
+            kwargs = dict(original_client_kwargs())
+            # NexAU 0.3.9 drops falsy zero and otherwise restores the OpenAI
+            # SDK retry default. Insert the research contract explicitly.
+            kwargs["max_retries"] = 0
+            kwargs["timeout"] = llm_config.timeout
+            return kwargs
+
+        llm_config.to_client_kwargs = exact_client_kwargs
+        sub_agents = getattr(current, "sub_agents", None) or {}
+        if not isinstance(sub_agents, Mapping):
+            raise RuntimeError("NexAU sub-agent config is not a mapping")
+        pending.extend(sub_agents.values())
+
+
+def _verify_no_replay_client(agent) -> None:
+    client = getattr(agent, "openai_client", None)
+    if type(getattr(client, "max_retries", None)) is not int or (
+        client.max_retries != 0
+    ):
+        raise RuntimeError("NexAU model client retry policy drifted")
 
 
 def _redact(text: str) -> str:
@@ -35,9 +98,11 @@ def run(task_dir: Path, worker_dir: Path, work_dir: Path, output_dir: Path, resu
     if str(worker_dir) not in sys.path:
         sys.path.insert(0, str(worker_dir))
     config = AgentConfig.from_yaml(config_path=worker_dir / "agent.yaml")
+    _pin_no_replay_policy(config)
     for name in ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL"):
         os.environ.pop(name, None)
     agent = Agent(config=config)
+    _verify_no_replay_client(agent)
     try:
         agent.sandbox_manager.instance.work_dir = work_dir
     except Exception:  # noqa: BLE001
