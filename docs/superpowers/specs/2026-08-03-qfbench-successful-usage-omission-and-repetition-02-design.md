@@ -1,8 +1,8 @@
 # QFBench Successful-Usage Omission and Repetition 02 Design
 
-> Date: 2026-08-03  
-> Status: approved for implementation and paid repetition-02 execution  
-> Run: `qfbench-rootless-base-85x5-official-deepseek-20260801`  
+> Date: 2026-08-03<br>
+> Status: approved for implementation and paid repetition-02 execution<br>
+> Run: `qfbench-rootless-base-85x5-official-deepseek-20260801`<br>
 > Scope: accounting reconciliation, sentinel classification, and exact resume
 
 ## Goal and Frozen Boundaries
