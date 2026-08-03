@@ -288,7 +288,11 @@ def _classify(raw: bytes) -> tuple[str, str]:
         return "identity_drift", "runtime identity drift"
     if b"historical" in lowered and b"hash" in lowered:
         return "historical_hash_drift", "historical evidence hash drift"
-    if b"ambiguous" in lowered and b"upstream" in lowered:
+    if (
+        b"downstream_delivery" in lowered
+        or b"post_accept_transport" in lowered
+        or (b"ambiguous" in lowered and b"upstream" in lowered)
+    ):
         return "ambiguous_upstream", "ambiguous upstream request acceptance"
     if b"cost" in lowered and b"missing" in lowered:
         return "unsupported_cost_omission", "unsupported cost ledger omission"

@@ -153,6 +153,24 @@ def test_provider_brand_does_not_mask_cost_omission(tmp_path):
     assert "openrouter-compatible" in incident.excerpt
 
 
+@pytest.mark.parametrize("marker", ("downstream_delivery", "post_accept_transport"))
+def test_accepted_transport_ambiguity_is_a_hard_stop(tmp_path, marker):
+    """Catch auto-resuming a scoring attempt whose provider call was accepted."""
+
+    from qea.repair_supervisor import classify_incident
+    from scripts.run_qfbench_rootless_sentinel import observe
+
+    payload = _sentinel_config(tmp_path)
+    with open(payload["failure_log"], "w") as handle:
+        handle.write(f"model proxy quarantined request: {marker}\n")
+    config = _load(tmp_path, payload)
+
+    incident = observe(config, pid_alive=lambda pid: False)
+
+    assert incident.category == "ambiguous_upstream"
+    assert classify_incident(incident).action == "hard_stop"
+
+
 def test_secret_like_binary_log_is_bounded_redacted_and_hard_stop(tmp_path):
     from qea.repair_supervisor import classify_incident
     from scripts.run_qfbench_rootless_sentinel import observe
