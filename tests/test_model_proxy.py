@@ -67,14 +67,17 @@ class UpstreamHandler(BaseHTTPRequestHandler):
             content_type = "application/json"
         self.send_response(200)
         self.send_header("Content-Type", content_type)
-        self.send_header(
-            "X-Request-Id",
-            (
-                f"provider-{REAL_TOKEN}"
-                if self.path.endswith("/echo-token-header")
-                else "provider-request-fixture-001"
-            ),
-        )
+        if self.path.endswith("/generation-header"):
+            self.send_header("X-Generation-Id", "gen-fixture-001")
+        else:
+            self.send_header(
+                "X-Request-Id",
+                (
+                    f"provider-{REAL_TOKEN}"
+                    if self.path.endswith("/echo-token-header")
+                    else "provider-request-fixture-001"
+                ),
+            )
         self.send_header("Connection", "keep-alive, X-Upstream-Remove")
         self.send_header("X-Upstream-Remove", "secret-hop")
         self.send_header("Content-Length", str(len(payload)))
@@ -523,6 +526,23 @@ def test_proxy_audit_has_only_safe_completed_request_fields(tmp_path):
         assert REAL_TOKEN not in encoded
         assert "authorization" not in encoded.lower()
         assert (tmp_path / "proxy-audit.jsonl").stat().st_mode & 0o777 == 0o600
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_proxy_audit_captures_openrouter_generation_id(tmp_path):
+    """Catch losing the only prompt-free key for provider-route metadata."""
+
+    upstream, upstream_thread = _start_upstream()
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, _ = _request(proxy, path="/v1/generation-header")
+        assert status == 200
+        finalize_status, _ = _finalize(proxy)
+        assert finalize_status == 200
+        [audit] = _read_audit(tmp_path)
+        assert audit["provider_request_id"] == "gen-fixture-001"
     finally:
         _stop(proxy, proxy_thread)
         _stop(upstream, upstream_thread)

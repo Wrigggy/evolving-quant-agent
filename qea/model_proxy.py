@@ -883,7 +883,12 @@ def _response_usage(
 
 
 def _provider_request_id(headers, *, forbidden: str) -> str | None:
-    for name in ("X-Request-Id", "X-OpenAI-Request-Id", "X-OpenRouter-Request-Id"):
+    for name in (
+        "X-Generation-Id",
+        "X-Request-Id",
+        "X-OpenAI-Request-Id",
+        "X-OpenRouter-Request-Id",
+    ):
         value = headers.get(name)
         if (
             isinstance(value, str)
