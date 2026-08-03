@@ -449,6 +449,7 @@ def _task_neutral_dockerfile(
             "RUN mkdir -p /usr/local/lib/qea\n"
             "COPY qea/__init__.py /usr/local/lib/qea/__init__.py\n"
             "COPY qea/model_proxy.py /usr/local/lib/qea/model_proxy.py\n"
+            "COPY qea/repair_supervisor.py /usr/local/lib/qea/repair_supervisor.py\n"
             "COPY qea/sandbox_backend.py /usr/local/lib/qea/sandbox_backend.py\n"
             "COPY qea/run_qea_model_proxy.py "
             "/usr/local/lib/qea/run_qea_model_proxy.py\n"

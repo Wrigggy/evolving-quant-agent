@@ -216,6 +216,10 @@ def test_task_neutral_proxy_and_evolver_plans_are_role_minimal(tmp_path) -> None
         "qea/sandbox_backend.py",
     }
     assert "nexau" not in proxy_dockerfile.lower()
+    assert (
+        "COPY qea/repair_supervisor.py /usr/local/lib/qea/repair_supervisor.py"
+        in proxy_dockerfile
+    )
     assert "--allowed-model" in proxy_entrypoint
     assert "--required-provider" in proxy_entrypoint
     assert "required_provider" in proxy_entrypoint
