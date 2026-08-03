@@ -203,6 +203,24 @@ possible scheduler batch effect. Local implementation is verified; the remote
 boundary, paid canary, and resumed repetitions are not yet measured. See the
 [scheduler epoch decision](decisions/2026-08-03-qfbench-scheduler-epoch-transition.md).
 
+### 2026-08-03 Pre-Send Connect Retry and Fresh Formal Run
+
+The scheduler-transition run stopped in repetition 01 with 85 attempts but only
+82 official scores. Two attempts are verifier-only recoverable; the third has
+four completed model requests followed by a connection failure proven to occur
+before request transmission, and no worker-execution manifest. Replaying the
+worker would duplicate accepted stochastic calls, while scoring zero would
+misclassify infrastructure failure. Preserve the run unchanged and exclude its
+scores from the formal five-repetition aggregate.
+
+The proxy now retries only bounded `connection.connect()` failures before any
+HTTP request bytes, with three attempts bound into public config/attempt/image
+identity. Generic model-client retries remain disabled, and all after-send
+failures remain quarantined. A fresh formal run must rebuild the proxy image and
+pass the no-model, provider-route, recovery, twelve-worker paid, cost, firewall,
+and zero-residual gates. The `4/3` then `12/3` scheduler epoch protocol applies
+to the fresh run, not the frozen run. See the [superseding decision](decisions/2026-08-03-qfbench-pre-send-connect-retry-and-formal-restart.md).
+
 No report may describe adapter compatibility, E2B parity, AutoDL performance, or seed-worker QFBench score as measured until the corresponding run artifact exists.
 
 ## Memory Maintenance Rules

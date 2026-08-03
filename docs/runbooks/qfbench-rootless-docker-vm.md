@@ -398,3 +398,26 @@ generation and keep the Mac repair controller under `caffeinate -i`. At final
 completion require five repetitions, 425 terminal scores, zero residual
 resources, a passing firewall scan, and per-epoch plus combined reporting with
 the scheduler batch-effect warning.
+
+## 12. Pre-Send Connection Failure and Formal Restart
+
+The run named in section 11 is frozen at 82/85 repetition-01 scores. Do not
+resume it, edit its checkpoint, or use its scores in the formal aggregate. One
+unscored worker completed four model calls before a fifth call failed during
+upstream connect; rerunning the worker would replay accepted stochastic calls.
+
+Deploy the superseding exact commit and rebuild the proxy image before using a
+new run ID. Confirm the uploaded private proxy config contains
+`"pre_accept_connect_attempts":3` and that its public config digest and immutable
+image ID match the launch manifest. This policy retries only TCP/TLS connection
+establishment before HTTP request transmission. Do not enable SDK, NexAU, HTTP
+status, response-read, or downstream-delivery retries.
+
+Rerun the no-model isolation gate, provider-route canary,
+supervisor/recovery canary, and `paid-baseline-batch`. Require measured overlap
+12, a single completed audit identity per accepted model call, offline
+verifiers, complete canonical cost, exact cleanup, and zero residual resources.
+Only then start a fresh five-repetition arm at repetition 01. Retain the section
+11 scheduler epochs (`4/3` for repetition 01 and `12/3` for repetitions 02–05)
+and all benchmark/model/provider/verifier identities other than the explicitly
+changed source, proxy image, config, runtime, and run identities.
