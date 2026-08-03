@@ -576,12 +576,18 @@ def _validated_timeout_quarantine(
 
 
 def audit_baseline_proxy_costs(
-    run_dir: str | Path, *, expected_attempts: int
+    run_dir: str | Path,
+    *,
+    expected_attempts: int,
+    _fixed_checkpoint: str | None = None,
+    _fixed_split: str | None = None,
 ) -> dict:
     """Strictly reconcile safe proxy ledgers against scored baseline attempts."""
 
     if isinstance(expected_attempts, bool) or expected_attempts < 1:
         raise BaselineConfigError("cost audit expected_attempts must be positive")
+    if (_fixed_checkpoint is None) != (_fixed_split is None):
+        raise BaselineConfigError("cost audit fixed identity is incomplete")
     root = Path(run_dir).resolve()
     attempt_paths = tuple(sorted((root / "attempts").glob("*/attempt.json")))
     if len(attempt_paths) != expected_attempts:
@@ -612,13 +618,30 @@ def audit_baseline_proxy_costs(
         task_id = attempt.get("task_id")
         if not isinstance(task_id, str) or score.get("task_id") != task_id:
             raise BaselineConfigError(f"cost audit score identity mismatch: {attempt_dir}")
-        match = _BASELINE_CHECKPOINT_RE.fullmatch(str(attempt.get("checkpoint", "")))
-        if match is None:
-            raise BaselineConfigError(f"cost audit checkpoint outside baseline: {attempt_dir}")
-        repetition = str(int(match.group("repetition")))
-        panel = match.group("panel")
-        if attempt.get("split") != f"baseline_{panel}":
-            raise BaselineConfigError(f"cost audit split/checkpoint mismatch: {attempt_dir}")
+        if _fixed_checkpoint is not None:
+            if (
+                attempt.get("checkpoint") != _fixed_checkpoint
+                or attempt.get("split") != _fixed_split
+            ):
+                raise BaselineConfigError(
+                    f"cost audit fixed checkpoint/split mismatch: {attempt_dir}"
+                )
+            repetition = "fixed"
+            panel = "fixed"
+        else:
+            match = _BASELINE_CHECKPOINT_RE.fullmatch(
+                str(attempt.get("checkpoint", ""))
+            )
+            if match is None:
+                raise BaselineConfigError(
+                    f"cost audit checkpoint outside baseline: {attempt_dir}"
+                )
+            repetition = str(int(match.group("repetition")))
+            panel = match.group("panel")
+            if attempt.get("split") != f"baseline_{panel}":
+                raise BaselineConfigError(
+                    f"cost audit split/checkpoint mismatch: {attempt_dir}"
+                )
 
         panel_group = repetition_groups.setdefault(repetition, {}).setdefault(
             panel,
@@ -640,14 +663,17 @@ def audit_baseline_proxy_costs(
                 quarantine_path,
                 source=attempt_dir,
             )
-            unreconciled_attempts.append({
+            unreconciled_attempt = {
                 "attempt_id": attempt_dir.name,
                 "checkpoint": str(attempt["checkpoint"]),
-                "panel": panel,
-                "repetition": int(repetition),
                 "task_id": task_id,
                 "reason": reason,
-            })
+            }
+            if repetition != "fixed":
+                unreconciled_attempt.update(
+                    {"panel": panel, "repetition": int(repetition)}
+                )
+            unreconciled_attempts.append(unreconciled_attempt)
             continue
         seen_request_identities: set[str] = set()
         for record in _read_audit_records(audit_path):
@@ -659,15 +685,18 @@ def audit_baseline_proxy_costs(
                 )
             seen_request_identities.add(request_identity)
             if cost is None:
-                unreconciled_requests.append({
+                unreconciled_request = {
                     "attempt_id": attempt_dir.name,
                     "checkpoint": str(attempt["checkpoint"]),
-                    "panel": panel,
-                    "repetition": int(repetition),
                     "request_identity_sha256": request_identity,
                     "task_id": task_id,
                     "reason": "successful_response_usage_unavailable",
-                })
+                }
+                if repetition != "fixed":
+                    unreconciled_request.update(
+                        {"panel": panel, "repetition": int(repetition)}
+                    )
+                unreconciled_requests.append(unreconciled_request)
             _add_cost(total, record, cost)
             _add_cost(panel_group, record, cost)
             _add_cost(task_group, record, cost)
@@ -686,9 +715,38 @@ def audit_baseline_proxy_costs(
             for panel, group in sorted(panels.items())
         }
         for repetition, panels in sorted(
-            repetition_groups.items(), key=lambda item: int(item[0])
+            repetition_groups.items(),
+            key=lambda item: (
+                0 if item[0].isdigit() else 1,
+                int(item[0]) if item[0].isdigit() else item[0],
+            ),
         )
     }
+    return payload
+
+
+def audit_fixed_checkpoint_proxy_costs(
+    run_dir: str | Path,
+    *,
+    expected_attempts: int,
+    checkpoint: str,
+    split: str,
+) -> dict:
+    """Run the canonical proxy-cost audit for one exact non-repetition panel."""
+
+    if not isinstance(checkpoint, str) or not checkpoint.strip():
+        raise BaselineConfigError("cost audit fixed checkpoint must be non-empty")
+    if not isinstance(split, str) or not split.strip():
+        raise BaselineConfigError("cost audit fixed split must be non-empty")
+    payload = audit_baseline_proxy_costs(
+        run_dir,
+        expected_attempts=expected_attempts,
+        _fixed_checkpoint=checkpoint,
+        _fixed_split=split,
+    )
+    payload.pop("by_repetition", None)
+    payload["checkpoint"] = checkpoint
+    payload["split"] = split
     return payload
 
 

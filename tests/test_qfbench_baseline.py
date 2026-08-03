@@ -627,6 +627,44 @@ def test_cost_audit_reconciles_attempts_requests_tokens_and_groups(tmp_path) -> 
     assert diagnostic["request_count"] == 1
 
 
+def test_fixed_checkpoint_cost_audit_reuses_canonical_validation(tmp_path) -> None:
+    from qea.evaluation import TaskAttempt
+    from qea.qfbench_baseline import audit_fixed_checkpoint_proxy_costs
+
+    attempt = TaskAttempt.create(
+        run_id="epoch-canary",
+        benchmark_commit=COMMIT,
+        task_id="risk-task",
+        split="baseline_primary",
+        checkpoint="epoch-02-concurrency-canary",
+        worker_digest="e" * 64,
+    )
+    attempt_dir = tmp_path / "attempts" / attempt.attempt_id
+    attempt_dir.mkdir(parents=True)
+    (attempt_dir / "attempt.json").write_text(json.dumps(asdict(attempt)))
+    score = OfficialTaskScore(
+        task_id="risk-task", domain="risk_credit", reward=0.5
+    )
+    (attempt_dir / "completed-score.json").write_text(json.dumps(asdict(score)))
+    (attempt_dir / "proxy-audit.jsonl").write_text(
+        json.dumps(_audit_record(identity="a", cost=0.01, input_tokens=10))
+        + "\n"
+    )
+
+    audit = audit_fixed_checkpoint_proxy_costs(
+        tmp_path,
+        expected_attempts=1,
+        checkpoint="epoch-02-concurrency-canary",
+        split="baseline_primary",
+    )
+
+    assert audit["attempt_count"] == 1
+    assert audit["request_count"] == 1
+    assert audit["provider_cost_usd"] == "0.01"
+    assert audit["checkpoint"] == "epoch-02-concurrency-canary"
+    assert audit["split"] == "baseline_primary"
+
+
 def test_cost_audit_allows_same_request_identity_in_distinct_repetitions(
     tmp_path,
 ) -> None:

@@ -81,9 +81,210 @@ def test_full_harness_canary_script_is_directly_invokable():
     assert proc.returncode == 0, proc.stderr
     assert "import" in proc.stdout
     assert "paid-rich" in proc.stdout
+    assert "paid-baseline-batch" in proc.stdout
     assert "--executor {rootless-docker,e2b}" in proc.stdout
     assert "--rootless-config" in proc.stdout
     assert "--rootless-image-set-manifest" in proc.stdout
+
+
+def test_paid_baseline_batch_requires_exact_epoch_two_standard_panel():
+    from scripts.smoke_qfbench_full_harness import (
+        PAID_BASELINE_BATCH_TASK_IDS,
+        select_paid_baseline_batch_tasks,
+    )
+
+    tasks = tuple(
+        SimpleNamespace(task_id=task_id, cpus=2, memory_mb=4096)
+        for task_id in PAID_BASELINE_BATCH_TASK_IDS
+    )
+    snapshot = SimpleNamespace(
+        primary=SimpleNamespace(tasks=tasks, task_ids=PAID_BASELINE_BATCH_TASK_IDS)
+    )
+    config = SimpleNamespace(
+        scheduler_epoch="repetitions-02-through-05",
+        worker_concurrency=12,
+        verifier_concurrency=3,
+        allowed_model="deepseek/deepseek-v4-flash",
+        required_provider="deepseek",
+    )
+
+    selected = select_paid_baseline_batch_tasks(
+        snapshot, config=config, executor="rootless-docker"
+    )
+
+    assert tuple(task.task_id for task in selected) == PAID_BASELINE_BATCH_TASK_IDS
+
+    bad = (SimpleNamespace(**{**tasks[0].__dict__, "cpus": 4}), *tasks[1:])
+    with pytest.raises(ValueError, match="2 CPU/4096 MiB"):
+        select_paid_baseline_batch_tasks(
+            SimpleNamespace(
+                primary=SimpleNamespace(
+                    tasks=bad,
+                    task_ids=PAID_BASELINE_BATCH_TASK_IDS,
+                )
+            ),
+            config=config,
+            executor="rootless-docker",
+        )
+
+
+def test_paid_baseline_batch_evaluates_once_without_evolver_or_feedback(
+    monkeypatch, tmp_path
+):
+    from scripts import smoke_qfbench_full_harness as smoke
+
+    tasks = tuple(
+        SimpleNamespace(
+            task_id=task_id,
+            cpus=2,
+            memory_mb=4096,
+            domain="domain-a",
+        )
+        for task_id in smoke.PAID_BASELINE_BATCH_TASK_IDS
+    )
+    snapshot = SimpleNamespace(
+        commit="0" * 40,
+        primary=SimpleNamespace(
+            tasks=tasks,
+            task_ids=smoke.PAID_BASELINE_BATCH_TASK_IDS,
+        ),
+    )
+    config = SimpleNamespace(
+        scheduler_epoch="repetitions-02-through-05",
+        worker_concurrency=12,
+        verifier_concurrency=3,
+        allowed_model="deepseek/deepseek-v4-flash",
+        required_provider="deepseek",
+    )
+    calls = []
+
+    class Evaluator:
+        def evaluate(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(
+                task_mean=0.5,
+                overall=0.5,
+                scores=tuple(
+                    SimpleNamespace(
+                        task_id=task.task_id,
+                        reward=0.5,
+                        diagnostic_tags=(),
+                    )
+                    for task in tasks
+                ),
+            )
+
+    runtime = SimpleNamespace(
+        evaluator=Evaluator(),
+        backend=SimpleNamespace(list=lambda labels: ()),
+        image_identity_digest="1" * 64,
+        scheduler_identity_digest="2" * 64,
+        runtime_identity_digest="3" * 64,
+    )
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    (seed / "agent.yaml").write_text("type: agent\n")
+    monkeypatch.setattr(
+        smoke,
+        "audit_fixed_checkpoint_proxy_costs",
+        lambda *args, **kwargs: {
+            "request_count": 12,
+            "provider_cost_usd": "0.12",
+            "cost_complete": True,
+            "provider_cost_is_lower_bound": False,
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        smoke,
+        "audit_paid_baseline_lifecycles",
+        lambda *args, **kwargs: {
+            "worker_overlap": 12,
+            "cleaned_up": True,
+            "verifier_networkless": True,
+            "worker_proxy_only": True,
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        smoke,
+        "audit_paid_provider_records",
+        lambda *args, **kwargs: {
+            "request_count": 12,
+            "latency_ms": {"mean": 100.0, "p90": 100.0},
+            "model": "deepseek/deepseek-v4-flash",
+        },
+        raising=False,
+    )
+
+    status = smoke.run_paid_baseline_batch(
+        runtime=runtime,
+        config=config,
+        snapshot=snapshot,
+        run_dir=tmp_path / "run",
+        seed_worker=seed,
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["tasks"] == tasks
+    assert calls[0]["split"] == "baseline_primary"
+    assert calls[0]["checkpoint"] == "epoch-02-concurrency-canary"
+    assert status["worker_overlap"] == 12
+    assert status["feedback_used"] is False
+    assert status["evolver_used"] is False
+
+
+def test_rootless_paid_baseline_runtime_is_built_without_evolver(
+    monkeypatch, tmp_path
+):
+    import qea.rootless_full_harness as rootless_module
+    from scripts import smoke_qfbench_full_harness as smoke
+
+    config = SimpleNamespace()
+    runtime = SimpleNamespace(close=lambda: None)
+    captured = {}
+
+    def build_runtime(**kwargs):
+        captured.update(kwargs)
+        return runtime
+
+    monkeypatch.setattr(
+        rootless_module,
+        "load_rootless_full_harness_config",
+        lambda path: config,
+    )
+    monkeypatch.setattr(
+        rootless_module,
+        "build_rootless_full_harness_runtime",
+        build_runtime,
+    )
+    monkeypatch.setattr(
+        smoke, "select_paid_baseline_batch_tasks", lambda *args, **kwargs: ()
+    )
+    monkeypatch.setattr(
+        smoke,
+        "run_paid_baseline_batch",
+        lambda **kwargs: {"mode": "paid-baseline-batch"},
+    )
+    args = SimpleNamespace(
+        mode="paid-baseline-batch",
+        executor="rootless-docker",
+        rootless_config=tmp_path / "rootless.json",
+        rootless_image_set_manifest=tmp_path / "images.json",
+        run_id="paid-batch",
+        results_dir=tmp_path / "results",
+    )
+    snapshot = SimpleNamespace(commit="0" * 40, tasks=())
+
+    result = smoke.run_rootless_canary(
+        args,
+        snapshot=snapshot,
+        task=SimpleNamespace(task_id="unused"),
+        run_dir=tmp_path / "results" / "paid-batch",
+    )
+
+    assert result["mode"] == "paid-baseline-batch"
+    assert captured["include_evolver"] is False
 
 
 def test_full_harness_canary_rootless_help_does_not_import_e2b_modules():
@@ -120,6 +321,41 @@ runpy.run_path(sys.argv[0], run_name="__main__")
     )
     assert proc.returncode == 0, proc.stderr
     assert "--executor {rootless-docker,e2b}" in proc.stdout
+
+
+def test_full_harness_canary_help_does_not_import_evolver_or_feedback_modules():
+    repo = Path(__file__).resolve().parents[1]
+    code = """
+import builtins
+import runpy
+import sys
+
+real_import = builtins.__import__
+blocked = {
+    "qea.candidate_admission",
+    "qea.evolution_feedback",
+    "qea.evolve_runtime",
+    "qea.executors.sandbox_evolver",
+}
+
+def reject_evolver(name, *args, **kwargs):
+    if name in blocked:
+        raise AssertionError(f"baseline-safe CLI imported {name}")
+    return real_import(name, *args, **kwargs)
+
+builtins.__import__ = reject_evolver
+sys.argv = ["scripts/smoke_qfbench_full_harness.py", "--help"]
+runpy.run_path(sys.argv[0], run_name="__main__")
+"""
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "paid-baseline-batch" in proc.stdout
 
 
 def test_rootless_canary_requires_runtime_inputs_without_loading_dotenv(

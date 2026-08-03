@@ -61,12 +61,11 @@ def _canonical_digest(payload: object) -> str:
 def _runtime_adapter_identity() -> dict[str, object]:
     """Bind coordinator-uploaded executable adapters into the run identity."""
 
-    from .executors import sandbox_evolver, sandbox_nexau
-
+    package_root = Path(__file__).resolve().parent
     paths = {
-        "evolver_runner": sandbox_evolver._REMOTE_RUNNER,
-        "worker_runner": sandbox_nexau._REMOTE_RUNNER,
-        "worker_runtime_bridge": sandbox_nexau._RUNTIME_BRIDGE,
+        "evolver_runner": package_root / "executors" / "remote_evolver.py",
+        "worker_runner": package_root / "executors" / "remote_nexau_worker.py",
+        "worker_runtime_bridge": package_root / "runtime_bridge.py",
     }
     files: list[dict[str, object]] = []
     for role, path in sorted(paths.items()):
@@ -557,7 +556,7 @@ def load_rootless_full_harness_config(
 class RootlessFullHarnessRuntime:
     backend: SandboxBackend
     evaluator: "QFBenchSandboxEvaluator"
-    proposer: "SandboxFullHarnessProposer"
+    proposer: "SandboxFullHarnessProposer | None"
     image_identity_digest: str
     scheduler_identity_digest: str
     runtime_identity_digest: str
@@ -878,6 +877,7 @@ def build_rootless_full_harness_runtime(
     tasks,
     run_id: str,
     results_root: str | Path,
+    include_evolver: bool = True,
 ) -> RootlessFullHarnessRuntime:
     """Assemble one E2B-independent rootless full-harness runtime."""
 
@@ -891,6 +891,8 @@ def build_rootless_full_harness_runtime(
         )
     if not isinstance(run_id, str) or _RUN_ID.fullmatch(run_id) is None:
         raise RootlessFullHarnessError("run_id must be a path-safe identifier")
+    if type(include_evolver) is not bool:
+        raise RootlessFullHarnessError("include_evolver must be a boolean")
     selected_tasks = tuple(tasks)
     if not selected_tasks:
         raise RootlessFullHarnessError("task panel must not be empty")
@@ -902,10 +904,6 @@ def build_rootless_full_harness_runtime(
 
     from . import rootless_runtime
     from .backends.rootless_docker import RootlessDockerBackend
-    from .executors.sandbox_evolver import (
-        SandboxEvolverConfig,
-        SandboxFullHarnessProposer,
-    )
     from .executors.sandbox_proxy import SandboxProxyConfig, SandboxProxyManager
     from .executors.sandbox_runtime import public_model_environment, trusted_directory
     from .loop_benchmark import QFBenchSandboxEvaluator
@@ -1037,19 +1035,34 @@ def build_rootless_full_harness_runtime(
             trusted_task_root=config.trusted_root,
             resource_pool=pool,
         )
-        evolver_config = SandboxEvolverConfig(
-            image_ref=catalog.evolver_image_ref,
-            resource_contract=config.evolver_resources,
-            command_timeout_seconds=config.evolver_resources.timeout_seconds,
-        )
-        proposer = SandboxFullHarnessProposer(
-            config=evolver_config,
-            backend=backend,
-            lifecycle_root=run_root / "lifecycles",
-            proxy_manager=proxy_manager,
-            resource_pool=pool,
-            model_name=config.allowed_model,
-        )
+        evolver_policy = {
+            "command_timeout_seconds": config.evolver_resources.timeout_seconds,
+            "max_input_files": 2000,
+            "max_input_bytes": 512 * 1024 * 1024,
+            "max_candidate_files": 2000,
+            "max_candidate_bytes": 64 * 1024 * 1024,
+            "lease_timeout_seconds": 120.0,
+        }
+        proposer = None
+        if include_evolver:
+            from .executors.sandbox_evolver import (
+                SandboxEvolverConfig,
+                SandboxFullHarnessProposer,
+            )
+
+            evolver_config = SandboxEvolverConfig(
+                image_ref=catalog.evolver_image_ref,
+                resource_contract=config.evolver_resources,
+                **evolver_policy,
+            )
+            proposer = SandboxFullHarnessProposer(
+                config=evolver_config,
+                backend=backend,
+                lifecycle_root=run_root / "lifecycles",
+                proxy_manager=proxy_manager,
+                resource_pool=pool,
+                model_name=config.allowed_model,
+            )
         model_env = public_model_environment(
             proxy_base_url=(
                 "http://qea-model-proxy:8080" + config.allowed_path_prefix
@@ -1139,16 +1152,7 @@ def build_rootless_full_harness_runtime(
                     "timeout_seconds": proxy_config.timeout_seconds,
                     "expect_request": proxy_config.expect_request,
                 },
-                "evolver_runtime_policy": {
-                    "command_timeout_seconds": (
-                        evolver_config.command_timeout_seconds
-                    ),
-                    "max_input_files": evolver_config.max_input_files,
-                    "max_input_bytes": evolver_config.max_input_bytes,
-                    "max_candidate_files": evolver_config.max_candidate_files,
-                    "max_candidate_bytes": evolver_config.max_candidate_bytes,
-                    "lease_timeout_seconds": evolver_config.lease_timeout_seconds,
-                },
+                "evolver_runtime_policy": evolver_policy,
                 "router_runtime_policy": {
                     "worker_lease_timeout_seconds": (
                         worker_router.lease_timeout_seconds

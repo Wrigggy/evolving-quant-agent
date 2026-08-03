@@ -700,6 +700,42 @@ def test_factory_builds_one_shared_runtime_and_applies_explicit_role_limits(
         runtime.close()
 
 
+def test_baseline_only_factory_does_not_import_or_construct_evolver(
+    tmp_path, monkeypatch
+) -> None:
+    import builtins
+
+    from qea.rootless_full_harness import build_rootless_full_harness_runtime
+
+    selected = _catalog()
+    config = _valid_config(tmp_path / "config-baseline-only")
+    _patch_catalog(monkeypatch, selected, config=config)
+    real_import = builtins.__import__
+
+    def reject_evolver(name, *args, **kwargs):
+        if name in {
+            "qea.executors.sandbox_evolver",
+            ".executors.sandbox_evolver",
+        } or name.endswith("sandbox_evolver"):
+            raise AssertionError("baseline-only runtime imported sandbox_evolver")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", reject_evolver)
+    runtime = build_rootless_full_harness_runtime(
+        config=config,
+        image_set_manifest=tmp_path / "image-set.json",
+        benchmark_commit=selected.benchmark_commit,
+        tasks=(_task(),),
+        run_id="rootless-baseline-only",
+        results_root=tmp_path / "results-baseline-only",
+        include_evolver=False,
+    )
+    try:
+        assert runtime.proposer is None
+    finally:
+        runtime.close()
+
+
 @pytest.mark.parametrize(
     "relative_path",
     (

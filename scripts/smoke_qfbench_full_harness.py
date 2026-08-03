@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a no-model import or paid Rich full-harness canary."""
+"""Run import, paid Rich, or paid baseline full-harness canaries."""
 
 from __future__ import annotations
 
@@ -12,18 +12,46 @@ import sys
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import run as run_cli
-from qea.candidate_admission import AdmissionPolicy, admit_candidate
 from qea.evaluation import TaskAttempt
 from qea.executors.sandbox_runtime import atomic_json as _write_json
-from qea.evolution_feedback import PublicTaskRubric, load_feedback_manifest
-from qea.evolve_runtime import snapshot_dir
 from qea.loop_benchmark import hash_worker_directory
+from qea.qfbench_baseline import audit_fixed_checkpoint_proxy_costs
+from qea.qfbench_epoch_report import audit_paid_baseline_lifecycles
 from qea.qfbench_images import NEXAU_REQUIREMENTS_LOCK, NEXAU_RUNTIME_PYTHON
+
+if TYPE_CHECKING:
+    from qea.evolution_feedback import PublicTaskRubric
+
+
+PAID_BASELINE_BATCH_TASK_IDS = (
+    "historical-var-data-prep",
+    "momentum-backtest",
+    "evt-pot-var",
+    "fx-forward-cross-rate",
+    "option-put-call-parity-forward-audit",
+    "sma-crossover-spy",
+    "corporate-action-adjustment",
+    "earnings-surprise-calculator",
+    "fama-french-factor-model-new",
+    "credit-migration-matrix",
+    "zero-coupon-bootstrapping",
+    "copula-sampling-rank-correlation",
+)
+_PAID_BASELINE_CHECKPOINT = "epoch-02-concurrency-canary"
+
+
+def _snapshot_worker(source: Path, destination: Path) -> None:
+    """Copy one worker snapshot without importing the evolution stack."""
+
+    if destination.exists():
+        shutil.rmtree(destination)
+    shutil.copytree(source, destination)
 
 
 _IMPORT_AGENT = """\
@@ -454,7 +482,212 @@ def _exact_rootless_reap(run_dir: Path, config_path: Path) -> dict:
     }
 
 
+def select_paid_baseline_batch_tasks(snapshot, *, config, executor: str):
+    """Validate the exact standard-task epoch-2 panel before any paid work."""
+
+    if executor != "rootless-docker":
+        raise ValueError("paid-baseline-batch requires rootless-docker")
+    if len(PAID_BASELINE_BATCH_TASK_IDS) != len(
+        set(PAID_BASELINE_BATCH_TASK_IDS)
+    ):
+        raise ValueError("paid baseline batch task panel contains duplicates")
+    if (
+        getattr(config, "scheduler_epoch", None)
+        != "repetitions-02-through-05"
+        or getattr(config, "worker_concurrency", None) != 12
+        or getattr(config, "verifier_concurrency", None) != 3
+    ):
+        raise ValueError("paid baseline batch requires schema-3 epoch-2 12/3 config")
+    if (
+        getattr(config, "allowed_model", None)
+        != "deepseek/deepseek-v4-flash"
+        or getattr(config, "required_provider", None) != "deepseek"
+    ):
+        raise ValueError(
+            "paid baseline batch requires DeepSeek V4 Flash official provider"
+        )
+    try:
+        primary_tasks = tuple(snapshot.primary.tasks)
+    except AttributeError as exc:
+        raise ValueError(
+            "paid baseline batch requires the baseline primary panel"
+        ) from exc
+    by_id = {task.task_id: task for task in primary_tasks}
+    missing = [
+        task_id for task_id in PAID_BASELINE_BATCH_TASK_IDS if task_id not in by_id
+    ]
+    if missing:
+        raise ValueError(f"paid baseline batch tasks are not primary: {missing}")
+    selected = tuple(by_id[task_id] for task_id in PAID_BASELINE_BATCH_TASK_IDS)
+    invalid = [
+        task.task_id
+        for task in selected
+        if getattr(task, "cpus", None) != 2
+        or getattr(task, "memory_mb", None) != 4096
+    ]
+    if invalid:
+        raise ValueError(
+            "paid baseline batch tasks must have a 2 CPU/4096 MiB worker "
+            f"contract: {invalid}"
+        )
+    return selected
+
+
+def audit_paid_provider_records(
+    run_dir: str | Path,
+    *,
+    attempt_ids,
+    allowed_model: str,
+) -> dict:
+    """Verify safe proxy metadata for the paid batch and summarize latency."""
+
+    root = Path(run_dir).resolve()
+    identifiers = tuple(attempt_ids)
+    latencies: list[float] = []
+    request_count = 0
+    for attempt_id in identifiers:
+        audit_path = root / "attempts" / attempt_id / "proxy-audit.jsonl"
+        if audit_path.is_symlink() or not audit_path.is_file():
+            raise RuntimeError(f"paid batch proxy audit is missing: {attempt_id}")
+        identities: set[str] = set()
+        for line in audit_path.read_text().splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if not isinstance(record, dict):
+                raise RuntimeError("paid batch proxy audit record is invalid")
+            if record.get("model") != allowed_model:
+                raise RuntimeError("paid batch proxy route model differs")
+            identity = record.get("request_identity_sha256")
+            if not isinstance(identity, str) or len(identity) != 64:
+                raise RuntimeError("paid batch request identity is invalid")
+            if identity in identities:
+                raise RuntimeError("paid batch contains a within-attempt replay")
+            identities.add(identity)
+            if (
+                record.get("request_state") != "completed"
+                or record.get("upstream_status_code") != 200
+                or record.get("failure_class") is not None
+            ):
+                raise RuntimeError("paid batch has a failed or ambiguous request")
+            latency = record.get("latency_ms")
+            if (
+                isinstance(latency, bool)
+                or not isinstance(latency, (int, float))
+                or latency < 0
+            ):
+                raise RuntimeError("paid batch provider latency is invalid")
+            latencies.append(float(latency))
+            request_count += 1
+    if request_count < len(identifiers):
+        raise RuntimeError("paid batch has fewer model requests than task attempts")
+    ordered = sorted(latencies)
+    p90_index = max(0, (9 * len(ordered) + 9) // 10 - 1)
+    return {
+        "request_count": request_count,
+        "latency_ms": {
+            "mean": sum(ordered) / len(ordered),
+            "p90": ordered[p90_index],
+        },
+        "model": allowed_model,
+    }
+
+
+def run_paid_baseline_batch(
+    *,
+    runtime,
+    config,
+    snapshot,
+    run_dir: str | Path,
+    seed_worker: str | Path = Path("qea/worker_gdpval_weak"),
+) -> dict:
+    """Evaluate the immutable base worker once on the twelve-task canary."""
+
+    root = Path(run_dir).resolve()
+    selected = select_paid_baseline_batch_tasks(
+        snapshot, config=config, executor="rootless-docker"
+    )
+    worker = root / "workers" / "seed"
+    _snapshot_worker(Path(seed_worker).resolve(), worker)
+    worker_digest = hash_worker_directory(worker)
+    attempts = tuple(
+        TaskAttempt.create(
+            run_id=root.name,
+            benchmark_commit=snapshot.commit,
+            task_id=task.task_id,
+            split="baseline_primary",
+            checkpoint=_PAID_BASELINE_CHECKPOINT,
+            worker_digest=worker_digest,
+        )
+        for task in selected
+    )
+    summary = runtime.evaluator.evaluate(
+        worker_dir=worker,
+        tasks=selected,
+        split="baseline_primary",
+        checkpoint=_PAID_BASELINE_CHECKPOINT,
+        run_dir=root,
+    )
+    cost = audit_fixed_checkpoint_proxy_costs(
+        root,
+        expected_attempts=12,
+        checkpoint=_PAID_BASELINE_CHECKPOINT,
+        split="baseline_primary",
+    )
+    if not cost.get("cost_complete") or cost.get(
+        "provider_cost_is_lower_bound"
+    ):
+        raise RuntimeError("paid baseline batch accounting is incomplete")
+    attempt_ids = tuple(attempt.attempt_id for attempt in attempts)
+    route = audit_paid_provider_records(
+        root,
+        attempt_ids=attempt_ids,
+        allowed_model=config.allowed_model,
+    )
+    lifecycles = audit_paid_baseline_lifecycles(
+        root, attempt_ids=attempt_ids
+    )
+    residual = runtime.backend.list(
+        {"qea.managed": "true", "qea.run-id": root.name}
+    )
+    if residual:
+        raise RuntimeError("paid baseline batch left managed resources")
+    output = {
+        "run_id": root.name,
+        "executor": "rootless-docker",
+        "mode": "paid-baseline-batch",
+        "checkpoint": _PAID_BASELINE_CHECKPOINT,
+        "task_ids": list(PAID_BASELINE_BATCH_TASK_IDS),
+        "task_count": 12,
+        "worker_concurrency": config.worker_concurrency,
+        "verifier_concurrency": config.verifier_concurrency,
+        "scheduler_epoch": config.scheduler_epoch,
+        "worker_overlap": lifecycles["worker_overlap"],
+        "official_task_mean": float(summary.task_mean),
+        "official_overall": float(summary.overall),
+        "timeout_count": sum(
+            "timeout" in tuple(score.diagnostic_tags)
+            for score in summary.scores
+        ),
+        "provider": config.required_provider,
+        "model": config.allowed_model,
+        "fallbacks_allowed": False,
+        "provider_audit": route,
+        "cost_audit": cost,
+        "lifecycle_audit": lifecycles,
+        "residual_resource_count": 0,
+        "feedback_used": False,
+        "evolver_used": False,
+        "image_identity_digest": runtime.image_identity_digest,
+        "scheduler_identity_digest": runtime.scheduler_identity_digest,
+        "runtime_identity_digest": runtime.runtime_identity_digest,
+    }
+    _write_json(root / "paid-baseline-batch.json", output)
+    return output
+
+
 def run_paid_rich_canary(args, *, snapshot, task, run_dir: Path) -> dict:
+    from qea.candidate_admission import AdmissionPolicy, admit_candidate
     from qea.e2b_lease import E2BLeasePool
     from qea.executors.e2b_evolver import E2BEvolverConfig, E2BFullHarnessProposer
     from qea.executors.e2b_nexau import (
@@ -462,6 +695,7 @@ def run_paid_rich_canary(args, *, snapshot, task, run_dir: Path) -> dict:
         E2BNexAUExecutor,
         E2BQFBenchVerifier,
     )
+    from qea.evolution_feedback import load_feedback_manifest
 
     worker_templates, verifier_templates = run_cli.load_template_ids(
         args.template_manifest_dir,
@@ -481,7 +715,7 @@ def run_paid_rich_canary(args, *, snapshot, task, run_dir: Path) -> dict:
         destination=run_dir / "evidence",
     )
     candidate = run_dir / "seed-candidate"
-    snapshot_dir(Path("qea/worker_gdpval_weak").resolve(), candidate)
+    _snapshot_worker(Path("qea/worker_gdpval_weak").resolve(), candidate)
     leases = E2BLeasePool(run_dir / ".e2b-leases", max_leases=args.global_e2b_cap)
     model_env = _model_env()
     proposer = E2BFullHarnessProposer(
@@ -607,6 +841,10 @@ def run_rootless_canary(args, *, snapshot, task, run_dir: Path) -> dict:
     )
 
     config = load_rootless_full_harness_config(args.rootless_config)
+    if args.mode == "paid-baseline-batch":
+        select_paid_baseline_batch_tasks(
+            snapshot, config=config, executor=args.executor
+        )
     runtime = build_rootless_full_harness_runtime(
         config=config,
         image_set_manifest=args.rootless_image_set_manifest,
@@ -614,8 +852,16 @@ def run_rootless_canary(args, *, snapshot, task, run_dir: Path) -> dict:
         tasks=snapshot.tasks,
         run_id=args.run_id,
         results_root=args.results_dir,
+        include_evolver=args.mode != "paid-baseline-batch",
     )
     try:
+        if args.mode == "paid-baseline-batch":
+            return run_paid_baseline_batch(
+                runtime=runtime,
+                config=config,
+                snapshot=snapshot,
+                run_dir=run_dir,
+            )
         result = run_rootless_import_canary(
             runtime=runtime,
             task=task,
@@ -639,7 +885,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("rootless-docker", "e2b"),
         default="rootless-docker",
     )
-    parser.add_argument("--mode", choices=("import", "paid-rich"), required=True)
+    parser.add_argument(
+        "--mode",
+        choices=("import", "paid-rich", "paid-baseline-batch"),
+        required=True,
+    )
     parser.add_argument("--qfbench-root", type=Path, required=True)
     parser.add_argument(
         "--manifest", type=Path, default=Path("data/qfbench/MANIFEST_30.json")
@@ -667,6 +917,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.mode == "paid-baseline-batch" and args.executor != "rootless-docker":
+        raise ValueError("paid-baseline-batch requires rootless-docker")
     if args.executor == "rootless-docker" and args.rootless_config is None:
         raise ValueError("--rootless-config is required for rootless-docker")
     if (
@@ -678,9 +930,18 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.executor == "e2b":
         run_cli._load_dotenv()
-    from qea.benchmarks.qfbench import load_qfbench_snapshot
+    if args.mode == "paid-baseline-batch":
+        from qea.benchmarks.qfbench import load_qfbench_baseline_snapshot
 
-    snapshot = load_qfbench_snapshot(args.qfbench_root, manifest_path=args.manifest)
+        snapshot = load_qfbench_baseline_snapshot(
+            args.qfbench_root, manifest_path=args.manifest
+        )
+    else:
+        from qea.benchmarks.qfbench import load_qfbench_snapshot
+
+        snapshot = load_qfbench_snapshot(
+            args.qfbench_root, manifest_path=args.manifest
+        )
     task = snapshot.task(args.task)
     if args.mode == "paid-rich" and task.task_id not in snapshot.optimize.task_ids:
         raise ValueError("paid-rich canary task must be in the optimize split")
@@ -695,7 +956,7 @@ def main(argv: list[str] | None = None) -> int:
         or (args.executor == "e2b" and args.approve_paid_e2b)
         or os.environ.get("QEA_PAID_EVAL_AUTO_APPROVE") == "1"
     )
-    if args.mode == "paid-rich" and not approved:
+    if args.mode in {"paid-rich", "paid-baseline-batch"} and not approved:
         print(
             "NOT STARTED: pass --approve-external-run or set standing "
             "auto-approval"
