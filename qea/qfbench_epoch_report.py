@@ -281,22 +281,24 @@ def audit_paid_baseline_lifecycles(
         raise EpochReportError("paid batch needs exactly twelve attempt identities")
     workers: list[dict] = []
     for attempt_id in identifiers:
-        lifecycle_root = root / "lifecycles" / root.name / attempt_id
-        if not lifecycle_root.is_dir():
-            alternative = root / "lifecycles" / attempt_id
-            lifecycle_root = alternative if alternative.is_dir() else lifecycle_root
+        sandbox_root = root / "lifecycles" / root.name / attempt_id
+        proxy_root = root / "lifecycles" / attempt_id
+        if not sandbox_root.is_dir() and proxy_root.is_dir():
+            sandbox_root = proxy_root
+        if not proxy_root.is_dir() and sandbox_root.is_dir():
+            proxy_root = sandbox_root
         try:
             worker = load_lifecycle(
-                lifecycle_root / "worker-sandbox-lifecycle-v2.json"
+                sandbox_root / "worker-sandbox-lifecycle-v2.json"
             )
             proxy = load_lifecycle(
-                lifecycle_root / "proxy-sandbox-lifecycle-v2.json"
+                proxy_root / "proxy-sandbox-lifecycle-v2.json"
             )
             verifier = load_lifecycle(
-                lifecycle_root / "verifier-sandbox-lifecycle-v2.json"
+                sandbox_root / "verifier-sandbox-lifecycle-v2.json"
             )
             network = load_network_lifecycle(
-                lifecycle_root / "proxy-network-lifecycle-v1.json"
+                proxy_root / "proxy-network-lifecycle-v1.json"
             )
         except (SandboxLifecycleError, SandboxNetworkLifecycleError) as exc:
             raise EpochReportError(

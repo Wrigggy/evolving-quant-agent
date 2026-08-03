@@ -124,3 +124,101 @@ def test_scheduler_epoch_report_separates_epochs_and_preserves_combined_result(
     assert report["combined"]["official_reward_mean"] == 0.6
     assert report["combined"]["provider_cost_usd"] == "0.15"
     assert report["scheduler_epoch_batch_effect_warning"] is True
+
+
+def _write_paid_lifecycle(path, *, run_id, attempt_id, role, network_policy):
+    started = datetime(2026, 8, 3, tzinfo=timezone.utc)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "backend": "rootless-docker",
+                "role": role,
+                "run_id": run_id,
+                "attempt_id": attempt_id,
+                "task_id": "task-a",
+                "native_id": f"{role}-{attempt_id}",
+                "immutable_image_ref": "sha256:" + "1" * 64,
+                "spec_sha256": "2" * 64,
+                "attempt_identity_sha256": "3" * 64,
+                "resource_contract": {
+                    "cpu_count": 1,
+                    "memory_mb": 512,
+                    "network_policy": network_policy,
+                    "pids_limit": 64,
+                    "timeout_seconds": 300,
+                    "writable_tmpfs_mb": {"/tmp": 64},
+                    "executable_tmpfs_paths": [],
+                },
+                "created_at": started.isoformat(),
+                "started_at": started.isoformat(),
+                "finished_at": (started + timedelta(minutes=1)).isoformat(),
+                "cleaned_at": (started + timedelta(minutes=2)).isoformat(),
+                "cleaned_up": True,
+                "cleanup_method": "exact-id",
+                "cleanup_result": "killed",
+                "failure": None,
+            }
+        )
+    )
+
+
+def test_paid_lifecycle_audit_uses_worker_and_proxy_specific_roots(tmp_path):
+    from qea.qfbench_epoch_report import audit_paid_baseline_lifecycles
+
+    run_dir = tmp_path / "paid-run"
+    attempt_ids = tuple(f"attempt-{index:02d}" for index in range(12))
+    for attempt_id in attempt_ids:
+        sandbox_root = run_dir / "lifecycles" / run_dir.name / attempt_id
+        proxy_root = run_dir / "lifecycles" / attempt_id
+        _write_paid_lifecycle(
+            sandbox_root / "worker-sandbox-lifecycle-v2.json",
+            run_id=run_dir.name,
+            attempt_id=attempt_id,
+            role="worker",
+            network_policy="worker-proxy-only",
+        )
+        _write_paid_lifecycle(
+            sandbox_root / "verifier-sandbox-lifecycle-v2.json",
+            run_id=run_dir.name,
+            attempt_id=attempt_id,
+            role="verifier",
+            network_policy="none",
+        )
+        _write_paid_lifecycle(
+            proxy_root / "proxy-sandbox-lifecycle-v2.json",
+            run_id=run_dir.name,
+            attempt_id=attempt_id,
+            role="proxy",
+            network_policy="proxy-outbound",
+        )
+        (proxy_root / "proxy-network-lifecycle-v1.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "backend": "rootless-docker",
+                    "native_id": f"network-{attempt_id}",
+                    "name": f"qea-{attempt_id}",
+                    "run_id": run_dir.name,
+                    "network_scope": attempt_id,
+                    "identity_sha256": "4" * 64,
+                    "created_at": "2026-08-03T00:00:00+00:00",
+                    "cleaned_at": "2026-08-03T00:02:00+00:00",
+                    "cleaned_up": True,
+                    "cleanup_method": "exact-id",
+                    "cleanup_result": "killed",
+                }
+            )
+        )
+
+    result = audit_paid_baseline_lifecycles(
+        run_dir, attempt_ids=attempt_ids
+    )
+
+    assert result == {
+        "worker_overlap": 12,
+        "cleaned_up": True,
+        "verifier_networkless": True,
+        "worker_proxy_only": True,
+    }

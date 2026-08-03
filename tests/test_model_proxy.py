@@ -648,17 +648,32 @@ def test_proxy_audit_drops_provider_request_id_that_contains_token(tmp_path):
         _stop(upstream, upstream_thread)
 
 
-def test_proxy_classifies_connect_failure_before_request_as_not_accepted(tmp_path):
+def test_proxy_classifies_connect_failure_before_request_as_not_accepted(
+    tmp_path, monkeypatch
+):
+    from qea.model_proxy import _ModelProxyHandler
+
     unused = socket.socket()
     unused.bind(("127.0.0.1", 0))
     port = unused.getsockname()[1]
     unused.close()
+    original_open = _ModelProxyHandler._open_upstream
+    opened = []
+
+    def record_open(self, policy):
+        opened.append(len(opened) + 1)
+        return original_open(self, policy)
+
+    monkeypatch.setattr(_ModelProxyHandler, "_open_upstream", record_open)
     proxy, proxy_thread = _start_proxy(
-        tmp_path, SimpleServerAddress(("127.0.0.1", port))
+        tmp_path,
+        SimpleServerAddress(("127.0.0.1", port)),
+        pre_accept_connect_attempts=3,
     )
     try:
         status, _, _ = _request(proxy)
         assert status == 502
+        assert opened == [1, 2, 3]
         [audit] = _read_audit(tmp_path)
         assert audit["request_state"] == "not_accepted"
         assert audit["failure_class"] == "pre_accept_transport"
@@ -672,8 +687,62 @@ def test_proxy_classifies_connect_failure_before_request_as_not_accepted(tmp_pat
         _stop(proxy, proxy_thread)
 
 
-def test_proxy_quarantines_disconnect_after_request_bytes_are_received(tmp_path):
+def test_proxy_retries_only_connect_failure_before_request_bytes(
+    tmp_path, monkeypatch
+):
+    from qea.model_proxy import _ModelProxyHandler
+
+    upstream, upstream_thread = _start_upstream()
+    original_open = _ModelProxyHandler._open_upstream
+    opened = []
+
+    class FailedBeforeRequest:
+        def connect(self):
+            raise ConnectionResetError("synthetic pre-request connect reset")
+
+        def close(self):
+            raise OSError("synthetic failed-connection close error")
+
+    def open_with_one_safe_failure(self, policy):
+        opened.append(len(opened) + 1)
+        if len(opened) == 1:
+            return FailedBeforeRequest()
+        return original_open(self, policy)
+
+    monkeypatch.setattr(
+        _ModelProxyHandler, "_open_upstream", open_with_one_safe_failure
+    )
+    proxy, proxy_thread = _start_proxy(
+        tmp_path, upstream, pre_accept_connect_attempts=3
+    )
+    try:
+        status, _, _ = _request(proxy)
+
+        assert status == 200
+        assert opened == [1, 2]
+        assert len(upstream.captured) == 1
+        [audit] = _read_audit(tmp_path)
+        assert audit["request_state"] == "completed"
+        assert audit["failure_class"] is None
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_proxy_quarantines_disconnect_after_request_bytes_are_received(
+    tmp_path, monkeypatch
+):
+    from qea.model_proxy import _ModelProxyHandler
+
     upstream, captured, upstream_thread = _start_disconnect_upstream()
+    original_open = _ModelProxyHandler._open_upstream
+    opened = []
+
+    def record_open(self, policy):
+        opened.append(len(opened) + 1)
+        return original_open(self, policy)
+
+    monkeypatch.setattr(_ModelProxyHandler, "_open_upstream", record_open)
     proxy, proxy_thread = _start_proxy(tmp_path, upstream)
     try:
         status, _, _ = _request(proxy)
@@ -681,6 +750,7 @@ def test_proxy_quarantines_disconnect_after_request_bytes_are_received(tmp_path)
         upstream_thread.join(timeout=3)
         assert not upstream_thread.is_alive()
         assert captured and b'{"model":"fixture"}' in captured[0]
+        assert opened == [1]
         [audit] = _read_audit(tmp_path)
         assert audit["request_state"] == "quarantined"
         assert audit["failure_class"] == "post_accept_transport"
@@ -1060,6 +1130,25 @@ def test_token_file_accepts_owner_only_modes(tmp_path, mode):
     assert config.token_file == token
 
 
+@pytest.mark.parametrize("attempts", [True, 0, 6])
+def test_proxy_config_rejects_unbounded_pre_accept_connect_attempts(
+    tmp_path, attempts
+):
+    from qea.model_proxy import ModelProxyConfig, ModelProxyError
+
+    with pytest.raises(ModelProxyError, match="integer in \\[1, 5\\]"):
+        ModelProxyConfig(
+            listen_host="127.0.0.1",
+            listen_port=0,
+            upstream_base_url="https://model.example/v1",
+            allowed_path_prefix="/v1",
+            allowed_model="fixture",
+            token_file=_token_file(tmp_path),
+            audit_file=tmp_path / "audit.jsonl",
+            pre_accept_connect_attempts=attempts,
+        )
+
+
 def test_token_file_rejects_symlink_and_oversized_value(tmp_path):
     from qea.model_proxy import ModelProxyConfig, ModelProxyError
 
@@ -1141,6 +1230,41 @@ def test_proxy_sandbox_plan_binds_scope_model_and_private_audit_config():
     assert plan.allowed_model == "openai/gpt-5"
     assert plan.audit_path == "/run/qea-secrets/proxy-audit.jsonl"
     assert plan.config_payload()["allowed_model"] == "openai/gpt-5"
+    assert plan.config_payload()["pre_accept_connect_attempts"] == 3
+
+
+def test_proxy_sandbox_plan_identity_binds_pre_accept_connect_attempts():
+    from qea.model_proxy import (
+        build_model_proxy_sandbox_plan,
+        model_proxy_plan_identity,
+    )
+
+    common = {
+        "run_id": "run-001",
+        "attempt_id": "attempt-001",
+        "image_ref": "sha256:" + "c" * 64,
+        "upstream_base_url": "https://openrouter.ai/api/v1",
+        "allowed_path_prefix": "/v1",
+        "allowed_model": "openai/gpt-5",
+        "audit_path": "/run/qea-secrets/proxy-audit.jsonl",
+        "network_scope": "attempt-001",
+        "listen_port": 8080,
+        "cpu_count": 1,
+        "memory_mb": 512,
+        "pids_limit": 64,
+        "timeout_seconds": 3600,
+    }
+
+    one_attempt = build_model_proxy_sandbox_plan(
+        **common, pre_accept_connect_attempts=1
+    )
+    three_attempts = build_model_proxy_sandbox_plan(
+        **common, pre_accept_connect_attempts=3
+    )
+
+    assert model_proxy_plan_identity(one_attempt) != model_proxy_plan_identity(
+        three_attempts
+    )
 
 
 def test_proxy_public_plan_identity_includes_safe_denied_request_hashes():

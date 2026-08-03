@@ -27,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-response-bytes", type=int, default=64 * 1024 * 1024)
     parser.add_argument("--connect-timeout-seconds", type=float, default=10.0)
     parser.add_argument("--read-timeout-seconds", type=float, default=300.0)
+    parser.add_argument("--pre-accept-connect-attempts", type=int, default=3)
     return parser
 
 
@@ -50,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
                 max_response_bytes=args.max_response_bytes,
                 connect_timeout_seconds=args.connect_timeout_seconds,
                 read_timeout_seconds=args.read_timeout_seconds,
+                pre_accept_connect_attempts=args.pre_accept_connect_attempts,
             )
         )
     except ModelProxyError:

@@ -282,6 +282,7 @@ def test_proxy_entrypoint_emits_required_provider_only_when_configured(
         "max_response_bytes": 4096,
         "connect_timeout_seconds": 10.0,
         "read_timeout_seconds": 300.0,
+        "pre_accept_connect_attempts": 3,
     }
     captured = []
 
@@ -305,6 +306,11 @@ def test_proxy_entrypoint_emits_required_provider_only_when_configured(
     assert pinned_argv[index : index + 2] == (
         "--required-provider",
         "deepseek",
+    )
+    retry_index = pinned_argv.index("--pre-accept-connect-attempts")
+    assert pinned_argv[retry_index : retry_index + 2] == (
+        "--pre-accept-connect-attempts",
+        "3",
     )
 
 

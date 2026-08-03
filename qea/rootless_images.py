@@ -73,7 +73,7 @@ required = {
     'listen_host', 'listen_port', 'upstream_base_url', 'allowed_path_prefix',
     'allowed_model', 'audit_file', 'denied_request_identities_sha256',
     'max_request_bytes', 'max_response_bytes', 'connect_timeout_seconds',
-    'read_timeout_seconds',
+    'read_timeout_seconds', 'pre_accept_connect_attempts',
 }
 if set(config) not in (required, required | {'required_provider'}):
     raise SystemExit(78)
@@ -91,6 +91,7 @@ argv = [
     '--max-response-bytes', str(config['max_response_bytes']),
     '--connect-timeout-seconds', str(config['connect_timeout_seconds']),
     '--read-timeout-seconds', str(config['read_timeout_seconds']),
+    '--pre-accept-connect-attempts', str(config['pre_accept_connect_attempts']),
 ]
 if 'required_provider' in config:
     argv.extend(['--required-provider', str(config['required_provider'])])

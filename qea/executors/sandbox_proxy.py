@@ -153,6 +153,7 @@ class SandboxProxyConfig:
     timeout_seconds: int = 120
     expect_request: bool = True
     required_provider: str | None = None
+    pre_accept_connect_attempts: int = 3
 
     def __post_init__(self) -> None:
         if not isinstance(self.resource_contract, SandboxResourceContract):
@@ -170,6 +171,13 @@ class SandboxProxyConfig:
             raise SandboxProxyError("timeout_seconds must be a positive integer")
         if type(self.expect_request) is not bool:
             raise SandboxProxyError("expect_request must be a boolean")
+        if (
+            type(self.pre_accept_connect_attempts) is not int
+            or not 1 <= self.pre_accept_connect_attempts <= 5
+        ):
+            raise SandboxProxyError(
+                "pre_accept_connect_attempts must be an integer in [1, 5]"
+            )
         if self.required_provider is not None:
             try:
                 normalized_provider = _validate_provider_slug(
@@ -740,6 +748,9 @@ class SandboxProxyManager:
                     sorted(denied_request_identities)
                 ),
                 writable_tmpfs_mb=self.config.resource_contract.writable_tmpfs_mb,
+                pre_accept_connect_attempts=(
+                    self.config.pre_accept_connect_attempts
+                ),
             )
             (
                 public_plan_sha256,

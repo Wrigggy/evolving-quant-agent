@@ -66,6 +66,8 @@ _AUDIT_KEYS = frozenset(
 )
 _PROVIDER_REQUEST_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,511}\Z")
 _MAX_DENIED_REQUEST_IDENTITIES = 10_000
+_MAX_PRE_ACCEPT_CONNECT_ATTEMPTS = 5
+_PRE_ACCEPT_CONNECT_BACKOFF_SECONDS = 0.25
 
 
 class ModelProxyError(RuntimeError):
@@ -336,6 +338,7 @@ class ModelProxyConfig:
     max_response_bytes: int = 64 * 1024 * 1024
     connect_timeout_seconds: float = 10.0
     read_timeout_seconds: float = 300.0
+    pre_accept_connect_attempts: int = 3
     required_provider: str | None = None
 
     def __post_init__(self) -> None:
@@ -373,6 +376,15 @@ class ModelProxyConfig:
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
                 raise ModelProxyError(f"{name} must be positive")
+        if (
+            type(self.pre_accept_connect_attempts) is not int
+            or not 1
+            <= self.pre_accept_connect_attempts
+            <= _MAX_PRE_ACCEPT_CONNECT_ATTEMPTS
+        ):
+            raise ModelProxyError(
+                "pre_accept_connect_attempts must be an integer in [1, 5]"
+            )
 
 
 @dataclass(frozen=True)
@@ -477,6 +489,7 @@ class ModelProxySandboxPlan:
     network_scope: str | None = None
     denied_request_identities_sha256: tuple[str, ...] = ()
     required_provider: str | None = None
+    pre_accept_connect_attempts: int = 3
 
     def config_payload(self) -> dict[str, object]:
         """Return the public config uploaded before the token appears."""
@@ -490,6 +503,7 @@ class ModelProxySandboxPlan:
             "max_response_bytes": 64 * 1024 * 1024,
             "connect_timeout_seconds": 10.0,
             "read_timeout_seconds": 300.0,
+            "pre_accept_connect_attempts": self.pre_accept_connect_attempts,
         }
         if self.allowed_model is not None:
             payload["allowed_model"] = self.allowed_model
@@ -530,6 +544,7 @@ class ModelProxySandboxPlan:
             "denied_request_identities_sha256": list(
                 self.denied_request_identities_sha256
             ),
+            "pre_accept_connect_attempts": self.pre_accept_connect_attempts,
         }
         if self.required_provider is not None:
             payload["required_provider"] = self.required_provider
@@ -606,6 +621,7 @@ def build_model_proxy_sandbox_plan(
     audit_path: str | None = None,
     denied_request_identities_sha256: Sequence[str] = (),
     writable_tmpfs_mb: Mapping[str, int] | None = None,
+    pre_accept_connect_attempts: int = 3,
 ) -> ModelProxySandboxPlan:
     """Build a proxy plan that has no API-key argument, env value, or label."""
 
@@ -633,6 +649,15 @@ def build_model_proxy_sandbox_plan(
     denied_identities = _validate_denied_request_identities(
         denied_request_identities_sha256
     )
+    if (
+        type(pre_accept_connect_attempts) is not int
+        or not 1
+        <= pre_accept_connect_attempts
+        <= _MAX_PRE_ACCEPT_CONNECT_ATTEMPTS
+    ):
+        raise ModelProxyError(
+            "pre_accept_connect_attempts must be an integer in [1, 5]"
+        )
     if denied_identities and allowed_model is None:
         raise ModelProxyError(
             "denied request identities require the complete scoped proxy policy"
@@ -685,6 +710,7 @@ def build_model_proxy_sandbox_plan(
         network_scope=network_scope,
         denied_request_identities_sha256=denied_identities,
         required_provider=required_provider,
+        pre_accept_connect_attempts=pre_accept_connect_attempts,
     )
 
 
@@ -780,6 +806,7 @@ class _ProxyPolicy:
     max_response_bytes: int
     connect_timeout_seconds: float
     read_timeout_seconds: float
+    pre_accept_connect_attempts: int = 3
 
 
 def _connection_tokens(headers) -> set[str]:
@@ -1126,6 +1153,28 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             timeout=policy.connect_timeout_seconds,
         )
 
+    def _connect_upstream(self, policy: _ProxyPolicy):
+        """Retry only failures proven to precede all HTTP request bytes."""
+
+        for attempt_number in range(1, policy.pre_accept_connect_attempts + 1):
+            connection = None
+            try:
+                connection = self._open_upstream(policy)
+                connection.connect()
+                return connection
+            except (OSError, TimeoutError, http.client.HTTPException):
+                if connection is not None:
+                    try:
+                        connection.close()
+                    except (OSError, http.client.HTTPException):
+                        pass
+                if attempt_number >= policy.pre_accept_connect_attempts:
+                    raise
+                time.sleep(
+                    _PRE_ACCEPT_CONNECT_BACKOFF_SECONDS * attempt_number
+                )
+        raise AssertionError("bounded pre-accept connect loop did not terminate")
+
     def _request_identity(self, target: str, body: bytes) -> str:
         digest = hashlib.sha256()
         digest.update(self.command.encode("ascii"))
@@ -1296,7 +1345,7 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
         headers = _filtered_request_headers(
             self.headers, policy, len(outbound_body)
         )
-        connection = self._open_upstream(policy)
+        connection = None
         spool = tempfile.SpooledTemporaryFile(
             max_size=min(policy.max_response_bytes, 1024 * 1024), mode="w+b"
         )
@@ -1313,7 +1362,7 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
         total_tokens = None
         provider_cost = None
         try:
-            connection.connect()
+            connection = self._connect_upstream(policy)
             request_transmission_started = True
             connection.request(
                 self.command,
@@ -1524,7 +1573,8 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                     pass
         finally:
             spool.close()
-            connection.close()
+            if connection is not None:
+                connection.close()
 
     def _proxy(self) -> None:
         if self.path == _FINALIZE_PATH:
@@ -1577,5 +1627,6 @@ def create_proxy_server(config: ModelProxyConfig) -> ThreadingHTTPServer:
         max_response_bytes=config.max_response_bytes,
         connect_timeout_seconds=float(config.connect_timeout_seconds),
         read_timeout_seconds=float(config.read_timeout_seconds),
+        pre_accept_connect_attempts=config.pre_accept_connect_attempts,
     )
     return _ModelProxyServer((config.listen_host, config.listen_port), policy)

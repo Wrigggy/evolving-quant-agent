@@ -310,6 +310,12 @@ def test_session_uses_one_scoped_network_and_private_token_transfer(tmp_path):
         "/run/qea-secrets/model-token",
         REAL_TOKEN,
     )
+    config_upload = next(
+        payload
+        for _, path, payload in backend.uploads
+        if path == "/run/qea-secrets/proxy-config.json"
+    )
+    assert json.loads(config_upload)["pre_accept_connect_attempts"] == 3
     token_occurrences = [
         event
         for event in backend.events
@@ -582,6 +588,24 @@ def test_backend_without_scoped_network_contract_fails_closed(tmp_path):
         with _open(manager, tmp_path / "run"):
             pytest.fail("session must not be yielded")
     assert backend.events == []
+
+
+@pytest.mark.parametrize("attempts", [True, 0, 6])
+def test_proxy_manager_rejects_unbounded_pre_accept_connect_attempts(
+    tmp_path, attempts
+):
+    from qea.executors.sandbox_proxy import SandboxProxyConfig, SandboxProxyError
+
+    with pytest.raises(SandboxProxyError, match="integer in \\[1, 5\\]"):
+        SandboxProxyConfig(
+            image_ref="sha256:" + "c" * 64,
+            resource_contract=_resources(),
+            token_file=_token_file(tmp_path),
+            upstream_base_url="https://openrouter.ai/api/v1",
+            allowed_path_prefix="/v1",
+            allowed_model="openai/gpt-5",
+            pre_accept_connect_attempts=attempts,
+        )
 
 
 @pytest.mark.parametrize("mode", [0o604, 0o640, 0o666])
