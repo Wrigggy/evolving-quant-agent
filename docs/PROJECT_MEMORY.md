@@ -160,6 +160,12 @@ The run preserved optimize-only answer-free feedback, independent no-network off
 
 Rootless is accepted only through the five-task one-iteration stage. Before five-task three-iteration or 30-task work, complete a deliberate production full-harness coordinator-kill, exact-ID reaper/resume exercise and authoritative provider-cost reconciliation. The shared-host administrator remains a documented residual risk, and rootless Docker is not microVM-equivalent. Full evidence and the current gate are in the [2026-07-31 decision](decisions/2026-07-31-qfbench-rootless-five-task-full-harness-gate.md).
 
+### 2026-08-03 Baseline Restart After Same-Turn Model Replay
+
+The repetition-01 accounting canary for `qfbench-rootless-base-85x5-official-deepseek-20260801` found 15 duplicated completed request identities across 13 attempts, representing 17 extra HTTP-200 provider calls. Thirteen groups align with the 180-second client timeout while the proxy could wait 300 seconds; two followed completed empty/unusable responses. The run's 85 scores remain immutable engineering evidence, but the run is invalid for repeated baseline performance and must not resume into repetition 02.
+
+The coordinator-uploaded worker adapter now enforces OpenAI SDK `max_retries=0`, NexAU outer `retry_attempts=1`, and a 360-second client-timeout floor. A new content-addressed run must restart at repetition 01 and stop after repetition 02 only after no-model and paid worker/verifier canaries. Historical completed duplicates remain fatal; they are not reclassified as a cost-only exception. See the [superseding decision](decisions/2026-08-03-qfbench-baseline-restart-after-model-replay.md).
+
 No report may describe adapter compatibility, E2B parity, AutoDL performance, or seed-worker QFBench score as measured until the corresponding run artifact exists.
 
 ## Memory Maintenance Rules
