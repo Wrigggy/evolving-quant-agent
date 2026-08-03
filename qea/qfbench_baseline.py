@@ -353,10 +353,12 @@ def _empty_cost_group() -> dict:
     }
 
 
-def _add_cost(group: dict, record: Mapping, cost: Decimal) -> None:
+def _add_cost(group: dict, record: Mapping, cost: Decimal | None) -> None:
     group["request_count"] += 1
     if record["request_state"] == "completed":
         group["completed_request_count"] += 1
+        if cost is None:
+            return
         group["input_tokens"] += record["input_tokens"]
         group["output_tokens"] += record["output_tokens"]
         group["total_tokens"] += record["total_tokens"]
@@ -395,7 +397,9 @@ def _read_audit_records(path: Path) -> tuple[dict, ...]:
     return tuple(records)
 
 
-def _validated_completed_cost(record: Mapping, *, source: Path) -> Decimal:
+def _validated_completed_cost(
+    record: Mapping, *, source: Path
+) -> Decimal | None:
     if set(record) != _PROXY_AUDIT_KEYS or record.get("schema_version") != 1:
         raise BaselineConfigError(f"cost audit invalid record schema: {source}")
     identity = record.get("request_identity_sha256")
@@ -425,6 +429,23 @@ def _validated_completed_cost(record: Mapping, *, source: Path) -> Decimal:
         return Decimal("0")
     if state != "completed" or status != 200:
         raise BaselineConfigError(f"cost audit invalid terminal request state: {source}")
+    accounting_names = (
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "provider_cost_usd",
+    )
+    accounting = tuple(record.get(name) for name in accounting_names)
+    if all(value is None for value in accounting):
+        if record.get("failure_class") is not None:
+            raise BaselineConfigError(
+                f"cost audit invalid successful failure class: {source}"
+            )
+        return None
+    if any(value is None for value in accounting):
+        raise BaselineConfigError(
+            f"cost audit partially missing successful accounting: {source}"
+        )
     tokens = []
     for name in ("input_tokens", "output_tokens", "total_tokens"):
         value = record.get(name)
@@ -511,6 +532,7 @@ def audit_baseline_proxy_costs(
     repetition_groups: dict[str, dict[str, dict]] = {}
     seen_request_identities: set[str] = set()
     unreconciled_attempts: list[dict] = []
+    unreconciled_requests: list[dict] = []
     for attempt_path in attempt_paths:
         attempt_dir = attempt_path.parent
         try:
@@ -574,15 +596,28 @@ def audit_baseline_proxy_costs(
                     f"cost audit duplicate request identity: {request_identity}"
                 )
             seen_request_identities.add(request_identity)
+            if cost is None:
+                unreconciled_requests.append({
+                    "attempt_id": attempt_dir.name,
+                    "checkpoint": str(attempt["checkpoint"]),
+                    "panel": panel,
+                    "repetition": int(repetition),
+                    "request_identity_sha256": request_identity,
+                    "task_id": task_id,
+                    "reason": "successful_response_usage_unavailable",
+                })
             _add_cost(total, record, cost)
             _add_cost(panel_group, record, cost)
             _add_cost(task_group, record, cost)
 
     payload = _cost_json(total)
-    payload["cost_complete"] = not unreconciled_attempts
-    payload["provider_cost_is_lower_bound"] = bool(unreconciled_attempts)
+    has_unreconciled = bool(unreconciled_attempts or unreconciled_requests)
+    payload["cost_complete"] = not has_unreconciled
+    payload["provider_cost_is_lower_bound"] = has_unreconciled
     payload["unreconciled_attempt_count"] = len(unreconciled_attempts)
     payload["unreconciled_attempts"] = unreconciled_attempts
+    payload["unreconciled_request_count"] = len(unreconciled_requests)
+    payload["unreconciled_requests"] = unreconciled_requests
     payload["by_repetition"] = {
         repetition: {
             panel: _cost_json(group, tasks=group.pop("tasks"))

@@ -501,6 +501,49 @@ def test_cost_audit_reconciles_attempts_requests_tokens_and_groups(tmp_path) -> 
     assert diagnostic["request_count"] == 1
 
 
+def test_cost_audit_reports_completed_request_without_accounting_as_lower_bound(
+    tmp_path,
+) -> None:
+    from qea.qfbench_baseline import audit_baseline_proxy_costs
+
+    primary_dir, _ = _cost_fixture(tmp_path)
+    audit_path = primary_dir / "proxy-audit.jsonl"
+    records = [json.loads(line) for line in audit_path.read_text().splitlines()]
+    request_identity = records[0]["request_identity_sha256"]
+    for field in (
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "provider_cost_usd",
+    ):
+        records[0][field] = None
+    audit_path.write_text("\n".join(map(json.dumps, records)) + "\n")
+
+    audit = audit_baseline_proxy_costs(tmp_path, expected_attempts=2)
+
+    assert audit["attempt_count"] == 2
+    assert audit["request_count"] == 3
+    assert audit["completed_request_count"] == 3
+    assert audit["input_tokens"] == 50
+    assert audit["output_tokens"] == 10
+    assert audit["total_tokens"] == 60
+    assert audit["provider_cost_usd"] == "0.05"
+    assert audit["cost_complete"] is False
+    assert audit["provider_cost_is_lower_bound"] is True
+    assert audit["unreconciled_attempt_count"] == 0
+    assert audit["unreconciled_attempts"] == []
+    assert audit["unreconciled_request_count"] == 1
+    assert audit["unreconciled_requests"] == [{
+        "attempt_id": primary_dir.name,
+        "checkpoint": "repetition-01-primary",
+        "panel": "primary",
+        "repetition": 1,
+        "request_identity_sha256": request_identity,
+        "task_id": "risk-task",
+        "reason": "successful_response_usage_unavailable",
+    }]
+
+
 def test_cost_audit_reports_timeout_ledger_as_explicit_lower_bound(tmp_path) -> None:
     from qea.qfbench_baseline import audit_baseline_proxy_costs
 
@@ -579,6 +622,7 @@ def test_cost_audit_rejects_non_timeout_or_ambiguous_missing_ledgers(
         "missing_audit",
         "null_success_cost",
         "null_success_usage",
+        "successful_failure_class",
         "noncompleted_200",
         "unknown_checkpoint",
         "attempt_count",
@@ -600,6 +644,16 @@ def test_cost_audit_fails_closed_on_incomplete_or_drifted_ledger(
         audit_path.write_text("\n".join(map(json.dumps, records)) + "\n")
     elif corruption == "null_success_usage":
         records[0]["total_tokens"] = None
+        audit_path.write_text("\n".join(map(json.dumps, records)) + "\n")
+    elif corruption == "successful_failure_class":
+        for field in (
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "provider_cost_usd",
+        ):
+            records[0][field] = None
+        records[0]["failure_class"] = "unexpected"
         audit_path.write_text("\n".join(map(json.dumps, records)) + "\n")
     elif corruption == "noncompleted_200":
         records[0]["request_state"] = "quarantined"
