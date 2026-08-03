@@ -97,6 +97,22 @@ def test_stopped_run_freezes_one_sanitized_owner_only_incident(tmp_path):
     assert stat.S_IMODE((incident_dir / "incident.json").stat().st_mode) == 0o600
 
 
+def test_provider_brand_does_not_mask_cost_omission(tmp_path):
+    from scripts.run_qfbench_rootless_sentinel import observe
+
+    payload = _sentinel_config(tmp_path)
+    with open(payload["failure_log"], "w") as handle:
+        handle.write("model transport label: openrouter-compatible\n")
+        handle.write("cost audit missing successful usage\n")
+    config = _load(tmp_path, payload)
+
+    incident = observe(config, pid_alive=lambda pid: False)
+
+    assert incident.category == "unsupported_cost_omission"
+    assert incident.failure_signature == "unsupported cost ledger omission"
+    assert "openrouter-compatible" in incident.excerpt
+
+
 def test_secret_like_binary_log_is_bounded_redacted_and_hard_stop(tmp_path):
     from qea.repair_supervisor import classify_incident
     from scripts.run_qfbench_rootless_sentinel import observe

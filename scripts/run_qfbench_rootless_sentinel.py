@@ -36,7 +36,6 @@ _REDACT_MARKERS = (
     b"api-key",
     b"authorization:",
     b"bearer ",
-    b"openrouter",
     b"token=",
     b".env",
     b"credentials",
