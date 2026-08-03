@@ -75,6 +75,33 @@ def _external_supervisor_config(tmp_path):
     return payload
 
 
+def _orphan_supervisor_config(tmp_path):
+    from qea.process_supervisor import ChildIdentity
+
+    payload = _external_supervisor_config(tmp_path)
+    supervisor_dir = payload["supervisor_dir"]
+    child = ChildIdentity(
+        pid=5252,
+        process_group_id=5252,
+        uid=os.getuid(),
+        start_ticks=12345,
+        command_sha256="a" * 64,
+        run_id="formal-r1",
+        source_commit="1" * 40,
+    )
+    child_path = os.path.join(supervisor_dir, "child-identity.json")
+    with open(child_path, "w") as handle:
+        json.dump(child.to_dict(), handle)
+    os.chmod(child_path, 0o600)
+    payload.update(
+        {
+            "schema_version": 3,
+            "child_identity_file": child_path,
+        }
+    )
+    return payload, child
+
+
 def test_running_matching_coordinator_does_not_create_incident(tmp_path):
     from scripts.run_qfbench_rootless_sentinel import observe
 
@@ -104,6 +131,63 @@ def test_external_supervisor_exit_freezes_incident_for_dead_coordinator(tmp_path
     assert IncidentStore(config.state_dir).load(incident.incident_id).state is (
         IncidentState.FROZEN
     )
+
+
+def test_dead_wrapper_with_live_owned_child_is_supervisor_orphan_hard_stop(
+    tmp_path,
+):
+    from qea.repair_supervisor import classify_incident
+    from qea.qfbench_boundary import ProcessIdentity, ProcessSnapshot
+    from scripts.run_qfbench_rootless_sentinel import observe
+
+    payload, child = _orphan_supervisor_config(tmp_path)
+    config = _load(tmp_path, payload)
+    snapshot = ProcessSnapshot(
+        identity=ProcessIdentity(
+            child.pid,
+            child.process_group_id,
+            child.uid,
+            child.start_ticks,
+            child.command_sha256,
+        ),
+        state="S",
+        argv=("python", "run.py", "formal-r1", "1" * 40),
+    )
+
+    incident = observe(
+        config,
+        pid_alive=lambda pid: pid == child.pid,
+        child_snapshot=lambda pid: snapshot,
+    )
+
+    assert incident.category == "supervisor_orphan"
+    assert classify_incident(incident).action == "hard_stop"
+
+
+def test_schema_three_rejects_live_child_identity_drift(tmp_path):
+    from qea.qfbench_boundary import ProcessIdentity, ProcessSnapshot
+    from scripts.run_qfbench_rootless_sentinel import SentinelError, observe
+
+    payload, child = _orphan_supervisor_config(tmp_path)
+    config = _load(tmp_path, payload)
+    drifted = ProcessSnapshot(
+        identity=ProcessIdentity(
+            child.pid,
+            child.process_group_id,
+            child.uid,
+            child.start_ticks + 1,
+            child.command_sha256,
+        ),
+        state="S",
+        argv=("python", "run.py", "formal-r1", "1" * 40),
+    )
+
+    with pytest.raises(SentinelError, match="child identity"):
+        observe(
+            config,
+            pid_alive=lambda pid: pid == child.pid,
+            child_snapshot=lambda pid: drifted,
+        )
 
 
 def test_completion_marker_precedes_stopped_coordinator(tmp_path):

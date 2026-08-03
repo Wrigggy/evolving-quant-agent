@@ -25,6 +25,14 @@ from qea.repair_supervisor import (  # noqa: E402
     IncidentStore,
     SupervisorPolicyError,
 )
+from qea.process_supervisor import ChildIdentity, SupervisorError  # noqa: E402
+from qea.qfbench_boundary import (  # noqa: E402
+    BoundaryError,
+    ProcessIdentity,
+    ProcessSnapshot,
+    read_process_snapshot,
+    validate_process_snapshot,
+)
 
 
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
@@ -60,6 +68,7 @@ class SentinelConfig:
     failure_log: Path
     completion_marker: Path
     state_dir: Path
+    child_identity_file: Path | None = None
 
 
 def _regular_config_path(path: str | Path) -> Path:
@@ -107,14 +116,17 @@ def load_config(path: str | Path) -> SentinelConfig:
         "state_dir",
     }
     expected_v2 = expected_v1 | {"supervisor_dir"}
+    expected_v3 = expected_v2 | {"child_identity_file"}
     if not isinstance(payload, dict):
         raise SentinelError("sentinel config schema is invalid")
     version = payload.get("schema_version")
     if (version == 1 and set(payload) != expected_v1) or (
         version == 2 and set(payload) != expected_v2
+    ) or (
+        version == 3 and set(payload) != expected_v3
     ):
         raise SentinelError("sentinel config schema is invalid")
-    if version not in {1, 2}:
+    if version not in {1, 2, 3}:
         raise SentinelError("sentinel config schema version is unsupported")
     run_id = payload["run_id"]
     if not isinstance(run_id, str) or not _RUN_ID.fullmatch(run_id):
@@ -128,7 +140,7 @@ def load_config(path: str | Path) -> SentinelConfig:
     run_dir = Path(run_dir_value).expanduser().resolve()
     if not run_dir.is_dir():
         raise SentinelError("run_dir is unavailable")
-    if version == 2:
+    if version in {2, 3}:
         supervisor_value = payload["supervisor_dir"]
         if not isinstance(supervisor_value, str):
             raise SentinelError("supervisor_dir must be a path string")
@@ -164,29 +176,39 @@ def load_config(path: str | Path) -> SentinelConfig:
         coordinator_pid_file=_owned_path(
             payload["coordinator_pid_file"],
             supervisor_dir,
-            "supervisor_dir" if version == 2 else "run_dir",
+            "supervisor_dir" if version in {2, 3} else "run_dir",
             "coordinator_pid_file",
         ),
         coordinator_command_token=command_token,
         exit_code_file=_owned_path(
             payload["exit_code_file"],
             supervisor_dir,
-            "supervisor_dir" if version == 2 else "run_dir",
+            "supervisor_dir" if version in {2, 3} else "run_dir",
             "exit_code_file",
         ),
         failure_log=_owned_path(
             payload["failure_log"],
             supervisor_dir,
-            "supervisor_dir" if version == 2 else "run_dir",
+            "supervisor_dir" if version in {2, 3} else "run_dir",
             "failure_log",
         ),
         completion_marker=_owned_path(
             payload["completion_marker"],
             supervisor_dir,
-            "supervisor_dir" if version == 2 else "run_dir",
+            "supervisor_dir" if version in {2, 3} else "run_dir",
             "completion_marker",
         ),
         state_dir=Path(state_value).expanduser().resolve(),
+        child_identity_file=(
+            _owned_path(
+                payload["child_identity_file"],
+                supervisor_dir,
+                "supervisor_dir",
+                "child_identity_file",
+            )
+            if version == 3
+            else None
+        ),
     )
 
 
@@ -233,6 +255,39 @@ def _read_pid(path: Path) -> int | None:
     if value < 2:
         raise SentinelError("coordinator pid is invalid")
     return value
+
+
+def _read_child_identity(path: Path) -> ChildIdentity:
+    payload = _read_regular(path, "child identity", maximum=4096)
+    metadata = path.stat()
+    if metadata.st_uid != os.geteuid() or stat.S_IMODE(metadata.st_mode) != 0o600:
+        raise SentinelError("child identity must be owner-controlled mode 600")
+    try:
+        decoded = json.loads(payload)
+        return ChildIdentity.from_dict(decoded)
+    except (json.JSONDecodeError, SupervisorError) as exc:
+        raise SentinelError(f"child identity is invalid: {exc}") from exc
+
+
+def _freeze_orphan_incident(config: SentinelConfig, child: ChildIdentity) -> Incident:
+    evidence = json.dumps(child.to_dict(), sort_keys=True).encode()
+    digest = hashlib.sha256(evidence).hexdigest()
+    incident = Incident.create(
+        run_id=config.run_id,
+        source_commit=config.source_commit,
+        exit_code=-1,
+        exit_evidence_sha256=digest,
+        failure_signature="supervisor wrapper exited while owned child remained live",
+        category="supervisor_orphan",
+        excerpt="validated child process group remains live after supervisor wrapper exit",
+        expected_identity=config.expected_identity,
+        evidence_hashes={"child_identity": digest},
+    )
+    store = IncidentStore(config.state_dir)
+    snapshot = store.create(incident)
+    if snapshot.state is IncidentState.OBSERVED:
+        store.transition(incident.incident_id, IncidentState.FROZEN)
+    return incident
 
 
 def _is_complete(config: SentinelConfig) -> bool:
@@ -327,12 +382,43 @@ def observe(
     *,
     pid_alive: Callable[[int], bool] = _default_pid_alive,
     pid_command: Callable[[int], str] = _default_pid_command,
+    child_snapshot: Callable[[int], ProcessSnapshot] = read_process_snapshot,
 ) -> Incident | None:
     """Observe once; freeze one incident and perform no repair or cleanup."""
 
     if _is_complete(config):
         return None
     pid = _read_pid(config.coordinator_pid_file)
+    if config.child_identity_file is not None:
+        child = _read_child_identity(config.child_identity_file)
+        if child.run_id != config.run_id or child.source_commit != config.source_commit:
+            raise SentinelError("child identity run/source mismatch")
+        wrapper_alive = pid is not None and pid_alive(pid)
+        child_alive = pid_alive(child.pid)
+        if child_alive:
+            try:
+                snapshot = child_snapshot(child.pid)
+                validate_process_snapshot(
+                    snapshot,
+                    expected=ProcessIdentity(
+                        pid=child.pid,
+                        process_group_id=child.process_group_id,
+                        uid=child.uid,
+                        start_ticks=child.start_ticks,
+                        command_sha256=child.command_sha256,
+                    ),
+                    command_token=config.coordinator_command_token,
+                    run_id=config.run_id,
+                    source_commit=config.source_commit,
+                    expected_uid=child.uid,
+                )
+            except (BoundaryError, ProcessLookupError) as exc:
+                raise SentinelError(f"live child identity mismatch: {exc}") from exc
+            if not wrapper_alive:
+                return _freeze_orphan_incident(config, child)
+            return None
+        if wrapper_alive:
+            raise SentinelError("live supervisor wrapper has no owned child")
     if pid is not None and pid_alive(pid):
         command = pid_command(pid)
         if config.coordinator_command_token not in command:

@@ -39,6 +39,7 @@ _HARD_STOP_CATEGORIES = frozenset(
         "ambiguous_upstream",
         "unsupported_cost_omission",
         "cleanup_failure",
+        "supervisor_orphan",
     }
 )
 _REPAIRABLE_CATEGORIES = frozenset({"artifact_integrity", "harness_bug"})
