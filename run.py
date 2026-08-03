@@ -338,6 +338,94 @@ def resolve_qfbench_concurrency(args, *, config=None) -> tuple[int, int]:
     return resolved_worker, verifier
 
 
+def _load_baseline_scheduler_epochs(run_dir: Path):
+    """Load a published schema-v2 epoch contract without mutating it."""
+
+    from qea.qfbench_scheduler_epochs import (
+        SchedulerEpoch,
+        SchedulerEpochError,
+        validate_scheduler_epochs,
+    )
+
+    resume_path = run_dir / "resume.json"
+    if not resume_path.exists():
+        return None
+    if resume_path.is_symlink() or not resume_path.is_file():
+        raise ValueError("baseline resume checkpoint must be a regular file")
+    try:
+        state = json.loads(resume_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("baseline resume checkpoint is invalid") from exc
+    if not isinstance(state, dict):
+        raise ValueError("baseline resume checkpoint must be a JSON object")
+    if state.get("schema_version") == 1:
+        return None
+    if state.get("schema_version") != 2:
+        raise ValueError("baseline resume checkpoint schema is unsupported")
+    try:
+        epochs = tuple(
+            SchedulerEpoch.from_dict(payload)
+            for payload in state.get("scheduler_epochs", ())
+        )
+        return validate_scheduler_epochs(
+            epochs,
+            total_repetitions=state.get("total_repetitions"),
+        )
+    except (SchedulerEpochError, TypeError) as exc:
+        raise ValueError(f"baseline scheduler epochs are invalid: {exc}") from exc
+
+
+def resolve_baseline_scheduler_epoch(run_dir, configured_epochs):
+    """Resolve the scheduler contract before constructing the runtime."""
+
+    from qea.qfbench_scheduler_epochs import (
+        SchedulerEpoch,
+        SchedulerEpochError,
+        epoch_for_repetition,
+    )
+
+    root = Path(run_dir)
+    resume_path = root / "resume.json"
+    if not resume_path.exists():
+        if configured_epochs is None:
+            return None
+        return epoch_for_repetition(configured_epochs, 1)
+    try:
+        state = json.loads(resume_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("baseline resume checkpoint is invalid") from exc
+    if not isinstance(state, dict):
+        raise ValueError("baseline resume checkpoint must be a JSON object")
+    if state.get("schema_version") == 1:
+        if configured_epochs is None:
+            return None
+    elif state.get("schema_version") == 2:
+        stored_epochs = _load_baseline_scheduler_epochs(root)
+        if configured_epochs is None or tuple(configured_epochs) != stored_epochs:
+            raise ValueError("configured scheduler epochs do not match checkpoint")
+    else:
+        raise ValueError("baseline resume checkpoint schema is unsupported")
+    try:
+        repetition = int(state["next_repetition"])
+        total = int(state["total_repetitions"])
+        epoch = epoch_for_repetition(
+            configured_epochs,
+            min(repetition, total),
+        )
+    except (KeyError, TypeError, ValueError, SchedulerEpochError) as exc:
+        raise ValueError("baseline scheduler epoch cannot be resolved") from exc
+    if not isinstance(epoch, SchedulerEpoch):
+        raise ValueError("baseline scheduler epoch cannot be resolved")
+    return epoch
+
+
+def _scheduler_epoch_label(epoch) -> str:
+    return (
+        f"repetitions-{epoch.first_repetition:02d}-through-"
+        f"{epoch.last_repetition:02d}"
+    )
+
+
 def qfbench_external_run_approval_text(executor: str) -> str:
     if executor == "rootless-docker":
         return "model-provider egress and self-hosted compute"
@@ -679,14 +767,37 @@ def _run_qfbench_rootless_baseline(args) -> int:
 
     plan = _prepare_qfbench_baseline_run(args)
     config = load_rootless_full_harness_config(args.rootless_config)
-    worker_concurrency, verifier_concurrency = resolve_qfbench_concurrency(
-        args, config=config
-    )
-    config = replace(
-        config,
-        worker_concurrency=worker_concurrency,
-        verifier_concurrency=verifier_concurrency,
-    )
+    run_dir = plan.results_root / plan.run_id
+    scheduler_epochs = _load_baseline_scheduler_epochs(run_dir)
+    active_epoch = resolve_baseline_scheduler_epoch(run_dir, scheduler_epochs)
+    if active_epoch is None:
+        worker_concurrency, verifier_concurrency = resolve_qfbench_concurrency(
+            args, config=config
+        )
+        config = replace(
+            config,
+            worker_concurrency=worker_concurrency,
+            verifier_concurrency=verifier_concurrency,
+        )
+    else:
+        expected_concurrency = (
+            active_epoch.worker_concurrency,
+            active_epoch.verifier_concurrency,
+        )
+        requested_concurrency = resolve_qfbench_concurrency(args, config=config)
+        if requested_concurrency != expected_concurrency:
+            raise ValueError(
+                "scheduler epoch requires concurrency "
+                f"{expected_concurrency[0]}/{expected_concurrency[1]}, found "
+                f"{requested_concurrency[0]}/{requested_concurrency[1]}"
+            )
+        expected_label = _scheduler_epoch_label(active_epoch)
+        if getattr(config, "scheduler_epoch", None) != expected_label:
+            raise ValueError(
+                "rootless config scheduler_epoch does not match checkpoint: "
+                f"expected {expected_label}"
+            )
+        worker_concurrency, verifier_concurrency = expected_concurrency
     _print_qfbench_baseline_plan(plan, backend="rootless-docker")
     print("  verifier network: disabled")
     print(f"  model upstream base: {config.upstream_base_url}")
@@ -719,6 +830,15 @@ def _run_qfbench_rootless_baseline(args) -> int:
         print(f"  image identity: {runtime.image_identity_digest}")
         print(f"  scheduler identity: {runtime.scheduler_identity_digest}")
         print(f"  runtime identity: {runtime.runtime_identity_digest}")
+        if active_epoch is not None and (
+            runtime.scheduler_identity_digest
+            != active_epoch.scheduler_identity_digest
+            or runtime.runtime_identity_digest
+            != active_epoch.runtime_identity_digest
+        ):
+            raise ValueError(
+                "active scheduler epoch identity does not match built runtime"
+            )
         model_identity = rootless_model_route_identity(
             upstream_base_url=config.upstream_base_url,
             allowed_path_prefix=config.allowed_path_prefix,
@@ -738,6 +858,7 @@ def _run_qfbench_rootless_baseline(args) -> int:
                 worker_concurrency=worker_concurrency,
                 verifier_concurrency=verifier_concurrency,
                 resume=args.resume,
+                scheduler_epochs=scheduler_epochs,
             ),
             primary_tasks=plan.snapshot.primary.tasks,
             diagnostic_tasks=plan.snapshot.diagnostic.tasks,

@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -242,6 +243,8 @@ class _CliRootlessConfig:
     upstream_base_url: str = "https://openrouter.ai/api/v1"
     allowed_path_prefix: str = "/v1"
     allowed_model: str = "provider/model"
+    scheduler_epoch: str | None = None
+    capacity: object = None
 
 
 def _rootless_plan():
@@ -588,6 +591,217 @@ def test_approved_baseline_path_uses_only_evaluator_and_binds_identities(
     assert len(captured["runner"]["primary_tasks"]) == 77
     assert len(captured["runner"]["diagnostic_tasks"]) == 8
     assert captured["runner"]["stop_after_repetition"] == 1
+
+
+def _write_schema_v2_baseline_resume(results_root: Path) -> tuple:
+    from qea.qfbench_scheduler_epochs import SchedulerEpoch
+
+    epochs = (
+        SchedulerEpoch(1, 1, 4, 3, "5" * 64, "6" * 64),
+        SchedulerEpoch(2, 5, 12, 3, "7" * 64, "8" * 64),
+    )
+    run_dir = results_root / "baseline-cli"
+    run_dir.mkdir(parents=True)
+    (run_dir / "resume.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "run_id": "baseline-cli",
+                "benchmark_commit": "0" * 40,
+                "total_repetitions": 5,
+                "scheduler_epochs": [epoch.to_dict() for epoch in epochs],
+                "next_repetition": 2,
+            }
+        )
+    )
+    return epochs
+
+
+def _baseline_plan_at(results_root: Path):
+    plan = _baseline_plan()
+    return SimpleNamespace(**{**vars(plan), "results_root": results_root})
+
+
+def _schema_v2_baseline_args(run, results_root: Path, *extra: str):
+    return run.build_parser().parse_args(
+        [
+            "--benchmark",
+            "qfbench",
+            "--qfbench-baseline",
+            "--qfbench-root",
+            "/tmp/qfbench",
+            "--qfbench-manifest",
+            "/tmp/baseline.json",
+            "--rootless-config",
+            "/tmp/rootless.json",
+            "--rootless-image-set-manifest",
+            "/tmp/image-set.json",
+            "--run-id",
+            "baseline-cli",
+            "--repetitions",
+            "5",
+            "--results-dir",
+            str(results_root),
+            "--resume",
+            "--approve-external-run",
+            *extra,
+        ]
+    )
+
+
+def test_schema_v2_resume_builds_runtime_with_epoch_two_limits(
+    tmp_path, monkeypatch
+) -> None:
+    import qea.qfbench_baseline as qfbench_baseline
+    import qea.rootless_full_harness as rootless_full_harness
+    import run
+
+    results_root = tmp_path / "results"
+    epochs = _write_schema_v2_baseline_resume(results_root)
+    config = _CliRootlessConfig(
+        worker_concurrency=12,
+        verifier_concurrency=3,
+        scheduler_epoch="repetitions-02-through-05",
+        capacity=SimpleNamespace(tmpfs_mb=40960),
+    )
+    runtime = SimpleNamespace(
+        backend=SimpleNamespace(backend_name="rootless-docker"),
+        evaluator=object(),
+        image_identity_digest="4" * 64,
+        scheduler_identity_digest="7" * 64,
+        runtime_identity_digest="8" * 64,
+        close=lambda: None,
+    )
+    captured = {}
+    plan = _baseline_plan_at(results_root)
+    monkeypatch.setattr(run, "_prepare_qfbench_baseline_run", lambda args: plan)
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "load_rootless_full_harness_config",
+        lambda path: config,
+    )
+    def fake_factory(**kwargs):
+        captured["factory"] = kwargs
+        return runtime
+
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "build_rootless_full_harness_runtime",
+        fake_factory,
+    )
+
+    def fake_run(configuration, **kwargs):
+        captured["configuration"] = configuration
+        return SimpleNamespace(
+            run_dir=results_root / "baseline-cli",
+            repetitions=(object(),),
+            aggregate={"primary": {"repeat_domain_macro": {"mean": 0.5}}},
+        )
+
+    monkeypatch.setattr(qfbench_baseline, "run_qfbench_baseline", fake_run)
+    monkeypatch.setattr(
+        qfbench_baseline,
+        "audit_baseline_proxy_costs",
+        lambda *args, **kwargs: {
+            "provider_cost_usd": "1",
+            "request_count": 85,
+            "total_tokens": 1,
+        },
+    )
+
+    assert run._run_qfbench_rootless_baseline(
+        _schema_v2_baseline_args(run, results_root)
+    ) == 0
+    selected = captured["factory"]["config"]
+    assert selected.worker_concurrency == 12
+    assert selected.verifier_concurrency == 3
+    assert selected.capacity.tmpfs_mb == 40960
+    assert captured["configuration"].scheduler_epochs == epochs
+
+
+def test_schema_v2_resume_rejects_conflicting_cli_concurrency(
+    tmp_path, monkeypatch
+) -> None:
+    import qea.rootless_full_harness as rootless_full_harness
+    import run
+
+    results_root = tmp_path / "results"
+    _write_schema_v2_baseline_resume(results_root)
+    config = _CliRootlessConfig(
+        worker_concurrency=12,
+        verifier_concurrency=3,
+        scheduler_epoch="repetitions-02-through-05",
+        capacity=SimpleNamespace(tmpfs_mb=40960),
+    )
+    monkeypatch.setattr(
+        run,
+        "_prepare_qfbench_baseline_run",
+        lambda args: _baseline_plan_at(results_root),
+    )
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "load_rootless_full_harness_config",
+        lambda path: config,
+    )
+
+    with pytest.raises(ValueError, match="scheduler epoch.*concurrency"):
+        run._run_qfbench_rootless_baseline(
+            _schema_v2_baseline_args(
+                run, results_root, "--worker-concurrency", "11"
+            )
+        )
+
+
+def test_schema_v2_runtime_digest_mismatch_fails_before_evaluator(
+    tmp_path, monkeypatch
+) -> None:
+    import qea.qfbench_baseline as qfbench_baseline
+    import qea.rootless_full_harness as rootless_full_harness
+    import run
+
+    results_root = tmp_path / "results"
+    _write_schema_v2_baseline_resume(results_root)
+    config = _CliRootlessConfig(
+        worker_concurrency=12,
+        verifier_concurrency=3,
+        scheduler_epoch="repetitions-02-through-05",
+        capacity=SimpleNamespace(tmpfs_mb=40960),
+    )
+    runtime = SimpleNamespace(
+        backend=SimpleNamespace(backend_name="rootless-docker"),
+        evaluator=object(),
+        image_identity_digest="4" * 64,
+        scheduler_identity_digest="9" * 64,
+        runtime_identity_digest="8" * 64,
+        close=lambda: None,
+    )
+    monkeypatch.setattr(
+        run,
+        "_prepare_qfbench_baseline_run",
+        lambda args: _baseline_plan_at(results_root),
+    )
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "load_rootless_full_harness_config",
+        lambda path: config,
+    )
+    monkeypatch.setattr(
+        rootless_full_harness,
+        "build_rootless_full_harness_runtime",
+        lambda **kwargs: runtime,
+    )
+    monkeypatch.setattr(
+        qfbench_baseline,
+        "run_qfbench_baseline",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("evaluator path must not start")
+        ),
+    )
+
+    with pytest.raises(ValueError, match="scheduler epoch identity"):
+        run._run_qfbench_rootless_baseline(
+            _schema_v2_baseline_args(run, results_root)
+        )
 
 
 def test_load_evolver_template_requires_published_matching_identity(tmp_path):

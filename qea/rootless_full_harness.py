@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+_SCHEDULER_EPOCH = re.compile(r"repetitions-[0-9]{2}-through-[0-9]{2}\Z")
 _MEM_AVAILABLE = re.compile(r"MemAvailable:\s+([0-9]+)\s+kB\s*\Z")
 _ROLE_REQUIRED_TMPFS = {
     "evolver_resources": frozenset({"/qea", "/tmp"}),
@@ -386,6 +387,7 @@ class RootlessFullHarnessConfig:
     worker_concurrency: int
     verifier_concurrency: int
     required_provider: str | None = None
+    scheduler_epoch: str | None = None
 
     def __post_init__(self) -> None:
         if type(self.expected_uid) is not int or self.expected_uid <= 0:
@@ -453,6 +455,13 @@ class RootlessFullHarnessConfig:
         for name in ("worker_concurrency", "verifier_concurrency"):
             if type(getattr(self, name)) is not int or getattr(self, name) <= 0:
                 raise ValueError(f"{name} must be a positive integer")
+        if self.scheduler_epoch is not None and not (
+            isinstance(self.scheduler_epoch, str)
+            and _SCHEDULER_EPOCH.fullmatch(self.scheduler_epoch)
+        ):
+            raise ValueError(
+                "scheduler_epoch must identify an exact repetition range"
+            )
         object.__setattr__(self, "public_root", public_root)
         object.__setattr__(self, "trusted_root", trusted_root)
         object.__setattr__(self, "token_file", token_file)
@@ -484,6 +493,7 @@ _CONFIG_KEYS_V1 = frozenset(
     }
 )
 _CONFIG_KEYS_V2 = _CONFIG_KEYS_V1 | {"required_provider"}
+_CONFIG_KEYS_V3 = _CONFIG_KEYS_V2 | {"scheduler_epoch"}
 
 
 def load_rootless_full_harness_config(
@@ -506,15 +516,18 @@ def load_rootless_full_harness_config(
     expected_keys = {
         1: _CONFIG_KEYS_V1,
         2: _CONFIG_KEYS_V2,
+        3: _CONFIG_KEYS_V3,
     }.get(schema_version)
     if expected_keys is None:
-        raise ValueError("rootless config schema_version must be 1 or 2")
+        raise ValueError("rootless config schema_version must be 1, 2, or 3")
     if set(payload) != expected_keys:
         raise ValueError("rootless config has unknown or missing fields")
-    if schema_version == 2 and not isinstance(
+    if schema_version in {2, 3} and not isinstance(
         payload["required_provider"], str
     ):
         raise ValueError("rootless config required_provider must be a string")
+    if schema_version == 3 and not isinstance(payload["scheduler_epoch"], str):
+        raise ValueError("rootless config scheduler_epoch must be a string")
     try:
         return RootlessFullHarnessConfig(
             docker_host=payload["docker_host"],
@@ -534,6 +547,7 @@ def load_rootless_full_harness_config(
             worker_concurrency=payload["worker_concurrency"],
             verifier_concurrency=payload["verifier_concurrency"],
             required_provider=payload.get("required_provider"),
+            scheduler_epoch=payload.get("scheduler_epoch"),
         )
     except (KeyError, TypeError) as exc:
         raise ValueError("rootless config field types are invalid") from exc
@@ -1052,15 +1066,17 @@ def build_rootless_full_harness_runtime(
             verifier_concurrency=config.verifier_concurrency,
         )
 
-        scheduler_identity = _canonical_digest(
-            {
-                "schema_version": 1,
-                "capacity": _capacity_payload(config.capacity),
-                "headroom": _headroom_payload(config.headroom),
-                "worker_concurrency": config.worker_concurrency,
-                "verifier_concurrency": config.verifier_concurrency,
-            }
-        )
+        scheduler_payload: dict[str, object] = {
+            "schema_version": 1,
+            "capacity": _capacity_payload(config.capacity),
+            "headroom": _headroom_payload(config.headroom),
+            "worker_concurrency": config.worker_concurrency,
+            "verifier_concurrency": config.verifier_concurrency,
+        }
+        if config.scheduler_epoch is not None:
+            scheduler_payload["schema_version"] = 2
+            scheduler_payload["scheduler_epoch"] = config.scheduler_epoch
+        scheduler_identity = _canonical_digest(scheduler_payload)
         task_panel = [
             {
                 "task_id": task.task_id,

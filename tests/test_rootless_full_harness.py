@@ -634,6 +634,19 @@ def test_rootless_config_loader_rejects_secret_value_and_parses_paths(tmp_path) 
         load_rootless_full_harness_config(path)
     payload["required_provider"] = "deepseek"
 
+    payload["schema_version"] = 3
+    payload["scheduler_epoch"] = "repetitions-02-through-05"
+    path.write_text(json.dumps(payload))
+    epoch_two = load_rootless_full_harness_config(path)
+    assert epoch_two.required_provider == "deepseek"
+    assert epoch_two.scheduler_epoch == "repetitions-02-through-05"
+
+    payload["scheduler_epoch"] = ""
+    path.write_text(json.dumps(payload))
+    with pytest.raises((ValueError, RuntimeError), match="scheduler_epoch"):
+        load_rootless_full_harness_config(path)
+    payload["scheduler_epoch"] = "repetitions-02-through-05"
+
     payload["model_token"] = "forbidden-inline-secret"
     path.write_text(json.dumps(payload))
     with pytest.raises((ValueError, RuntimeError), match="unknown|secret|token"):
@@ -994,6 +1007,10 @@ def test_factory_binds_runtime_scheduler_and_catalog_identity(tmp_path, monkeypa
     scheduling = build(
         replace(config, worker_concurrency=7), suffix="scheduling"
     )
+    labeled_epoch = build(
+        replace(config, scheduler_epoch="repetitions-02-through-05"),
+        suffix="epoch",
+    )
 
     assert model.runtime_identity_digest != baseline.runtime_identity_digest
     assert model.scheduler_identity_digest == baseline.scheduler_identity_digest
@@ -1002,6 +1019,9 @@ def test_factory_binds_runtime_scheduler_and_catalog_identity(tmp_path, monkeypa
     assert limits.runtime_identity_digest != baseline.runtime_identity_digest
     assert scheduling.runtime_identity_digest != baseline.runtime_identity_digest
     assert scheduling.scheduler_identity_digest != baseline.scheduler_identity_digest
+    assert labeled_epoch.runtime_identity_digest != baseline.runtime_identity_digest
+    assert labeled_epoch.scheduler_identity_digest != baseline.scheduler_identity_digest
+    assert labeled_epoch.image_identity_digest == baseline.image_identity_digest
 
     changed_catalog = _catalog(identity="d" * 64)
     _patch_catalog(monkeypatch, changed_catalog, config=config)

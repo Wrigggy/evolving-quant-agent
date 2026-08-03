@@ -257,6 +257,37 @@ def test_combined_requests_overlap_only_when_exact_accounting_allows_it():
     worker_lease.release()
 
 
+def test_epoch_two_capacity_admits_twelve_standard_or_eight_heavy_pairs():
+    capacity = ResourceCapacity(48, 98_304, 8_192, 40_960, 24)
+    pool = _pool(capacity)
+    standard_pair = ResourceRequest(4, 8_192, 384, 2_960, 2)
+    standard_leases = [
+        pool.acquire(f"standard-{index}", standard_pair, timeout_seconds=0)
+        for index in range(12)
+    ]
+    with pytest.raises(ResourceLeaseTimeout):
+        pool.acquire("standard-13", standard_pair, timeout_seconds=0)
+    for lease in reversed(standard_leases):
+        lease.release()
+
+    heavy_pair = ResourceRequest(6, 12_288, 384, 2_960, 2)
+    heavy_leases = [
+        pool.acquire(f"heavy-{index}", heavy_pair, timeout_seconds=0)
+        for index in range(8)
+    ]
+    with pytest.raises(ResourceLeaseTimeout):
+        pool.acquire("heavy-9", heavy_pair, timeout_seconds=0)
+    for lease in reversed(heavy_leases):
+        lease.release()
+
+    complete = pool.acquire(
+        "complete-capacity",
+        ResourceRequest(48, 98_304, 8_192, 40_960, 24),
+        timeout_seconds=0,
+    )
+    complete.release()
+
+
 def test_duplicate_live_lease_key_is_rejected_without_changing_accounting():
     pool = _pool(_capacity(1))
     first = pool.acquire("same-key", _request(), timeout_seconds=0)
