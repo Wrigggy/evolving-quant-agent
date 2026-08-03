@@ -185,6 +185,24 @@ preregistered repetitions is valid. The remote sentinel, Mac repair controller,
 and continuous run-scoped no-sleep assertion must be bound to the new run before
 launch. See the [superseding decision](decisions/2026-08-03-qfbench-v4-flash-five-repeat-restart.md).
 
+### 2026-08-03 Repetition-Boundary Scheduler Epoch Transition
+
+The V4 Flash run keeps repetition 01 at worker/verifier concurrency `4/3` and,
+only after a fail-closed 85-score clean boundary, records schema-v2 scheduler
+epochs before repetitions 02–05 use `12/3`. Both scheduler and complete runtime
+digests are bound per epoch; task/image/worker/model/provider/reward identities
+remain fixed. The boundary guard rejects any repetition-02 evidence or residual
+resource, and the epoch-2 supervisor owns the complete coordinator process group.
+
+Before formal resume, a separate twelve-standard-task
+`paid-baseline-batch` must measure worker overlap 12 and pass canonical cost,
+provider route, no-replay, offline-verifier, evaluator-firewall, exact cleanup,
+and zero-residual gates. It uses the immutable base worker and no evolver or
+feedback input. Final reports must separate epoch 1 from epoch 2 and disclose a
+possible scheduler batch effect. Local implementation is verified; the remote
+boundary, paid canary, and resumed repetitions are not yet measured. See the
+[scheduler epoch decision](decisions/2026-08-03-qfbench-scheduler-epoch-transition.md).
+
 No report may describe adapter compatibility, E2B parity, AutoDL performance, or seed-worker QFBench score as measured until the corresponding run artifact exists.
 
 ## Memory Maintenance Rules

@@ -352,3 +352,49 @@ systemctl --user status docker --no-pager
 ```
 
 Do not remove the bare Git repository, committed worktree, role manifests, lifecycle JSON, or verifier evidence during rollback. Restart only after the prior exact-ID inventory is reconciled.
+
+## 11. Five-Repetition Baseline Scheduler Epoch Transition
+
+For run
+`qfbench-rootless-base-85x5-official-deepseek-v4-flash-noreplay-recovery2-20260803`,
+do not edit the schema-v1 checkpoint or start repetition 02 manually. Recovery
+must run through the committed process-group supervisor and pre-exec gate at
+worker/verifier concurrency `4/3`. Attach the boundary guard and run-aware watch
+to the exact child PID, PGID, start ticks, argv digest, run ID, and source commit
+before releasing the gate.
+
+The boundary is eligible only at 85 repetition-01 terminal scores with
+`next_repetition=2`, `phase=primary`, null `pending_primary`, no repetition-02
+evidence, and zero run-owned containers/networks. Freeze the evidence manifest,
+terminate the stopped legacy process group, and publish the schema-v2 checkpoint
+only after those facts remain true. Preserve all previous scores, ledgers,
+lifecycles, and hard-stop records byte-for-byte.
+
+Epoch 2 uses schema-3 config label `repetitions-02-through-05`, concurrency
+`12/3`, capacity `48 CPU / 98,304 MiB / 8,192 PIDs / 40,960 MiB tmpfs / 24
+sandboxes`, maximum load 56, and minimum Linux `MemAvailable` 16,384 MiB. Before
+resume, run the no-model import canary and then:
+
+```bash
+"$QEA_PYTHON" scripts/smoke_qfbench_full_harness.py \
+  --executor rootless-docker --mode paid-baseline-batch \
+  --qfbench-root "$QFBENCH_PUBLIC" \
+  --manifest data/qfbench/MANIFEST_85_BASELINE.json \
+  --rootless-config "$QEA_EPOCH2_CONFIG" \
+  --rootless-image-set-manifest "$QEA_IMAGE_SET" \
+  --run-id "$QEA_EPOCH2_CANARY_RUN_ID" \
+  --results-dir "$HOME/qea/runs" --approve-external-run
+```
+
+Require `worker_overlap=12`, model `deepseek/deepseek-v4-flash`, provider
+`deepseek`, `fallbacks_allowed=false`, only completed HTTP-200 proxy records,
+complete cost accounting, no within-attempt replay, verifier network policy
+`none`, complete exact-ID cleanup, and zero residual resources. Any failure
+blocks epoch 2; do not silently fall back to a lower concurrency under the same
+epoch identity.
+
+Launch repetitions 02–05 only through the new supervisor/watch/sentinel unit
+generation and keep the Mac repair controller under `caffeinate -i`. At final
+completion require five repetitions, 425 terminal scores, zero residual
+resources, a passing firewall scan, and per-epoch plus combined reporting with
+the scheduler batch-effect warning.
