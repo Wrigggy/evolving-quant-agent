@@ -513,12 +513,14 @@ def _validated_completed_cost(
     return cost
 
 
-def _validated_timeout_quarantine(
+def validate_timeout_quarantine(
     score: Mapping,
-    marker_path: Path,
+    marker: Mapping,
     *,
-    source: Path,
+    source: Path | str,
 ) -> str:
+    """Validate the only supported official-timeout cost lower bound."""
+
     reward = score.get("reward")
     tags = score.get("diagnostic_tags")
     try:
@@ -542,12 +544,6 @@ def _validated_timeout_quarantine(
         raise BaselineConfigError(
             f"cost audit missing ledger is not bound to a timeout score: {source}"
         )
-    try:
-        marker = json.loads(marker_path.read_text())
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise BaselineConfigError(
-            f"cost audit missing or malformed quarantine marker: {source}"
-        ) from exc
     expected = {
         "schema_version": 1,
         "request_state": "quarantined",
@@ -558,6 +554,25 @@ def _validated_timeout_quarantine(
             f"cost audit unsupported quarantine marker: {source}"
         )
     return str(marker["reason"])
+
+
+def _validated_timeout_quarantine(
+    score: Mapping,
+    marker_path: Path,
+    *,
+    source: Path,
+) -> str:
+    try:
+        marker = json.loads(marker_path.read_text())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BaselineConfigError(
+            f"cost audit missing or malformed quarantine marker: {source}"
+        ) from exc
+    if not isinstance(marker, Mapping):
+        raise BaselineConfigError(
+            f"cost audit missing or malformed quarantine marker: {source}"
+        )
+    return validate_timeout_quarantine(score, marker, source=source)
 
 
 def audit_baseline_proxy_costs(
