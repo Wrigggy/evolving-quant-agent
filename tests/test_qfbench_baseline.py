@@ -216,6 +216,132 @@ def test_calibration_stop_then_resume_starts_at_repetition_two(tmp_path) -> None
     assert len(resumed.calls) == 8
 
 
+def test_schema_v2_resume_uses_epoch_two_without_resampling_repetition_one(
+    tmp_path,
+) -> None:
+    from qea.qfbench_baseline import run_qfbench_baseline
+    from qea.qfbench_scheduler_epochs import (
+        SchedulerEpoch,
+        migrate_v1_checkpoint,
+    )
+
+    worker = tmp_path / "worker"
+    worker.mkdir()
+    (worker / "agent.yaml").write_text("name: base\n")
+    primary, diagnostic = _tasks()
+    partial = run_qfbench_baseline(
+        _config(tmp_path, worker),
+        primary_tasks=primary,
+        diagnostic_tasks=diagnostic,
+        benchmark_commit=COMMIT,
+        evaluator=RecordingEvaluator(),
+        stop_after_repetition=1,
+    )
+    resume_path = partial.run_dir / "resume.json"
+    state = json.loads(resume_path.read_text())
+    state["phase"] = "primary"
+    resume_path.write_text(json.dumps(state))
+    epochs = (
+        SchedulerEpoch(
+            1,
+            1,
+            4,
+            3,
+            DIGESTS["scheduler_identity_digest"],
+            DIGESTS["runtime_identity_digest"],
+        ),
+        SchedulerEpoch(2, 5, 12, 3, "e" * 64, "f" * 64),
+    )
+    migrate_v1_checkpoint(
+        resume_path,
+        scheduler_epochs=epochs,
+        boundary_manifest_sha256="a" * 64,
+    )
+
+    resumed = RecordingEvaluator()
+    complete = run_qfbench_baseline(
+        _config(
+            tmp_path,
+            worker,
+            worker_concurrency=12,
+            scheduler_identity_digest="e" * 64,
+            runtime_identity_digest="f" * 64,
+            scheduler_epochs=epochs,
+        ),
+        primary_tasks=primary,
+        diagnostic_tasks=diagnostic,
+        benchmark_commit=COMMIT,
+        evaluator=resumed,
+    )
+
+    assert complete.complete is True
+    assert resumed.calls[0] == (
+        "baseline_primary",
+        "repetition-02-primary",
+    )
+    assert len(resumed.calls) == 8
+    result = json.loads((partial.run_dir / "result.json").read_text())
+    assert result["scheduler_epochs"] == [epoch.to_dict() for epoch in epochs]
+    assert result["active_scheduler_epoch_index"] == 2
+
+
+def test_schema_v2_resume_rejects_runtime_outside_declared_epoch(tmp_path) -> None:
+    from qea.qfbench_baseline import BaselineConfigError, run_qfbench_baseline
+    from qea.qfbench_scheduler_epochs import (
+        SchedulerEpoch,
+        migrate_v1_checkpoint,
+    )
+
+    worker = tmp_path / "worker"
+    worker.mkdir()
+    (worker / "agent.yaml").write_text("name: base\n")
+    primary, diagnostic = _tasks()
+    partial = run_qfbench_baseline(
+        _config(tmp_path, worker),
+        primary_tasks=primary,
+        diagnostic_tasks=diagnostic,
+        benchmark_commit=COMMIT,
+        evaluator=RecordingEvaluator(),
+        stop_after_repetition=1,
+    )
+    resume_path = partial.run_dir / "resume.json"
+    state = json.loads(resume_path.read_text())
+    state["phase"] = "primary"
+    resume_path.write_text(json.dumps(state))
+    epochs = (
+        SchedulerEpoch(
+            1,
+            1,
+            4,
+            3,
+            DIGESTS["scheduler_identity_digest"],
+            DIGESTS["runtime_identity_digest"],
+        ),
+        SchedulerEpoch(2, 5, 12, 3, "e" * 64, "f" * 64),
+    )
+    migrate_v1_checkpoint(
+        resume_path,
+        scheduler_epochs=epochs,
+        boundary_manifest_sha256="a" * 64,
+    )
+
+    with pytest.raises(BaselineConfigError, match="active scheduler epoch identity"):
+        run_qfbench_baseline(
+            _config(
+                tmp_path,
+                worker,
+                worker_concurrency=11,
+                scheduler_identity_digest="d" * 64,
+                runtime_identity_digest="c" * 64,
+                scheduler_epochs=epochs,
+            ),
+            primary_tasks=primary,
+            diagnostic_tasks=diagnostic,
+            benchmark_commit=COMMIT,
+            evaluator=RecordingEvaluator(),
+        )
+
+
 def test_stop_after_fifth_repetition_finishes_complete_run(tmp_path) -> None:
     from qea.qfbench_baseline import run_qfbench_baseline
 

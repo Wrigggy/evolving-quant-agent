@@ -16,6 +16,13 @@ from typing import Iterable, Mapping, Protocol
 
 from .evaluation import EvaluationSummary, OfficialTaskScore, aggregate_domain_macro
 from .evolve_runtime import snapshot_dir
+from .qfbench_scheduler_epochs import (
+    SchedulerEpoch,
+    SchedulerEpochError,
+    epoch_for_repetition,
+    sampling_identity,
+    validate_scheduler_epochs,
+)
 from .worker_identity import WorkerIdentityError, hash_worker_directory
 
 
@@ -75,6 +82,7 @@ class BaselineConfig:
     worker_concurrency: int = 4
     verifier_concurrency: int = 3
     resume: bool = True
+    scheduler_epochs: tuple[SchedulerEpoch, ...] | None = None
 
     def __post_init__(self) -> None:
         if not _RUN_ID_RE.fullmatch(self.run_id):
@@ -95,6 +103,15 @@ class BaselineConfig:
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
                 raise BaselineConfigError(f"{name} must be positive")
+        if self.scheduler_epochs is not None:
+            try:
+                epochs = validate_scheduler_epochs(
+                    self.scheduler_epochs,
+                    total_repetitions=self.repetitions,
+                )
+            except SchedulerEpochError as exc:
+                raise BaselineConfigError(str(exc)) from exc
+            object.__setattr__(self, "scheduler_epochs", epochs)
 
 
 @dataclass(frozen=True)
@@ -182,6 +199,36 @@ def _identity(
         "primary_tasks": _task_contract(primary_tasks),
         "diagnostic_tasks": _task_contract(diagnostic_tasks),
     }
+
+
+def _require_active_scheduler_epoch(
+    config: BaselineConfig,
+    *,
+    repetition: int,
+) -> SchedulerEpoch:
+    """Bind the running process to the declared epoch for one repetition."""
+
+    if config.scheduler_epochs is None:
+        raise BaselineConfigError("schema v2 resume requires scheduler epochs")
+    try:
+        epoch = epoch_for_repetition(config.scheduler_epochs, repetition)
+    except SchedulerEpochError as exc:
+        raise BaselineConfigError(str(exc)) from exc
+    active_identity = {
+        "worker_concurrency": config.worker_concurrency,
+        "verifier_concurrency": config.verifier_concurrency,
+        "scheduler_identity_digest": config.scheduler_identity_digest,
+        "runtime_identity_digest": config.runtime_identity_digest,
+    }
+    expected_identity = {
+        name: getattr(epoch, name) for name in active_identity
+    }
+    if active_identity != expected_identity:
+        raise BaselineConfigError(
+            "active scheduler epoch identity mismatch: "
+            f"expected {expected_identity}, found {active_identity}"
+        )
+    return epoch
 
 
 def _is_pristine_runtime_scaffold(run_dir: Path) -> bool:
@@ -683,23 +730,32 @@ def _result(
         aggregate=aggregate,
         seed_worker_dir=seed_worker_dir,
     )
-    _atomic_json(
-        run_dir / "result.json",
-        {
-            "run_id": result.run_id,
-            "complete": result.complete,
-            "seed_worker_dir": seed_worker_dir.relative_to(run_dir).as_posix(),
-            "repetitions": [
-                {
-                    "repetition": record.repetition,
-                    "primary": _summary_dict(record.primary),
-                    "diagnostic": _summary_dict(record.diagnostic),
-                }
-                for record in repetitions
-            ],
-            "aggregate": aggregate,
-        },
-    )
+    payload = {
+        "run_id": result.run_id,
+        "complete": result.complete,
+        "seed_worker_dir": seed_worker_dir.relative_to(run_dir).as_posix(),
+        "repetitions": [
+            {
+                "repetition": record.repetition,
+                "primary": _summary_dict(record.primary),
+                "diagnostic": _summary_dict(record.diagnostic),
+            }
+            for record in repetitions
+        ],
+        "aggregate": aggregate,
+    }
+    if state.get("schema_version") == 2:
+        payload["scheduler_epochs"] = state["scheduler_epochs"]
+        active_epoch = _require_active_scheduler_epoch(
+            config,
+            repetition=min(
+                int(state["next_repetition"]), config.repetitions
+            ),
+        )
+        payload["active_scheduler_epoch_index"] = (
+            config.scheduler_epochs.index(active_epoch) + 1
+        )
+    _atomic_json(run_dir / "result.json", payload)
     return result
 
 
@@ -754,7 +810,6 @@ def run_qfbench_baseline(
         except (OSError, json.JSONDecodeError) as exc:
             raise BaselineConfigError(f"invalid resume checkpoint: {exc}") from exc
         expected_checkpoint = {
-            "schema_version": 1,
             "run_id": config.run_id,
             "benchmark_commit": benchmark_commit,
             "total_repetitions": config.repetitions,
@@ -767,12 +822,45 @@ def run_qfbench_baseline(
                 "resume checkpoint mismatch: "
                 f"expected {expected_checkpoint}, found {actual_checkpoint}"
             )
-        if state.get("identity") != identity:
-            raise BaselineConfigError("resume immutable identity mismatch")
+        schema_version = state.get("schema_version")
+        if schema_version == 1:
+            if state.get("identity") != identity:
+                raise BaselineConfigError("resume immutable identity mismatch")
+        elif schema_version == 2:
+            if config.scheduler_epochs is None:
+                raise BaselineConfigError(
+                    "schema v2 resume requires scheduler epochs"
+                )
+            serialized_epochs = [
+                epoch.to_dict() for epoch in config.scheduler_epochs
+            ]
+            if state.get("scheduler_epochs") != serialized_epochs:
+                raise BaselineConfigError("resume scheduler epochs mismatch")
+            try:
+                expected_sampling_identity = sampling_identity(identity)
+            except SchedulerEpochError as exc:
+                raise BaselineConfigError(str(exc)) from exc
+            if state.get("sampling_identity") != expected_sampling_identity:
+                raise BaselineConfigError("resume immutable identity mismatch")
+            if state.get("phase") == "calibration_stop":
+                raise BaselineConfigError(
+                    "schema v2 checkpoint cannot use calibration_stop phase"
+                )
+            next_repetition = min(
+                int(state.get("next_repetition", 0)), config.repetitions
+            )
+            _require_active_scheduler_epoch(
+                config,
+                repetition=next_repetition,
+            )
+        else:
+            raise BaselineConfigError(
+                f"resume checkpoint schema version is unsupported: {schema_version}"
+            )
         if not seed_worker.is_dir():
             raise BaselineConfigError("resume seed worker snapshot is missing")
         _require_seed_worker_digest(seed_worker, worker_digest)
-        if state.get("phase") == "calibration_stop":
+        if schema_version == 1 and state.get("phase") == "calibration_stop":
             state["phase"] = "primary"
             _atomic_json(resume_path, state)
     else:
@@ -794,6 +882,8 @@ def run_qfbench_baseline(
 
     while state["next_repetition"] <= config.repetitions:
         repetition = int(state["next_repetition"])
+        if state.get("schema_version") == 2:
+            _require_active_scheduler_epoch(config, repetition=repetition)
         if state["phase"] == "primary":
             _require_seed_worker_digest(seed_worker, worker_digest)
             primary_summary = evaluator.evaluate(
