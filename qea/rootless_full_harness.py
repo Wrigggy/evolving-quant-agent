@@ -388,6 +388,7 @@ class RootlessFullHarnessConfig:
     required_provider: str | None = None
     scheduler_epoch: str | None = None
     worker_launch_interval_seconds: int = 0
+    lease_timeout_seconds: int = 120
 
     def __post_init__(self) -> None:
         if type(self.expected_uid) is not int or self.expected_uid <= 0:
@@ -462,6 +463,13 @@ class RootlessFullHarnessConfig:
             raise ValueError(
                 "worker launch interval must be a non-negative integer"
             )
+        if (
+            type(self.lease_timeout_seconds) is not int
+            or not 120 <= self.lease_timeout_seconds <= 7200
+        ):
+            raise ValueError(
+                "lease timeout must be an integer from 120 through 7200 seconds"
+            )
         if self.scheduler_epoch is not None and not (
             isinstance(self.scheduler_epoch, str)
             and _SCHEDULER_EPOCH.fullmatch(self.scheduler_epoch)
@@ -502,6 +510,7 @@ _CONFIG_KEYS_V1 = frozenset(
 _CONFIG_KEYS_V2 = _CONFIG_KEYS_V1 | {"required_provider"}
 _CONFIG_KEYS_V3 = _CONFIG_KEYS_V2 | {"scheduler_epoch"}
 _CONFIG_KEYS_V4 = _CONFIG_KEYS_V3 | {"worker_launch_interval_seconds"}
+_CONFIG_KEYS_V5 = _CONFIG_KEYS_V4 | {"lease_timeout_seconds"}
 
 
 def load_rootless_full_harness_config(
@@ -526,16 +535,19 @@ def load_rootless_full_harness_config(
         2: _CONFIG_KEYS_V2,
         3: _CONFIG_KEYS_V3,
         4: _CONFIG_KEYS_V4,
+        5: _CONFIG_KEYS_V5,
     }.get(schema_version)
     if expected_keys is None:
-        raise ValueError("rootless config schema_version must be 1, 2, 3, or 4")
+        raise ValueError(
+            "rootless config schema_version must be 1, 2, 3, 4, or 5"
+        )
     if set(payload) != expected_keys:
         raise ValueError("rootless config has unknown or missing fields")
-    if schema_version in {2, 3, 4} and not isinstance(
+    if schema_version in {2, 3, 4, 5} and not isinstance(
         payload["required_provider"], str
     ):
         raise ValueError("rootless config required_provider must be a string")
-    if schema_version in {3, 4} and not isinstance(
+    if schema_version in {3, 4, 5} and not isinstance(
         payload["scheduler_epoch"], str
     ):
         raise ValueError("rootless config scheduler_epoch must be a string")
@@ -562,6 +574,7 @@ def load_rootless_full_harness_config(
             worker_launch_interval_seconds=payload.get(
                 "worker_launch_interval_seconds", 0
             ),
+            lease_timeout_seconds=payload.get("lease_timeout_seconds", 120),
         )
     except (KeyError, TypeError) as exc:
         raise ValueError("rootless config field types are invalid") from exc
@@ -1042,6 +1055,7 @@ def build_rootless_full_harness_runtime(
             proxy_manager=proxy_manager,
             resource_pool=pool,
             model_name=config.allowed_model,
+            lease_timeout_seconds=config.lease_timeout_seconds,
         )
         verifier_router = rootless_runtime.RootlessVerifierRouter(
             catalog=catalog,
@@ -1049,6 +1063,7 @@ def build_rootless_full_harness_runtime(
             lifecycle_root=run_root / "lifecycles",
             trusted_task_root=config.trusted_root,
             resource_pool=pool,
+            lease_timeout_seconds=config.lease_timeout_seconds,
         )
         evolver_policy = {
             "command_timeout_seconds": config.evolver_resources.timeout_seconds,
@@ -1056,7 +1071,7 @@ def build_rootless_full_harness_runtime(
             "max_input_bytes": 512 * 1024 * 1024,
             "max_candidate_files": 2000,
             "max_candidate_bytes": 64 * 1024 * 1024,
-            "lease_timeout_seconds": 120.0,
+            "lease_timeout_seconds": float(config.lease_timeout_seconds),
         }
         proposer = None
         if include_evolver:
@@ -1098,17 +1113,16 @@ def build_rootless_full_harness_runtime(
         )
 
         scheduler_payload: dict[str, object] = {
-            "schema_version": 1,
+            "schema_version": 4,
             "capacity": _capacity_payload(config.capacity),
             "headroom": _headroom_payload(config.headroom),
             "worker_concurrency": config.worker_concurrency,
             "verifier_concurrency": config.verifier_concurrency,
+            "lease_timeout_seconds": config.lease_timeout_seconds,
         }
         if config.scheduler_epoch is not None:
-            scheduler_payload["schema_version"] = 2
             scheduler_payload["scheduler_epoch"] = config.scheduler_epoch
         if config.worker_launch_interval_seconds:
-            scheduler_payload["schema_version"] = 3
             scheduler_payload["worker_launch_interval_seconds"] = (
                 config.worker_launch_interval_seconds
             )
