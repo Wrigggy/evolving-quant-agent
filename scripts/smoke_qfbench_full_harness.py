@@ -30,10 +30,10 @@ if TYPE_CHECKING:
 
 
 PAID_BASELINE_BATCH_TASK_IDS = (
-    "historical-var-data-prep",
+    "ohlc-realized-vol-estimators",
     "momentum-backtest",
     "evt-pot-var",
-    "fx-forward-cross-rate",
+    "geometric-mean-reverting-jd",
     "option-put-call-parity-forward-audit",
     "sma-crossover-spy",
     "corporate-action-adjustment",

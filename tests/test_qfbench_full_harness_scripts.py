@@ -93,12 +93,43 @@ def test_paid_baseline_batch_requires_exact_epoch_two_standard_panel():
         select_paid_baseline_batch_tasks,
     )
 
+    expected = (
+        "ohlc-realized-vol-estimators",
+        "momentum-backtest",
+        "evt-pot-var",
+        "geometric-mean-reverting-jd",
+        "option-put-call-parity-forward-audit",
+        "sma-crossover-spy",
+        "corporate-action-adjustment",
+        "earnings-surprise-calculator",
+        "fama-french-factor-model-new",
+        "credit-migration-matrix",
+        "zero-coupon-bootstrapping",
+        "copula-sampling-rank-correlation",
+    )
+    manifest = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "data/qfbench/MANIFEST_85_BASELINE.json"
+        ).read_text()
+    )
+    primary = {
+        item["task_id"]: item for item in manifest["baseline"]["primary"]
+    }
+    for task_id in (
+        "ohlc-realized-vol-estimators",
+        "geometric-mean-reverting-jd",
+    ):
+        assert primary[task_id]["resource_source"] == "qea_fallback"
+        assert primary[task_id]["resources"]["cpus"] == 2
+        assert primary[task_id]["resources"]["memory_mb"] == 4096
+
     tasks = tuple(
         SimpleNamespace(task_id=task_id, cpus=2, memory_mb=4096)
-        for task_id in PAID_BASELINE_BATCH_TASK_IDS
+        for task_id in expected
     )
     snapshot = SimpleNamespace(
-        primary=SimpleNamespace(tasks=tasks, task_ids=PAID_BASELINE_BATCH_TASK_IDS)
+        primary=SimpleNamespace(tasks=tasks, task_ids=expected)
     )
     config = SimpleNamespace(
         scheduler_epoch="repetitions-02-through-05",
@@ -112,7 +143,8 @@ def test_paid_baseline_batch_requires_exact_epoch_two_standard_panel():
         snapshot, config=config, executor="rootless-docker"
     )
 
-    assert tuple(task.task_id for task in selected) == PAID_BASELINE_BATCH_TASK_IDS
+    assert PAID_BASELINE_BATCH_TASK_IDS == expected
+    assert tuple(task.task_id for task in selected) == expected
 
     bad = (SimpleNamespace(**{**tasks[0].__dict__, "cpus": 4}), *tasks[1:])
     with pytest.raises(ValueError, match="2 CPU/4096 MiB"):
@@ -120,7 +152,7 @@ def test_paid_baseline_batch_requires_exact_epoch_two_standard_panel():
             SimpleNamespace(
                 primary=SimpleNamespace(
                     tasks=bad,
-                    task_ids=PAID_BASELINE_BATCH_TASK_IDS,
+                    task_ids=expected,
                 )
             ),
             config=config,
