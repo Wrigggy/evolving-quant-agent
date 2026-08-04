@@ -29,7 +29,10 @@ if TYPE_CHECKING:
 
 
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
-_SCHEDULER_EPOCH = re.compile(r"repetitions-[0-9]{2}-through-[0-9]{2}\Z")
+_SCHEDULER_EPOCH = re.compile(
+    r"(?:repetitions-[0-9]{2}-through-[0-9]{2}"
+    r"|iter[0-9]{2}-[0-9]{2}-[0-9]+w[0-9]+v)\Z"
+)
 _MEM_AVAILABLE = re.compile(r"MemAvailable:\s+([0-9]+)\s+kB\s*\Z")
 _ROLE_REQUIRED_TMPFS = {
     "evolver_resources": frozenset({"/qea", "/tmp"}),
@@ -476,7 +479,7 @@ class RootlessFullHarnessConfig:
             and _SCHEDULER_EPOCH.fullmatch(self.scheduler_epoch)
         ):
             raise ValueError(
-                "scheduler_epoch must identify an exact repetition range"
+                "scheduler_epoch must identify an exact scheduling range"
             )
         object.__setattr__(self, "public_root", public_root)
         object.__setattr__(self, "trusted_root", trusted_root)

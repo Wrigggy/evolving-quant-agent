@@ -687,6 +687,12 @@ def test_rootless_config_loader_rejects_secret_value_and_parses_paths(tmp_path) 
     bounded_queueing = load_rootless_full_harness_config(path)
     assert bounded_queueing.lease_timeout_seconds == 6000
 
+    payload["scheduler_epoch"] = "iter01-10-12w3v"
+    path.write_text(json.dumps(payload))
+    evolution_epoch = load_rootless_full_harness_config(path)
+    assert evolution_epoch.scheduler_epoch == "iter01-10-12w3v"
+    payload["scheduler_epoch"] = "repetitions-02-through-05"
+
     for invalid_timeout in (119, 7201, True, 6000.0, "6000"):
         payload["lease_timeout_seconds"] = invalid_timeout
         path.write_text(json.dumps(payload))
