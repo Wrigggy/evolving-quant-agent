@@ -48,6 +48,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
     )
+    ap.add_argument(
+        "--validation-calibration",
+        type=Path,
+        default=None,
+        help="immutable five-repeat calibration for schema-v2 QFBench evolution",
+    )
     ap.add_argument("--template-manifest-dir", type=Path)
     ap.add_argument("--evolver-template-manifest", type=Path)
     ap.add_argument("--rootless-config", type=Path)
@@ -84,9 +90,13 @@ def build_parser() -> argparse.ArgumentParser:
 def resolve_iterations(args) -> int:
     if args.benchmark == "qfbench":
         iterations = 3 if args.iters is None else args.iters
-        allowed = {1, 3, 5} if args.executor == "rootless-docker" else {3, 5}
+        allowed = {1, 3, 5, 10} if args.executor == "rootless-docker" else {3, 5}
         if iterations not in allowed:
-            choices = "1, 3, or 5" if 1 in allowed else "3 or 5"
+            choices = (
+                "1, 3, or 5 (or 10 for train/validation/test)"
+                if 1 in allowed
+                else "3 or 5"
+            )
             raise ValueError(f"QFBench pilot --iters must be {choices}")
         return iterations
     return 4 if args.iters is None else args.iters
@@ -100,6 +110,24 @@ def estimate_qfbench_attempts(
     if optimize_count < 1 or held_out_count < 1 or iterations not in {1, 3, 5}:
         raise ValueError("invalid QFBench attempt schedule")
     return optimize_count * (iterations + 1) + held_out_count * 2
+
+
+def estimate_qfbench_tvt_attempts(
+    train_count: int,
+    validation_count: int,
+    test_count: int,
+    iterations: int,
+) -> int:
+    if (
+        min(train_count, validation_count, test_count) < 1
+        or iterations != 10
+    ):
+        raise ValueError("invalid QFBench train/validation/test attempt schedule")
+    return (
+        train_count * (iterations + 1)
+        + validation_count * (iterations + 1)
+        + test_count * 2
+    )
 
 
 def load_template_ids(
@@ -300,6 +328,7 @@ def validate_qfbench_baseline_args(args) -> None:
             "feedback_mode",
             "feedback_manifest",
             "verifier_criteria_map",
+            "validation_calibration",
             "template_manifest_dir",
             "evolver_template_manifest",
         )
@@ -444,6 +473,8 @@ class _QFBenchRunPlan:
     admission_digest: str
     task_manifest_digest: str
     results_root: Path
+    protocol: str = "optimize-held-out-v1"
+    calibration: object | None = None
 
 
 @dataclass(frozen=True)
@@ -459,9 +490,13 @@ class _QFBenchBaselinePlan:
 def _prepare_qfbench_run(args) -> _QFBenchRunPlan:
     """Validate and resolve provider-neutral QFBench run inputs."""
 
-    from qea.benchmarks.qfbench import load_qfbench_snapshot
+    from qea.benchmarks.qfbench import (
+        load_qfbench_evolution_snapshot,
+        load_qfbench_snapshot,
+    )
     from qea.candidate_admission import AdmissionPolicy
     from qea.evolution_feedback import feedback_contract_digest
+    from qea.qfbench_validation import load_validation_calibration
 
     if args.mock or args.real or args.levelb:
         raise ValueError("--benchmark qfbench cannot be combined with legacy mode flags")
@@ -472,23 +507,79 @@ def _prepare_qfbench_run(args) -> _QFBenchRunPlan:
         raise ValueError("--run-id is required with --resume")
     iterations = resolve_iterations(args)
     manifest_path = args.qfbench_manifest or Path("data/qfbench/MANIFEST_30.json")
-    snapshot = load_qfbench_snapshot(args.qfbench_root, manifest_path=manifest_path)
+    manifest_file = Path(manifest_path).expanduser().resolve()
+    try:
+        manifest_payload = json.loads(manifest_file.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot load QFBench manifest {manifest_file}: {exc}") from exc
+    schema_version = manifest_payload.get("schema_version")
+    if schema_version == 2:
+        if args.executor != "rootless-docker":
+            raise ValueError(
+                "QFBench train/validation/test evolution currently requires rootless-docker"
+            )
+        if args.validation_calibration is None:
+            raise ValueError(
+                "--validation-calibration is required for schema-v2 QFBench evolution"
+            )
+        if iterations != 10:
+            raise ValueError(
+                "schema-v2 QFBench train/validation/test evolution requires --iters 10"
+            )
+        snapshot = load_qfbench_evolution_snapshot(
+            args.qfbench_root, manifest_path=manifest_file
+        )
+        calibration = load_validation_calibration(args.validation_calibration)
+        if calibration.validation_task_ids != snapshot.validation.task_ids:
+            raise ValueError(
+                "validation calibration task panel does not match evolution manifest"
+            )
+        protocol = "train-validation-test-v1"
+        test_count = len(snapshot.test.tasks) + len(snapshot.diagnostic.tasks)
+        estimated_attempts = estimate_qfbench_tvt_attempts(
+            len(snapshot.train.tasks),
+            len(snapshot.validation.tasks),
+            test_count,
+            iterations,
+        )
+        forbidden_ids = (
+            set(snapshot.validation.task_ids)
+            | set(snapshot.test.task_ids)
+            | set(snapshot.diagnostic.task_ids)
+        )
+    elif schema_version == 1:
+        if args.validation_calibration is not None:
+            raise ValueError(
+                "--validation-calibration requires a schema-v2 QFBench manifest"
+            )
+        if iterations == 10:
+            raise ValueError(
+                "ten iterations require a schema-v2 train/validation/test manifest"
+            )
+        snapshot = load_qfbench_snapshot(
+            args.qfbench_root, manifest_path=manifest_file
+        )
+        calibration = None
+        protocol = "optimize-held-out-v1"
+        estimated_attempts = estimate_qfbench_attempts(
+            len(snapshot.optimize.tasks),
+            len(snapshot.held_out.tasks),
+            iterations,
+        )
+        forbidden_ids = set(snapshot.held_out.task_ids)
+    else:
+        raise ValueError("unsupported QFBench manifest schema")
     run_id = args.run_id or datetime.now(timezone.utc).strftime(
         "qfbench-%Y%m%dT%H%M%SZ"
-    )
-    estimated_attempts = estimate_qfbench_attempts(
-        len(snapshot.optimize.tasks),
-        len(snapshot.held_out.tasks),
-        iterations,
     )
     contract_digest = feedback_contract_digest(
         args.feedback_mode, args.feedback_manifest
     )
     admission_digest = AdmissionPolicy.qfbench_full(
-        forbidden_content=sorted(snapshot.held_out.task_ids)
+        forbidden_content=sorted(forbidden_ids)
     ).digest()
     task_manifest_digest = hashlib.sha256(
-        Path(manifest_path).resolve().read_bytes()
+        manifest_file.read_bytes()
     ).hexdigest()
     return _QFBenchRunPlan(
         snapshot=snapshot,
@@ -499,6 +590,8 @@ def _prepare_qfbench_run(args) -> _QFBenchRunPlan:
         admission_digest=admission_digest,
         task_manifest_digest=task_manifest_digest,
         results_root=Path(args.results_dir).resolve(),
+        protocol=protocol,
+        calibration=calibration,
     )
 
 
@@ -532,11 +625,31 @@ def _print_qfbench_plan(plan, args, *, backend: str) -> None:
     print(f"  backend: {backend}")
     print(f"  feedback arm: {args.feedback_mode}")
     print(f"  commit: {snapshot.commit}")
-    print(f"  optimize: {', '.join(snapshot.optimize.task_ids)}")
-    print(
-        "  promotion held-out (seed/final only): "
-        + ", ".join(snapshot.held_out.task_ids)
-    )
+    if plan.protocol == "train-validation-test-v1":
+        print(f"  train: {', '.join(snapshot.train.task_ids)}")
+        print(
+            "  blind validation (seed/every iteration): "
+            + ", ".join(snapshot.validation.task_ids)
+        )
+        print(
+            "  authoritative test (seed/final only): "
+            + ", ".join(snapshot.test.task_ids)
+        )
+        print(
+            "  copy-oracle diagnostic (seed/final only): "
+            + ", ".join(snapshot.diagnostic.task_ids)
+        )
+        print(
+            "  validation tolerance: "
+            f"{plan.calibration.tolerance:.6f} "
+            f"({plan.calibration.digest})"
+        )
+    else:
+        print(f"  optimize: {', '.join(snapshot.optimize.task_ids)}")
+        print(
+            "  promotion held-out (seed/final only): "
+            + ", ".join(snapshot.held_out.task_ids)
+        )
     print(
         f"  iterations: {plan.iterations}; "
         f"official scoring attempts: {plan.estimated_attempts}"
@@ -722,30 +835,49 @@ def _run_qfbench_rootless(args) -> int:
             allowed_path_prefix=config.allowed_path_prefix,
             allowed_model=config.allowed_model,
         )
+        evolution_config_values = {
+            "run_id": plan.run_id,
+            "n_iters": plan.iterations,
+            "results_dir": plan.results_root,
+            "seed_worker_dir": Path("qea/worker_gdpval_weak"),
+            "worker_concurrency": worker_concurrency,
+            "verifier_concurrency": verifier_concurrency,
+            "scheduler_identity_digest": runtime.scheduler_identity_digest,
+            "resume": args.resume,
+            "feedback_mode": args.feedback_mode,
+            "feedback_contract_digest": plan.contract_digest,
+            "public_rubric_path": args.feedback_manifest,
+            "verifier_mapping_path": args.verifier_criteria_map,
+            "admission_policy_digest": plan.admission_digest,
+            "task_manifest_digest": plan.task_manifest_digest,
+            "model_identity": model_identity,
+            "template_identity_digest": runtime.runtime_identity_digest,
+        }
+        if plan.protocol == "train-validation-test-v1":
+            evolution_config_values.update({
+                "validation_noise_tolerance": plan.calibration.tolerance,
+                "validation_calibration_digest": plan.calibration.digest,
+                "validation_calibration_source_run_id": (
+                    plan.calibration.source_run_id
+                ),
+            })
+            task_panels = {
+                "optimize_tasks": plan.snapshot.train.tasks,
+                "validation_tasks": plan.snapshot.validation.tasks,
+                "test_tasks": plan.snapshot.test.tasks,
+                "diagnostic_tasks": plan.snapshot.diagnostic.tasks,
+            }
+        else:
+            task_panels = {
+                "optimize_tasks": plan.snapshot.optimize.tasks,
+                "held_out_tasks": plan.snapshot.held_out.tasks,
+            }
         result = run_benchmark_evolution(
-            BenchmarkEvolutionConfig(
-                run_id=plan.run_id,
-                n_iters=plan.iterations,
-                results_dir=plan.results_root,
-                seed_worker_dir=Path("qea/worker_gdpval_weak"),
-                worker_concurrency=worker_concurrency,
-                verifier_concurrency=verifier_concurrency,
-                scheduler_identity_digest=runtime.scheduler_identity_digest,
-                resume=args.resume,
-                feedback_mode=args.feedback_mode,
-                feedback_contract_digest=plan.contract_digest,
-                public_rubric_path=args.feedback_manifest,
-                verifier_mapping_path=args.verifier_criteria_map,
-                admission_policy_digest=plan.admission_digest,
-                task_manifest_digest=plan.task_manifest_digest,
-                model_identity=model_identity,
-                template_identity_digest=runtime.runtime_identity_digest,
-            ),
-            optimize_tasks=plan.snapshot.optimize.tasks,
-            held_out_tasks=plan.snapshot.held_out.tasks,
+            BenchmarkEvolutionConfig(**evolution_config_values),
             benchmark_commit=plan.snapshot.commit,
             evaluator=runtime.evaluator,
             proposer=secure_proposer,
+            **task_panels,
         )
         _print_qfbench(result, backend=runtime.backend.backend_name)
         return 0
@@ -1035,10 +1167,24 @@ def _run_qfbench_e2b(args) -> int:
 def _print_qfbench(result, *, backend: str = "e2b") -> None:
     print(f"\n=== QFBench {backend} evolution: {result.run_id} ===")
     print(f"  optimize domain-macro trajectory: {result.optimize_trajectory}")
-    print(
-        f"  promotion held-out: {result.held_out_seed.overall:.4f} -> "
-        f"{result.held_out_final.overall:.4f} (not used for mutation selection)"
-    )
+    if result.validation_seed is not None:
+        print(
+            f"  blind validation: {result.validation_seed.overall:.4f} -> "
+            f"{result.validation_final.overall:.4f} (confirm gate only)"
+        )
+        print(
+            f"  authoritative test: {result.test_seed.overall:.4f} -> "
+            f"{result.test_final.overall:.4f} (seed/final only)"
+        )
+        print(
+            f"  copy-oracle diagnostic: {result.diagnostic_seed.overall:.4f} -> "
+            f"{result.diagnostic_final.overall:.4f} (reported separately)"
+        )
+    else:
+        print(
+            f"  promotion held-out: {result.held_out_seed.overall:.4f} -> "
+            f"{result.held_out_final.overall:.4f} (not used for mutation selection)"
+        )
     for record in result.records:
         print(
             f"  iter {record.iteration}: {'keep' if record.kept else 'rollback'} "

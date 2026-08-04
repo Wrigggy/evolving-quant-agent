@@ -257,6 +257,8 @@ def _rootless_plan():
     )
     return SimpleNamespace(
         snapshot=snapshot,
+        protocol="optimize-held-out-v1",
+        calibration=None,
         run_id="rootless-cli",
         iterations=1,
         estimated_attempts=60,
