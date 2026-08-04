@@ -181,6 +181,7 @@ def _fatal(attempt_id: str, category: str, records) -> AttemptWatchResult:
 def _lifecycle_records(run_dir: Path, attempt_id: str):
     roots = (
         run_dir / "lifecycles" / run_dir.name / attempt_id,
+        run_dir / "lifecycles" / attempt_id,
         run_dir / "attempts" / attempt_id,
     )
     records: list[tuple[str, bytes]] = []

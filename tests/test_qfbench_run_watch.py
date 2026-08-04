@@ -97,6 +97,26 @@ def test_exact_official_timeout_is_unreconciled_cost_lower_bound(tmp_path):
     assert result.category is None
 
 
+def test_exact_timeout_accepts_split_production_lifecycle_layout(tmp_path):
+    from qea.qfbench_run_watch import classify_attempt_evidence
+
+    run_dir, attempt = _attempt(tmp_path)
+    nested = run_dir / "lifecycles" / run_dir.name / attempt.name
+    proxy_root = run_dir / "lifecycles" / attempt.name
+    proxy_root.mkdir(parents=True)
+    for name in (
+        "proxy-sandbox-lifecycle-v2.json",
+        "proxy-network-lifecycle-v1.json",
+    ):
+        (nested / name).replace(proxy_root / name)
+
+    result = classify_attempt_evidence(attempt, run_dir=run_dir)
+
+    assert result.status == "timeout_cost_lower_bound"
+    assert result.hard_stop is False
+    assert result.category is None
+
+
 def test_replaced_ambiguous_attempt_is_nonfatal_and_audit_bound(tmp_path):
     """Catch a watchdog hard-stop after the coordinator created a safe successor."""
 
