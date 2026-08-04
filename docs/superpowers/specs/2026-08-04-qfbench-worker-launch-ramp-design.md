@@ -6,9 +6,11 @@ The corrected twelve-worker rootless canary passed its host and resource gates,
 then all twelve first model requests received explicit HTTP 503 responses from
 the required DeepSeek provider. The records had no generation ID, token counts,
 or provider cost. All worker and proxy resources were exact-ID reaped. A prior
-one-worker provider canary completed eleven requests successfully, so the
-failure is a provider-facing startup burst rather than a rootless capacity or
-cleanup failure.
+one-worker provider canary completed eleven requests successfully. A later
+one-worker canary completed two requests before receiving the same 503 while
+DeepSeek reported degraded V4 Flash API performance. This rules out rootless
+capacity and cleanup as the cause, but does not prove that startup burst was
+the sole provider failure.
 
 ## Decision
 
@@ -23,6 +25,8 @@ The interval is part of the rootless scheduler identity. Config schemas 1-3
 remain readable with an implicit zero interval; schema 4 requires the explicit
 field. The paid epoch-2 canary requires schema-4 semantics, interval two,
 concurrency 12/3, and a measured maximum overlap of twelve workers.
+Provider recovery and a fresh successful single-worker canary are independent
+prerequisites; the ramp is not evidence that the provider is healthy.
 
 ## Safety Boundaries
 

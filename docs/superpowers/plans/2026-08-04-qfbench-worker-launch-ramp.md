@@ -1,6 +1,6 @@
 # QFBench Worker Launch Ramp Implementation Plan
 
-**Goal:** Preserve epoch-2 concurrency twelve while removing the provider-facing twelve-request startup burst.
+**Goal:** Preserve epoch-2 concurrency twelve while bounding the provider-facing startup burst and retaining an independent provider-health gate.
 
 **Architecture:** Rate-limit only new worker execution starts inside the common two-stage evaluator. Carry the interval through a backward-compatible rootless config schema and bind it into the scheduler digest. Require the preregistered paid batch canary to exercise the exact formal value.
 
@@ -37,5 +37,6 @@
 - Run focused tests, the rootless safety panel, and the complete local suite.
 - Commit and deploy the exact SHA without merging.
 - Publish schema-4 configs with interval two and unique run IDs.
-- Run no-model, provider-route, paid twelve-worker, and recovery canaries.
+- Run no-model and recovery canaries. Wait for official provider recovery,
+  then run fresh provider-route and paid twelve-worker canaries.
 - Proceed to the fresh five-repetition formal run only if all gates pass.

@@ -1,9 +1,10 @@
 # QFBench Provider Burst and Worker Launch Ramp
 
 Date: 2026-08-04
-Status: accepted; supersedes the epoch-2 zero-ramp scheduling detail in the
-2026-08-03 scheduler-epoch decision. All other model, provider, task, scoring,
-isolation, and no-replay decisions remain unchanged.
+Status: accepted as a burst mitigation, not as a provider-availability fix;
+supersedes the epoch-2 zero-ramp scheduling detail in the 2026-08-03
+scheduler-epoch decision. All other model, provider, task, scoring, isolation,
+and no-replay decisions remain unchanged.
 
 ## Evidence
 
@@ -16,10 +17,14 @@ counts, or provider cost. The worker and proxy lifecycle records were complete
 and exact-ID cleaned. No OOM, lease, disk, PID, verifier, or residual-resource
 failure was observed.
 
-The earlier single-worker canary completed eleven official-provider requests,
-80,896 tokens, and one official score without fallback or replay. Together,
-the evidence identifies the simultaneous twelve-request startup burst as the
-failed condition; it does not justify replaying a sent request.
+An earlier single-worker canary completed eleven official-provider requests,
+80,896 tokens, and one official score without fallback or replay. A subsequent
+schema-4 single-worker canary completed two HTTP-200 requests and then received
+the same explicit 503. DeepSeek's official status page concurrently reported
+degraded V4 Flash API performance. The twelve-request burst therefore was not
+proven to be the sole cause. The ramp remains a prudent burst mitigation, while
+provider recovery is an independent launch gate. None of this evidence
+justifies replaying a sent request.
 
 ## Decision
 
@@ -32,9 +37,12 @@ slots.
 
 The ramp is included in the scheduler identity. Config schemas 1-3 remain
 readable with implicit interval zero and retain their legacy scheduler digest.
-The paid epoch-2 canary must enforce interval two, achieve measured worker
-overlap twelve, complete provider accounting, observe zero within-attempt
-replay, and leave no managed resource before repetitions 2-5 may run.
+After the provider reports recovery, a fresh publish-once single-worker canary
+must pass before the paid epoch-2 canary. The latter must enforce interval two,
+achieve measured worker overlap twelve, complete provider accounting, observe
+zero within-attempt replay, and leave no managed resource before repetitions
+2-5 may run. Repeated 503s freeze paid scheduling rather than triggering an
+attempt replay, fallback, or an unbounded canary loop.
 
 ## Resource Boundary
 
