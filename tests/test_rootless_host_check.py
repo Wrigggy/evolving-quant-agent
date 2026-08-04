@@ -96,6 +96,63 @@ def test_docker_client_server_version_and_git_cleanliness_are_required():
         assert checks[expected]["status"] == "fail"
 
 
+def test_systemd_degraded_exit_one_still_proves_user_manager_is_reachable():
+    """Catch discarding systemd's valid degraded state solely for exit code 1."""
+
+    from scripts.check_qfbench_rootless_host import evaluate_fixture
+
+    payload = copy.deepcopy(_fixture_payload())
+    payload["observations"]["systemd_user"].update(
+        exit_code=1,
+        stdout="degraded\n",
+    )
+    checks = {
+        item["name"]: item for item in evaluate_fixture(payload)["checks"]
+    }
+
+    assert checks["user_systemd"]["status"] == "pass"
+
+
+def test_rootless_data_root_may_use_a_user_owned_data_filesystem():
+    """Catch rejecting a safe rootless data root solely for being outside HOME."""
+
+    from scripts.check_qfbench_rootless_host import evaluate_fixture
+
+    payload = copy.deepcopy(_fixture_payload())
+    docker_info = json.loads(payload["observations"]["docker_info"]["stdout"])
+    docker_info["DockerRootDir"] = "/data/qea-julius-rootless-docker-20260801"
+    payload["observations"]["docker_info"]["stdout"] = json.dumps(docker_info)
+    payload["observations"]["docker_root_stat"] = {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "710:1013:directory\n",
+    }
+
+    checks = {
+        item["name"]: item for item in evaluate_fixture(payload)["checks"]
+    }
+
+    assert checks["rootless_security"]["status"] == "pass"
+
+
+def test_rootless_data_root_wrong_owner_fails_closed():
+    """Catch trusting a rootless-labelled daemon whose data root is not user-owned."""
+
+    from scripts.check_qfbench_rootless_host import evaluate_fixture
+
+    payload = copy.deepcopy(_fixture_payload())
+    payload["observations"]["docker_root_stat"] = {
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "700:0:directory\n",
+    }
+    checks = {
+        item["name"]: item for item in evaluate_fixture(payload)["checks"]
+    }
+
+    assert checks["rootless_security"]["status"] == "fail"
+
+
 def test_cli_emits_machine_json_and_human_summary_without_writes(tmp_path):
     repository = Path(__file__).resolve().parents[1]
     before = {path: path.stat().st_mtime_ns for path in tmp_path.iterdir()}

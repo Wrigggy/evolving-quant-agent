@@ -34,6 +34,11 @@
       "stderr": "",
       "stdout": "{\"DockerRootDir\":\"/home/julius/.local/share/docker\",\"Driver\":\"overlayfs\",\"DriverStatus\":[],\"SecurityOptions\":[\"name=seccomp,profile=builtin\",\"name=rootless\",\"name=cgroupns\"]}\n"
     },
+    "docker_root_stat": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "700:1013:directory\n"
+    },
     "docker_socket_stat": {
       "exit_code": 0,
       "stderr": "",

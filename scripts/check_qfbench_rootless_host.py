@@ -37,6 +37,7 @@ _OBSERVATION_KEYS = frozenset(
         "cgroup_filesystem",
         "cpu_online",
         "docker_info",
+        "docker_root_stat",
         "docker_socket_stat",
         "docker_version",
         "filesystem_free",
@@ -148,6 +149,20 @@ def collect_live(expected: Mapping[str, object]) -> dict[str, object]:
     docker_host = normalized["docker_host"]
     newuid = shutil.which("newuidmap")
     newgid = shutil.which("newgidmap")
+    docker_info = _run(
+        ("docker", "--host", docker_host, "info", "--format", "{{json .}}")
+    )
+    docker_root_stat = _observation(1)
+    if docker_info["exit_code"] == 0:
+        try:
+            docker_root = json.loads(str(docker_info["stdout"])).get(
+                "DockerRootDir"
+            )
+        except (AttributeError, json.JSONDecodeError):
+            docker_root = None
+        if isinstance(docker_root, str) and Path(docker_root).is_absolute():
+            docker_root_stat = _stat_record(Path(docker_root))
+
     observations = {
         "uid": _run(("id", "-u")),
         "username": _run(("id", "-un")),
@@ -166,9 +181,8 @@ def collect_live(expected: Mapping[str, object]) -> dict[str, object]:
         "docker_version": _run(
             ("docker", "--host", docker_host, "version", "--format", "{{json .}}")
         ),
-        "docker_info": _run(
-            ("docker", "--host", docker_host, "info", "--format", "{{json .}}")
-        ),
+        "docker_info": docker_info,
+        "docker_root_stat": docker_root_stat,
         "filesystem_free": _run(("df", "-Pk", str(runtime))),
         "filesystem_type": _run(("stat", "-f", "-c", "%T", str(runtime))),
         "kernel_release": _run(("uname", "-r")),
@@ -355,9 +369,15 @@ def evaluate_fixture(payload: object) -> dict[str, object]:
         {"cpu", "memory", "pids"}.issubset(controllers),
         "cpu, memory, and pids controllers required",
     )
+    systemd_observation = observations["systemd_user"]
+    systemd_state = (
+        str(systemd_observation["stdout"]).strip()
+        if systemd_observation["exit_code"] in {0, 1}
+        else ""
+    )
     add(
         "user_systemd",
-        _text(observations, "systemd_user") in {"running", "degraded"},
+        systemd_state in {"running", "degraded"},
         "user systemd manager must be reachable",
     )
     add("linger", _text(observations, "linger") == "yes", "linger=yes required")
@@ -386,12 +406,23 @@ def evaluate_fixture(payload: object) -> dict[str, object]:
     docker_info = _json_observation(observations, "docker_info")
     security = docker_info.get("SecurityOptions", []) if docker_info else []
     docker_root = docker_info.get("DockerRootDir") if docker_info else None
+    docker_root_metadata = _mode(_text(observations, "docker_root_stat"))
+    try:
+        docker_root_mode = (
+            int(docker_root_metadata[0], 8) if docker_root_metadata else None
+        )
+    except ValueError:
+        docker_root_mode = None
     rootless_ok = (
         isinstance(security, list)
         and "name=rootless" in security
         and isinstance(docker_root, str)
-        and docker_root.startswith(f"/home/{username}/")
+        and Path(docker_root).is_absolute()
         and docker_root != "/var/lib/docker"
+        and docker_root_metadata is not None
+        and docker_root_metadata[1:] == (uid, "directory")
+        and docker_root_mode is not None
+        and docker_root_mode & 0o022 == 0
     )
     add("rootless_security", rootless_ok, "rootless security option and user-owned data root required")
     driver_status = docker_info.get("DriverStatus", []) if docker_info else []
