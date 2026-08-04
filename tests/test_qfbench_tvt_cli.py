@@ -26,6 +26,7 @@ class _RootlessConfig:
     upstream_base_url: str = "https://openrouter.ai/api/v1"
     allowed_path_prefix: str = "/v1"
     allowed_model: str = "deepseek/deepseek-v4-flash-0731"
+    required_provider: str = "deepseek"
     scheduler_epoch: str | None = "iter01-10-20w3v"
     capacity: object = None
 
@@ -124,10 +125,15 @@ def test_rootless_tvt_path_binds_calibration_and_four_panels(monkeypatch) -> Non
     assert config.validation_noise_tolerance == 0.025
     assert config.validation_calibration_digest == "7" * 64
     assert config.validation_calibration_source_run_id == "base-85x5"
+    assert config.model_identity == rootless_full_harness.rootless_model_route_identity(
+        upstream_base_url="https://openrouter.ai/api/v1",
+        allowed_path_prefix="/v1",
+        allowed_model="deepseek/deepseek-v4-flash-0731",
+        required_provider="deepseek",
+    )
     runner = captured["runner"]
     assert len(runner["optimize_tasks"]) == 30
     assert len(runner["validation_tasks"]) == 15
     assert len(runner["test_tasks"]) == 32
     assert len(runner["diagnostic_tasks"]) == 8
     assert "held_out_tasks" not in runner
-

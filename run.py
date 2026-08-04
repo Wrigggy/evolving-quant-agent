@@ -834,6 +834,7 @@ def _run_qfbench_rootless(args) -> int:
             upstream_base_url=config.upstream_base_url,
             allowed_path_prefix=config.allowed_path_prefix,
             allowed_model=config.allowed_model,
+            required_provider=config.required_provider,
         )
         evolution_config_values = {
             "run_id": plan.run_id,
@@ -975,6 +976,7 @@ def _run_qfbench_rootless_baseline(args) -> int:
             upstream_base_url=config.upstream_base_url,
             allowed_path_prefix=config.allowed_path_prefix,
             allowed_model=config.allowed_model,
+            required_provider=config.required_provider,
         )
         result = run_qfbench_baseline(
             BaselineConfig(

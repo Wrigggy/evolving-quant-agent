@@ -243,6 +243,7 @@ class _CliRootlessConfig:
     upstream_base_url: str = "https://openrouter.ai/api/v1"
     allowed_path_prefix: str = "/v1"
     allowed_model: str = "provider/model"
+    required_provider: str | None = None
     scheduler_epoch: str | None = None
     capacity: object = None
 
