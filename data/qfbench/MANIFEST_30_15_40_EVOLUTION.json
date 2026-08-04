@@ -1,0 +1,802 @@
+{
+  "schema_version": 2,
+  "repository_url": "https://github.com/QF-Bench/QuantitativeFinance-Bench.git",
+  "commit": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+  "inventory": {
+    "tasks": 86,
+    "runnable_tasks": 85,
+    "train_tasks": 30,
+    "validation_tasks": 15,
+    "test_tasks": 32,
+    "diagnostic_tasks": 8
+  },
+  "copy_oracle_tasks": [
+    "barrier-garch-var",
+    "cta-basel-capital",
+    "kelly-var-sizing",
+    "regime-cta-vol-target",
+    "regime-riskparity-cvar",
+    "sec-10k-report-long",
+    "sentiment-factor-alpha",
+    "structured-note-risk"
+  ],
+  "inoperable_tasks": [
+    {
+      "task_id": "sec-8k-event-alpha",
+      "reason": "official verifier raises before writing reward.txt at the pinned commit"
+    }
+  ],
+  "evolution": {
+    "train": [
+      {
+        "task_id": "historical-var-data-prep",
+        "domain": "risk_credit",
+        "lineage": "historical_var_data_prep",
+        "difficulty": "easy",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "evt-pot-var",
+        "domain": "risk_credit",
+        "lineage": "evt_pot_var",
+        "difficulty": "medium",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "credit-migration-matrix",
+        "domain": "risk_credit",
+        "lineage": "credit_migration_matrix",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "credit-spread-decomposition",
+        "domain": "risk_credit",
+        "lineage": "credit_spread_decomposition",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "momentum-backtest",
+        "domain": "systematic_strategy",
+        "lineage": "momentum_backtest",
+        "difficulty": "easy",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "bollinger-backtest-aapl",
+        "domain": "systematic_strategy",
+        "lineage": "bollinger_backtest_aapl",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "brinson-sector-attribution",
+        "domain": "systematic_strategy",
+        "lineage": "brinson_sector_attribution",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "etf-cross-asset-lead-lag",
+        "domain": "systematic_strategy",
+        "lineage": "etf_cross_asset_lead_lag",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "cme-hdd-option-pricing",
+        "domain": "derivatives",
+        "lineage": "cme_hdd_option_pricing",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "delta-hedging-pnl-simulation",
+        "domain": "derivatives",
+        "lineage": "delta_hedging_pnl_simulation",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "localvol-barrier",
+        "domain": "derivatives",
+        "lineage": "localvol_barrier",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "fomc-tone-event-study",
+        "domain": "rates_fx_macro",
+        "lineage": "fomc_tone_event_study",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "swap-curve-bootstrap-ois",
+        "domain": "rates_fx_macro",
+        "lineage": "swap_curve_bootstrap_ois",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "yield-curve-bond-immunization",
+        "domain": "rates_fx_macro",
+        "lineage": "yield_curve_bond_immunization",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "zero-coupon-bootstrapping",
+        "domain": "rates_fx_macro",
+        "lineage": "zero_coupon_bootstrapping",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "crypto-funding-rate-basis-carry",
+        "domain": "execution_microstructure",
+        "lineage": "crypto_funding_rate_basis_carry",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "prediction-markets-cross-venue-dislocation",
+        "domain": "execution_microstructure",
+        "lineage": "prediction_markets_cross_venue_dislocation",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "13f-amendment-aware-crowding",
+        "domain": "data_engineering",
+        "lineage": "13f_amendment_aware_crowding",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "corporate-action-adjustment",
+        "domain": "data_engineering",
+        "lineage": "corporate_action_adjustment",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "earnings-surprise-calculator",
+        "domain": "data_engineering",
+        "lineage": "earnings_surprise_calculator",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "bs-greeks-pde",
+        "domain": "derivatives",
+        "lineage": "bs_greeks_pde",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "qea_fallback",
+        "resources": {
+          "agent_timeout_seconds": 2400,
+          "verifier_timeout_seconds": 300,
+          "build_timeout_seconds": 600,
+          "cpus": 2,
+          "memory_mb": 4096
+        }
+      },
+      {
+        "task_id": "cliquet-ratchet-pricing",
+        "domain": "derivatives",
+        "lineage": "cliquet_ratchet_pricing",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "merton-jump-diffusion",
+        "domain": "derivatives",
+        "lineage": "merton_jump_diffusion",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "spread-option-kirk-margrabe",
+        "domain": "derivatives",
+        "lineage": "spread_option_kirk_margrabe",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "variance-swap-replication",
+        "domain": "derivatives",
+        "lineage": "variance_swap_replication",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "realized-vol-estimators",
+        "domain": "risk_credit",
+        "lineage": "realized_vol_estimators",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "var-es-estimation",
+        "domain": "risk_credit",
+        "lineage": "var_es_estimation",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "sma-crossover-spy",
+        "domain": "systematic_strategy",
+        "lineage": "sma_crossover_spy",
+        "difficulty": "easy",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "residual-momentum",
+        "domain": "systematic_strategy",
+        "lineage": "residual_momentum",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "binance-btc-participation-tca",
+        "domain": "execution_microstructure",
+        "lineage": "binance_btc_participation_tca",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      }
+    ],
+    "validation": [
+      {
+        "task_id": "dcc-garch-portfolio-var",
+        "domain": "risk_credit",
+        "lineage": "dcc_garch_portfolio_var",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "fft-compound-poisson",
+        "domain": "risk_credit",
+        "lineage": "fft_compound_poisson",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "pca-factor-portfolio",
+        "domain": "systematic_strategy",
+        "lineage": "pca_factor_portfolio",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "bl-regime-hmm",
+        "domain": "systematic_strategy",
+        "lineage": "bl_regime_hmm",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "option-put-call-parity-forward-audit",
+        "domain": "derivatives",
+        "lineage": "option_put_call_parity_forward_audit",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "interest-rate-cap-floor",
+        "domain": "derivatives",
+        "lineage": "interest_rate_cap_floor",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "fx-forward-cross-rate",
+        "domain": "rates_fx_macro",
+        "lineage": "fx_forward_cross_rate",
+        "difficulty": "easy",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "cir-bond-pricing",
+        "domain": "rates_fx_macro",
+        "lineage": "cir_bond_pricing",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "intraday-volume-fitting-and-execution-scheduling",
+        "domain": "execution_microstructure",
+        "lineage": "intraday_volume_fitting_and_execution_scheduling",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "form4-cross-sectional-sale-pressure",
+        "domain": "data_engineering",
+        "lineage": "form4_cross_sectional_sale_pressure",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "implied-vol-approximations",
+        "domain": "derivatives",
+        "lineage": "implied_vol_approximations",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "ou-jump-commodity",
+        "domain": "derivatives",
+        "lineage": "ou_jump_commodity",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "standard-var-methods",
+        "domain": "risk_credit",
+        "lineage": "standard_var_methods",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "double-sort",
+        "domain": "systematic_strategy",
+        "lineage": "double_sort",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "fx-carry-forward-hedge",
+        "domain": "rates_fx_macro",
+        "lineage": "fx_carry_forward_hedge",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      }
+    ],
+    "test": [
+      {
+        "task_id": "alpha-hedge-strategy",
+        "domain": "systematic_strategy",
+        "lineage": "alpha_hedge_strategy",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "american-option-fd-new",
+        "domain": "derivatives",
+        "lineage": "american_option_fd_new",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "asian-option-levy-curran",
+        "domain": "derivatives",
+        "lineage": "asian_option_levy_curran",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "barone-adesi-whaley",
+        "domain": "derivatives",
+        "lineage": "barone_adesi_whaley",
+        "difficulty": "unlabelled",
+        "reward_kind": "binary",
+        "resource_source": "qea_fallback",
+        "resources": {
+          "agent_timeout_seconds": 2400,
+          "verifier_timeout_seconds": 300,
+          "build_timeout_seconds": 600,
+          "cpus": 2,
+          "memory_mb": 4096
+        }
+      },
+      {
+        "task_id": "compound-option-geske",
+        "domain": "derivatives",
+        "lineage": "compound_option_geske",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "qea_fallback",
+        "resources": {
+          "agent_timeout_seconds": 2400,
+          "verifier_timeout_seconds": 300,
+          "build_timeout_seconds": 600,
+          "cpus": 2,
+          "memory_mb": 4096
+        }
+      },
+      {
+        "task_id": "copula-equity-fitting",
+        "domain": "risk_credit",
+        "lineage": "copula_equity_fitting",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "copula-sampling-rank-correlation",
+        "domain": "risk_credit",
+        "lineage": "copula_sampling_rank_correlation",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "qea_fallback",
+        "resources": {
+          "agent_timeout_seconds": 2400,
+          "verifier_timeout_seconds": 300,
+          "build_timeout_seconds": 600,
+          "cpus": 2,
+          "memory_mb": 4096
+        }
+      },
+      {
+        "task_id": "credit-portfolio-var-cvar",
+        "domain": "risk_credit",
+        "lineage": "credit_portfolio_var_cvar",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "creditmetrics-portfolio-var",
+        "domain": "risk_credit",
+        "lineage": "creditmetrics_portfolio_var",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "cross-sectional-momentum",
+        "domain": "systematic_strategy",
+        "lineage": "cross_sectional_momentum",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "digital-barrier-options",
+        "domain": "derivatives",
+        "lineage": "digital_barrier_options",
+        "difficulty": "medium-hard",
+        "reward_kind": "binary",
+        "resource_source": "qea_fallback",
+        "resources": {
+          "agent_timeout_seconds": 2400,
+          "verifier_timeout_seconds": 300,
+          "build_timeout_seconds": 600,
+          "cpus": 2,
+          "memory_mb": 4096
+        }
+      },
+      {
+        "task_id": "dupire-local-vol",
+        "domain": "derivatives",
+        "lineage": "dupire_local_vol",
+        "difficulty": "unlabelled",
+        "reward_kind": "binary",
+        "resource_source": "qea_fallback",
+        "resources": {
+          "agent_timeout_seconds": 2400,
+          "verifier_timeout_seconds": 300,
+          "build_timeout_seconds": 600,
+          "cpus": 2,
+          "memory_mb": 4096
+        }
+      },
+      {
+        "task_id": "etf-overlap-redemption-pressure",
+        "domain": "systematic_strategy",
+        "lineage": "etf_overlap_redemption_pressure",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "event-study-earnings",
+        "domain": "systematic_strategy",
+        "lineage": "event_study_earnings",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "ewma-portfolio-risk-decomposition",
+        "domain": "risk_credit",
+        "lineage": "ewma_portfolio_risk_decomposition",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "fama-french-factor-model-new",
+        "domain": "systematic_strategy",
+        "lineage": "fama_french_factor_model_new",
+        "difficulty": "easy",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "first-passage-time",
+        "domain": "derivatives",
+        "lineage": "first_passage_time",
+        "difficulty": "unlabelled",
+        "reward_kind": "binary",
+        "resource_source": "qea_fallback",
+        "resources": {
+          "agent_timeout_seconds": 2400,
+          "verifier_timeout_seconds": 300,
+          "build_timeout_seconds": 600,
+          "cpus": 2,
+          "memory_mb": 4096
+        }
+      },
+      {
+        "task_id": "geometric-mean-reverting-jd",
+        "domain": "rates_fx_macro",
+        "lineage": "geometric_mean_reverting_jd",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "qea_fallback",
+        "resources": {
+          "agent_timeout_seconds": 2400,
+          "verifier_timeout_seconds": 300,
+          "build_timeout_seconds": 600,
+          "cpus": 2,
+          "memory_mb": 4096
+        }
+      },
+      {
+        "task_id": "hull-white-swaption",
+        "domain": "derivatives",
+        "lineage": "hull_white_swaption",
+        "difficulty": "very_hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "ipca-latent-factors",
+        "domain": "systematic_strategy",
+        "lineage": "ipca_latent_factors",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "lob-pc-signal",
+        "domain": "execution_microstructure",
+        "lineage": "lob_pc_signal",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "lookback-options",
+        "domain": "derivatives",
+        "lineage": "lookback_options",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "qea_fallback",
+        "resources": {
+          "agent_timeout_seconds": 2400,
+          "verifier_timeout_seconds": 300,
+          "build_timeout_seconds": 600,
+          "cpus": 2,
+          "memory_mb": 4096
+        }
+      },
+      {
+        "task_id": "mc-greek-surface-1",
+        "domain": "derivatives",
+        "lineage": "mc_greek_surface_1",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "mtm-xccy-basis-desk",
+        "domain": "rates_fx_macro",
+        "lineage": "mtm_xccy_basis_desk",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "multimodal-alpha-fusion-edgar-cot-gdelt",
+        "domain": "systematic_strategy",
+        "lineage": "multimodal_alpha_fusion_edgar_cot_gdelt",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "ohlc-realized-vol-estimators",
+        "domain": "risk_credit",
+        "lineage": "ohlc_realized_vol_estimators",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "qea_fallback",
+        "resources": {
+          "agent_timeout_seconds": 2400,
+          "verifier_timeout_seconds": 300,
+          "build_timeout_seconds": 600,
+          "cpus": 2,
+          "memory_mb": 4096
+        }
+      },
+      {
+        "task_id": "polars-api-migration",
+        "domain": "data_engineering",
+        "lineage": "polars_api_migration",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "smith-tail-index",
+        "domain": "risk_credit",
+        "lineage": "smith_tail_index",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "qea_fallback",
+        "resources": {
+          "agent_timeout_seconds": 2400,
+          "verifier_timeout_seconds": 300,
+          "build_timeout_seconds": 600,
+          "cpus": 2,
+          "memory_mb": 4096
+        }
+      },
+      {
+        "task_id": "stable-residual",
+        "domain": "systematic_strategy",
+        "lineage": "stable_residual",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "stochvol-implied-surface-new",
+        "domain": "derivatives",
+        "lineage": "stochvol_implied_surface_new",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "yield-curve-bootstrap-immunization",
+        "domain": "rates_fx_macro",
+        "lineage": "yield_curve_bootstrap_immunization",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "yield-curve-pca-dynamics",
+        "domain": "rates_fx_macro",
+        "lineage": "yield_curve_pca_dynamics",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      }
+    ],
+    "diagnostic": [
+      {
+        "task_id": "barrier-garch-var",
+        "domain": "derivatives",
+        "lineage": "barrier_garch_var",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "cta-basel-capital",
+        "domain": "risk_credit",
+        "lineage": "cta_basel_capital",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "kelly-var-sizing",
+        "domain": "systematic_strategy",
+        "lineage": "kelly_var_sizing",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "regime-cta-vol-target",
+        "domain": "systematic_strategy",
+        "lineage": "regime_cta_vol_target",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "regime-riskparity-cvar",
+        "domain": "systematic_strategy",
+        "lineage": "regime_riskparity_cvar",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "sec-10k-report-long",
+        "domain": "data_engineering",
+        "lineage": "sec_10k_report_long",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "sentiment-factor-alpha",
+        "domain": "systematic_strategy",
+        "lineage": "sentiment_factor_alpha",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      },
+      {
+        "task_id": "structured-note-risk",
+        "domain": "derivatives",
+        "lineage": "structured_note_risk",
+        "difficulty": "hard",
+        "reward_kind": "partial",
+        "resource_source": "upstream"
+      }
+    ],
+    "structural_exclusions": [
+      {
+        "task_id": "sec-8k-event-alpha",
+        "reason": "official verifier raises before writing reward.txt at the pinned commit"
+      }
+    ]
+  }
+}

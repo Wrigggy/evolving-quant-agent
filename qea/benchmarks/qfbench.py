@@ -145,6 +145,35 @@ class QFBenchBaselineSnapshot:
         raise KeyError(task_id)
 
 
+@dataclass(frozen=True)
+class QFBenchEvolutionSnapshot:
+    root: Path
+    repository_url: str
+    commit: str
+    train: QFBenchSplit
+    validation: QFBenchSplit
+    test: QFBenchSplit
+    diagnostic: QFBenchSplit
+    structural_exclusions: frozenset[str]
+    copy_oracle_tasks: frozenset[str]
+    inoperable_tasks: frozenset[str]
+
+    @property
+    def tasks(self) -> tuple[QFBenchTask, ...]:
+        return (
+            self.train.tasks
+            + self.validation.tasks
+            + self.test.tasks
+            + self.diagnostic.tasks
+        )
+
+    def task(self, task_id: str) -> QFBenchTask:
+        for task in self.tasks:
+            if task.task_id == task_id:
+                return task
+        raise KeyError(task_id)
+
+
 def default_manifest_path() -> Path:
     return Path(__file__).resolve().parents[2] / "data" / "qfbench" / "MANIFEST.json"
 
@@ -1024,6 +1053,42 @@ def _reject_cross_split_input_hash_overlap(
     )
 
 
+def _reject_cross_panel_input_hash_overlap(
+    panels: tuple[QFBenchSplit, ...],
+) -> None:
+    indexed: dict[str, list[tuple[str, str, str]]] = {}
+    for panel in panels:
+        for task in panel.tasks:
+            data_root = task.root / "environment" / "data"
+            for path in _files_under(data_root):
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                relative = path.relative_to(data_root).as_posix()
+                indexed.setdefault(digest, []).append(
+                    (panel.name, task.task_id, relative)
+                )
+    overlap = {
+        digest: entries
+        for digest, entries in indexed.items()
+        if len({entry[0] for entry in entries}) > 1
+    }
+    if not overlap:
+        return
+    details = []
+    for digest in sorted(overlap):
+        entries = sorted(overlap[digest])
+        for index, left in enumerate(entries):
+            for right in entries[index + 1:]:
+                if left[0] != right[0]:
+                    details.append(
+                        f"{left[0]} {left[1]}/{left[2]} == "
+                        f"{right[0]} {right[1]}/{right[2]}"
+                    )
+    raise QFBenchConfigError(
+        "input data hash overlap between evolution panels: "
+        + "; ".join(details)
+    )
+
+
 def load_qfbench_snapshot(
     root: str | Path,
     *,
@@ -1092,6 +1157,163 @@ def load_qfbench_snapshot(
         commit=actual_commit,
         optimize=optimize,
         held_out=held_out,
+        copy_oracle_tasks=copy_oracles,
+        inoperable_tasks=inoperable,
+    )
+
+
+def load_qfbench_evolution_snapshot(
+    root: str | Path,
+    *,
+    manifest_path: str | Path,
+) -> QFBenchEvolutionSnapshot:
+    """Load the preregistered train/validation/test evolution protocol."""
+
+    root_path = Path(root).expanduser().resolve()
+    manifest_file = Path(manifest_path).expanduser().resolve()
+    try:
+        manifest = json.loads(manifest_file.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise QFBenchConfigError(
+            f"cannot load QFBench manifest {manifest_file}: {exc}"
+        ) from exc
+    if manifest.get("schema_version") != 2:
+        raise QFBenchConfigError("unsupported QFBench evolution manifest schema")
+    expected_commit = str(manifest.get("commit", "")).lower()
+    if not _COMMIT_RE.fullmatch(expected_commit):
+        raise QFBenchConfigError("manifest commit must be a full 40-character SHA")
+    actual_commit = _snapshot_revision(root_path)
+    if actual_commit != expected_commit:
+        raise QFBenchConfigError(
+            f"QFBench commit mismatch: expected {expected_commit}, "
+            f"found {actual_commit}"
+        )
+
+    copy_oracles = frozenset(
+        str(item) for item in manifest.get("copy_oracle_tasks", ())
+    )
+    inoperable_entries = manifest.get("inoperable_tasks", [])
+    if not isinstance(inoperable_entries, list):
+        raise QFBenchConfigError("manifest inoperable_tasks must be an array")
+    inoperable_ids = []
+    for entry in inoperable_entries:
+        if not isinstance(entry, dict):
+            raise QFBenchConfigError("inoperable task entries must be objects")
+        task_id = _require_string(entry, "task_id", "<inoperable>")
+        _require_string(entry, "reason", task_id)
+        inoperable_ids.append(task_id)
+    inoperable = frozenset(inoperable_ids)
+
+    evolution = manifest.get("evolution")
+    if not isinstance(evolution, dict):
+        raise QFBenchConfigError("manifest must contain an evolution object")
+    entries_by_name = {}
+    for name in ("train", "validation", "test", "diagnostic"):
+        entries = evolution.get(name, ())
+        if not isinstance(entries, list):
+            raise QFBenchConfigError(f"evolution {name} must be an array")
+        if any(not isinstance(entry, dict) for entry in entries):
+            raise QFBenchConfigError(f"evolution {name} entries must be objects")
+        entries_by_name[name] = entries
+
+    for name in ("train", "validation", "test"):
+        task_ids = {
+            _require_string(entry, "task_id", f"<{name}>")
+            for entry in entries_by_name[name]
+        }
+        invalid = sorted(task_ids & copy_oracles)
+        if invalid:
+            raise QFBenchConfigError(
+                f"copy-oracle tasks cannot enter evolution {name}: {invalid}"
+            )
+
+    train = _load_split(
+        root_path,
+        "train",
+        entries_by_name["train"],
+        copy_oracles,
+        inoperable,
+    )
+    validation = _load_split(
+        root_path,
+        "validation",
+        entries_by_name["validation"],
+        copy_oracles,
+        inoperable,
+    )
+    test = _load_split(
+        root_path,
+        "test",
+        entries_by_name["test"],
+        copy_oracles,
+        inoperable,
+    )
+    diagnostic = _load_split(
+        root_path,
+        "diagnostic",
+        entries_by_name["diagnostic"],
+        copy_oracles,
+        inoperable,
+        allow_copy_oracle=True,
+    )
+    if set(diagnostic.task_ids) != copy_oracles:
+        raise QFBenchConfigError(
+            "evolution diagnostic tasks must equal the registered copy-oracle set"
+        )
+
+    panels = (train, validation, test, diagnostic)
+    seen_ids: dict[str, str] = {}
+    seen_lineages: dict[str, str] = {}
+    for panel in panels:
+        for task in panel.tasks:
+            prior_panel = seen_ids.get(task.task_id)
+            if prior_panel is not None:
+                raise QFBenchConfigError(
+                    "task overlap between evolution panels: "
+                    f"{task.task_id} in {prior_panel} and {panel.name}"
+                )
+            seen_ids[task.task_id] = panel.name
+            prior_lineage_panel = seen_lineages.get(task.lineage)
+            if prior_lineage_panel is not None:
+                raise QFBenchConfigError(
+                    "lineage overlap between evolution panels: "
+                    f"{task.lineage} in {prior_lineage_panel} and {panel.name}"
+                )
+            seen_lineages[task.lineage] = panel.name
+    _reject_cross_panel_input_hash_overlap(panels)
+
+    structural_entries = evolution.get("structural_exclusions", ())
+    if not isinstance(structural_entries, list):
+        raise QFBenchConfigError(
+            "evolution structural_exclusions must be an array"
+        )
+    structural_ids = []
+    for entry in structural_entries:
+        if not isinstance(entry, dict):
+            raise QFBenchConfigError(
+                "structural exclusion entries must be objects"
+            )
+        task_id = _require_string(entry, "task_id", "<structural-exclusion>")
+        _require_string(entry, "reason", task_id)
+        structural_ids.append(task_id)
+    structural = frozenset(structural_ids)
+    if structural != inoperable:
+        raise QFBenchConfigError(
+            "evolution structural exclusions must equal registered inoperable tasks"
+        )
+
+    repository_url = manifest.get("repository_url")
+    if not isinstance(repository_url, str) or not repository_url:
+        raise QFBenchConfigError("manifest repository_url must be non-empty")
+    return QFBenchEvolutionSnapshot(
+        root=root_path,
+        repository_url=repository_url,
+        commit=actual_commit,
+        train=train,
+        validation=validation,
+        test=test,
+        diagnostic=diagnostic,
+        structural_exclusions=structural,
         copy_oracle_tasks=copy_oracles,
         inoperable_tasks=inoperable,
     )
