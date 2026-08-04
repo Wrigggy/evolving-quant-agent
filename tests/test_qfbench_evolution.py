@@ -188,6 +188,114 @@ def test_config_maps_deprecated_concurrency_alias_and_rejects_conflicts(tmp_path
         )
 
 
+@pytest.mark.parametrize("interval", [-1, True, 1.5, "2"])
+def test_sandbox_evaluator_rejects_invalid_worker_launch_interval(interval):
+    from qea.loop_benchmark import EvolutionConfigError, QFBenchSandboxEvaluator
+
+    with pytest.raises(EvolutionConfigError, match="worker launch interval"):
+        QFBenchSandboxEvaluator(
+            benchmark_commit="0" * 40,
+            run_id="invalid-launch-interval",
+            executor=SimpleNamespace(),
+            verifier=SimpleNamespace(),
+            model_env={},
+            worker_concurrency=1,
+            verifier_concurrency=1,
+            worker_launch_interval_seconds=interval,
+        )
+
+
+def test_worker_launch_gate_enforces_monotonic_minimum_spacing():
+    from qea.loop_benchmark import _WorkerLaunchGate
+
+    now = [10.0]
+    sleeps = []
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+        now[0] += seconds
+
+    gate = _WorkerLaunchGate(
+        2,
+        clock=lambda: now[0],
+        sleep=sleep,
+    )
+
+    gate.wait()
+    gate.wait()
+    gate.wait()
+
+    assert sleeps == [2.0, 2.0]
+
+
+def test_zero_worker_launch_interval_never_reads_clock_or_sleeps():
+    from qea.loop_benchmark import _WorkerLaunchGate
+
+    def fail():
+        raise AssertionError("zero launch interval must be a no-op")
+
+    gate = _WorkerLaunchGate(0, clock=fail, sleep=lambda seconds: fail())
+
+    gate.wait()
+
+
+def test_sandbox_evaluator_gates_only_new_worker_execution(tmp_path):
+    from qea.loop_benchmark import QFBenchSandboxEvaluator
+
+    tasks = (
+        SimpleNamespace(task_id="task-a", domain="risk", lineage="a"),
+        SimpleNamespace(task_id="task-b", domain="risk", lineage="b"),
+    )
+    launches = []
+
+    class Executor:
+        def execute(self, *, attempt, task, worker_dir, run_dir, model_env):
+            return _execution_for(attempt, run_dir, task)
+
+    class Verifier:
+        def verify(self, *, attempt, task, execution, run_dir):
+            return OfficialTaskScore(
+                task_id=task.task_id,
+                domain=task.domain,
+                reward=1.0,
+            )
+
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="launch-gate-resume",
+        executor=Executor(),
+        verifier=Verifier(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+        worker_launch_interval_seconds=2,
+    )
+    evaluator._worker_launch_gate = SimpleNamespace(
+        wait=lambda: launches.append("new-worker")
+    )
+    worker = _seed_worker(tmp_path)
+    run_dir = tmp_path / "run"
+
+    first = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=(tasks[0],),
+        split="optimize",
+        checkpoint="seed-optimize",
+        run_dir=run_dir,
+    )
+    second = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=tasks,
+        split="optimize",
+        checkpoint="seed-optimize",
+        run_dir=run_dir,
+    )
+
+    assert first.overall == 1.0
+    assert second.overall == 1.0
+    assert launches == ["new-worker", "new-worker"]
+
+
 @pytest.mark.parametrize(
     "scheduler_identity_digest",
     ["typo", "A" * 64, "a" * 63, "g" * 64],

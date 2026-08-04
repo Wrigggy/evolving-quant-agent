@@ -6,9 +6,11 @@ import hashlib
 import json
 import os
 import re
+import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from threading import Lock
 from typing import TYPE_CHECKING, Callable, Iterable, Mapping, Protocol
 
 from .candidate_admission import (
@@ -53,6 +55,42 @@ LEGACY_SCHEDULER_IDENTITY_DIGEST = "unspecified"
 
 class EvolutionConfigError(ValueError):
     """The pilot configuration is unsafe or incompatible with its checkpoint."""
+
+
+class _WorkerLaunchGate:
+    """Serialize genuinely new worker starts with a monotonic minimum interval."""
+
+    def __init__(
+        self,
+        interval_seconds: int,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        if type(interval_seconds) is not int or interval_seconds < 0:
+            raise EvolutionConfigError(
+                "worker launch interval must be a non-negative integer"
+            )
+        self.interval_seconds = interval_seconds
+        self._clock = clock
+        self._sleep = sleep
+        self._lock = Lock()
+        self._next_launch_at: float | None = None
+
+    def wait(self) -> None:
+        """Wait until the next worker-start slot without weakening concurrency."""
+
+        if self.interval_seconds == 0:
+            return
+        with self._lock:
+            now = self._clock()
+            if self._next_launch_at is not None and now < self._next_launch_at:
+                self._sleep(self._next_launch_at - now)
+                now = self._clock()
+            self._next_launch_at = max(
+                now,
+                self._next_launch_at if self._next_launch_at is not None else now,
+            ) + self.interval_seconds
 
 
 class BenchmarkEvaluator(Protocol):
@@ -399,6 +437,7 @@ class QFBenchSandboxEvaluator:
         worker_concurrency: int | None = None,
         verifier_concurrency: int | None = None,
         max_workers: int | None = None,
+        worker_launch_interval_seconds: int = 0,
     ) -> None:
         if not re.fullmatch(r"[0-9a-f]{40}", benchmark_commit):
             raise EvolutionConfigError("benchmark_commit must be a full SHA")
@@ -437,6 +476,10 @@ class QFBenchSandboxEvaluator:
         self.worker_concurrency = resolved_worker_concurrency
         self.verifier_concurrency = resolved_verifier_concurrency
         self.max_workers = resolved_worker_concurrency
+        self._worker_launch_gate = _WorkerLaunchGate(
+            worker_launch_interval_seconds
+        )
+        self.worker_launch_interval_seconds = worker_launch_interval_seconds
 
     @staticmethod
     def _completed_score_path(run_dir: Path, attempt: TaskAttempt) -> Path:
@@ -514,6 +557,7 @@ class QFBenchSandboxEvaluator:
                 )
                 return score
             try:
+                self._worker_launch_gate.wait()
                 execution = self.executor.execute(
                     attempt=attempt,
                     task=task,

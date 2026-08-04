@@ -497,7 +497,11 @@ def select_paid_baseline_batch_tasks(snapshot, *, config, executor: str):
         or getattr(config, "worker_concurrency", None) != 12
         or getattr(config, "verifier_concurrency", None) != 3
     ):
-        raise ValueError("paid baseline batch requires schema-3 epoch-2 12/3 config")
+        raise ValueError("paid baseline batch requires schema-4 epoch-2 12/3 config")
+    if getattr(config, "worker_launch_interval_seconds", None) != 2:
+        raise ValueError(
+            "paid baseline batch requires the two-second worker launch ramp"
+        )
     if (
         getattr(config, "allowed_model", None)
         != "deepseek/deepseek-v4-flash"
@@ -661,6 +665,9 @@ def run_paid_baseline_batch(
         "task_count": 12,
         "worker_concurrency": config.worker_concurrency,
         "verifier_concurrency": config.verifier_concurrency,
+        "worker_launch_interval_seconds": (
+            config.worker_launch_interval_seconds
+        ),
         "scheduler_epoch": config.scheduler_epoch,
         "worker_overlap": lifecycles["worker_overlap"],
         "official_task_mean": float(summary.task_mean),

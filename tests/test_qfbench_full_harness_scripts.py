@@ -135,6 +135,7 @@ def test_paid_baseline_batch_requires_exact_epoch_two_standard_panel():
         scheduler_epoch="repetitions-02-through-05",
         worker_concurrency=12,
         verifier_concurrency=3,
+        worker_launch_interval_seconds=2,
         allowed_model="deepseek/deepseek-v4-flash",
         required_provider="deepseek",
     )
@@ -145,6 +146,18 @@ def test_paid_baseline_batch_requires_exact_epoch_two_standard_panel():
 
     assert PAID_BASELINE_BATCH_TASK_IDS == expected
     assert tuple(task.task_id for task in selected) == expected
+
+    with pytest.raises(ValueError, match="two-second worker launch ramp"):
+        select_paid_baseline_batch_tasks(
+            snapshot,
+            config=SimpleNamespace(
+                **{
+                    **config.__dict__,
+                    "worker_launch_interval_seconds": 0,
+                }
+            ),
+            executor="rootless-docker",
+        )
 
     bad = (SimpleNamespace(**{**tasks[0].__dict__, "cpus": 4}), *tasks[1:])
     with pytest.raises(ValueError, match="2 CPU/4096 MiB"):
@@ -185,6 +198,7 @@ def test_paid_baseline_batch_evaluates_once_without_evolver_or_feedback(
         scheduler_epoch="repetitions-02-through-05",
         worker_concurrency=12,
         verifier_concurrency=3,
+        worker_launch_interval_seconds=2,
         allowed_model="deepseek/deepseek-v4-flash",
         required_provider="deepseek",
     )
@@ -262,6 +276,7 @@ def test_paid_baseline_batch_evaluates_once_without_evolver_or_feedback(
     assert calls[0]["split"] == "baseline_primary"
     assert calls[0]["checkpoint"] == "epoch-02-concurrency-canary"
     assert status["worker_overlap"] == 12
+    assert status["worker_launch_interval_seconds"] == 2
     assert status["feedback_used"] is False
     assert status["evolver_used"] is False
 

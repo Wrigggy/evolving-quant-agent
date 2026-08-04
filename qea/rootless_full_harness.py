@@ -387,6 +387,7 @@ class RootlessFullHarnessConfig:
     verifier_concurrency: int
     required_provider: str | None = None
     scheduler_epoch: str | None = None
+    worker_launch_interval_seconds: int = 0
 
     def __post_init__(self) -> None:
         if type(self.expected_uid) is not int or self.expected_uid <= 0:
@@ -454,6 +455,13 @@ class RootlessFullHarnessConfig:
         for name in ("worker_concurrency", "verifier_concurrency"):
             if type(getattr(self, name)) is not int or getattr(self, name) <= 0:
                 raise ValueError(f"{name} must be a positive integer")
+        if (
+            type(self.worker_launch_interval_seconds) is not int
+            or self.worker_launch_interval_seconds < 0
+        ):
+            raise ValueError(
+                "worker launch interval must be a non-negative integer"
+            )
         if self.scheduler_epoch is not None and not (
             isinstance(self.scheduler_epoch, str)
             and _SCHEDULER_EPOCH.fullmatch(self.scheduler_epoch)
@@ -493,6 +501,7 @@ _CONFIG_KEYS_V1 = frozenset(
 )
 _CONFIG_KEYS_V2 = _CONFIG_KEYS_V1 | {"required_provider"}
 _CONFIG_KEYS_V3 = _CONFIG_KEYS_V2 | {"scheduler_epoch"}
+_CONFIG_KEYS_V4 = _CONFIG_KEYS_V3 | {"worker_launch_interval_seconds"}
 
 
 def load_rootless_full_harness_config(
@@ -516,16 +525,19 @@ def load_rootless_full_harness_config(
         1: _CONFIG_KEYS_V1,
         2: _CONFIG_KEYS_V2,
         3: _CONFIG_KEYS_V3,
+        4: _CONFIG_KEYS_V4,
     }.get(schema_version)
     if expected_keys is None:
-        raise ValueError("rootless config schema_version must be 1, 2, or 3")
+        raise ValueError("rootless config schema_version must be 1, 2, 3, or 4")
     if set(payload) != expected_keys:
         raise ValueError("rootless config has unknown or missing fields")
-    if schema_version in {2, 3} and not isinstance(
+    if schema_version in {2, 3, 4} and not isinstance(
         payload["required_provider"], str
     ):
         raise ValueError("rootless config required_provider must be a string")
-    if schema_version == 3 and not isinstance(payload["scheduler_epoch"], str):
+    if schema_version in {3, 4} and not isinstance(
+        payload["scheduler_epoch"], str
+    ):
         raise ValueError("rootless config scheduler_epoch must be a string")
     try:
         return RootlessFullHarnessConfig(
@@ -547,6 +559,9 @@ def load_rootless_full_harness_config(
             verifier_concurrency=payload["verifier_concurrency"],
             required_provider=payload.get("required_provider"),
             scheduler_epoch=payload.get("scheduler_epoch"),
+            worker_launch_interval_seconds=payload.get(
+                "worker_launch_interval_seconds", 0
+            ),
         )
     except (KeyError, TypeError) as exc:
         raise ValueError("rootless config field types are invalid") from exc
@@ -1077,6 +1092,9 @@ def build_rootless_full_harness_runtime(
             model_env=model_env,
             worker_concurrency=config.worker_concurrency,
             verifier_concurrency=config.verifier_concurrency,
+            worker_launch_interval_seconds=(
+                config.worker_launch_interval_seconds
+            ),
         )
 
         scheduler_payload: dict[str, object] = {
@@ -1089,6 +1107,11 @@ def build_rootless_full_harness_runtime(
         if config.scheduler_epoch is not None:
             scheduler_payload["schema_version"] = 2
             scheduler_payload["scheduler_epoch"] = config.scheduler_epoch
+        if config.worker_launch_interval_seconds:
+            scheduler_payload["schema_version"] = 3
+            scheduler_payload["worker_launch_interval_seconds"] = (
+                config.worker_launch_interval_seconds
+            )
         scheduler_identity = _canonical_digest(scheduler_payload)
         task_panel = [
             {
