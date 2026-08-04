@@ -1,0 +1,577 @@
+{
+  "schema_version": 1,
+  "benchmark_commit": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+  "source": "public instruction and environment requirements only",
+  "tasks": {
+    "historical-var-data-prep": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested results and reproducible solution artifacts with the public schemas.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "data_preparation",
+          "requirement": "Clean and align the public return data as specified, and report the cleaning outcome.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "risk_calculation",
+          "requirement": "Compute the requested historical VaR statistics and worst-day result from the cleaned observations.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "evt-pot-var": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested EVT/POT results and reproducible solution artifacts with the public schemas.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "tail_model",
+          "requirement": "Apply the public EVT/POT threshold and tail-model workflow for each requested method and level.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "risk_and_backtest",
+          "requirement": "Report the requested VaR, expected shortfall, and backtest statistics consistently.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "credit-migration-matrix": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce every transition, default-probability, cohort, and summary artifact requested by the public instruction.",
+          "evidence_kind": "missing_output"
+        },
+        {
+          "criterion_id": "transition_analysis",
+          "requirement": "Construct valid transition and generator matrices and the requested cumulative default measures.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "consistency",
+          "requirement": "Keep cohort, transition, default-rate, and summary outputs internally and cross-file consistent.",
+          "evidence_kind": "requirement_not_satisfied"
+        }
+      ]
+    },
+    "credit-spread-decomposition": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the decomposition, variance, pipeline, regime-break, and summary outputs requested publicly.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "decomposition",
+          "requirement": "Apply the specified credit-spread decomposition and variance attribution methodology.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "pipeline_and_regimes",
+          "requirement": "Use the public data pipeline and report the requested regime-break analysis consistently.",
+          "evidence_kind": "requirement_not_satisfied"
+        }
+      ]
+    },
+    "momentum-backtest": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested momentum backtest result and reproducible artifact schemas.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "signal_and_execution",
+          "requirement": "Construct and execute the public momentum rule using the specified timing and parameters.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "performance",
+          "requirement": "Report internally consistent strategy returns, risk, turnover, and comparison metrics requested publicly.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "bollinger-backtest-aapl": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce all requested Bollinger backtest files with their public schemas.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "signal_and_execution",
+          "requirement": "Apply the specified Bollinger signal, position, execution, and transaction-cost rules.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "performance",
+          "requirement": "Report consistent trade, return, drawdown, and benchmark statistics.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "brinson-sector-attribution": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested attribution results at total, monthly, quarterly, and sector levels.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "attribution",
+          "requirement": "Calculate allocation, selection, and interaction effects using the specified Brinson framework.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "aggregation",
+          "requirement": "Ensure monthly, quarterly, sector, and total effects reconcile with active return.",
+          "evidence_kind": "requirement_not_satisfied"
+        }
+      ]
+    },
+    "etf-cross-asset-lead-lag": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce every requested lead-lag model, diagnostic, and summary artifact with the public schemas.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "sample_and_model",
+          "requirement": "Build the requested sample split and cross-asset lead-lag regressions without look-ahead.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "diagnostics",
+          "requirement": "Report the specified fit, inference, stability, and forecast diagnostics consistently.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "cme-hdd-option-pricing": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce all requested cleaned-weather, HDD, pricing, Greek, simulation, and summary artifacts.",
+          "evidence_kind": "missing_output"
+        },
+        {
+          "criterion_id": "weather_and_model",
+          "requirement": "Clean the public weather series and apply the specified HDD and mean-reversion model workflow.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "pricing_and_risk",
+          "requirement": "Compute consistent burn, Monte Carlo, discounting, uncertainty, and Greek results.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "delta-hedging-pnl-simulation": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested hedging simulation structure for every public rebalance frequency.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "option_and_hedge",
+          "requirement": "Apply the specified option value, delta, dividend, payoff, and rebalancing identities.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "pnl_and_cost",
+          "requirement": "Report consistent terminal stock, transaction-cost, dividend, and hedging-PnL results.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "localvol-barrier": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce all requested cleaned quotes, surface, local-volatility, barrier, and summary files.",
+          "evidence_kind": "missing_output"
+        },
+        {
+          "criterion_id": "surface_construction",
+          "requirement": "Build valid call and local-volatility surfaces from the public option quotes.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "barrier_pricing",
+          "requirement": "Price and summarize the requested barrier structure consistently with the constructed surface.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "fomc-tone-event-study": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested event panel, influence, diagnostics, regression, and summary outputs.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "event_pipeline",
+          "requirement": "Map public FOMC events to yields, text measures, prior-state variables, and event windows without look-ahead.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "inference",
+          "requirement": "Report the requested regressions, robust inference, influence, and diagnostics consistently.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "swap-curve-bootstrap-ois": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested bootstrapped curves, repricing diagnostics, and summary files.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "curve_bootstrap",
+          "requirement": "Bootstrap the specified OIS and projection curves using the public instruments and conventions.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "repricing",
+          "requirement": "Reprice the input instruments and report consistent residual and summary diagnostics.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "yield-curve-bond-immunization": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested curve, bond analytics, immunization weights, scenarios, and summary outputs.",
+          "evidence_kind": "missing_output"
+        },
+        {
+          "criterion_id": "bond_and_duration",
+          "requirement": "Calculate the specified bond values and key-rate-duration exposures from the public curve.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "immunization",
+          "requirement": "Construct and validate an immunized portfolio satisfying the public constraints and scenarios.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "zero-coupon-bootstrapping": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested zero-curve and discount-factor outputs for every public maturity.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "bootstrap",
+          "requirement": "Bootstrap zero rates and discount factors from the supplied par instruments using the stated conventions.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "curve_consistency",
+          "requirement": "Maintain monotonic discounting and reprice the supplied par instruments consistently.",
+          "evidence_kind": "requirement_not_satisfied"
+        }
+      ]
+    },
+    "crypto-funding-rate-basis-carry": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce every requested cleaned-series, regime, OU, simulation, and result artifact.",
+          "evidence_kind": "missing_output"
+        },
+        {
+          "criterion_id": "data_and_model",
+          "requirement": "Use correct funding-rate units, public sample dates, diagnostics, regimes, and mean-reversion model.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "carry_risk",
+          "requirement": "Report consistent carry, Monte Carlo return, percentile, VaR, and CVaR results.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "prediction-markets-cross-venue-dislocation": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested results, solution intermediates, trade log, daily equity, and cleaning artifacts.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "market_pipeline",
+          "requirement": "Clean and synchronize the public venue data using the stated cutoffs and approved market pairs.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "trading_and_risk",
+          "requirement": "Apply the specified direction, edge, fee, sizing, PnL, and equity reconstruction rules.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "13f-amendment-aware-crowding": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce all requested filing-resolution, holdings, manager, crowding, overlap, audit, and summary outputs.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "filing_pipeline",
+          "requirement": "Resolve amendments and effective holdings from the public filings using the stated rules.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "crowding_analytics",
+          "requirement": "Compute consistent manager, turnover, overlap, crowding, and cleaning-audit analytics.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "corporate-action-adjustment": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce all requested adjusted-price, return, event, audit, and summary outputs.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "adjustment_pipeline",
+          "requirement": "Apply the specified split, dividend, and corporate-action adjustment sequence to the public data.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "consistency",
+          "requirement": "Keep adjusted prices, returns, event records, and audit totals internally consistent.",
+          "evidence_kind": "requirement_not_satisfied"
+        }
+      ]
+    },
+    "earnings-surprise-calculator": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested earnings-surprise, standardized metric, classification, and summary outputs.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "earnings_pipeline",
+          "requirement": "Clean and align the public actual, estimate, and scaling data using the stated conventions.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "surprise_metrics",
+          "requirement": "Compute and classify the requested earnings-surprise metrics consistently across all records.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "bs-greeks-pde": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested calibration, Greek-surface, PDE-verification, and summary artifacts with the public schemas.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "analytical_greeks",
+          "requirement": "Compute Black-Scholes prices and analytical Greeks on every public spot and maturity grid point using the stated conventions.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "pde_and_parity",
+          "requirement": "Verify the public PDE, put-call-parity, and Greek-property requirements consistently across the full grid.",
+          "evidence_kind": "requirement_not_satisfied"
+        }
+      ]
+    },
+    "cliquet-ratchet-pricing": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested calibration, cliquet-price, forward-start-detail, and summary artifacts with the public schemas.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "calibration",
+          "requirement": "Calibrate the public return statistics and annualized volatility from the supplied adjusted price history.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "forward_start_pricing",
+          "requirement": "Price and aggregate every public forward-start configuration and reconcile it with the European comparison and summary.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "merton-jump-diffusion": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested calibration, price-grid, and summary artifacts with their public schemas and row counts.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "jump_calibration",
+          "requirement": "Apply the public truncated-mixture likelihood, bounds, drift convention, and restart procedure for Merton calibration.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "pricing_and_smile",
+          "requirement": "Compute consistent Merton-series prices, Black-Scholes comparisons, implied volatilities, and smile summaries.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "spread-option-kirk-margrabe": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested calibration, Margrabe, Kirk, correlation-sensitivity, and summary artifacts with the public schemas.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "joint_calibration",
+          "requirement": "Synchronize the public equity histories and estimate the two volatilities, spots, and return correlation using the stated conventions.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "pricing_and_mc",
+          "requirement": "Apply Margrabe and Kirk pricing across every public grid and reconcile the results with the specified Monte Carlo verification.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "variance-swap-replication": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the single requested result artifact with the complete public schema, counts, and scenario structure.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "chain_and_iv",
+          "requirement": "Filter the target-expiry option chain, select the correct OTM side, recover strike implied volatilities, and interpolate the forward ATM volatility as specified.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "replication_and_scenarios",
+          "requirement": "Apply the public non-uniform trapezoidal replication weights and report internally consistent fair-strike, risk-premium, and scenario PnL values.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "realized-vol-estimators": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested per-day and summary JSON structure with all public frequencies, counts, and volatility fields.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "cleaning_and_sampling",
+          "requirement": "Median-deduplicate, restrict to inclusive regular hours, preserve gaps, and sample each public minute grid using the stated rule.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "noise_and_variation",
+          "requirement": "Compute consistent realized variance, Bandi-Russell noise, corrected five-minute variance, bipower variation, and annualization results.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "var-es-estimation": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested true-value, estimate, comparison, and summary artifacts with all public distributions, methods, and confidence levels.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "data_and_truth",
+          "requirement": "Generate the public seeded distributions in the required sequence and compute their analytical or numerical true VaR and ES measures.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "estimation_and_comparison",
+          "requirement": "Apply every public estimation method and compute consistent VaR/ES estimates, RMSE comparisons, and best-method selections.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "sma-crossover-spy": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested result, trade, daily-portfolio, and interactive chart artifacts with the public schemas.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "signal_and_execution",
+          "requirement": "Use adjusted prices and implement the public SMA crossover, next-open execution, position, and forced-close rules without look-ahead.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "performance",
+          "requirement": "Reconstruct portfolio value and report internally consistent returns, risk, drawdown, trade, win-rate, and PnL metrics.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "residual-momentum": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce the requested finite JSON and both monthly CSV panels with the public schemas, sorting, counts, and empty-cell conventions.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "fama_macbeth",
+          "requirement": "Apply the three public cross-sectional specifications, population standardization, sample threshold, and textbook lag-six Newey-West summaries.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "oos_and_verdict",
+          "requirement": "Build the expanding-window OOS predictions, deterministic quintiles, IC and spread statistics, and residual-versus-raw verdict using the public rules.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    },
+    "binance-btc-participation-tca": {
+      "criteria": [
+        {
+          "criterion_id": "deliverables",
+          "requirement": "Produce exactly the three requested output files with the public key and column order, formatting, bucket rows, intermediates, and checkpoints.",
+          "evidence_kind": "schema_or_structure_mismatch"
+        },
+        {
+          "criterion_id": "bucket_fills",
+          "requirement": "Reconstruct every public time bucket, eligible-trade aggregate, capped child quantity, event-linked fill, and remaining quantity deterministically.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        },
+        {
+          "criterion_id": "tca_metrics",
+          "requirement": "Select the public arrival and future quote references and compute internally consistent fill-rate, VWAP, spread, shortfall, and impact metrics.",
+          "evidence_kind": "numeric_or_method_mismatch"
+        }
+      ]
+    }
+  }
+}

@@ -56,6 +56,45 @@ def test_trusted_mapping_covers_exact_public_feedback_tasks():
     assert all(rules[-1].pattern == "*" for rules in mapping.values())
 
 
+def test_train30_feedback_covers_only_train_panel():
+    from qea.evolution_feedback import (
+        load_feedback_manifest,
+        load_verifier_mapping,
+    )
+
+    qfbench = json.loads(
+        (
+            REPOSITORY
+            / "data/qfbench/MANIFEST_30_15_40_EVOLUTION.json"
+        ).read_text()
+    )["evolution"]
+    train = {item["task_id"] for item in qfbench["train"]}
+    forbidden = {
+        item["task_id"]
+        for panel in ("validation", "test", "diagnostic")
+        for item in qfbench[panel]
+    }
+    feedback = load_feedback_manifest(
+        REPOSITORY / "data/qfbench/FEEDBACK_TRAIN_30.json",
+        expected_task_ids=train,
+        forbidden_task_ids=forbidden,
+    )
+    public_criteria = {
+        task_id: {criterion.criterion_id for criterion in rubric.criteria}
+        for task_id, rubric in feedback.items()
+    }
+    mapping = load_verifier_mapping(
+        REPOSITORY / "data/qfbench/VERIFIER_CRITERIA_TRAIN_30.json",
+        public_criteria=public_criteria,
+    )
+
+    assert len(train) == 30
+    assert set(feedback) == train
+    assert set(mapping) == train
+    assert train.isdisjoint(forbidden)
+    assert all(rules[-1].pattern == "*" for rules in mapping.values())
+
+
 def test_sanitized_criterion_feedback_never_forwards_private_fields(tmp_path):
     from qea.evolution_feedback import (
         PublicCriterion,
