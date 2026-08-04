@@ -14,7 +14,18 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterable, Mapping, Protocol
 
-from .evaluation import EvaluationSummary, OfficialTaskScore, aggregate_domain_macro
+from .attempt_recovery import (
+    AttemptRecoveryError,
+    REPLACEMENT_MANIFEST,
+    read_replacement_manifest,
+    replacement_attempt_from_manifest,
+)
+from .evaluation import (
+    EvaluationSummary,
+    OfficialTaskScore,
+    TaskAttempt,
+    aggregate_domain_macro,
+)
 from .evolve_runtime import snapshot_dir
 from .qfbench_scheduler_epochs import (
     SchedulerEpoch,
@@ -590,10 +601,80 @@ def audit_baseline_proxy_costs(
         raise BaselineConfigError("cost audit fixed identity is incomplete")
     root = Path(run_dir).resolve()
     attempt_paths = tuple(sorted((root / "attempts").glob("*/attempt.json")))
-    if len(attempt_paths) != expected_attempts:
+    attempts: dict[str, tuple[Path, dict, TaskAttempt]] = {}
+    for attempt_path in attempt_paths:
+        attempt_dir = attempt_path.parent
+        try:
+            payload = json.loads(attempt_path.read_text())
+            attempt = TaskAttempt(**payload)
+        except (OSError, TypeError, json.JSONDecodeError, ValueError) as exc:
+            raise BaselineConfigError(
+                f"cost audit invalid attempt identity {attempt_dir.name}: {exc}"
+            ) from exc
+        if asdict(attempt) != payload or attempt.attempt_id != attempt_dir.name:
+            raise BaselineConfigError(
+                f"cost audit attempt identity mismatch: {attempt_dir}"
+            )
+        attempts[attempt.attempt_id] = (attempt_path, payload, attempt)
+
+    superseded: dict[str, dict] = {}
+    logical_by_attempt: dict[str, TaskAttempt] = {
+        attempt_id: record[2] for attempt_id, record in attempts.items()
+    }
+    replacement_targets: set[str] = set()
+    try:
+        for attempt_id, (attempt_path, _, _) in attempts.items():
+            manifest_path = attempt_path.parent / REPLACEMENT_MANIFEST
+            if not manifest_path.exists():
+                continue
+            manifest = read_replacement_manifest(manifest_path)
+            if manifest["superseded_attempt_id"] != attempt_id:
+                raise BaselineConfigError(
+                    f"cost audit replacement source mismatch: {attempt_path.parent}"
+                )
+            logical_record = attempts.get(manifest["logical_attempt_id"])
+            replacement_record = attempts.get(manifest["replacement_attempt_id"])
+            if logical_record is None or replacement_record is None:
+                raise BaselineConfigError(
+                    f"cost audit replacement lineage is incomplete: {attempt_path.parent}"
+                )
+            logical_attempt = logical_record[2]
+            replacement = replacement_attempt_from_manifest(
+                logical_attempt, manifest
+            )
+            if replacement_record[2] != replacement:
+                raise BaselineConfigError(
+                    f"cost audit replacement identity mismatch: {attempt_path.parent}"
+                )
+            audit_path = attempt_path.parent / "proxy-audit.jsonl"
+            try:
+                raw_audit = audit_path.read_bytes()
+            except OSError as exc:
+                raise BaselineConfigError(
+                    f"cost audit replacement source ledger is unavailable: {attempt_path.parent}"
+                ) from exc
+            if hashlib.sha256(raw_audit).hexdigest() != manifest[
+                "source_audit_sha256"
+            ]:
+                raise BaselineConfigError(
+                    f"cost audit replacement source ledger drifted: {attempt_path.parent}"
+                )
+            if replacement.attempt_id in replacement_targets:
+                raise BaselineConfigError(
+                    "cost audit replacement lineage has multiple predecessors"
+                )
+            replacement_targets.add(replacement.attempt_id)
+            superseded[attempt_id] = manifest
+            logical_by_attempt[attempt_id] = logical_attempt
+            logical_by_attempt[replacement.attempt_id] = logical_attempt
+    except AttemptRecoveryError as exc:
+        raise BaselineConfigError(str(exc)) from exc
+
+    terminal_attempt_ids = set(attempts) - set(superseded)
+    if len(terminal_attempt_ids) != expected_attempts:
         raise BaselineConfigError(
             "cost audit scored attempt count mismatch: "
-            f"expected {expected_attempts}, found {len(attempt_paths)}"
+            f"expected {expected_attempts}, found {len(terminal_attempt_ids)}"
         )
 
     total = _empty_cost_group()
@@ -602,26 +683,40 @@ def audit_baseline_proxy_costs(
     unreconciled_requests: list[dict] = []
     for attempt_path in attempt_paths:
         attempt_dir = attempt_path.parent
+        attempt_id = attempt_dir.name
+        _, attempt, _ = attempts[attempt_id]
+        logical_attempt = logical_by_attempt[attempt_id]
+        is_superseded = attempt_id in superseded
         try:
-            attempt = json.loads(attempt_path.read_text())
-            score = json.loads((attempt_dir / "completed-score.json").read_text())
+            score = (
+                None
+                if is_superseded
+                else json.loads((attempt_dir / "completed-score.json").read_text())
+            )
         except (OSError, json.JSONDecodeError) as exc:
             raise BaselineConfigError(
                 f"cost audit missing or invalid scored attempt {attempt_dir.name}: {exc}"
             ) from exc
         if (
             not isinstance(attempt, dict)
-            or not isinstance(score, dict)
+            or (not is_superseded and not isinstance(score, dict))
             or attempt.get("attempt_id") != attempt_dir.name
         ):
             raise BaselineConfigError(f"cost audit attempt identity mismatch: {attempt_dir}")
-        task_id = attempt.get("task_id")
-        if not isinstance(task_id, str) or score.get("task_id") != task_id:
+        if is_superseded and (attempt_dir / "completed-score.json").exists():
+            raise BaselineConfigError(
+                f"cost audit superseded attempt must not be scored: {attempt_dir}"
+            )
+        task_id = logical_attempt.task_id
+        if (
+            not isinstance(task_id, str)
+            or (not is_superseded and score.get("task_id") != task_id)
+        ):
             raise BaselineConfigError(f"cost audit score identity mismatch: {attempt_dir}")
         if _fixed_checkpoint is not None:
             if (
-                attempt.get("checkpoint") != _fixed_checkpoint
-                or attempt.get("split") != _fixed_split
+                logical_attempt.checkpoint != _fixed_checkpoint
+                or logical_attempt.split != _fixed_split
             ):
                 raise BaselineConfigError(
                     f"cost audit fixed checkpoint/split mismatch: {attempt_dir}"
@@ -630,7 +725,7 @@ def audit_baseline_proxy_costs(
             panel = "fixed"
         else:
             match = _BASELINE_CHECKPOINT_RE.fullmatch(
-                str(attempt.get("checkpoint", ""))
+                logical_attempt.checkpoint
             )
             if match is None:
                 raise BaselineConfigError(
@@ -638,7 +733,7 @@ def audit_baseline_proxy_costs(
                 )
             repetition = str(int(match.group("repetition")))
             panel = match.group("panel")
-            if attempt.get("split") != f"baseline_{panel}":
+            if logical_attempt.split != f"baseline_{panel}":
                 raise BaselineConfigError(
                     f"cost audit split/checkpoint mismatch: {attempt_dir}"
                 )
@@ -648,9 +743,10 @@ def audit_baseline_proxy_costs(
             {**_empty_cost_group(), "tasks": {}},
         )
         task_group = panel_group["tasks"].setdefault(task_id, _empty_cost_group())
-        total["attempt_count"] += 1
-        panel_group["attempt_count"] += 1
-        task_group["attempt_count"] += 1
+        if not is_superseded:
+            total["attempt_count"] += 1
+            panel_group["attempt_count"] += 1
+            task_group["attempt_count"] += 1
         audit_path = attempt_dir / "proxy-audit.jsonl"
         quarantine_path = attempt_dir / "proxy-audit.quarantined.json"
         if audit_path.is_file() and quarantine_path.exists():
@@ -658,6 +754,10 @@ def audit_baseline_proxy_costs(
                 f"cost audit has both canonical and quarantined ledgers: {attempt_dir}"
             )
         if not audit_path.is_file():
+            if is_superseded:
+                raise BaselineConfigError(
+                    f"cost audit superseded attempt is missing its ledger: {attempt_dir}"
+                )
             reason = _validated_timeout_quarantine(
                 score,
                 quarantine_path,
@@ -676,18 +776,53 @@ def audit_baseline_proxy_costs(
             unreconciled_attempts.append(unreconciled_attempt)
             continue
         seen_request_identities: set[str] = set()
-        for record in _read_audit_records(audit_path):
-            cost = _validated_completed_cost(record, source=attempt_dir)
+        audit_records = _read_audit_records(audit_path)
+        for record_index, record in enumerate(audit_records):
+            if is_superseded and record.get("request_state") == "quarantined":
+                manifest = superseded[attempt_id]
+                if (
+                    record_index != len(audit_records) - 1
+                    or set(record) != _PROXY_AUDIT_KEYS
+                    or record.get("schema_version") != 1
+                    or record.get("failure_class") != manifest["reason"]
+                ):
+                    raise BaselineConfigError(
+                        f"cost audit invalid superseded quarantine: {attempt_dir}"
+                    )
+                request_identity = record.get("request_identity_sha256")
+                if (
+                    not isinstance(request_identity, str)
+                    or not _SHA256_RE.fullmatch(request_identity)
+                ):
+                    raise BaselineConfigError(
+                        f"cost audit invalid request identity: {attempt_dir}"
+                    )
+                cost = None
+            else:
+                cost = _validated_completed_cost(record, source=attempt_dir)
             request_identity = record["request_identity_sha256"]
             if request_identity in seen_request_identities:
                 raise BaselineConfigError(
                     f"cost audit duplicate request identity: {request_identity}"
                 )
             seen_request_identities.add(request_identity)
-            if cost is None:
+            if is_superseded and record.get("request_state") == "quarantined":
                 unreconciled_request = {
                     "attempt_id": attempt_dir.name,
-                    "checkpoint": str(attempt["checkpoint"]),
+                    "checkpoint": logical_attempt.checkpoint,
+                    "request_identity_sha256": request_identity,
+                    "task_id": task_id,
+                    "reason": str(record["failure_class"]),
+                }
+                if repetition != "fixed":
+                    unreconciled_request.update(
+                        {"panel": panel, "repetition": int(repetition)}
+                    )
+                unreconciled_requests.append(unreconciled_request)
+            elif cost is None:
+                unreconciled_request = {
+                    "attempt_id": attempt_dir.name,
+                    "checkpoint": logical_attempt.checkpoint,
                     "request_identity_sha256": request_identity,
                     "task_id": task_id,
                     "reason": "successful_response_usage_unavailable",
@@ -702,6 +837,7 @@ def audit_baseline_proxy_costs(
             _add_cost(task_group, record, cost)
 
     payload = _cost_json(total)
+    payload["superseded_attempt_count"] = len(superseded)
     has_unreconciled = bool(unreconciled_attempts or unreconciled_requests)
     payload["cost_complete"] = not has_unreconciled
     payload["provider_cost_is_lower_bound"] = has_unreconciled

@@ -496,6 +496,140 @@ def test_sandbox_evaluator_resume_reuses_worker_manifest_after_verifier_failure(
     assert len(tuple((run_dir / "attempts").glob("*/worker-execution.json"))) == 2
 
 
+def test_sandbox_evaluator_replaces_ambiguous_worker_attempt_without_replay(
+    tmp_path,
+):
+    """Catch reopening an accepted-but-ambiguous provider attempt on resume."""
+
+    from qea.loop_benchmark import QFBenchSandboxEvaluator, hash_worker_directory
+
+    task = SimpleNamespace(
+        task_id="alpha-hedge-strategy",
+        domain="derivatives",
+        lineage="alpha-hedge-strategy",
+    )
+    worker = _seed_worker(tmp_path)
+    logical_attempt = TaskAttempt.create(
+        run_id="replacement-resume",
+        benchmark_commit="0" * 40,
+        task_id=task.task_id,
+        split="baseline_primary",
+        checkpoint="repetition-01-primary",
+        worker_digest=hash_worker_directory(worker),
+    )
+    run_dir = tmp_path / "replacement-resume"
+    original_dir = run_dir / "attempts" / logical_attempt.attempt_id
+    original_dir.mkdir(parents=True)
+    (original_dir / "attempt.json").write_text(
+        json.dumps(logical_attempt.__dict__)
+    )
+    completed = {
+        "schema_version": 1,
+        "request_identity_sha256": "a" * 64,
+        "model": "deepseek/deepseek-v4-flash-0731",
+        "started_at": "2026-08-04T06:00:00+00:00",
+        "finished_at": "2026-08-04T06:00:01+00:00",
+        "latency_ms": 1000,
+        "request_state": "completed",
+        "upstream_status_code": 200,
+        "provider_request_id": "request-1",
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "total_tokens": 15,
+        "provider_cost_usd": "0.01",
+        "failure_class": None,
+    }
+    quarantined = {
+        **completed,
+        "request_identity_sha256": "b" * 64,
+        "finished_at": "2026-08-04T06:00:02+00:00",
+        "latency_ms": 2000,
+        "request_state": "quarantined",
+        "upstream_status_code": None,
+        "provider_request_id": None,
+        "input_tokens": None,
+        "output_tokens": None,
+        "total_tokens": None,
+        "provider_cost_usd": None,
+        "failure_class": "post_accept_transport",
+    }
+    audit_path = original_dir / "proxy-audit.jsonl"
+    audit_path.write_text(
+        json.dumps(completed, sort_keys=True)
+        + "\n"
+        + json.dumps(quarantined, sort_keys=True)
+        + "\n"
+    )
+    original_audit = audit_path.read_bytes()
+
+    class RecordingExecutor:
+        def __init__(self):
+            self.attempt_ids = []
+
+        def execute(self, *, attempt, task, worker_dir, run_dir, model_env):
+            assert attempt.attempt_id != logical_attempt.attempt_id
+            self.attempt_ids.append(attempt.attempt_id)
+            return _execution_for(attempt, run_dir, task)
+
+    class RecordingVerifier:
+        def __init__(self):
+            self.attempt_ids = []
+
+        def verify(self, *, attempt, task, execution, run_dir):
+            self.attempt_ids.append(attempt.attempt_id)
+            return OfficialTaskScore(
+                task_id=task.task_id,
+                domain=task.domain,
+                reward=0.75,
+            )
+
+    executor = RecordingExecutor()
+    verifier = RecordingVerifier()
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="replacement-resume",
+        executor=executor,
+        verifier=verifier,
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+
+    first = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=(task,),
+        split="baseline_primary",
+        checkpoint="repetition-01-primary",
+        run_dir=run_dir,
+    )
+    second = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=(task,),
+        split="baseline_primary",
+        checkpoint="repetition-01-primary",
+        run_dir=run_dir,
+    )
+
+    assert first.overall == second.overall == 0.75
+    assert len(executor.attempt_ids) == 1
+    assert verifier.attempt_ids == executor.attempt_ids
+    replacement_id = executor.attempt_ids[0]
+    replacement_dir = run_dir / "attempts" / replacement_id
+    replacement = json.loads(
+        (original_dir / "worker-attempt-replacement.json").read_text()
+    )
+    assert replacement["schema_version"] == 1
+    assert replacement["reason"] == "post_accept_transport"
+    assert replacement["superseded_attempt_id"] == logical_attempt.attempt_id
+    assert replacement["replacement_attempt_id"] == replacement_id
+    assert replacement["source_audit_sha256"] == hashlib.sha256(
+        original_audit
+    ).hexdigest()
+    assert replacement_dir.joinpath("completed-score.json").is_file()
+    assert not original_dir.joinpath("completed-score.json").exists()
+    assert audit_path.read_bytes() == original_audit
+
+
 def _persist_timeout_evidence(
     attempt_dir,
     *,

@@ -11,11 +11,18 @@ import select
 import signal
 import stat
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping
 
+from .attempt_recovery import (
+    AttemptRecoveryError,
+    REPLACEMENT_MANIFEST,
+    read_replacement_manifest,
+    replacement_attempt_from_manifest,
+)
+from .evaluation import TaskAttempt
 from .process_supervisor import ChildIdentity, SupervisorError
 from .qfbench_baseline import BaselineConfigError, validate_timeout_quarantine
 from .qfbench_boundary import (
@@ -251,6 +258,68 @@ def classify_attempt_evidence(
         audit_path = attempt_root / "proxy-audit.jsonl"
         marker_path = attempt_root / "proxy-audit.quarantined.json"
         if not score_path.exists():
+            replacement_path = attempt_root / REPLACEMENT_MANIFEST
+            if audit_path.exists() and replacement_path.exists():
+                audits, raw_audit = _audit_records(audit_path)
+                records.append(
+                    (f"attempts/{attempt_id}/proxy-audit.jsonl", raw_audit)
+                )
+                manifest, raw_manifest = _read_json(replacement_path)
+                records.append(
+                    (f"attempts/{attempt_id}/{REPLACEMENT_MANIFEST}", raw_manifest)
+                )
+                validated_manifest = read_replacement_manifest(replacement_path)
+                if manifest != validated_manifest:
+                    return _fatal(attempt_id, "identity_drift", records)
+                logical_attempt = TaskAttempt(**attempt)
+                replacement = replacement_attempt_from_manifest(
+                    logical_attempt, validated_manifest
+                )
+                identities = [
+                    record.get("request_identity_sha256") for record in audits
+                ]
+                if (
+                    validated_manifest.get("superseded_attempt_id") != attempt_id
+                    or validated_manifest.get("reason") != "post_accept_transport"
+                    or validated_manifest.get("source_audit_sha256")
+                    != hashlib.sha256(raw_audit).hexdigest()
+                    or len(identities) != len(set(identities))
+                    or audits[-1].get("request_state") != "quarantined"
+                    or audits[-1].get("failure_class")
+                    != "post_accept_transport"
+                    or any(
+                        record.get("request_state")
+                        not in {"completed", "not_accepted"}
+                        for record in audits[:-1]
+                    )
+                ):
+                    return _fatal(attempt_id, "identity_drift", records)
+                replacement_attempt_path = (
+                    root
+                    / "attempts"
+                    / replacement.attempt_id
+                    / "attempt.json"
+                )
+                if replacement_attempt_path.exists():
+                    replacement_payload, raw_replacement = _read_json(
+                        replacement_attempt_path
+                    )
+                    records.append(
+                        (
+                            "attempts/"
+                            f"{replacement.attempt_id}/attempt.json",
+                            raw_replacement,
+                        )
+                    )
+                    if replacement_payload != asdict(replacement):
+                        return _fatal(attempt_id, "identity_drift", records)
+                return AttemptWatchResult(
+                    attempt_id,
+                    "superseded_infrastructure_attempt",
+                    False,
+                    None,
+                    _evidence_digest(records),
+                )
             if audit_path.exists() or marker_path.exists():
                 return _fatal(attempt_id, "ambiguous_upstream", records)
             return AttemptWatchResult(
@@ -319,7 +388,7 @@ def classify_attempt_evidence(
             None,
             _evidence_digest(records),
         )
-    except RunWatchError:
+    except (AttemptRecoveryError, RunWatchError, TypeError, ValueError):
         return _fatal(attempt_id, "identity_drift", records)
 
 

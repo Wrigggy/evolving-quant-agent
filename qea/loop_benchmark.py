@@ -13,6 +13,7 @@ from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Callable, Iterable, Mapping, Protocol
 
+from .attempt_recovery import resolve_worker_attempt
 from .candidate_admission import (
     AdmissionPolicy,
     CandidateAdmissionError,
@@ -526,7 +527,7 @@ class QFBenchSandboxEvaluator:
         checkpoint: str,
         run_dir: Path,
     ) -> OfficialTaskScore | PendingVerification:
-        attempt = TaskAttempt.create(
+        logical_attempt = TaskAttempt.create(
             run_id=self.run_id,
             benchmark_commit=self.benchmark_commit,
             task_id=task.task_id,
@@ -534,13 +535,16 @@ class QFBenchSandboxEvaluator:
             checkpoint=checkpoint,
             worker_digest=worker_digest,
         )
-        self._persist_attempt(run_dir, attempt)
-        completed = self._load_score(run_dir, attempt, task)
-        if completed is not None:
-            return completed
+        attempt = logical_attempt
+        while True:
+            self._persist_attempt(run_dir, attempt)
+            completed = self._load_score(run_dir, attempt, task)
+            if completed is not None:
+                return completed
 
-        execution = load_worker_execution(attempt, run_dir)
-        if execution is None:
+            execution = load_worker_execution(attempt, run_dir)
+            if execution is not None:
+                break
             persisted_timeout = load_persisted_worker_timeout(attempt, run_dir)
             if persisted_timeout is not None:
                 attempt_dir = run_dir / "attempts" / attempt.attempt_id
@@ -556,6 +560,10 @@ class QFBenchSandboxEvaluator:
                     self._completed_score_path(run_dir, attempt), asdict(score)
                 )
                 return score
+            resolved_attempt = resolve_worker_attempt(logical_attempt, run_dir)
+            if resolved_attempt != attempt:
+                attempt = resolved_attempt
+                continue
             try:
                 self._worker_launch_gate.wait()
                 execution = self.executor.execute(
@@ -590,6 +598,7 @@ class QFBenchSandboxEvaluator:
                 raise EvolutionConfigError(
                     f"worker execution manifest was not persisted for {task.task_id}"
                 )
+            break
         return PendingVerification(
             index=index,
             task=task,

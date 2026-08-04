@@ -97,6 +97,60 @@ def test_exact_official_timeout_is_unreconciled_cost_lower_bound(tmp_path):
     assert result.category is None
 
 
+def test_replaced_ambiguous_attempt_is_nonfatal_and_audit_bound(tmp_path):
+    """Catch a watchdog hard-stop after the coordinator created a safe successor."""
+
+    from dataclasses import asdict
+
+    from qea.attempt_recovery import resolve_worker_attempt
+    from qea.evaluation import TaskAttempt
+    from qea.qfbench_run_watch import classify_attempt_evidence
+
+    run_dir = tmp_path / "replacement-run"
+    logical = TaskAttempt.create(
+        run_id=run_dir.name,
+        benchmark_commit="0" * 40,
+        task_id="alpha-hedge-strategy",
+        split="baseline_primary",
+        checkpoint="repetition-01-primary",
+        worker_digest="1" * 64,
+    )
+    attempt = run_dir / "attempts" / logical.attempt_id
+    attempt.mkdir(parents=True)
+    (attempt / "attempt.json").write_text(json.dumps(asdict(logical)))
+    record = _audit_record(
+        request_state="quarantined",
+        upstream_status_code=None,
+        provider_request_id=None,
+        input_tokens=None,
+        output_tokens=None,
+        total_tokens=None,
+        provider_cost_usd=None,
+        failure_class="post_accept_transport",
+    )
+    (attempt / "proxy-audit.jsonl").write_text(json.dumps(record) + "\n")
+    replacement = resolve_worker_attempt(logical, run_dir)
+    replacement_dir = run_dir / "attempts" / replacement.attempt_id
+    replacement_dir.mkdir(parents=True)
+    (replacement_dir / "attempt.json").write_text(json.dumps(asdict(replacement)))
+
+    result = classify_attempt_evidence(attempt, run_dir=run_dir)
+
+    assert result.status == "superseded_infrastructure_attempt"
+    assert result.hard_stop is False
+    assert result.category is None
+
+    manifest_path = attempt / "worker-attempt-replacement.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["source_audit_sha256"] = "f" * 64
+    manifest_path.write_text(json.dumps(manifest))
+
+    drifted = classify_attempt_evidence(attempt, run_dir=run_dir)
+
+    assert drifted.hard_stop is True
+    assert drifted.category == "identity_drift"
+
+
 @pytest.mark.parametrize(
     "corruption",
     (

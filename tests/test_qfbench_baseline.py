@@ -627,6 +627,77 @@ def test_cost_audit_reconciles_attempts_requests_tokens_and_groups(tmp_path) -> 
     assert diagnostic["request_count"] == 1
 
 
+def test_cost_audit_counts_replacement_as_one_score_and_old_cost_as_lower_bound(
+    tmp_path,
+) -> None:
+    """Catch rejecting a completed run solely because one worker identity was replaced."""
+
+    from qea.attempt_recovery import resolve_worker_attempt
+    from qea.evaluation import TaskAttempt
+    from qea.qfbench_baseline import audit_baseline_proxy_costs
+
+    logical = TaskAttempt.create(
+        run_id="baseline-five",
+        benchmark_commit=COMMIT,
+        task_id="alpha-hedge-strategy",
+        split="baseline_primary",
+        checkpoint="repetition-01-primary",
+        worker_digest="e" * 64,
+    )
+    logical_dir = tmp_path / "attempts" / logical.attempt_id
+    logical_dir.mkdir(parents=True)
+    (logical_dir / "attempt.json").write_text(json.dumps(asdict(logical)))
+    ambiguous = _audit_record(identity="a", cost=0.0, input_tokens=0)
+    ambiguous.update(
+        {
+            "request_state": "quarantined",
+            "upstream_status_code": None,
+            "provider_request_id": None,
+            "input_tokens": None,
+            "output_tokens": None,
+            "total_tokens": None,
+            "provider_cost_usd": None,
+            "failure_class": "post_accept_transport",
+        }
+    )
+    (logical_dir / "proxy-audit.jsonl").write_text(
+        json.dumps(ambiguous) + "\n"
+    )
+    replacement = resolve_worker_attempt(logical, tmp_path)
+    replacement_dir = tmp_path / "attempts" / replacement.attempt_id
+    replacement_dir.mkdir(parents=True)
+    (replacement_dir / "attempt.json").write_text(
+        json.dumps(asdict(replacement))
+    )
+    score = OfficialTaskScore(
+        task_id=logical.task_id,
+        domain="derivatives",
+        reward=0.5,
+    )
+    (replacement_dir / "completed-score.json").write_text(
+        json.dumps(asdict(score))
+    )
+    (replacement_dir / "proxy-audit.jsonl").write_text(
+        json.dumps(_audit_record(identity="b", cost=0.01, input_tokens=10))
+        + "\n"
+    )
+
+    audit = audit_baseline_proxy_costs(tmp_path, expected_attempts=1)
+
+    assert audit["attempt_count"] == 1
+    assert audit["superseded_attempt_count"] == 1
+    assert audit["request_count"] == 2
+    assert audit["completed_request_count"] == 1
+    assert audit["provider_cost_usd"] == "0.01"
+    assert audit["cost_complete"] is False
+    assert audit["provider_cost_is_lower_bound"] is True
+    assert audit["unreconciled_request_count"] == 1
+    assert audit["unreconciled_requests"][0]["reason"] == (
+        "post_accept_transport"
+    )
+    assert audit["by_repetition"]["1"]["primary"]["attempt_count"] == 1
+
+
 def test_fixed_checkpoint_cost_audit_reuses_canonical_validation(tmp_path) -> None:
     from qea.evaluation import TaskAttempt
     from qea.qfbench_baseline import audit_fixed_checkpoint_proxy_costs
