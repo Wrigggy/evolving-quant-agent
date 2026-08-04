@@ -82,6 +82,8 @@ def test_full_harness_canary_script_is_directly_invokable():
     assert "import" in proc.stdout
     assert "paid-rich" in proc.stdout
     assert "paid-baseline-batch" in proc.stdout
+    assert "paid-provider-batch" in proc.stdout
+    assert "--acceptance-provider" in proc.stdout
     assert "--executor {rootless-docker,e2b}" in proc.stdout
     assert "--rootless-config" in proc.stdout
     assert "--rootless-image-set-manifest" in proc.stdout
@@ -171,6 +173,84 @@ def test_paid_baseline_batch_requires_exact_epoch_two_standard_panel():
             config=config,
             executor="rootless-docker",
         )
+
+
+def test_paid_provider_batch_accepts_only_an_explicit_matching_nonofficial_provider():
+    from scripts.smoke_qfbench_full_harness import (
+        PAID_BASELINE_BATCH_TASK_IDS,
+        select_paid_baseline_batch_tasks,
+    )
+
+    tasks = tuple(
+        SimpleNamespace(task_id=task_id, cpus=2, memory_mb=4096)
+        for task_id in PAID_BASELINE_BATCH_TASK_IDS
+    )
+    snapshot = SimpleNamespace(
+        primary=SimpleNamespace(
+            tasks=tasks,
+            task_ids=PAID_BASELINE_BATCH_TASK_IDS,
+        )
+    )
+    cloudflare = SimpleNamespace(
+        scheduler_epoch="repetitions-02-through-05",
+        worker_concurrency=12,
+        verifier_concurrency=3,
+        worker_launch_interval_seconds=2,
+        allowed_model="deepseek/deepseek-v4-flash",
+        required_provider="cloudflare",
+    )
+
+    selected = select_paid_baseline_batch_tasks(
+        snapshot,
+        config=cloudflare,
+        executor="rootless-docker",
+        expected_provider="cloudflare",
+        formal_scoring_eligible=False,
+    )
+
+    assert tuple(task.task_id for task in selected) == PAID_BASELINE_BATCH_TASK_IDS
+    with pytest.raises(ValueError, match="official provider"):
+        select_paid_baseline_batch_tasks(
+            snapshot,
+            config=cloudflare,
+            executor="rootless-docker",
+        )
+    with pytest.raises(ValueError, match="must differ from the official provider"):
+        select_paid_baseline_batch_tasks(
+            snapshot,
+            config=SimpleNamespace(
+                **{**cloudflare.__dict__, "required_provider": "deepseek"}
+            ),
+            executor="rootless-docker",
+            expected_provider="deepseek",
+            formal_scoring_eligible=False,
+        )
+
+
+@pytest.mark.parametrize("provider", [None, "deepseek"])
+def test_paid_provider_batch_cli_requires_nonofficial_provider_before_loading_data(
+    tmp_path, provider
+):
+    from scripts import smoke_qfbench_full_harness as smoke
+
+    argv = [
+        "--executor",
+        "rootless-docker",
+        "--mode",
+        "paid-provider-batch",
+        "--qfbench-root",
+        str(tmp_path / "missing-qfbench"),
+        "--rootless-config",
+        str(tmp_path / "missing-config.json"),
+        "--rootless-image-set-manifest",
+        str(tmp_path / "missing-images.json"),
+        "--approve-external-run",
+    ]
+    if provider is not None:
+        argv.extend(["--acceptance-provider", provider])
+
+    with pytest.raises(ValueError, match="acceptance provider"):
+        smoke.main(argv)
 
 
 def test_paid_baseline_batch_evaluates_once_without_evolver_or_feedback(
@@ -279,10 +359,114 @@ def test_paid_baseline_batch_evaluates_once_without_evolver_or_feedback(
     assert status["worker_launch_interval_seconds"] == 2
     assert status["feedback_used"] is False
     assert status["evolver_used"] is False
+    assert status["formal_scoring_eligible"] is True
+    assert status["claim_boundary"] == "official-provider concurrency gate"
 
 
+def test_paid_provider_batch_result_is_infrastructure_only(monkeypatch, tmp_path):
+    from scripts import smoke_qfbench_full_harness as smoke
+
+    tasks = tuple(
+        SimpleNamespace(
+            task_id=task_id,
+            cpus=2,
+            memory_mb=4096,
+            domain="domain-a",
+        )
+        for task_id in smoke.PAID_BASELINE_BATCH_TASK_IDS
+    )
+    snapshot = SimpleNamespace(
+        commit="0" * 40,
+        primary=SimpleNamespace(
+            tasks=tasks,
+            task_ids=smoke.PAID_BASELINE_BATCH_TASK_IDS,
+        ),
+    )
+    config = SimpleNamespace(
+        scheduler_epoch="repetitions-02-through-05",
+        worker_concurrency=12,
+        verifier_concurrency=3,
+        worker_launch_interval_seconds=2,
+        allowed_model="deepseek/deepseek-v4-flash",
+        required_provider="cloudflare",
+    )
+
+    class Evaluator:
+        def evaluate(self, **kwargs):
+            return SimpleNamespace(
+                task_mean=0.5,
+                overall=0.5,
+                scores=tuple(
+                    SimpleNamespace(
+                        task_id=task.task_id,
+                        reward=0.5,
+                        diagnostic_tags=(),
+                    )
+                    for task in tasks
+                ),
+            )
+
+    runtime = SimpleNamespace(
+        evaluator=Evaluator(),
+        backend=SimpleNamespace(list=lambda labels: ()),
+        image_identity_digest="1" * 64,
+        scheduler_identity_digest="2" * 64,
+        runtime_identity_digest="3" * 64,
+    )
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    (seed / "agent.yaml").write_text("type: agent\n")
+    monkeypatch.setattr(
+        smoke,
+        "audit_fixed_checkpoint_proxy_costs",
+        lambda *args, **kwargs: {
+            "request_count": 12,
+            "provider_cost_usd": "0.12",
+            "cost_complete": True,
+            "provider_cost_is_lower_bound": False,
+        },
+    )
+    monkeypatch.setattr(
+        smoke,
+        "audit_paid_baseline_lifecycles",
+        lambda *args, **kwargs: {"worker_overlap": 12},
+    )
+    monkeypatch.setattr(
+        smoke,
+        "audit_paid_provider_records",
+        lambda *args, **kwargs: {
+            "request_count": 12,
+            "latency_ms": {"mean": 100.0, "p90": 100.0},
+            "model": "deepseek/deepseek-v4-flash",
+        },
+    )
+
+    status = smoke.run_paid_baseline_batch(
+        runtime=runtime,
+        config=config,
+        snapshot=snapshot,
+        run_dir=tmp_path / "run",
+        seed_worker=seed,
+        mode="paid-provider-batch",
+        expected_provider="cloudflare",
+        formal_scoring_eligible=False,
+    )
+
+    assert status["mode"] == "paid-provider-batch"
+    assert status["provider"] == "cloudflare"
+    assert status["formal_scoring_eligible"] is False
+    assert status["claim_boundary"] == "infrastructure-only provider batch"
+
+
+@pytest.mark.parametrize(
+    ("mode", "acceptance_provider"),
+    [
+        ("paid-baseline-batch", None),
+        ("paid-provider-batch", "cloudflare"),
+    ],
+)
 def test_rootless_paid_baseline_runtime_is_built_without_evolver(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, mode, acceptance_provider
 ):
     import qea.rootless_full_harness as rootless_module
     from scripts import smoke_qfbench_full_harness as smoke
@@ -311,10 +495,11 @@ def test_rootless_paid_baseline_runtime_is_built_without_evolver(
     monkeypatch.setattr(
         smoke,
         "run_paid_baseline_batch",
-        lambda **kwargs: {"mode": "paid-baseline-batch"},
+        lambda **kwargs: {"mode": mode},
     )
     args = SimpleNamespace(
-        mode="paid-baseline-batch",
+        mode=mode,
+        acceptance_provider=acceptance_provider,
         executor="rootless-docker",
         rootless_config=tmp_path / "rootless.json",
         rootless_image_set_manifest=tmp_path / "images.json",
@@ -330,7 +515,7 @@ def test_rootless_paid_baseline_runtime_is_built_without_evolver(
         run_dir=tmp_path / "results" / "paid-batch",
     )
 
-    assert result["mode"] == "paid-baseline-batch"
+    assert result["mode"] == mode
     assert captured["include_evolver"] is False
 
 

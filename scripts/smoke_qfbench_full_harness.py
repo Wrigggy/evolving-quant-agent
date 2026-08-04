@@ -482,11 +482,28 @@ def _exact_rootless_reap(run_dir: Path, config_path: Path) -> dict:
     }
 
 
-def select_paid_baseline_batch_tasks(snapshot, *, config, executor: str):
+def select_paid_baseline_batch_tasks(
+    snapshot,
+    *,
+    config,
+    executor: str,
+    expected_provider: str = "deepseek",
+    formal_scoring_eligible: bool = True,
+):
     """Validate the exact standard-task epoch-2 panel before any paid work."""
 
     if executor != "rootless-docker":
         raise ValueError("paid-baseline-batch requires rootless-docker")
+    if not isinstance(formal_scoring_eligible, bool):
+        raise ValueError("formal scoring eligibility must be boolean")
+    if not isinstance(expected_provider, str) or not expected_provider:
+        raise ValueError("expected provider must be non-empty")
+    if formal_scoring_eligible and expected_provider != "deepseek":
+        raise ValueError("formal batch requires the DeepSeek official provider")
+    if not formal_scoring_eligible and expected_provider == "deepseek":
+        raise ValueError(
+            "acceptance provider must differ from the official provider"
+        )
     if len(PAID_BASELINE_BATCH_TASK_IDS) != len(
         set(PAID_BASELINE_BATCH_TASK_IDS)
     ):
@@ -505,10 +522,14 @@ def select_paid_baseline_batch_tasks(snapshot, *, config, executor: str):
     if (
         getattr(config, "allowed_model", None)
         != "deepseek/deepseek-v4-flash"
-        or getattr(config, "required_provider", None) != "deepseek"
+        or getattr(config, "required_provider", None) != expected_provider
     ):
+        if formal_scoring_eligible:
+            raise ValueError(
+                "paid baseline batch requires DeepSeek V4 Flash official provider"
+            )
         raise ValueError(
-            "paid baseline batch requires DeepSeek V4 Flash official provider"
+            "paid provider batch config does not match the acceptance provider"
         )
     try:
         primary_tasks = tuple(snapshot.primary.tasks)
@@ -604,13 +625,27 @@ def run_paid_baseline_batch(
     snapshot,
     run_dir: str | Path,
     seed_worker: str | Path = Path("qea/worker_gdpval_weak"),
+    mode: str = "paid-baseline-batch",
+    expected_provider: str = "deepseek",
+    formal_scoring_eligible: bool = True,
 ) -> dict:
     """Evaluate the immutable base worker once on the twelve-task canary."""
 
     root = Path(run_dir).resolve()
     selected = select_paid_baseline_batch_tasks(
-        snapshot, config=config, executor="rootless-docker"
+        snapshot,
+        config=config,
+        executor="rootless-docker",
+        expected_provider=expected_provider,
+        formal_scoring_eligible=formal_scoring_eligible,
     )
+    expected_mode = (
+        "paid-baseline-batch"
+        if formal_scoring_eligible
+        else "paid-provider-batch"
+    )
+    if mode != expected_mode:
+        raise ValueError("paid batch mode does not match formal eligibility")
     worker = root / "workers" / "seed"
     _snapshot_worker(Path(seed_worker).resolve(), worker)
     worker_digest = hash_worker_directory(worker)
@@ -659,7 +694,13 @@ def run_paid_baseline_batch(
     output = {
         "run_id": root.name,
         "executor": "rootless-docker",
-        "mode": "paid-baseline-batch",
+        "mode": mode,
+        "formal_scoring_eligible": formal_scoring_eligible,
+        "claim_boundary": (
+            "official-provider concurrency gate"
+            if formal_scoring_eligible
+            else "infrastructure-only provider batch"
+        ),
         "checkpoint": _PAID_BASELINE_CHECKPOINT,
         "task_ids": list(PAID_BASELINE_BATCH_TASK_IDS),
         "task_count": 12,
@@ -689,7 +730,7 @@ def run_paid_baseline_batch(
         "scheduler_identity_digest": runtime.scheduler_identity_digest,
         "runtime_identity_digest": runtime.runtime_identity_digest,
     }
-    _write_json(root / "paid-baseline-batch.json", output)
+    _write_json(root / f"{mode}.json", output)
     return output
 
 
@@ -848,9 +889,20 @@ def run_rootless_canary(args, *, snapshot, task, run_dir: Path) -> dict:
     )
 
     config = load_rootless_full_harness_config(args.rootless_config)
-    if args.mode == "paid-baseline-batch":
+    batch_mode = args.mode in {"paid-baseline-batch", "paid-provider-batch"}
+    formal_scoring_eligible = args.mode == "paid-baseline-batch"
+    expected_provider = (
+        "deepseek"
+        if formal_scoring_eligible
+        else getattr(args, "acceptance_provider", None)
+    )
+    if batch_mode:
         select_paid_baseline_batch_tasks(
-            snapshot, config=config, executor=args.executor
+            snapshot,
+            config=config,
+            executor=args.executor,
+            expected_provider=expected_provider,
+            formal_scoring_eligible=formal_scoring_eligible,
         )
     runtime = build_rootless_full_harness_runtime(
         config=config,
@@ -859,15 +911,18 @@ def run_rootless_canary(args, *, snapshot, task, run_dir: Path) -> dict:
         tasks=snapshot.tasks,
         run_id=args.run_id,
         results_root=args.results_dir,
-        include_evolver=args.mode != "paid-baseline-batch",
+        include_evolver=not batch_mode,
     )
     try:
-        if args.mode == "paid-baseline-batch":
+        if batch_mode:
             return run_paid_baseline_batch(
                 runtime=runtime,
                 config=config,
                 snapshot=snapshot,
                 run_dir=run_dir,
+                mode=args.mode,
+                expected_provider=expected_provider,
+                formal_scoring_eligible=formal_scoring_eligible,
             )
         result = run_rootless_import_canary(
             runtime=runtime,
@@ -894,9 +949,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mode",
-        choices=("import", "paid-rich", "paid-baseline-batch"),
+        choices=(
+            "import",
+            "paid-rich",
+            "paid-baseline-batch",
+            "paid-provider-batch",
+        ),
         required=True,
     )
+    parser.add_argument("--acceptance-provider")
     parser.add_argument("--qfbench-root", type=Path, required=True)
     parser.add_argument(
         "--manifest", type=Path, default=Path("data/qfbench/MANIFEST_30.json")
@@ -924,8 +985,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.mode == "paid-baseline-batch" and args.executor != "rootless-docker":
-        raise ValueError("paid-baseline-batch requires rootless-docker")
+    batch_mode = args.mode in {"paid-baseline-batch", "paid-provider-batch"}
+    if batch_mode and args.executor != "rootless-docker":
+        raise ValueError("paid batch modes require rootless-docker")
+    if args.mode == "paid-provider-batch" and (
+        not args.acceptance_provider or args.acceptance_provider == "deepseek"
+    ):
+        raise ValueError(
+            "acceptance provider must be explicit and differ from deepseek"
+        )
+    if args.mode != "paid-provider-batch" and args.acceptance_provider is not None:
+        raise ValueError(
+            "--acceptance-provider is only valid for paid-provider-batch"
+        )
     if args.executor == "rootless-docker" and args.rootless_config is None:
         raise ValueError("--rootless-config is required for rootless-docker")
     if (
@@ -937,7 +1009,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.executor == "e2b":
         run_cli._load_dotenv()
-    if args.mode == "paid-baseline-batch":
+    if batch_mode:
         from qea.benchmarks.qfbench import load_qfbench_baseline_snapshot
 
         snapshot = load_qfbench_baseline_snapshot(
@@ -963,7 +1035,11 @@ def main(argv: list[str] | None = None) -> int:
         or (args.executor == "e2b" and args.approve_paid_e2b)
         or os.environ.get("QEA_PAID_EVAL_AUTO_APPROVE") == "1"
     )
-    if args.mode in {"paid-rich", "paid-baseline-batch"} and not approved:
+    if args.mode in {
+        "paid-rich",
+        "paid-baseline-batch",
+        "paid-provider-batch",
+    } and not approved:
         print(
             "NOT STARTED: pass --approve-external-run or set standing "
             "auto-approval"
