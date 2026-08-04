@@ -61,7 +61,7 @@ Also assert that `paid-provider-batch` requires a non-DeepSeek
 Run:
 
 ```bash
-.venv/bin/python -m pytest tests/test_qfbench_full_harness_scripts.py -q
+/Users/kevinwu/Coding/evolving-quant-agent/.venv-nexau/bin/python -m pytest tests/test_qfbench_full_harness_scripts.py -q
 ```
 
 Expected: failures because the new mode, argument, function parameters, and
@@ -88,7 +88,7 @@ In `scripts/smoke_qfbench_full_harness.py`:
 Run:
 
 ```bash
-.venv/bin/python -m pytest tests/test_qfbench_full_harness_scripts.py -q
+/Users/kevinwu/Coding/evolving-quant-agent/.venv-nexau/bin/python -m pytest tests/test_qfbench_full_harness_scripts.py -q
 ```
 
 Expected: all tests pass.
@@ -98,7 +98,7 @@ Expected: all tests pass.
 Run:
 
 ```bash
-.venv/bin/python -m pytest \
+/Users/kevinwu/Coding/evolving-quant-agent/.venv-nexau/bin/python -m pytest \
   tests/test_qfbench_full_harness_scripts.py \
   tests/test_rootless_full_harness.py \
   tests/test_model_proxy.py \
