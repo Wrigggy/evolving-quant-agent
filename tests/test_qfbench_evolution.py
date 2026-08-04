@@ -560,6 +560,16 @@ def test_sandbox_evaluator_replaces_ambiguous_worker_attempt_without_replay(
         + json.dumps(quarantined, sort_keys=True)
         + "\n"
     )
+    (original_dir / "worker-command.json").write_text(
+        json.dumps(
+            {
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": "proxy audit was incomplete",
+                "timed_out": False,
+            }
+        )
+    )
     original_audit = audit_path.read_bytes()
 
     class RecordingExecutor:

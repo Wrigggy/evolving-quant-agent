@@ -545,9 +545,22 @@ class QFBenchSandboxEvaluator:
             execution = load_worker_execution(attempt, run_dir)
             if execution is not None:
                 break
+            attempt_dir = run_dir / "attempts" / attempt.attempt_id
+            resolved_attempt = None
+            if (
+                attempt_dir.joinpath("proxy-audit.jsonl").is_file()
+                and not attempt_dir.joinpath(
+                    "proxy-audit.quarantined.json"
+                ).exists()
+            ):
+                resolved_attempt = resolve_worker_attempt(
+                    logical_attempt, run_dir
+                )
+                if resolved_attempt != attempt:
+                    attempt = resolved_attempt
+                    continue
             persisted_timeout = load_persisted_worker_timeout(attempt, run_dir)
             if persisted_timeout is not None:
-                attempt_dir = run_dir / "attempts" / attempt.attempt_id
                 persist_timeout_recovery(attempt_dir, persisted_timeout)
                 score = OfficialTaskScore(
                     task_id=task.task_id,
@@ -560,7 +573,10 @@ class QFBenchSandboxEvaluator:
                     self._completed_score_path(run_dir, attempt), asdict(score)
                 )
                 return score
-            resolved_attempt = resolve_worker_attempt(logical_attempt, run_dir)
+            if resolved_attempt is None:
+                resolved_attempt = resolve_worker_attempt(
+                    logical_attempt, run_dir
+                )
             if resolved_attempt != attempt:
                 attempt = resolved_attempt
                 continue
