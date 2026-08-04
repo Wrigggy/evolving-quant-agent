@@ -246,6 +246,51 @@ def test_evidence_corpus_never_contains_heldout_or_private_verifier_material(tmp
     assert "private-command.json" not in text
 
 
+def test_evidence_corpus_skips_validation_test_and_diagnostic_splits(tmp_path):
+    from qea.evolution_evidence import build_evolution_evidence
+    from qea.evolution_feedback import FeedbackMode
+
+    run_dir = tmp_path / "run"
+    optimize = _task(tmp_path, "optimize-1")
+    _attempt(
+        run_dir,
+        task_id="optimize-1",
+        split="optimize",
+        checkpoint="seed-optimize",
+    )
+    forbidden = {
+        "validation-secret": "validation",
+        "test-secret": "test",
+        "diagnostic-secret": "diagnostic",
+    }
+    for task_id, split in forbidden.items():
+        _attempt(
+            run_dir,
+            task_id=task_id,
+            split=split,
+            checkpoint=f"seed-{split}",
+            private_canary=f"{split.upper()}_PRIVATE_CANARY",
+        )
+    feedback, mapping = _contracts()
+
+    record = build_evolution_evidence(
+        mode=FeedbackMode.RICH,
+        optimize_tasks=(optimize,),
+        held_out_task_ids=set(forbidden),
+        run_dir=run_dir,
+        destination=tmp_path / "evidence",
+        feedback_manifest=feedback,
+        verifier_mapping=mapping,
+        history=(),
+    )
+    text = _all_text(record.root)
+
+    assert all(task_id not in text for task_id in forbidden)
+    assert "VALIDATION_PRIVATE_CANARY" not in text
+    assert "TEST_PRIVATE_CANARY" not in text
+    assert "DIAGNOSTIC_PRIVATE_CANARY" not in text
+
+
 def test_control_corpus_excludes_public_task_trace_artifact_and_rubric(tmp_path):
     from qea.evolution_evidence import build_evolution_evidence
     from qea.evolution_feedback import FeedbackMode

@@ -135,14 +135,52 @@ class BenchmarkEvolutionConfig:
     task_manifest_digest: str = ""
     model_identity: str = "unspecified"
     template_identity_digest: str = "unspecified"
+    validation_noise_tolerance: float | None = None
+    validation_calibration_digest: str = ""
+    validation_calibration_source_run_id: str = ""
 
     def __post_init__(self) -> None:
-        if self.n_iters not in {1, 3, 5}:
-            raise EvolutionConfigError("QFBench pilot n_iters must be 1, 3, or 5")
+        validation_protocol = self.validation_noise_tolerance is not None
+        allowed_iterations = {1, 3, 5, 10} if validation_protocol else {1, 3, 5}
+        if self.n_iters not in allowed_iterations:
+            choices = "1, 3, 5, or 10" if validation_protocol else "1, 3, or 5"
+            raise EvolutionConfigError(
+                f"QFBench pilot n_iters must be {choices}"
+            )
         if not _RUN_ID_RE.fullmatch(self.run_id):
             raise EvolutionConfigError("run_id must be a path-safe identifier")
         if self.noise_floor < 0 or self.max_domain_regression < 0:
             raise EvolutionConfigError("noise and domain regression limits must be non-negative")
+        if validation_protocol:
+            tolerance = self.validation_noise_tolerance
+            if (
+                isinstance(tolerance, bool)
+                or not isinstance(tolerance, (int, float))
+                or not 0.0 <= float(tolerance) <= 1.0
+            ):
+                raise EvolutionConfigError(
+                    "validation_noise_tolerance must be between zero and one"
+                )
+            if re.fullmatch(r"[0-9a-f]{64}", self.validation_calibration_digest) is None:
+                raise EvolutionConfigError(
+                    "validation_calibration_digest must be 64 lowercase hex characters"
+                )
+            if not _RUN_ID_RE.fullmatch(
+                self.validation_calibration_source_run_id
+            ):
+                raise EvolutionConfigError(
+                    "validation_calibration_source_run_id must be path-safe"
+                )
+            object.__setattr__(
+                self, "validation_noise_tolerance", float(tolerance)
+            )
+        elif (
+            self.validation_calibration_digest
+            or self.validation_calibration_source_run_id
+        ):
+            raise EvolutionConfigError(
+                "validation calibration identity requires a noise tolerance"
+            )
         if (
             self.concurrency is not None
             and self.worker_concurrency is not None
@@ -220,6 +258,8 @@ class BenchmarkIterationRecord:
     admission_failure: str | None = None
     evidence_digest: str | None = None
     official_evaluated: bool = True
+    candidate_validation_overall: float | None = None
+    validation_margin: float | None = None
 
 
 @dataclass(frozen=True)
@@ -229,9 +269,15 @@ class BenchmarkEvolutionResult:
     records: tuple[BenchmarkIterationRecord, ...]
     optimize_trajectory: tuple[float, ...]
     optimize_final: EvaluationSummary
-    held_out_seed: EvaluationSummary
-    held_out_final: EvaluationSummary
+    held_out_seed: EvaluationSummary | None
+    held_out_final: EvaluationSummary | None
     final_worker_dir: Path
+    validation_seed: EvaluationSummary | None = None
+    validation_final: EvaluationSummary | None = None
+    test_seed: EvaluationSummary | None = None
+    test_final: EvaluationSummary | None = None
+    diagnostic_seed: EvaluationSummary | None = None
+    diagnostic_final: EvaluationSummary | None = None
 
     @property
     def n_kept(self) -> int:
@@ -272,6 +318,37 @@ def _task_manifest_digest(
             }
             for task in held_out
         ],
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _tvt_task_manifest_digest(
+    benchmark_commit: str,
+    *,
+    train: tuple,
+    validation: tuple,
+    test: tuple,
+    diagnostic: tuple,
+) -> str:
+    def task_payload(tasks: tuple) -> list[dict]:
+        return [
+            {
+                "task_id": task.task_id,
+                "domain": task.domain,
+                "lineage": task.lineage,
+            }
+            for task in tasks
+        ]
+
+    payload = {
+        "benchmark_commit": benchmark_commit,
+        "protocol": "train-validation-test-v1",
+        "train": task_payload(train),
+        "validation": task_payload(validation),
+        "test": task_payload(test),
+        "diagnostic": task_payload(diagnostic),
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -799,6 +876,49 @@ def _validate_task_sets(optimize_tasks: tuple, held_out_tasks: tuple) -> None:
         raise EvolutionConfigError("optimize and held-out lineages overlap")
 
 
+def _validate_tvt_task_sets(
+    train_tasks: tuple,
+    validation_tasks: tuple,
+    test_tasks: tuple,
+    diagnostic_tasks: tuple,
+) -> None:
+    panels = {
+        "train": train_tasks,
+        "validation": validation_tasks,
+        "test": test_tasks,
+        "diagnostic": diagnostic_tasks,
+    }
+    if any(not tasks for tasks in panels.values()):
+        raise EvolutionConfigError(
+            "train, validation, test, and diagnostic task sets must be non-empty"
+        )
+    seen_ids: dict[str, str] = {}
+    seen_lineages: dict[str, str] = {}
+    for name, tasks in panels.items():
+        ids = [task.task_id for task in tasks]
+        lineages = [task.lineage for task in tasks]
+        if len(ids) != len(set(ids)):
+            raise EvolutionConfigError(f"task IDs must be unique within {name}")
+        if len(lineages) != len(set(lineages)):
+            raise EvolutionConfigError(
+                f"task lineages must be unique within {name}"
+            )
+        for task_id in ids:
+            if task_id in seen_ids:
+                raise EvolutionConfigError(
+                    f"task ID overlap between {seen_ids[task_id]} and {name}: "
+                    f"{task_id}"
+                )
+            seen_ids[task_id] = name
+        for lineage in lineages:
+            if lineage in seen_lineages:
+                raise EvolutionConfigError(
+                    "task lineage overlap between "
+                    f"{seen_lineages[lineage]} and {name}: {lineage}"
+                )
+            seen_lineages[lineage] = name
+
+
 def _accept_candidate(
     incumbent: EvaluationSummary,
     candidate: EvaluationSummary,
@@ -881,15 +1001,54 @@ def _result_from_state(run_dir: Path, state: dict) -> BenchmarkEvolutionResult:
     seed_optimize = _summary_from_dict(state["seed_optimize"])
     trajectory = [seed_optimize.overall]
     trajectory.extend(record.candidate_overall for record in records if record.kept)
+    tvt_protocol = state.get("schema_version") == 3
     return BenchmarkEvolutionResult(
         run_id=state["run_id"],
         run_dir=run_dir,
         records=records,
         optimize_trajectory=tuple(trajectory),
         optimize_final=_summary_from_dict(state["incumbent_summary"]),
-        held_out_seed=_summary_from_dict(state["held_out_seed"]),
-        held_out_final=_summary_from_dict(state["held_out_final"]),
+        held_out_seed=(
+            None
+            if tvt_protocol
+            else _summary_from_dict(state["held_out_seed"])
+        ),
+        held_out_final=(
+            None
+            if tvt_protocol
+            else _summary_from_dict(state["held_out_final"])
+        ),
         final_worker_dir=(run_dir / state["incumbent_worker"]).resolve(),
+        validation_seed=(
+            _summary_from_dict(state["validation_seed"])
+            if tvt_protocol
+            else None
+        ),
+        validation_final=(
+            _summary_from_dict(state["incumbent_validation_summary"])
+            if tvt_protocol
+            else None
+        ),
+        test_seed=(
+            _summary_from_dict(state["test_seed"])
+            if tvt_protocol
+            else None
+        ),
+        test_final=(
+            _summary_from_dict(state["test_final"])
+            if tvt_protocol
+            else None
+        ),
+        diagnostic_seed=(
+            _summary_from_dict(state["diagnostic_seed"])
+            if tvt_protocol
+            else None
+        ),
+        diagnostic_final=(
+            _summary_from_dict(state["diagnostic_final"])
+            if tvt_protocol
+            else None
+        ),
     )
 
 
@@ -897,14 +1056,47 @@ def run_benchmark_evolution(
     config: BenchmarkEvolutionConfig,
     *,
     optimize_tasks: Iterable,
-    held_out_tasks: Iterable,
+    held_out_tasks: Iterable | None = None,
+    validation_tasks: Iterable | None = None,
+    test_tasks: Iterable | None = None,
+    diagnostic_tasks: Iterable | None = None,
     benchmark_commit: str,
     evaluator: BenchmarkEvaluator,
     proposer: LegacyProposer | FullHarnessProposer = nexau_process_proposer,
 ) -> BenchmarkEvolutionResult:
     optimize = tuple(optimize_tasks)
-    held_out = tuple(held_out_tasks)
-    _validate_task_sets(optimize, held_out)
+    tvt_arguments = (
+        validation_tasks is not None,
+        test_tasks is not None,
+        diagnostic_tasks is not None,
+    )
+    tvt_protocol = any(tvt_arguments)
+    if tvt_protocol:
+        if not all(tvt_arguments) or held_out_tasks is not None:
+            raise EvolutionConfigError(
+                "train/validation/test mode requires all three new panels and no held-out panel"
+            )
+        if config.validation_noise_tolerance is None:
+            raise EvolutionConfigError(
+                "train/validation/test mode requires validation calibration"
+            )
+        validation = tuple(validation_tasks or ())
+        test = tuple(test_tasks or ())
+        diagnostic = tuple(diagnostic_tasks or ())
+        held_out = ()
+        _validate_tvt_task_sets(optimize, validation, test, diagnostic)
+    else:
+        if held_out_tasks is None:
+            raise EvolutionConfigError("legacy evolution requires held-out tasks")
+        if config.validation_noise_tolerance is not None:
+            raise EvolutionConfigError(
+                "validation calibration requires train/validation/test panels"
+            )
+        held_out = tuple(held_out_tasks)
+        validation = ()
+        test = ()
+        diagnostic = ()
+        _validate_task_sets(optimize, held_out)
     if not re.fullmatch(r"[0-9a-f]{40}", benchmark_commit):
         raise EvolutionConfigError("benchmark_commit must be a full SHA")
 
@@ -915,8 +1107,11 @@ def run_benchmark_evolution(
         )
     feedback_mode = FeedbackMode(config.feedback_mode)
     held_out_ids = {task.task_id for task in held_out}
+    forbidden_feedback_ids = held_out_ids | {
+        task.task_id for task in validation + test + diagnostic
+    }
     policy = AdmissionPolicy.qfbench_full(
-        forbidden_content=sorted(held_out_ids)
+        forbidden_content=sorted(forbidden_feedback_ids)
     )
     feedback_manifest = {}
     verifier_mapping = {}
@@ -926,7 +1121,7 @@ def run_benchmark_evolution(
         feedback_manifest = load_feedback_manifest(
             config.public_rubric_path,
             expected_task_ids={task.task_id for task in optimize},
-            forbidden_task_ids=held_out_ids,
+            forbidden_task_ids=forbidden_feedback_ids,
         )
         public_criteria = {
             task_id: {item.criterion_id for item in rubric.criteria}
@@ -967,13 +1162,21 @@ def run_benchmark_evolution(
             config.admission_policy_digest or "legacy-process-only"
         )
 
+    task_manifest_digest = config.task_manifest_digest or (
+        _tvt_task_manifest_digest(
+            benchmark_commit,
+            train=optimize,
+            validation=validation,
+            test=test,
+            diagnostic=diagnostic,
+        )
+        if tvt_protocol
+        else _task_manifest_digest(benchmark_commit, optimize, held_out)
+    )
     identity = {
         "arm": feedback_mode.value,
         "benchmark_commit": benchmark_commit,
-        "task_manifest_digest": (
-            config.task_manifest_digest
-            or _task_manifest_digest(benchmark_commit, optimize, held_out)
-        ),
+        "task_manifest_digest": task_manifest_digest,
         "feedback_contract_digest": active_feedback_digest,
         "public_rubric_digest": rubric_digest,
         "verifier_mapping_digest": verifier_mapping_digest,
@@ -985,6 +1188,17 @@ def run_benchmark_evolution(
         "verifier_concurrency": config.verifier_concurrency,
         "scheduler_identity_digest": config.scheduler_identity_digest,
     }
+    if tvt_protocol:
+        identity.update({
+            "protocol": "train-validation-test-v1",
+            "validation_noise_tolerance": config.validation_noise_tolerance,
+            "validation_calibration_digest": (
+                config.validation_calibration_digest
+            ),
+            "validation_calibration_source_run_id": (
+                config.validation_calibration_source_run_id
+            ),
+        })
 
     run_dir = Path(config.results_dir).resolve() / config.run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -993,9 +1207,10 @@ def run_benchmark_evolution(
         if not config.resume:
             raise EvolutionConfigError(f"run {config.run_id} already has a checkpoint")
         state = json.loads(resume_path.read_text())
-        if state.get("schema_version") != 2:
+        expected_schema = 3 if tvt_protocol else 2
+        if state.get("schema_version") != expected_schema:
             raise EvolutionConfigError(
-                f"resume checkpoint schema mismatch: expected 2, "
+                f"resume checkpoint schema mismatch: expected {expected_schema}, "
                 f"found {state.get('schema_version')}"
             )
         expected = (config.run_id, config.n_iters, benchmark_commit)
@@ -1012,7 +1227,7 @@ def run_benchmark_evolution(
                 f"resume immutable identity mismatch: {changed}"
             )
         if state.get("phase") == "complete":
-            if config.full_harness:
+            if config.full_harness and not tvt_protocol:
                 _backfill_legacy_fixed_schedule(
                     run_dir=run_dir,
                     state=state,
@@ -1024,7 +1239,7 @@ def run_benchmark_evolution(
         seed_target = run_dir / "workers" / "seed"
         snapshot_dir(seed_source, seed_target)
         state = {
-            "schema_version": 2,
+            "schema_version": 3 if tvt_protocol else 2,
             "run_id": config.run_id,
             "arm": feedback_mode.value,
             "n_iters": config.n_iters,
@@ -1040,6 +1255,7 @@ def run_benchmark_evolution(
             "proposals": [],
             "costs": [],
             "lifecycles": [],
+            "validation_records": [],
             "pending_candidate": None,
         }
         _atomic_json(resume_path, state)
@@ -1053,25 +1269,62 @@ def run_benchmark_evolution(
             checkpoint="seed-optimize",
             run_dir=run_dir,
         )
-        seed_held_out = evaluator.evaluate(
-            worker_dir=incumbent_worker,
-            tasks=held_out,
-            split="held_out",
-            checkpoint="seed-held-out",
-            run_dir=run_dir,
-        )
-        state.update({
-            "seed_optimize": _summary_dict(seed_optimize),
-            "incumbent_summary": _summary_dict(seed_optimize),
-            "held_out_seed": _summary_dict(seed_held_out),
-            "phase": "propose",
-        })
+        if tvt_protocol:
+            seed_validation = evaluator.evaluate(
+                worker_dir=incumbent_worker,
+                tasks=validation,
+                split="validation",
+                checkpoint="seed-validation",
+                run_dir=run_dir,
+            )
+            seed_test = evaluator.evaluate(
+                worker_dir=incumbent_worker,
+                tasks=test,
+                split="test",
+                checkpoint="seed-test",
+                run_dir=run_dir,
+            )
+            seed_diagnostic = evaluator.evaluate(
+                worker_dir=incumbent_worker,
+                tasks=diagnostic,
+                split="diagnostic",
+                checkpoint="seed-diagnostic",
+                run_dir=run_dir,
+            )
+            state.update({
+                "seed_optimize": _summary_dict(seed_optimize),
+                "incumbent_summary": _summary_dict(seed_optimize),
+                "validation_seed": _summary_dict(seed_validation),
+                "incumbent_validation_summary": _summary_dict(seed_validation),
+                "test_seed": _summary_dict(seed_test),
+                "diagnostic_seed": _summary_dict(seed_diagnostic),
+                "phase": "propose",
+            })
+        else:
+            seed_held_out = evaluator.evaluate(
+                worker_dir=incumbent_worker,
+                tasks=held_out,
+                split="held_out",
+                checkpoint="seed-held-out",
+                run_dir=run_dir,
+            )
+            state.update({
+                "seed_optimize": _summary_dict(seed_optimize),
+                "incumbent_summary": _summary_dict(seed_optimize),
+                "held_out_seed": _summary_dict(seed_held_out),
+                "phase": "propose",
+            })
         _atomic_json(resume_path, state)
 
     while int(state["next_iteration"]) <= config.n_iters:
         iteration = int(state["next_iteration"])
         incumbent_worker = (run_dir / state["incumbent_worker"]).resolve()
         incumbent_summary = _summary_from_dict(state["incumbent_summary"])
+        incumbent_validation_summary = (
+            _summary_from_dict(state["incumbent_validation_summary"])
+            if tvt_protocol
+            else None
+        )
         pending = state.get("pending_candidate")
         if pending is None:
             candidate = run_dir / "workers" / f"iteration-{iteration:02d}-candidate"
@@ -1082,7 +1335,7 @@ def run_benchmark_evolution(
                 evidence = build_evolution_evidence(
                     mode=feedback_mode,
                     optimize_tasks=optimize,
-                    held_out_task_ids=held_out_ids,
+                    held_out_task_ids=forbidden_feedback_ids,
                     run_dir=run_dir,
                     destination=(
                         run_dir
@@ -1249,9 +1502,47 @@ def run_benchmark_evolution(
             kept, reason, deltas = _accept_candidate(incumbent_summary, candidate_summary, config)
             official_evaluated = True
 
+        candidate_validation_summary = None
+        validation_margin = None
+        if tvt_protocol and admitted:
+            assert incumbent_validation_summary is not None
+            candidate_validation_summary = evaluator.evaluate(
+                worker_dir=candidate,
+                tasks=validation,
+                split="validation",
+                checkpoint=f"iteration-{iteration}-validation",
+                run_dir=run_dir,
+            )
+            validation_margin = (
+                candidate_validation_summary.overall
+                - incumbent_validation_summary.overall
+            )
+            assert config.validation_noise_tolerance is not None
+            confirm_passed = (
+                validation_margin >= -config.validation_noise_tolerance
+            )
+            if kept and not confirm_passed:
+                kept = False
+                reason = "confirm_failed"
+            state.setdefault("validation_records", []).append({
+                "iteration": iteration,
+                "incumbent_before": _summary_dict(
+                    incumbent_validation_summary
+                ),
+                "candidate": _summary_dict(candidate_validation_summary),
+                "margin": validation_margin,
+                "tolerance": config.validation_noise_tolerance,
+                "confirmed": confirm_passed,
+            })
+
         if kept:
             state["incumbent_worker"] = pending["candidate_worker"]
             state["incumbent_summary"] = _summary_dict(candidate_summary)
+            if tvt_protocol:
+                assert candidate_validation_summary is not None
+                state["incumbent_validation_summary"] = _summary_dict(
+                    candidate_validation_summary
+                )
             incumbent_after = candidate_summary.overall
         else:
             state["rejected_edit_signatures"].append(signature)
@@ -1270,16 +1561,32 @@ def run_benchmark_evolution(
             admission_failure=admission_failure,
             evidence_digest=pending.get("evidence_digest"),
             official_evaluated=official_evaluated,
+            candidate_validation_overall=(
+                candidate_validation_summary.overall
+                if candidate_validation_summary is not None
+                else None
+            ),
+            validation_margin=validation_margin,
         )
         state["records"].append(asdict(record))
+        history_reason = (
+            "admission_failed"
+            if tvt_protocol and not admitted
+            else reason
+        )
+        history_admission_failure = (
+            "candidate admission rejected"
+            if tvt_protocol and admission_failure
+            else admission_failure
+        )
         state["history"].append({
             "iteration": iteration,
             "edit_signature": signature,
             "candidate_worker_digest": pending["candidate_worker_digest"],
             "admitted": admitted,
-            "admission_failure": admission_failure,
+            "admission_failure": history_admission_failure,
             "kept": kept,
-            "reason": reason,
+            "reason": history_reason,
             "incumbent_before": incumbent_summary.overall,
             "candidate_overall": candidate_summary.overall,
             "incumbent_after": incumbent_after,
@@ -1288,33 +1595,77 @@ def run_benchmark_evolution(
         })
         state["pending_candidate"] = None
         state["next_iteration"] = iteration + 1
-        state["phase"] = "propose" if iteration < config.n_iters else "final_held_out"
+        state["phase"] = (
+            "propose"
+            if iteration < config.n_iters
+            else ("final_test" if tvt_protocol else "final_held_out")
+        )
         _atomic_json(resume_path, state)
 
     if state["phase"] != "complete":
         final_worker = (run_dir / state["incumbent_worker"]).resolve()
-        final_held_out = evaluator.evaluate(
-            worker_dir=final_worker,
-            tasks=held_out,
-            split="held_out",
-            checkpoint="final-held-out",
-            run_dir=run_dir,
-        )
-        state["held_out_final"] = _summary_dict(final_held_out)
+        if tvt_protocol:
+            final_test = evaluator.evaluate(
+                worker_dir=final_worker,
+                tasks=test,
+                split="test",
+                checkpoint="final-test",
+                run_dir=run_dir,
+            )
+            final_diagnostic = evaluator.evaluate(
+                worker_dir=final_worker,
+                tasks=diagnostic,
+                split="diagnostic",
+                checkpoint="final-diagnostic",
+                run_dir=run_dir,
+            )
+            state["test_final"] = _summary_dict(final_test)
+            state["diagnostic_final"] = _summary_dict(final_diagnostic)
+        else:
+            final_held_out = evaluator.evaluate(
+                worker_dir=final_worker,
+                tasks=held_out,
+                split="held_out",
+                checkpoint="final-held-out",
+                run_dir=run_dir,
+            )
+            state["held_out_final"] = _summary_dict(final_held_out)
         state["phase"] = "complete"
         _atomic_json(resume_path, state)
 
     result = _result_from_state(run_dir, state)
-    _atomic_json(run_dir / "result.json", {
-        "schema_version": 2,
+    result_payload = {
+        "schema_version": 3 if tvt_protocol else 2,
         "run_id": result.run_id,
         "arm": state["arm"],
         "identity": state["identity"],
         "records": [asdict(record) for record in result.records],
         "optimize_trajectory": result.optimize_trajectory,
         "optimize_final": _summary_dict(result.optimize_final),
-        "held_out_seed": _summary_dict(result.held_out_seed),
-        "held_out_final": _summary_dict(result.held_out_final),
         "final_worker_dir": str(result.final_worker_dir),
-    })
+    }
+    if tvt_protocol:
+        assert result.validation_seed is not None
+        assert result.validation_final is not None
+        assert result.test_seed is not None
+        assert result.test_final is not None
+        assert result.diagnostic_seed is not None
+        assert result.diagnostic_final is not None
+        result_payload.update({
+            "validation_seed": _summary_dict(result.validation_seed),
+            "validation_final": _summary_dict(result.validation_final),
+            "validation_records": state.get("validation_records", []),
+            "test_seed": _summary_dict(result.test_seed),
+            "test_final": _summary_dict(result.test_final),
+            "diagnostic_seed": _summary_dict(result.diagnostic_seed),
+            "diagnostic_final": _summary_dict(result.diagnostic_final),
+        })
+    else:
+        assert result.held_out_seed is not None
+        assert result.held_out_final is not None
+        result_payload.update({
+            "held_out_seed": _summary_dict(result.held_out_seed),
+            "held_out_final": _summary_dict(result.held_out_final),
+        })
+    _atomic_json(run_dir / "result.json", result_payload)
     return result

@@ -212,9 +212,10 @@ def build_evolution_evidence(
 
     feedback_mode = FeedbackMode(mode)
     tasks = {str(task.task_id): task for task in optimize_tasks}
+    forbidden_ids = set(held_out_task_ids)
     if not tasks or set(tasks) != set(feedback_manifest):
         raise EvidenceContractError("optimize task and public feedback sets differ")
-    if set(tasks) & set(held_out_task_ids):
+    if set(tasks) & forbidden_ids:
         raise EvidenceContractError("optimize and held-out task sets overlap")
     if set(tasks) != set(verifier_mapping):
         raise EvidenceContractError("optimize task and verifier mapping sets differ")
@@ -231,11 +232,12 @@ def build_evolution_evidence(
         "optimize_task_ids": sorted(tasks),
         "access_log": "access_log.jsonl",
         "held_out_feedback": False,
+        "non_train_feedback": False,
     })
     history_payload = tuple(dict(item) for item in history)
     encoded_history = json.dumps(history_payload, sort_keys=True)
     leaked_history_ids = [
-        task_id for task_id in sorted(set(held_out_task_ids))
+        task_id for task_id in sorted(forbidden_ids)
         if task_id and task_id in encoded_history
     ]
     if leaked_history_ids:
@@ -248,7 +250,11 @@ def build_evolution_evidence(
     for attempt_dir, attempt in _attempts(source_run):
         task_id = str(attempt.get("task_id", ""))
         split = str(attempt.get("split", ""))
-        if split == "held_out":
+        if split in {"held_out", "validation", "test", "diagnostic"}:
+            if task_id not in forbidden_ids:
+                raise EvidenceContractError(
+                    f"unknown non-train task {task_id!r} in split {split!r}"
+                )
             continue
         if split != "optimize":
             raise EvidenceContractError(f"unknown attempt split {split!r}")
