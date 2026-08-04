@@ -1053,19 +1053,32 @@ def _reject_cross_split_input_hash_overlap(
     )
 
 
-def _reject_cross_panel_input_hash_overlap(
+def _reject_cross_panel_public_task_overlap(
     panels: tuple[QFBenchSplit, ...],
 ) -> None:
-    indexed: dict[str, list[tuple[str, str, str]]] = {}
+    indexed: dict[str, list[tuple[str, str]]] = {}
     for panel in panels:
         for task in panel.tasks:
-            data_root = task.root / "environment" / "data"
-            for path in _files_under(data_root):
-                digest = hashlib.sha256(path.read_bytes()).hexdigest()
-                relative = path.relative_to(data_root).as_posix()
-                indexed.setdefault(digest, []).append(
-                    (panel.name, task.task_id, relative)
-                )
+            public_paths = (
+                task.root / "instruction.md",
+                task.root / "task.toml",
+                *_files_under(task.root / "environment"),
+            )
+            bundle = [
+                {
+                    "path": path.relative_to(task.root).as_posix(),
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+                for path in public_paths
+            ]
+            digest = hashlib.sha256(
+                json.dumps(
+                    bundle,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest()
+            indexed.setdefault(digest, []).append((panel.name, task.task_id))
     overlap = {
         digest: entries
         for digest, entries in indexed.items()
@@ -1080,11 +1093,10 @@ def _reject_cross_panel_input_hash_overlap(
             for right in entries[index + 1:]:
                 if left[0] != right[0]:
                     details.append(
-                        f"{left[0]} {left[1]}/{left[2]} == "
-                        f"{right[0]} {right[1]}/{right[2]}"
+                        f"{left[0]} {left[1]} == {right[0]} {right[1]}"
                     )
     raise QFBenchConfigError(
-        "input data hash overlap between evolution panels: "
+        "public task bundle overlap between evolution panels: "
         + "; ".join(details)
     )
 
@@ -1280,7 +1292,7 @@ def load_qfbench_evolution_snapshot(
                     f"{task.lineage} in {prior_lineage_panel} and {panel.name}"
                 )
             seen_lineages[task.lineage] = panel.name
-    _reject_cross_panel_input_hash_overlap(panels)
+    _reject_cross_panel_public_task_overlap(panels)
 
     structural_entries = evolution.get("structural_exclusions", ())
     if not isinstance(structural_entries, list):

@@ -204,3 +204,44 @@ def test_evolution_loader_rejects_cross_panel_lineage_overlap(
 
     with pytest.raises(QFBenchConfigError, match="lineage overlap"):
         load_qfbench_evolution_snapshot(root, manifest_path=manifest)
+
+
+def test_evolution_loader_allows_shared_data_file_across_distinct_tasks(
+    evolution_fixture: tuple[Path, Path],
+) -> None:
+    from qea.benchmarks.qfbench import load_qfbench_evolution_snapshot
+
+    root, manifest = evolution_fixture
+    train = root / "tasks/train-task"
+    validation = root / "tasks/validation-task"
+    validation.joinpath("environment/data/input.csv").write_bytes(
+        train.joinpath("environment/data/input.csv").read_bytes()
+    )
+    train.joinpath("instruction.md").write_text("Produce the train risk report.\n")
+    validation.joinpath("instruction.md").write_text(
+        "Price the validation rates instrument.\n"
+    )
+
+    snapshot = load_qfbench_evolution_snapshot(root, manifest_path=manifest)
+
+    assert snapshot.train.task_ids == ("train-task",)
+    assert snapshot.validation.task_ids == ("validation-task",)
+
+
+def test_evolution_loader_rejects_exact_public_task_bundle_overlap(
+    evolution_fixture: tuple[Path, Path],
+) -> None:
+    from qea.benchmarks.qfbench import (
+        QFBenchConfigError,
+        load_qfbench_evolution_snapshot,
+    )
+
+    root, manifest = evolution_fixture
+    train = root / "tasks/train-task"
+    validation = root / "tasks/validation-task"
+    validation.joinpath("environment/data/input.csv").write_bytes(
+        train.joinpath("environment/data/input.csv").read_bytes()
+    )
+
+    with pytest.raises(QFBenchConfigError, match="public task bundle overlap"):
+        load_qfbench_evolution_snapshot(root, manifest_path=manifest)
