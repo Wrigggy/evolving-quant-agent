@@ -21,6 +21,7 @@ from .attempt_recovery import (
     REPLACEMENT_MANIFEST,
     read_replacement_manifest,
     replacement_attempt_from_manifest,
+    validate_replacement_source,
 )
 from .evaluation import TaskAttempt
 from .process_supervisor import ChildIdentity, SupervisorError
@@ -271,6 +272,7 @@ def classify_attempt_evidence(
                 validated_manifest = read_replacement_manifest(replacement_path)
                 if manifest != validated_manifest:
                     return _fatal(attempt_id, "identity_drift", records)
+                validate_replacement_source(attempt_root, validated_manifest)
                 logical_attempt = TaskAttempt(**attempt)
                 replacement = replacement_attempt_from_manifest(
                     logical_attempt, validated_manifest
@@ -278,21 +280,47 @@ def classify_attempt_evidence(
                 identities = [
                     record.get("request_identity_sha256") for record in audits
                 ]
-                if (
+                reason = validated_manifest.get("reason")
+                invalid_source = (
                     validated_manifest.get("superseded_attempt_id") != attempt_id
-                    or validated_manifest.get("reason") != "post_accept_transport"
                     or validated_manifest.get("source_audit_sha256")
                     != hashlib.sha256(raw_audit).hexdigest()
                     or len(identities) != len(set(identities))
-                    or audits[-1].get("request_state") != "quarantined"
-                    or audits[-1].get("failure_class")
-                    != "post_accept_transport"
-                    or any(
-                        record.get("request_state")
-                        not in {"completed", "not_accepted"}
-                        for record in audits[:-1]
+                )
+                if reason == "post_accept_transport":
+                    invalid_source = invalid_source or (
+                        audits[-1].get("request_state") != "quarantined"
+                        or audits[-1].get("failure_class")
+                        != "post_accept_transport"
+                        or any(
+                            record.get("request_state")
+                            not in {"completed", "not_accepted"}
+                            for record in audits[:-1]
+                        )
                     )
-                ):
+                elif reason == "worker_transport_after_completed_audit":
+                    command_path = attempt_root / "worker-command.json"
+                    command, raw_command = _read_json(command_path)
+                    records.append(
+                        (
+                            f"attempts/{attempt_id}/worker-command.json",
+                            raw_command,
+                        )
+                    )
+                    invalid_source = invalid_source or (
+                        validated_manifest.get("source_command_sha256")
+                        != hashlib.sha256(raw_command).hexdigest()
+                        or any(
+                            record.get("request_state") != "completed"
+                            or record.get("upstream_status_code") != 200
+                            or record.get("failure_class") is not None
+                            for record in audits
+                        )
+                        or not isinstance(command, dict)
+                    )
+                else:
+                    invalid_source = True
+                if invalid_source:
                     return _fatal(attempt_id, "identity_drift", records)
                 replacement_attempt_path = (
                     root

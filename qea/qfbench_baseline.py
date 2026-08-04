@@ -19,6 +19,7 @@ from .attempt_recovery import (
     REPLACEMENT_MANIFEST,
     read_replacement_manifest,
     replacement_attempt_from_manifest,
+    validate_replacement_source,
 )
 from .evaluation import (
     EvaluationSummary,
@@ -628,6 +629,7 @@ def audit_baseline_proxy_costs(
             if not manifest_path.exists():
                 continue
             manifest = read_replacement_manifest(manifest_path)
+            validate_replacement_source(attempt_path.parent, manifest)
             if manifest["superseded_attempt_id"] != attempt_id:
                 raise BaselineConfigError(
                     f"cost audit replacement source mismatch: {attempt_path.parent}"

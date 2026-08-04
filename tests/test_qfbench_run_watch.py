@@ -151,6 +151,68 @@ def test_replaced_ambiguous_attempt_is_nonfatal_and_audit_bound(tmp_path):
     assert drifted.category == "identity_drift"
 
 
+def test_completed_audit_worker_transport_replacement_is_nonfatal_and_bound(
+    tmp_path,
+):
+    """Catch a watchdog hard-stop or unbound command after safe replacement."""
+
+    from dataclasses import asdict
+
+    from qea.attempt_recovery import resolve_worker_attempt
+    from qea.evaluation import TaskAttempt
+    from qea.qfbench_run_watch import classify_attempt_evidence
+
+    run_dir = tmp_path / "completed-audit-transport-run"
+    logical = TaskAttempt.create(
+        run_id=run_dir.name,
+        benchmark_commit="0" * 40,
+        task_id="mc-greek-surface-1",
+        split="baseline_primary",
+        checkpoint="repetition-02-primary",
+        worker_digest="1" * 64,
+    )
+    attempt = run_dir / "attempts" / logical.attempt_id
+    attempt.mkdir(parents=True)
+    (attempt / "attempt.json").write_text(json.dumps(asdict(logical)))
+    record = _audit_record()
+    (attempt / "proxy-audit.jsonl").write_text(json.dumps(record) + "\n")
+    command_path = attempt / "worker-command.json"
+    command_path.write_text(
+        json.dumps(
+            {
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": (
+                    "openai.APIError: Network connection lost.\n"
+                    "RuntimeError: Error in agent execution: "
+                    "Network connection lost.\n"
+                ),
+                "timed_out": False,
+            }
+        )
+        + "\n"
+    )
+    replacement = resolve_worker_attempt(logical, run_dir)
+    replacement_dir = run_dir / "attempts" / replacement.attempt_id
+    replacement_dir.mkdir(parents=True)
+    (replacement_dir / "attempt.json").write_text(json.dumps(asdict(replacement)))
+
+    result = classify_attempt_evidence(attempt, run_dir=run_dir)
+
+    assert result.status == "superseded_infrastructure_attempt"
+    assert result.hard_stop is False
+    assert result.category is None
+
+    command = json.loads(command_path.read_text())
+    command["stderr"] += "tampered\n"
+    command_path.write_text(json.dumps(command) + "\n")
+
+    drifted = classify_attempt_evidence(attempt, run_dir=run_dir)
+
+    assert drifted.hard_stop is True
+    assert drifted.category == "identity_drift"
+
+
 @pytest.mark.parametrize(
     "corruption",
     (

@@ -698,6 +698,72 @@ def test_cost_audit_counts_replacement_as_one_score_and_old_cost_as_lower_bound(
     assert audit["by_repetition"]["1"]["primary"]["attempt_count"] == 1
 
 
+def test_cost_audit_rejects_completed_audit_replacement_command_drift(
+    tmp_path,
+) -> None:
+    """Catch accepting a replacement after its worker failure evidence changes."""
+
+    from qea.attempt_recovery import resolve_worker_attempt
+    from qea.evaluation import TaskAttempt
+    from qea.qfbench_baseline import BaselineConfigError, audit_baseline_proxy_costs
+
+    logical = TaskAttempt.create(
+        run_id="baseline-five",
+        benchmark_commit=COMMIT,
+        task_id="mc-greek-surface-1",
+        split="baseline_primary",
+        checkpoint="repetition-02-primary",
+        worker_digest="e" * 64,
+    )
+    logical_dir = tmp_path / "attempts" / logical.attempt_id
+    logical_dir.mkdir(parents=True)
+    (logical_dir / "attempt.json").write_text(json.dumps(asdict(logical)))
+    (logical_dir / "proxy-audit.jsonl").write_text(
+        json.dumps(_audit_record(identity="a", cost=0.01, input_tokens=10))
+        + "\n"
+    )
+    command_path = logical_dir / "worker-command.json"
+    command_path.write_text(
+        json.dumps(
+            {
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": (
+                    "openai.APIError: Network connection lost.\n"
+                    "RuntimeError: Error in agent execution: "
+                    "Network connection lost.\n"
+                ),
+                "timed_out": False,
+            }
+        )
+        + "\n"
+    )
+    replacement = resolve_worker_attempt(logical, tmp_path)
+    replacement_dir = tmp_path / "attempts" / replacement.attempt_id
+    replacement_dir.mkdir(parents=True)
+    (replacement_dir / "attempt.json").write_text(
+        json.dumps(asdict(replacement))
+    )
+    score = OfficialTaskScore(
+        task_id=logical.task_id,
+        domain="derivatives",
+        reward=0.5,
+    )
+    (replacement_dir / "completed-score.json").write_text(
+        json.dumps(asdict(score))
+    )
+    (replacement_dir / "proxy-audit.jsonl").write_text(
+        json.dumps(_audit_record(identity="b", cost=0.01, input_tokens=10))
+        + "\n"
+    )
+    command = json.loads(command_path.read_text())
+    command["stderr"] += "tampered\n"
+    command_path.write_text(json.dumps(command) + "\n")
+
+    with pytest.raises(BaselineConfigError, match="source evidence drifted"):
+        audit_baseline_proxy_costs(tmp_path, expected_attempts=1)
+
+
 def test_fixed_checkpoint_cost_audit_reuses_canonical_validation(tmp_path) -> None:
     from qea.evaluation import TaskAttempt
     from qea.qfbench_baseline import audit_fixed_checkpoint_proxy_costs

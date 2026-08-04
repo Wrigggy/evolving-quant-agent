@@ -35,7 +35,7 @@ _AUDIT_FIELDS = frozenset(
         "failure_class",
     }
 )
-_MANIFEST_FIELDS = frozenset(
+_MANIFEST_FIELDS_V1 = frozenset(
     {
         "schema_version",
         "reason",
@@ -47,6 +47,15 @@ _MANIFEST_FIELDS = frozenset(
         "replacement_checkpoint",
         "source_audit_sha256",
     }
+)
+_MANIFEST_FIELDS_V2 = _MANIFEST_FIELDS_V1 | frozenset(
+    {"source_command_sha256"}
+)
+_COMPLETED_AUDIT_TRANSPORT_REASON = "worker_transport_after_completed_audit"
+_COMMAND_FIELDS = frozenset({"exit_code", "stdout", "stderr", "timed_out"})
+_WORKER_TRANSPORT_SIGNATURES = (
+    "openai.APIError: Network connection lost.",
+    "RuntimeError: Error in agent execution: Network connection lost.",
 )
 
 
@@ -103,7 +112,35 @@ def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
     os.chmod(path, 0o600)
 
 
-def _recoverable_audit(attempt_dir: Path) -> tuple[str, str] | None:
+def _completed_audit_transport_command(attempt_dir: Path) -> str | None:
+    command_path = attempt_dir / "worker-command.json"
+    if not command_path.exists():
+        return None
+    raw = _read_regular_bytes(command_path)
+    try:
+        command = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AttemptRecoveryError(
+            "attempt recovery worker command is malformed"
+        ) from exc
+    if not isinstance(command, dict) or set(command) != _COMMAND_FIELDS:
+        raise AttemptRecoveryError("attempt recovery worker command schema is invalid")
+    if (
+        command.get("exit_code") != 1
+        or command.get("timed_out") is not False
+        or not isinstance(command.get("stdout"), str)
+        or not isinstance(command.get("stderr"), str)
+    ):
+        return None
+    stderr = command["stderr"]
+    if not all(signature in stderr for signature in _WORKER_TRANSPORT_SIGNATURES):
+        return None
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _recoverable_audit(
+    attempt_dir: Path,
+) -> tuple[str, str, str | None] | None:
     audit_path = attempt_dir / "proxy-audit.jsonl"
     if not audit_path.exists():
         return None
@@ -137,7 +174,21 @@ def _recoverable_audit(attempt_dir: Path) -> tuple[str, str] | None:
         if record.get("request_state") == "quarantined"
     ]
     if not quarantined:
-        return None
+        if any(
+            record.get("request_state") != "completed"
+            or record.get("upstream_status_code") != 200
+            or record.get("failure_class") is not None
+            for record in records
+        ):
+            return None
+        command_sha256 = _completed_audit_transport_command(attempt_dir)
+        if command_sha256 is None:
+            return None
+        return (
+            _COMPLETED_AUDIT_TRANSPORT_REASON,
+            hashlib.sha256(raw).hexdigest(),
+            command_sha256,
+        )
     if quarantined != [len(records) - 1]:
         raise AttemptRecoveryError(
             "attempt recovery requires exactly one terminal quarantined request"
@@ -152,7 +203,7 @@ def _recoverable_audit(attempt_dir: Path) -> tuple[str, str] | None:
         for record in records[:-1]
     ):
         raise AttemptRecoveryError("attempt recovery proxy audit has invalid prior state")
-    return "post_accept_transport", hashlib.sha256(raw).hexdigest()
+    return "post_accept_transport", hashlib.sha256(raw).hexdigest(), None
 
 
 def _replacement_attempt(
@@ -181,9 +232,12 @@ def _expected_manifest(
     ordinal: int,
     reason: str,
     source_audit_sha256: str,
+    source_command_sha256: str | None,
 ) -> dict:
-    return {
-        "schema_version": 1,
+    payload = {
+        "schema_version": (
+            2 if reason == _COMPLETED_AUDIT_TRANSPORT_REASON else 1
+        ),
         "reason": reason,
         "logical_attempt_id": logical_attempt.attempt_id,
         "logical_checkpoint": logical_attempt.checkpoint,
@@ -193,6 +247,20 @@ def _expected_manifest(
         "replacement_checkpoint": replacement_attempt.checkpoint,
         "source_audit_sha256": source_audit_sha256,
     }
+    if reason == _COMPLETED_AUDIT_TRANSPORT_REASON:
+        if (
+            not isinstance(source_command_sha256, str)
+            or not _SHA256.fullmatch(source_command_sha256)
+        ):
+            raise AttemptRecoveryError(
+                "attempt replacement command digest is invalid"
+            )
+        payload["source_command_sha256"] = source_command_sha256
+    elif source_command_sha256 is not None:
+        raise AttemptRecoveryError(
+            "post-accept replacement must not bind a worker command"
+        )
+    return payload
 
 
 def read_replacement_manifest(path: str | Path) -> dict:
@@ -200,7 +268,15 @@ def read_replacement_manifest(path: str | Path) -> dict:
 
     source = Path(path)
     payload = _read_json(source)
-    if set(payload) != _MANIFEST_FIELDS or payload.get("schema_version") != 1:
+    schema_version = payload.get("schema_version")
+    expected_fields = (
+        _MANIFEST_FIELDS_V1
+        if schema_version == 1
+        else _MANIFEST_FIELDS_V2
+        if schema_version == 2
+        else frozenset()
+    )
+    if not expected_fields or set(payload) != expected_fields:
         raise AttemptRecoveryError(f"attempt replacement manifest schema is invalid: {source}")
     for field in (
         "logical_attempt_id",
@@ -213,8 +289,21 @@ def read_replacement_manifest(path: str | Path) -> dict:
             raise AttemptRecoveryError(
                 f"attempt replacement manifest digest is invalid: {field}"
             )
+    if schema_version == 2:
+        command_digest = payload.get("source_command_sha256")
+        if not isinstance(command_digest, str) or not _SHA256.fullmatch(
+            command_digest
+        ):
+            raise AttemptRecoveryError(
+                "attempt replacement command digest is invalid"
+            )
+    expected_reason = (
+        "post_accept_transport"
+        if schema_version == 1
+        else _COMPLETED_AUDIT_TRANSPORT_REASON
+    )
     if (
-        payload.get("reason") != "post_accept_transport"
+        payload.get("reason") != expected_reason
         or type(payload.get("replacement_ordinal")) is not int
         or not 1 <= payload["replacement_ordinal"] <= MAX_WORKER_ATTEMPT_REPLACEMENTS
         or not isinstance(payload.get("logical_checkpoint"), str)
@@ -224,6 +313,27 @@ def read_replacement_manifest(path: str | Path) -> dict:
     ):
         raise AttemptRecoveryError("attempt replacement manifest semantics are invalid")
     return payload
+
+
+def validate_replacement_source(
+    attempt_dir: str | Path,
+    manifest: Mapping[str, object],
+) -> None:
+    """Validate that immutable source evidence still justifies replacement."""
+
+    source = Path(attempt_dir).resolve()
+    recoverable = _recoverable_audit(source)
+    if recoverable is None:
+        raise AttemptRecoveryError(
+            "attempt replacement manifest has no recoverable source evidence"
+        )
+    reason, audit_sha256, command_sha256 = recoverable
+    if (
+        manifest.get("reason") != reason
+        or manifest.get("source_audit_sha256") != audit_sha256
+        or manifest.get("source_command_sha256") != command_sha256
+    ):
+        raise AttemptRecoveryError("attempt replacement source evidence drifted")
 
 
 def resolve_worker_attempt(
@@ -255,7 +365,7 @@ def resolve_worker_attempt(
                 raise AttemptRecoveryError(
                     "attempt replacement manifest has no recoverable source audit"
                 )
-            reason, source_audit_sha256 = recoverable
+            reason, source_audit_sha256, source_command_sha256 = recoverable
             replacement = _replacement_attempt(logical_attempt, ordinal=ordinal)
             expected = _expected_manifest(
                 logical_attempt=logical_attempt,
@@ -264,6 +374,7 @@ def resolve_worker_attempt(
                 ordinal=ordinal,
                 reason=reason,
                 source_audit_sha256=source_audit_sha256,
+                source_command_sha256=source_command_sha256,
             )
             if read_replacement_manifest(manifest_path) != expected:
                 raise AttemptRecoveryError("attempt replacement manifest drifted")
@@ -271,7 +382,7 @@ def resolve_worker_attempt(
             continue
         if recoverable is None:
             return current
-        reason, source_audit_sha256 = recoverable
+        reason, source_audit_sha256, source_command_sha256 = recoverable
         replacement = _replacement_attempt(logical_attempt, ordinal=ordinal)
         _atomic_json(
             manifest_path,
@@ -282,6 +393,7 @@ def resolve_worker_attempt(
                 ordinal=ordinal,
                 reason=reason,
                 source_audit_sha256=source_audit_sha256,
+                source_command_sha256=source_command_sha256,
             ),
         )
         current = replacement
@@ -318,6 +430,7 @@ __all__ = [
     "MAX_WORKER_ATTEMPT_REPLACEMENTS",
     "REPLACEMENT_MANIFEST",
     "read_replacement_manifest",
+    "validate_replacement_source",
     "replacement_attempt_from_manifest",
     "resolve_worker_attempt",
 ]

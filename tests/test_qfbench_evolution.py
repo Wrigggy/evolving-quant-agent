@@ -640,6 +640,118 @@ def test_sandbox_evaluator_replaces_ambiguous_worker_attempt_without_replay(
     assert audit_path.read_bytes() == original_audit
 
 
+def test_sandbox_evaluator_replaces_worker_transport_failure_after_completed_audit(
+    tmp_path,
+):
+    """Catch a resume loop when the SDK rejects a proxy-completed stream."""
+
+    from qea.loop_benchmark import QFBenchSandboxEvaluator, hash_worker_directory
+
+    task = SimpleNamespace(
+        task_id="mc-greek-surface-1",
+        domain="derivatives",
+        lineage="mc-greek-surface-1",
+    )
+    worker = _seed_worker(tmp_path)
+    logical_attempt = TaskAttempt.create(
+        run_id="completed-audit-transport-resume",
+        benchmark_commit="0" * 40,
+        task_id=task.task_id,
+        split="baseline_primary",
+        checkpoint="repetition-02-primary",
+        worker_digest=hash_worker_directory(worker),
+    )
+    run_dir = tmp_path / logical_attempt.run_id
+    original_dir = run_dir / "attempts" / logical_attempt.attempt_id
+    original_dir.mkdir(parents=True)
+    (original_dir / "attempt.json").write_text(
+        json.dumps(logical_attempt.__dict__)
+    )
+    completed = {
+        "schema_version": 1,
+        "request_identity_sha256": "a" * 64,
+        "model": "deepseek/deepseek-v4-flash-0731",
+        "started_at": "2026-08-04T09:39:22+00:00",
+        "finished_at": "2026-08-04T09:41:31+00:00",
+        "latency_ms": 129000,
+        "request_state": "completed",
+        "upstream_status_code": 200,
+        "provider_request_id": "request-1",
+        "input_tokens": 3350,
+        "output_tokens": 11945,
+        "total_tokens": 15295,
+        "provider_cost_usd": "0.01",
+        "failure_class": None,
+    }
+    audit_path = original_dir / "proxy-audit.jsonl"
+    audit_path.write_text(json.dumps(completed, sort_keys=True) + "\n")
+    command = {
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": (
+            "openai.APIError: Network connection lost.\n"
+            "RuntimeError: Error in agent execution: Network connection lost.\n"
+        ),
+        "timed_out": False,
+    }
+    command_path = original_dir / "worker-command.json"
+    command_path.write_text(json.dumps(command, sort_keys=True) + "\n")
+    original_audit = audit_path.read_bytes()
+    original_command = command_path.read_bytes()
+
+    class RecordingExecutor:
+        def __init__(self):
+            self.attempt_ids = []
+
+        def execute(self, *, attempt, task, worker_dir, run_dir, model_env):
+            assert attempt.attempt_id != logical_attempt.attempt_id
+            self.attempt_ids.append(attempt.attempt_id)
+            return _execution_for(attempt, run_dir, task)
+
+    class RecordingVerifier:
+        def verify(self, *, attempt, task, execution, run_dir):
+            return OfficialTaskScore(
+                task_id=task.task_id,
+                domain=task.domain,
+                reward=0.75,
+            )
+
+    executor = RecordingExecutor()
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id=logical_attempt.run_id,
+        executor=executor,
+        verifier=RecordingVerifier(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+
+    summary = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=(task,),
+        split="baseline_primary",
+        checkpoint="repetition-02-primary",
+        run_dir=run_dir,
+    )
+
+    assert summary.overall == 0.75
+    assert len(executor.attempt_ids) == 1
+    replacement = json.loads(
+        (original_dir / "worker-attempt-replacement.json").read_text()
+    )
+    assert replacement["schema_version"] == 2
+    assert replacement["reason"] == "worker_transport_after_completed_audit"
+    assert replacement["source_audit_sha256"] == hashlib.sha256(
+        original_audit
+    ).hexdigest()
+    assert replacement["source_command_sha256"] == hashlib.sha256(
+        original_command
+    ).hexdigest()
+    assert audit_path.read_bytes() == original_audit
+    assert command_path.read_bytes() == original_command
+
+
 def _persist_timeout_evidence(
     attempt_dir,
     *,
