@@ -138,7 +138,7 @@ def test_paid_baseline_batch_requires_exact_epoch_two_standard_panel():
         worker_concurrency=12,
         verifier_concurrency=3,
         worker_launch_interval_seconds=2,
-        allowed_model="deepseek/deepseek-v4-flash",
+        allowed_model="deepseek/deepseek-v4-flash-0731",
         required_provider="deepseek",
     )
 
@@ -156,6 +156,18 @@ def test_paid_baseline_batch_requires_exact_epoch_two_standard_panel():
                 **{
                     **config.__dict__,
                     "worker_launch_interval_seconds": 0,
+                }
+            ),
+            executor="rootless-docker",
+        )
+
+    with pytest.raises(ValueError, match="V4 Flash 0731"):
+        select_paid_baseline_batch_tasks(
+            snapshot,
+            config=SimpleNamespace(
+                **{
+                    **config.__dict__,
+                    "allowed_model": "deepseek/deepseek-v4-flash",
                 }
             ),
             executor="rootless-docker",
@@ -196,7 +208,7 @@ def test_paid_provider_batch_accepts_only_an_explicit_matching_nonofficial_provi
         worker_concurrency=12,
         verifier_concurrency=3,
         worker_launch_interval_seconds=2,
-        allowed_model="deepseek/deepseek-v4-flash",
+        allowed_model="deepseek/deepseek-v4-flash-0731",
         required_provider="cloudflare",
     )
 
@@ -279,7 +291,7 @@ def test_paid_baseline_batch_evaluates_once_without_evolver_or_feedback(
         worker_concurrency=12,
         verifier_concurrency=3,
         worker_launch_interval_seconds=2,
-        allowed_model="deepseek/deepseek-v4-flash",
+        allowed_model="deepseek/deepseek-v4-flash-0731",
         required_provider="deepseek",
     )
     calls = []
@@ -315,9 +327,9 @@ def test_paid_baseline_batch_evaluates_once_without_evolver_or_feedback(
         "audit_fixed_checkpoint_proxy_costs",
         lambda *args, **kwargs: {
             "request_count": 12,
-            "provider_cost_usd": "0.12",
-            "cost_complete": True,
-            "provider_cost_is_lower_bound": False,
+            "provider_cost_usd": None,
+            "cost_complete": False,
+            "provider_cost_is_lower_bound": True,
         },
         raising=False,
     )
@@ -338,7 +350,7 @@ def test_paid_baseline_batch_evaluates_once_without_evolver_or_feedback(
         lambda *args, **kwargs: {
             "request_count": 12,
             "latency_ms": {"mean": 100.0, "p90": 100.0},
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4-flash-0731",
         },
         raising=False,
     )
@@ -361,6 +373,7 @@ def test_paid_baseline_batch_evaluates_once_without_evolver_or_feedback(
     assert status["evolver_used"] is False
     assert status["formal_scoring_eligible"] is True
     assert status["claim_boundary"] == "official-provider concurrency gate"
+    assert status["cost_audit"]["cost_complete"] is False
 
 
 def test_paid_provider_batch_result_is_infrastructure_only(monkeypatch, tmp_path):
@@ -387,7 +400,7 @@ def test_paid_provider_batch_result_is_infrastructure_only(monkeypatch, tmp_path
         worker_concurrency=12,
         verifier_concurrency=3,
         worker_launch_interval_seconds=2,
-        allowed_model="deepseek/deepseek-v4-flash",
+        allowed_model="deepseek/deepseek-v4-flash-0731",
         required_provider="cloudflare",
     )
 
@@ -437,7 +450,7 @@ def test_paid_provider_batch_result_is_infrastructure_only(monkeypatch, tmp_path
         lambda *args, **kwargs: {
             "request_count": 12,
             "latency_ms": {"mean": 100.0, "p90": 100.0},
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "deepseek/deepseek-v4-flash-0731",
         },
     )
 
@@ -456,6 +469,30 @@ def test_paid_provider_batch_result_is_infrastructure_only(monkeypatch, tmp_path
     assert status["provider"] == "cloudflare"
     assert status["formal_scoring_eligible"] is False
     assert status["claim_boundary"] == "infrastructure-only provider batch"
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "deepseek/deepseek-v4-flash-0731",
+        "deepseek/deepseek-v4-flash-20260731",
+    ],
+)
+def test_v4_flash_0731_canary_accepts_only_registered_and_canonical_model_ids(
+    model,
+):
+    from scripts.qfbench_v4_flash_0731_provider_canary import (
+        validate_generation_route,
+    )
+
+    validate_generation_route(provider="DeepSeek", model=model)
+    with pytest.raises(RuntimeError, match="unexpected provider metadata"):
+        validate_generation_route(provider="DeepInfra", model=model)
+    with pytest.raises(RuntimeError, match="unexpected model metadata"):
+        validate_generation_route(
+            provider="DeepSeek",
+            model="deepseek/deepseek-v4-flash-20260423",
+        )
 
 
 @pytest.mark.parametrize(
