@@ -367,6 +367,8 @@ def test_rootless_optional_extra_is_focused_and_e2b_independent() -> None:
 def test_approved_rootless_factory_constructs_when_all_e2b_modules_are_blocked(
     tmp_path, monkeypatch,
 ) -> None:
+    import qea as qea_package
+    import qea.executors as executors_package
     import qea.rootless_full_harness as module
 
     class RejectE2BFinder(importlib.abc.MetaPathFinder):
@@ -410,6 +412,25 @@ def test_approved_rootless_factory_constructs_when_all_e2b_modules_are_blocked(
             if name in {"qea.rootless_runtime", "qea.executors.sandbox_nexau"}:
                 sys.modules.pop(name, None)
         sys.modules.update(refresh)
+        if "qea.rootless_runtime" in refresh:
+            qea_package.rootless_runtime = refresh["qea.rootless_runtime"]
+        if "qea.executors.sandbox_nexau" in refresh:
+            executors_package.sandbox_nexau = refresh[
+                "qea.executors.sandbox_nexau"
+            ]
+
+    restored = _catalog()
+    restored_config = _valid_config(tmp_path / "config-restored")
+    _patch_catalog(monkeypatch, restored, config=restored_config)
+    restored_runtime = module.build_rootless_full_harness_runtime(
+        config=restored_config,
+        image_set_manifest=tmp_path / "restored-image-set.json",
+        benchmark_commit=restored.benchmark_commit,
+        tasks=(_task(),),
+        run_id="restored-module-identity",
+        results_root=tmp_path / "restored-results",
+    )
+    restored_runtime.close()
 
 
 def test_rootless_config_normalizes_immutable_limits_and_private_paths(tmp_path) -> None:

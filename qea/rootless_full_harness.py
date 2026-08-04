@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -758,10 +759,8 @@ def _expected_docker_preflight(image_set) -> tuple[str, tuple[str, ...], tuple[s
     return version, security, tuple(sorted(set(image_ids)))
 
 
-def _resolved_catalog(catalog, config: RootlessFullHarnessConfig):
-    from .rootless_runtime import RootlessRuntimeCatalog, RootlessTaskRuntime
-
-    resolved: dict[str, RootlessTaskRuntime] = {}
+def _resolved_catalog(catalog, config: RootlessFullHarnessConfig, runtime_module):
+    resolved: dict[str, object] = {}
     for task_id, task in catalog.tasks.items():
         worker = SandboxResourceContract(
             cpu_count=task.worker_resources.cpu_count,
@@ -785,7 +784,7 @@ def _resolved_catalog(catalog, config: RootlessFullHarnessConfig):
                 "verifier_resources": _resource_payload(verifier),
             }
         )
-        resolved[task_id] = RootlessTaskRuntime(
+        resolved[task_id] = runtime_module.RootlessTaskRuntime(
             task_id=task_id,
             worker_image_ref=task.worker_image_ref,
             verifier_image_ref=task.verifier_image_ref,
@@ -805,7 +804,7 @@ def _resolved_catalog(catalog, config: RootlessFullHarnessConfig):
             ],
         }
     )
-    return RootlessRuntimeCatalog(
+    return runtime_module.RootlessRuntimeCatalog(
         benchmark_commit=catalog.benchmark_commit,
         base_image_ref=catalog.base_image_ref,
         evolver_image_ref=catalog.evolver_image_ref,
@@ -930,7 +929,7 @@ def build_rootless_full_harness_runtime(
     if len(set(task_ids)) != len(task_ids):
         raise RootlessFullHarnessError("task panel contains duplicate task identities")
 
-    from . import rootless_runtime
+    rootless_runtime = importlib.import_module(".rootless_runtime", __package__)
     from .backends.rootless_docker import RootlessDockerBackend
     from .executors.sandbox_proxy import SandboxProxyConfig, SandboxProxyManager
     from .executors.sandbox_runtime import public_model_environment, trusted_directory
@@ -1004,7 +1003,7 @@ def build_rootless_full_harness_runtime(
             raise RootlessFullHarnessError(
                 f"role timeout is below benchmark contract for {task_id!r}"
             )
-    catalog = _resolved_catalog(source_catalog, config)
+    catalog = _resolved_catalog(source_catalog, config, rootless_runtime)
     _validate_capacity(config, catalog)
 
     root = trusted_directory(
