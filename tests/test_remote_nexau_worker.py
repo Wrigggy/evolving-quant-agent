@@ -46,6 +46,44 @@ def test_no_replay_policy_rejects_constructed_client_retry_drift():
         )
 
 
+def test_structured_tool_trace_preserves_skill_activation():
+    from qea.executors import remote_nexau_worker
+
+    tool_use = SimpleNamespace(
+        type="tool_use",
+        name="LoadSkill",
+        input={"skill_name": "spec-driven-deliverables"},
+    )
+    tool_result = SimpleNamespace(
+        type="tool_result",
+        content=(
+            "Found the skill details of `spec-driven-deliverables`.\n"
+            "<SkillDetails><SkillName>spec-driven-deliverables</SkillName>"
+            "</SkillDetails>"
+        ),
+    )
+
+    use_text = remote_nexau_worker._message_text(
+        SimpleNamespace(content=[tool_use], get_text_content=lambda: "")
+    )
+    result_text = remote_nexau_worker._message_text(
+        SimpleNamespace(content=[tool_result], get_text_content=lambda: "")
+    )
+
+    assert "LoadSkill" in use_text
+    assert "spec-driven-deliverables" in use_text
+    assert "<SkillDetails>" in result_text
+    assert "spec-driven-deliverables" in result_text
+
+
+def test_trace_role_uses_enum_value_instead_of_debug_representation():
+    from qea.executors import remote_nexau_worker
+
+    role = SimpleNamespace(value="assistant")
+
+    assert remote_nexau_worker._role_name(SimpleNamespace(role=role)) == "assistant"
+
+
 def test_remote_runner_imports_worker_local_tool_before_loading_config(
     tmp_path, monkeypatch
 ):

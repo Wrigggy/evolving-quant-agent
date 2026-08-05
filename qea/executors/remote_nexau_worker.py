@@ -84,10 +84,44 @@ def _redact(text: str) -> str:
 
 
 def _message_text(message) -> str:
+    text = ""
     try:
-        return message.get_text_content()
+        text = message.get_text_content()
     except Exception:  # noqa: BLE001
-        return str(getattr(message, "content", "") or "")
+        text = str(getattr(message, "content", "") or "")
+    structured: list[str] = []
+    for block in getattr(message, "content", ()) or ():
+        block_type = str(getattr(block, "type", ""))
+        if block_type == "tool_use":
+            name = str(getattr(block, "name", "") or "")
+            tool_input = getattr(block, "input", {})
+            structured.append(
+                "<ToolUse>"
+                + json.dumps(
+                    {"name": name, "input": tool_input},
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    default=str,
+                )
+                + "</ToolUse>"
+            )
+        elif block_type == "tool_result":
+            result = getattr(block, "content", "")
+            if isinstance(result, str):
+                structured.append(result)
+            elif isinstance(result, list):
+                structured.append(
+                    "".join(
+                        str(getattr(part, "text", "") or "")
+                        for part in result
+                    )
+                )
+    return "\n".join(part for part in (text, *structured) if part)
+
+
+def _role_name(message) -> str:
+    role = getattr(message, "role", "")
+    return str(getattr(role, "value", role) or "")
 
 
 def _is_empty_model_response_error(exc: BaseException) -> bool:
@@ -152,7 +186,7 @@ def run(task_dir: Path, worker_dir: Path, work_dir: Path, output_dir: Path, resu
     trace_path = result_dir / "raw_trace.jsonl"
     with trace_path.open("w") as trace:
         for item in agent.full_trace or ():
-            role = str(getattr(item, "role", ""))
+            role = _role_name(item)
             text = _redact(_message_text(item))
             trace.write(json.dumps({"role": role, "content": text}, ensure_ascii=False) + "\n")
             if role == "assistant":
