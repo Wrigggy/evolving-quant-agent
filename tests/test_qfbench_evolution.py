@@ -1049,7 +1049,7 @@ def test_sandbox_evaluator_mixed_state_resume_runs_only_pending_worker(tmp_path)
     [
         ({"write_command": False}, "paired"),
         ({"write_quarantine": False}, "paired"),
-        ({"command_changes": {"timed_out": False}}, "timed_out"),
+        ({"command_changes": {"timed_out": False}}, "conflicts with a completed"),
         ({"command_changes": {"exit_code": 1}}, "exit code"),
         ({"command_changes": {"extra": "field"}}, "schema"),
         ({"write_audit": True}, "canonical proxy audit"),

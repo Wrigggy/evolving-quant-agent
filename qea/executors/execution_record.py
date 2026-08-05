@@ -86,7 +86,26 @@ def load_persisted_worker_timeout(
     quarantine_exists = quarantine_path.is_file()
     if not command_exists and not quarantine_exists:
         return None
-    if command_exists != quarantine_exists:
+
+    # `worker-command.json` is written for every attempt, so its presence alone
+    # does not claim a timeout. Only a command that recorded `timed_out` is
+    # timeout evidence; a normally exited worker means this attempt simply has
+    # no timeout evidence to load.
+    if not command_exists:
+        raise WorkerExecutionError(
+            "persisted timeout command and quarantine evidence must be paired"
+        )
+    command, command_bytes = _read_bounded_json(command_path, label="command")
+    if set(command) != {"exit_code", "stdout", "stderr", "timed_out"}:
+        raise WorkerExecutionError("persisted timeout command schema is invalid")
+    if command["timed_out"] is not True:
+        if quarantine_exists:
+            raise WorkerExecutionError(
+                "persisted timeout quarantine conflicts with a completed "
+                "worker command"
+            )
+        return None
+    if not quarantine_exists:
         raise WorkerExecutionError(
             "persisted timeout command and quarantine evidence must be paired"
         )
@@ -95,11 +114,6 @@ def load_persisted_worker_timeout(
             "persisted timeout conflicts with a canonical proxy audit"
         )
 
-    command, command_bytes = _read_bounded_json(command_path, label="command")
-    if set(command) != {"exit_code", "stdout", "stderr", "timed_out"}:
-        raise WorkerExecutionError("persisted timeout command schema is invalid")
-    if command["timed_out"] is not True:
-        raise WorkerExecutionError("persisted timeout command timed_out must be true")
     if type(command["exit_code"]) is not int or command["exit_code"] != 124:
         raise WorkerExecutionError("persisted timeout command exit code must be 124")
     if not isinstance(command["stdout"], str) or not isinstance(

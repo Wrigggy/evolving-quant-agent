@@ -109,3 +109,50 @@ def test_e2b_record_and_timeout_names_are_compatibility_aliases():
     assert E2BWorkerExecution is WorkerExecution
     assert E2BWorkerTimeout is WorkerBehaviorTimeout
     assert issubclass(E2BWorkerTimeout, E2BExecutionError)
+
+
+def _write_worker_command(attempt_dir, *, timed_out: bool, exit_code: int) -> None:
+    import json
+
+    attempt_dir.mkdir(parents=True, exist_ok=True)
+    (attempt_dir / "worker-command.json").write_text(
+        json.dumps(
+            {
+                "exit_code": exit_code,
+                "stdout": "",
+                "stderr": "",
+                "timed_out": timed_out,
+            },
+            sort_keys=True,
+            indent=2,
+        )
+        + "\n"
+    )
+
+
+def test_completed_worker_command_without_quarantine_is_not_a_timeout(tmp_path):
+    """A normally exited worker is absence of timeout evidence, not a pairing fault."""
+
+    from qea.executors.execution_record import load_persisted_worker_timeout
+
+    attempt = _attempt()
+    attempt_dir = tmp_path / "run" / "attempts" / attempt.attempt_id
+    _write_worker_command(attempt_dir, timed_out=False, exit_code=0)
+
+    assert load_persisted_worker_timeout(attempt, tmp_path / "run") is None
+
+
+def test_timed_out_worker_command_without_quarantine_is_unpaired(tmp_path):
+    """Genuine timeout evidence still requires its quarantine counterpart."""
+
+    from qea.executors.execution_record import (
+        WorkerExecutionError,
+        load_persisted_worker_timeout,
+    )
+
+    attempt = _attempt()
+    attempt_dir = tmp_path / "run" / "attempts" / attempt.attempt_id
+    _write_worker_command(attempt_dir, timed_out=True, exit_code=124)
+
+    with pytest.raises(WorkerExecutionError, match="must be paired"):
+        load_persisted_worker_timeout(attempt, tmp_path / "run")
