@@ -640,10 +640,29 @@ def test_sandbox_evaluator_replaces_ambiguous_worker_attempt_without_replay(
     assert audit_path.read_bytes() == original_audit
 
 
-def test_sandbox_evaluator_replaces_worker_transport_failure_after_completed_audit(
+@pytest.mark.parametrize(
+    "worker_stderr",
+    (
+        (
+            "openai.APIError: Network connection lost.\n"
+            "RuntimeError: Error in agent execution: Network connection lost.\n"
+        ),
+        (
+            "File \"concurrent/futures/thread.py\", line 203, in "
+            "_adjust_thread_count\n"
+            "File \"threading.py\", line 994, in start\n"
+            "_start_new_thread(self._bootstrap, ())\n"
+            "RuntimeError: can't start new thread\n"
+            "RuntimeError: Error in agent execution: can't start new thread\n"
+        ),
+    ),
+    ids=("provider-transport", "worker-thread-exhaustion"),
+)
+def test_sandbox_evaluator_replaces_worker_infrastructure_failure_after_completed_audit(
     tmp_path,
+    worker_stderr,
 ):
-    """Catch a resume loop when the SDK rejects a proxy-completed stream."""
+    """Catch resume loops after a proxy-completed infrastructure failure."""
 
     from qea.loop_benchmark import QFBenchSandboxEvaluator, hash_worker_directory
 
@@ -688,10 +707,7 @@ def test_sandbox_evaluator_replaces_worker_transport_failure_after_completed_aud
     command = {
         "exit_code": 1,
         "stdout": "",
-        "stderr": (
-            "openai.APIError: Network connection lost.\n"
-            "RuntimeError: Error in agent execution: Network connection lost.\n"
-        ),
+        "stderr": worker_stderr,
         "timed_out": False,
     }
     command_path = original_dir / "worker-command.json"
@@ -750,6 +766,69 @@ def test_sandbox_evaluator_replaces_worker_transport_failure_after_completed_aud
     ).hexdigest()
     assert audit_path.read_bytes() == original_audit
     assert command_path.read_bytes() == original_command
+
+
+def test_attempt_recovery_rejects_unrecognized_completed_audit_worker_failure(
+    tmp_path,
+):
+    """Do not turn an ordinary worker exception into another model attempt."""
+
+    from qea.attempt_recovery import resolve_worker_attempt
+
+    logical_attempt = TaskAttempt.create(
+        run_id="completed-audit-ordinary-worker-error",
+        benchmark_commit="0" * 40,
+        task_id="ordinary-worker-error",
+        split="baseline_primary",
+        checkpoint="repetition-01-primary",
+        worker_digest="1" * 64,
+    )
+    attempt_dir = (
+        tmp_path
+        / logical_attempt.run_id
+        / "attempts"
+        / logical_attempt.attempt_id
+    )
+    attempt_dir.mkdir(parents=True)
+    completed = {
+        "schema_version": 1,
+        "request_identity_sha256": "a" * 64,
+        "model": "deepseek/deepseek-v4-flash-0731",
+        "started_at": "2026-08-04T09:39:22+00:00",
+        "finished_at": "2026-08-04T09:41:31+00:00",
+        "latency_ms": 129000,
+        "request_state": "completed",
+        "upstream_status_code": 200,
+        "provider_request_id": "request-1",
+        "input_tokens": 3350,
+        "output_tokens": 11945,
+        "total_tokens": 15295,
+        "provider_cost_usd": "0.01",
+        "failure_class": None,
+    }
+    (attempt_dir / "proxy-audit.jsonl").write_text(
+        json.dumps(completed, sort_keys=True) + "\n"
+    )
+    (attempt_dir / "worker-command.json").write_text(
+        json.dumps(
+            {
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": (
+                    "RuntimeError: Error in agent execution: "
+                    "can't start new thread\n"
+                ),
+                "timed_out": False,
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    )
+
+    assert resolve_worker_attempt(
+        logical_attempt, tmp_path / logical_attempt.run_id
+    ) == logical_attempt
+    assert not attempt_dir.joinpath("worker-attempt-replacement.json").exists()
 
 
 def _persist_timeout_evidence(

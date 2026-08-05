@@ -57,6 +57,17 @@ _WORKER_TRANSPORT_SIGNATURES = (
     "openai.APIError: Network connection lost.",
     "RuntimeError: Error in agent execution: Network connection lost.",
 )
+_WORKER_THREAD_EXHAUSTION_SIGNATURES = (
+    "concurrent/futures/thread.py",
+    "_adjust_thread_count",
+    "_start_new_thread(self._bootstrap, ())",
+    "RuntimeError: can't start new thread",
+    "RuntimeError: Error in agent execution: can't start new thread",
+)
+_RECOVERABLE_WORKER_INFRASTRUCTURE_SIGNATURES = (
+    _WORKER_TRANSPORT_SIGNATURES,
+    _WORKER_THREAD_EXHAUSTION_SIGNATURES,
+)
 
 
 class AttemptRecoveryError(RuntimeError):
@@ -133,7 +144,10 @@ def _completed_audit_transport_command(attempt_dir: Path) -> str | None:
     ):
         return None
     stderr = command["stderr"]
-    if not all(signature in stderr for signature in _WORKER_TRANSPORT_SIGNATURES):
+    if not any(
+        all(signature in stderr for signature in signatures)
+        for signatures in _RECOVERABLE_WORKER_INFRASTRUCTURE_SIGNATURES
+    ):
         return None
     return hashlib.sha256(raw).hexdigest()
 
