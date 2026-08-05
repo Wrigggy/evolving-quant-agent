@@ -69,6 +69,8 @@ def _latest_progress(run_dir: Path) -> tuple[int, int, int, float | None]:
     workers = list(run_dir.glob("attempts/*/worker-execution.json"))
     replacements = list(run_dir.glob("attempts/*/replacement.json"))
     progress = scores + workers + replacements
+    progress.extend(run_dir.glob("attempts/*/proxy-audit.jsonl"))
+    progress.extend(run_dir.glob("lifecycles/**/*.json"))
     for name in ("pilot-plan.json", "pilot-progress.json", "pilot-report.json"):
         path = run_dir / name
         if path.is_file():
@@ -98,10 +100,12 @@ def build_health(*, run_id: str, unit: str, run_dir: Path) -> dict[str, object]:
     if complete:
         category = "complete"
         needs_codex = False
-    elif active == "active" and (age is None or age <= 1200):
+    elif active in {"active", "activating"} and (
+        age is None or age <= 1200
+    ):
         category = "healthy"
         needs_codex = False
-    elif active == "active":
+    elif active in {"active", "activating"}:
         category = "stalled"
         needs_codex = True
     elif active == "failed" and restarts >= 3:

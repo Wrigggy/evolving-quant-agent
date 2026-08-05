@@ -51,3 +51,18 @@ def test_health_alerts_after_bounded_restart_budget(tmp_path, monkeypatch):
     health = build_health(run_id="pilot", unit="pilot.service", run_dir=tmp_path)
     assert health["category"] == "restart_budget_exhausted"
     assert health["needs_codex"] is True
+
+
+def test_health_treats_bounded_auto_restart_as_transient(tmp_path, monkeypatch):
+    from scripts.watch_qfbench_component_pilot import build_health
+
+    _state(
+        monkeypatch,
+        ActiveState="activating",
+        SubState="auto-restart",
+        Result="exit-code",
+        ExecMainStatus="1",
+    )
+    health = build_health(run_id="pilot", unit="pilot.service", run_dir=tmp_path)
+    assert health["category"] == "healthy"
+    assert health["needs_codex"] is False
