@@ -237,6 +237,15 @@ def main(argv: list[str] | None = None) -> int:
     if plan_path.is_file() and _json(plan_path) != plan:
         raise ValueError("persisted evolver-pilot plan differs")
     _atomic_json(plan_path, plan)
+    if not args.preflight_only:
+        _atomic_json(run_dir / "pilot-progress.json", {
+            "schema_version": 1,
+            "stage": args.stage,
+            "run_id": args.run_id,
+            "status": "starting",
+            "task_ids": list(selected_task_ids),
+            "evidence_sha256": evidence.sha256,
+        })
 
     config = load_rootless_full_harness_config(args.rootless_config)
     config = replace(
