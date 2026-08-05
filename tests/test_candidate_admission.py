@@ -85,6 +85,42 @@ input_schema:
     ))
 
 
+def _add_skill(candidate: Path):
+    skill = candidate / "skills/spec-driven-deliverables"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("""\
+---
+name: spec-driven-deliverables
+description: Load for tasks with dense output contracts and numerical checks.
+---
+
+Read the public specification, build the artifact, and validate its schema.
+""")
+    path = candidate / "agent.yaml"
+    path.write_text(path.read_text().replace(
+        "tracers:\n",
+        "skills:\n  - ./skills/spec-driven-deliverables\ntracers:\n",
+    ))
+
+
+def _add_middleware(candidate: Path, *, symbol: str = "CompletionGuard"):
+    (candidate / "middleware").mkdir()
+    (candidate / "middleware/__init__.py").write_text("")
+    (candidate / "middleware/completion_guard.py").write_text("""\
+from nexau.archs.main_sub.execution.hooks import Middleware
+
+class CompletionGuard(Middleware):
+    pass
+""")
+    path = candidate / "agent.yaml"
+    path.write_text(path.read_text().replace(
+        "tracers:\n",
+        "middlewares:\n"
+        f"  - import: middleware.completion_guard:{symbol}\n"
+        "tracers:\n",
+    ))
+
+
 def test_admits_prompt_and_complete_local_tool_binding(tmp_path):
     from qea.candidate_admission import AdmissionPolicy, admit_candidate
 
@@ -108,6 +144,66 @@ def test_admits_prompt_and_complete_local_tool_binding(tmp_path):
     assert "protected_config" in record.checks
     assert "local_bindings" in record.checks
     assert asdict(record)["failure"] is None
+
+
+def test_admits_reachable_skill_and_middleware_components(tmp_path):
+    from qea.candidate_admission import AdmissionPolicy, admit_candidate
+
+    seed, candidate = _seed_candidate(tmp_path)
+    _add_skill(candidate)
+    _add_middleware(candidate)
+
+    record = admit_candidate(seed, candidate, AdmissionPolicy.qfbench_full())
+
+    assert record.admitted is True
+    assert {"local_skills", "local_middlewares", "component_reachability"} <= set(
+        record.checks
+    )
+
+
+def test_rejects_false_component_schema_and_unreachable_python(tmp_path):
+    from qea.candidate_admission import (
+        AdmissionPolicy,
+        CandidateAdmissionError,
+        admit_candidate,
+    )
+
+    seed, candidate = _seed_candidate(tmp_path)
+    path = candidate / "agent.yaml"
+    path.write_text(path.read_text() + "middleware: []\n")
+    with pytest.raises(CandidateAdmissionError, match="unsupported top-level config"):
+        admit_candidate(seed, candidate, AdmissionPolicy.qfbench_full())
+
+    path.write_text(AGENT_YAML)
+    (candidate / "validator").mkdir()
+    (candidate / "validator/unused.py").write_text("def check():\n    return True\n")
+    with pytest.raises(CandidateAdmissionError, match="not reachable"):
+        admit_candidate(seed, candidate, AdmissionPolicy.qfbench_full())
+
+
+def test_rejects_missing_skill_contract_and_middleware_symbol(tmp_path):
+    from qea.candidate_admission import (
+        AdmissionPolicy,
+        CandidateAdmissionError,
+        admit_candidate,
+    )
+
+    seed, candidate = _seed_candidate(tmp_path)
+    skill = candidate / "skills/broken"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("No frontmatter.\n")
+    path = candidate / "agent.yaml"
+    path.write_text(path.read_text().replace(
+        "tracers:\n", "skills:\n  - ./skills/broken\ntracers:\n"
+    ))
+    with pytest.raises(CandidateAdmissionError, match="frontmatter"):
+        admit_candidate(seed, candidate, AdmissionPolicy.qfbench_full())
+
+    shutil.rmtree(candidate)
+    shutil.copytree(seed, candidate)
+    _add_middleware(candidate, symbol="MissingGuard")
+    with pytest.raises(CandidateAdmissionError, match="symbol.*missing"):
+        admit_candidate(seed, candidate, AdmissionPolicy.qfbench_full())
 
 
 @pytest.mark.parametrize(

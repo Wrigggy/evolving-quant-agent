@@ -10,7 +10,7 @@ benchmark task.
 
 ## The candidate is a directory, not a prompt
 
-You may create or edit files in any of these seven components. All of them are
+You may create or edit files in any of these nine component roles. All are
 writable now, whether or not they currently exist. A component that is absent
 from the candidate is an **unused option**, not a forbidden one.
 
@@ -20,11 +20,11 @@ from the candidate is an **unused option**, not a forbidden one.
 | `agent.yaml` | Tool declarations and bindings | You added or renamed a tool, or changed a tool's binding |
 | `tool_descriptions/` | Per-tool YAML: purpose, inputs, output shape, failure modes | The worker has a capability but misuses it, or calls it with wrong arguments |
 | `tools/` | Local Python the worker can call | The worker repeatedly hand-writes the same fragile logic, or needs a deterministic operation it keeps getting wrong |
-| `validator/` | Checks the worker runs against its own outputs before finishing | The worker produces near-miss deliverables — right computation, wrong shape, order, units, or rounding |
-| `skills/` | Reusable procedures for recurring task shapes | Several tasks share a workflow the worker rediscovers each time |
-| `memory/` | Durable notes the worker carries across its own run | The worker forgets a convention it already read, or re-derives the same fact repeatedly |
-| `middleware/` | Logic wrapping the worker's execution loop | The failure is in *control flow* — looping, giving up early, running out of turns, not acting |
-| `routing/` | Dispatch between different handling paths | Different task families need visibly different treatment |
+| `validator/` | Helper checks imported by a registered tool or middleware | The worker produces near-miss deliverables — right computation, wrong shape, order, units, or rounding |
+| `skills/` | NexAU `SKILL.md` procedures registered under `skills:` and loaded on demand | Several tasks share a workflow the worker rediscovers each time, but global injection would be too broad |
+| `memory/` | Helper state imported by a registered tool or middleware | The worker forgets a convention it already read, or re-derives the same fact repeatedly |
+| `middleware/` | NexAU execution-loop logic registered under plural `middlewares:` | The failure is in *control flow* — looping, giving up early, running out of turns, not acting |
+| `routing/` | Dispatch helpers imported by a registered tool or middleware | Different task families need visibly different treatment |
 
 Note the asymmetry, and do not let it decide for you: editing
 `systemprompt.md` is one small write, while adding a tool or validator means a
@@ -40,13 +40,11 @@ not by what is cheapest to write.
    traces and public evaluations for tasks that scored poorly. Identify *what
    kind* of failure dominates: wrong approach, wrong tool use, missing
    capability, malformed output, bad control flow, or forgotten context.
-3. **Read `reference/NEXAU_GUIDE.md`** before changing agent configuration or
-   tools.
+3. **Read `NEXAU_GUIDE.md` from the `reference` workspace** before changing
+   agent configuration, skills, middlewares, or tools. Do not look for the
+   reference inside the candidate workspace.
 4. **Name the component you will change and why**, before editing. State the
-   failure kind you diagnosed and which component addresses that kind. If the
-   history shows the same component was edited and rejected on the two most
-   recent iterations, **change component** — repeating a rejected axis with a
-   different wording is not a new hypothesis.
+   failure kind you diagnosed and which component addresses that kind.
 5. **Make the narrowest change that tests one distinct hypothesis.** Narrow means
    *one idea*, not *one file*. A validator plus its declaration plus its smoke
    test is one hypothesis. Rewriting the prompt and adding a tool at once is two.

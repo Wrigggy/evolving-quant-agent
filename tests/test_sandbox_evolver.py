@@ -445,8 +445,10 @@ def test_evolver_uses_atomic_combined_lease_proxy_only_spec_and_structured_argv(
     assert set(backend.uploads) == {
         "/qea/evolver-input.tar",
         "/qea/remote_evolver.py",
+        "/qea/runtime_bridge.py",
         "/qea/diagnosis.txt",
     }
+    assert b"def task_python(" in backend.uploads["/qea/runtime_bridge.py"]
     assert result.proxy_sandbox_id == "proxy-1"
     assert result.network_id == "network-1"
     assert result.backend == "fake-rootless"

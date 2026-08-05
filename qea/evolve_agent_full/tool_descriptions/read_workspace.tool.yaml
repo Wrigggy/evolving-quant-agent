@@ -1,13 +1,12 @@
 type: tool
 name: read_workspace
-description: Read a bounded line range from one UTF-8 candidate or evidence file.
+description: Read a bounded line range from one UTF-8 candidate, evidence, or immutable framework-reference file.
 input_schema:
   type: object
   properties:
-    source: {type: string, enum: [candidate, evidence]}
+    source: {type: string, enum: [candidate, evidence, reference]}
     file_path: {type: string, description: "Safe path relative to the selected workspace."}
     start_line: {type: integer, minimum: 1, default: 1}
     max_lines: {type: integer, minimum: 1, maximum: 2000, default: 400}
   required: [source, file_path]
   additionalProperties: false
-

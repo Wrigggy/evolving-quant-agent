@@ -16,8 +16,9 @@ import yaml
 
 _SECRET_NAMES = frozenset({".env", "id_rsa", "id_ed25519"})
 _TEXT_SUFFIXES = frozenset({".json", ".md", ".py", ".txt", ".yaml", ".yml"})
-_LOCAL_COMPONENT_KEYS = frozenset({
-    "middleware", "memory", "routing", "skills", "tools", "validator"
+_LOCAL_CONFIG_KEYS = frozenset({"middlewares", "skills"})
+_LOCAL_PYTHON_ROOTS = frozenset({
+    "memory", "middleware", "routing", "skills", "tools", "validator"
 })
 _PROTECTED_FIELDS = (
     "type",
@@ -240,7 +241,7 @@ def _validate_protected(seed: Path, candidate: Path, policy: AdmissionPolicy) ->
     for field in policy.protected_fields:
         if _dotted(seed_config, field) != _dotted(candidate_config, field):
             raise CandidateAdmissionError(f"protected field {field} changed")
-    allowed_keys = set(seed_config) | set(_LOCAL_COMPONENT_KEYS)
+    allowed_keys = set(seed_config) | set(_LOCAL_CONFIG_KEYS)
     extra = set(candidate_config) - allowed_keys
     if extra:
         raise CandidateAdmissionError(
@@ -282,7 +283,10 @@ def _validate_python(
             else:
                 imports = []
             for module in imports:
-                if module not in policy.allowed_import_roots and module != "tools":
+                if (
+                    module not in policy.allowed_import_roots
+                    and module not in _LOCAL_PYTHON_ROOTS
+                ):
                     raise CandidateAdmissionError(
                         f"undeclared import {module!r} in {item.path}"
                     )
@@ -330,11 +334,12 @@ def _validate_local_bindings(
     root: Path,
     config: dict,
     trees: dict[str, ast.Module],
-) -> None:
+) -> set[str]:
     tools = config.get("tools")
     if not isinstance(tools, list) or not tools:
         raise CandidateAdmissionError("candidate agent tools must be a non-empty list")
     names: set[str] = set()
+    local_modules: set[str] = set()
     for raw in tools:
         if not isinstance(raw, dict):
             raise CandidateAdmissionError("candidate agent tool entry must be an object")
@@ -368,6 +373,7 @@ def _validate_local_bindings(
             raise CandidateAdmissionError(
                 f"local binding module does not exist: {module!r}"
             )
+        local_modules.add(module)
         functions = {
             node.name: node for node in tree.body
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -394,6 +400,211 @@ def _validate_local_bindings(
                 raise CandidateAdmissionError(
                     f"binding signature for {name!r} cannot accept {', '.join(missing)}"
                 )
+    return local_modules
+
+
+def _validate_skills(root: Path, config: dict) -> None:
+    raw_skills = config.get("skills", [])
+    if not isinstance(raw_skills, list):
+        raise CandidateAdmissionError("candidate agent skills must be a list")
+    names: set[str] = set()
+    for raw in raw_skills:
+        if not isinstance(raw, str) or not raw:
+            raise CandidateAdmissionError("candidate skill path must be a non-empty string")
+        folder = _resolve_relative(root, raw, "skill")
+        try:
+            relative = folder.relative_to(root.resolve())
+        except ValueError as exc:  # pragma: no cover - guarded by _resolve_relative
+            raise CandidateAdmissionError(f"skill path escapes candidate: {raw!r}") from exc
+        if not relative.parts or relative.parts[0] != "skills":
+            raise CandidateAdmissionError(
+                f"candidate skill must live below skills/: {raw!r}"
+            )
+        skill_path = folder / "SKILL.md"
+        if not skill_path.is_file():
+            raise CandidateAdmissionError(f"candidate skill has no SKILL.md: {raw!r}")
+        text = skill_path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        if not lines or lines[0].strip() != "---":
+            raise CandidateAdmissionError(
+                f"candidate skill frontmatter is missing: {raw!r}"
+            )
+        try:
+            closing = next(
+                index for index, line in enumerate(lines[1:], start=1)
+                if line.strip() == "---"
+            )
+        except StopIteration as exc:
+            raise CandidateAdmissionError(
+                f"candidate skill frontmatter is unterminated: {raw!r}"
+            ) from exc
+        try:
+            metadata = yaml.safe_load("\n".join(lines[1:closing]))
+        except yaml.YAMLError as exc:
+            raise CandidateAdmissionError(
+                f"invalid candidate skill frontmatter {raw!r}: {exc}"
+            ) from exc
+        if not isinstance(metadata, dict):
+            raise CandidateAdmissionError(
+                f"candidate skill frontmatter must be an object: {raw!r}"
+            )
+        name = metadata.get("name")
+        description = metadata.get("description")
+        if not isinstance(name, str) or not name.strip():
+            raise CandidateAdmissionError(f"candidate skill name is missing: {raw!r}")
+        if not isinstance(description, str) or not description.strip():
+            raise CandidateAdmissionError(
+                f"candidate skill description is missing: {raw!r}"
+            )
+        if name in names:
+            raise CandidateAdmissionError(f"duplicate candidate skill name {name!r}")
+        names.add(name)
+
+
+def _middleware_binding(raw: object, *, index: int) -> str:
+    if isinstance(raw, str) and raw:
+        return raw
+    if not isinstance(raw, dict):
+        raise CandidateAdmissionError(
+            f"candidate middleware {index} must be a string or object"
+        )
+    extra = set(raw) - {"import", "params"}
+    if extra:
+        raise CandidateAdmissionError(
+            f"candidate middleware {index} has unsupported fields: {sorted(extra)}"
+        )
+    binding = raw.get("import")
+    params = raw.get("params")
+    if not isinstance(binding, str) or not binding:
+        raise CandidateAdmissionError(
+            f"candidate middleware {index} import is missing"
+        )
+    if params is not None and not isinstance(params, dict):
+        raise CandidateAdmissionError(
+            f"candidate middleware {index} params must be an object"
+        )
+    return binding
+
+
+def _validate_middlewares(
+    root: Path,
+    config: dict,
+    trees: dict[str, ast.Module],
+) -> set[str]:
+    raw_middlewares = config.get("middlewares", [])
+    if not isinstance(raw_middlewares, list):
+        raise CandidateAdmissionError("candidate agent middlewares must be a list")
+    local_modules: set[str] = set()
+    for index, raw in enumerate(raw_middlewares):
+        binding = _middleware_binding(raw, index=index)
+        module, separator, symbol = binding.partition(":")
+        if not separator or not _IDENTIFIER_RE.fullmatch(symbol):
+            raise CandidateAdmissionError(f"invalid middleware import {binding!r}")
+        if module.startswith("nexau."):
+            continue
+        if not module.startswith("middleware."):
+            raise CandidateAdmissionError(
+                f"local middleware import must be below middleware/: {binding!r}"
+            )
+        module_path = root / (module.replace(".", "/") + ".py")
+        relative = module_path.relative_to(root).as_posix()
+        tree = trees.get(relative)
+        if tree is None:
+            raise CandidateAdmissionError(
+                f"local middleware module does not exist: {module!r}"
+            )
+        symbols = {
+            node.name
+            for node in tree.body
+            if isinstance(
+                node,
+                (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef),
+            )
+        }
+        if symbol not in symbols:
+            raise CandidateAdmissionError(
+                f"middleware symbol {symbol!r} is missing from {module!r}"
+            )
+        local_modules.add(module)
+    return local_modules
+
+
+def _module_name(path: str) -> str:
+    parts = list(PurePosixPath(path).with_suffix("").parts)
+    if parts and parts[-1] == "__init__":
+        parts.pop()
+    return ".".join(parts)
+
+
+def _imported_local_modules(
+    module: str,
+    path: str,
+    tree: ast.Module,
+    known: set[str],
+) -> set[str]:
+    imported: set[str] = set()
+    pure = PurePosixPath(path)
+    package = module if pure.stem == "__init__" else module.rpartition(".")[0]
+    for node in ast.walk(tree):
+        candidates: list[str] = []
+        if isinstance(node, ast.Import):
+            candidates.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                package_parts = package.split(".") if package else []
+                trim = node.level - 1
+                if trim > len(package_parts):
+                    continue
+                base_parts = package_parts[: len(package_parts) - trim]
+                if node.module:
+                    base_parts.extend(node.module.split("."))
+                base = ".".join(base_parts)
+            else:
+                base = node.module or ""
+            if base:
+                candidates.append(base)
+                candidates.extend(f"{base}.{alias.name}" for alias in node.names)
+        for candidate in candidates:
+            if candidate in known:
+                imported.add(candidate)
+    return imported
+
+
+def _validate_component_reachability(
+    trees: dict[str, ast.Module],
+    entrypoints: set[str],
+) -> None:
+    modules = {
+        _module_name(path): (path, tree)
+        for path, tree in trees.items()
+        if _module_name(path)
+    }
+    known = set(modules)
+    edges = {
+        module: _imported_local_modules(module, path, tree, known)
+        for module, (path, tree) in modules.items()
+    }
+    reachable: set[str] = set()
+    pending = list(entrypoints)
+    while pending:
+        module = pending.pop()
+        if module in reachable:
+            continue
+        reachable.add(module)
+        pending.extend(edges.get(module, ()))
+        parts = module.split(".")
+        reachable.update(".".join(parts[:index]) for index in range(1, len(parts)))
+    checked_roots = {"memory", "middleware", "routing", "tools", "validator"}
+    unreachable = sorted(
+        module
+        for module in known
+        if module.split(".", 1)[0] in checked_roots and module not in reachable
+    )
+    if unreachable:
+        raise CandidateAdmissionError(
+            "candidate Python modules are not reachable from a declared tool or "
+            f"middleware: {unreachable}"
+        )
 
 
 def admit_candidate(
@@ -411,7 +622,13 @@ def admit_candidate(
     files = tuple(item for item, _ in scanned)
     config = _validate_protected(seed, candidate, policy)
     trees = _validate_python(candidate, files, policy)
-    _validate_local_bindings(candidate, config, trees)
+    tool_modules = _validate_local_bindings(candidate, config, trees)
+    _validate_skills(candidate, config)
+    middleware_modules = _validate_middlewares(candidate, config, trees)
+    _validate_component_reachability(
+        trees,
+        tool_modules | middleware_modules,
+    )
     checks = [
         "file_manifest",
         "protected_config",
@@ -419,6 +636,9 @@ def admit_candidate(
         "declared_imports",
         "subprocess_timeouts",
         "local_bindings",
+        "local_skills",
+        "local_middlewares",
+        "component_reachability",
     ]
     if exact_runtime is not None:
         exact_runtime(candidate)

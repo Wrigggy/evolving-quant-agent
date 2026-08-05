@@ -37,8 +37,10 @@ def _roots(tmp_path):
     evidence.mkdir()
     (evidence / "contract.json").write_text('{"mode":"rich"}\n')
     (evolver / "tools").mkdir(parents=True)
+    (evolver / "reference").mkdir()
     (evolver / "agent.yaml").write_text("name: evolver\n")
     (evolver / "tools/__init__.py").write_text("")
+    (evolver / "reference/NEXAU_GUIDE.md").write_text("framework guide\n")
     return candidate, evidence, evolver
 
 
@@ -238,8 +240,10 @@ def test_evolver_uses_secure_header_injected_network_and_candidate_only_output(t
     assert "sk-live-secret" not in next((tmp_path / "run").rglob("diagnosis.txt")).read_text()
     assert set(sandbox.files.data) >= {
         "/qea/remote_evolver.py",
+        "/qea/runtime_bridge.py",
         "/tmp/qea-evolver.tar",
     }
+    assert b"def task_python(" in sandbox.files.data["/qea/runtime_bridge.py"]
 
 
 def test_evolver_failure_still_kills_and_records_cleanup(tmp_path):
@@ -316,9 +320,11 @@ def test_remote_evolver_inserts_asset_root_and_archives_only_candidate(
     (candidate / "systemprompt.md").write_text("before\n")
     (evidence / "contract.json").write_text('{"mode":"rich"}\n')
     (evolver / "tools").mkdir(parents=True)
+    (evolver / "reference").mkdir()
     (evolver / "agent.yaml").write_text("name: evolver\n")
     (evolver / "tools/__init__.py").write_text("")
     (evolver / "tools/guarded_workspace.py").write_text("BOUND = True\n")
+    (evolver / "reference/NEXAU_GUIDE.md").write_text("framework guide\n")
 
     class FakeConfig:
         @classmethod
@@ -358,6 +364,10 @@ def test_remote_evolver_inserts_asset_root_and_archives_only_candidate(
     ) == 0
 
     assert "LLM_API_KEY" not in os.environ
+    assert os.environ["QEA_REFERENCE_ROOT"] == str(evolver / "reference")
+    assert os.environ["QEA_RUNTIME_ROOT"] == str(
+        Path(remote_evolver.__file__).resolve().parent
+    )
     with tarfile.open(result / "candidate.tar") as archive:
         assert sorted(archive.getnames()) == ["agent.yaml", "systemprompt.md"]
     assert json.loads((result / "prediction.json").read_text())["summary"] == "changed"

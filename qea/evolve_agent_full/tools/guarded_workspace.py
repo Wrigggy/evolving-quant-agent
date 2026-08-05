@@ -1,8 +1,8 @@
 """Capability-limited workspace tools for the full-harness evolver.
 
-The evolver may read its immutable evidence corpus and may read/write only the
-candidate worker tree.  It never receives a general-purpose shell or Python
-execution primitive.
+The evolver may read its immutable evidence and framework-reference corpora and
+may read/write only the candidate worker tree.  It never receives a
+general-purpose shell or Python execution primitive.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from typing import Any
 _ROOT_ENV = {
     "candidate": "QEA_CANDIDATE_ROOT",
     "evidence": "QEA_EVIDENCE_ROOT",
+    "reference": "QEA_REFERENCE_ROOT",
 }
 _MAX_LISTED_PATHS = 2_000
 _MAX_READ_BYTES = 256_000
@@ -44,6 +45,18 @@ def _root(source: str) -> Path:
     root = Path(raw)
     if not root.is_dir():
         raise GuardedWorkspaceError(f"workspace root does not exist: {source}")
+    return root.resolve(strict=True)
+
+
+def _runtime_root() -> Path:
+    raw = os.environ.get("QEA_RUNTIME_ROOT")
+    if not raw:
+        raise GuardedWorkspaceError(
+            "required environment variable QEA_RUNTIME_ROOT is unset"
+        )
+    root = Path(raw)
+    if not root.is_dir():
+        raise GuardedWorkspaceError("runtime root does not exist")
     return root.resolve(strict=True)
 
 
@@ -114,7 +127,7 @@ def _read_text(path: Path) -> str:
 
 
 def list_workspace(source: str, pattern: str = "**/*") -> dict[str, Any]:
-    """List regular UTF-8 candidate or evidence files matching a safe glob."""
+    """List files in a candidate, evidence, or framework-reference workspace."""
 
     relative_pattern = _relative(pattern, label="pattern")
     root = _root(source)
@@ -143,7 +156,7 @@ def read_workspace(
     start_line: int = 1,
     max_lines: int = 400,
 ) -> dict[str, Any]:
-    """Read a bounded line range from a candidate or evidence text file."""
+    """Read a bounded line range from an authorized workspace text file."""
 
     if start_line < 1 or not 1 <= max_lines <= 2_000:
         raise GuardedWorkspaceError("start_line must be >= 1 and max_lines must be 1..2000")
@@ -302,6 +315,7 @@ def smoke_candidate_tool(
         raise GuardedWorkspaceError("args_json must decode to an object")
 
     root = _root("candidate")
+    runtime_root = _runtime_root()
     importlib.invalidate_caches()
     runner = (
         "import importlib,json,sys;"
@@ -312,7 +326,7 @@ def smoke_candidate_tool(
     )
     env = {
         "PATH": os.environ.get("PATH", ""),
-        "PYTHONPATH": str(root),
+        "PYTHONPATH": os.pathsep.join((str(root), str(runtime_root))),
         "PYTHONDONTWRITEBYTECODE": "1",
         "LANG": "C.UTF-8",
     }
@@ -347,4 +361,3 @@ def smoke_candidate_tool(
             or len(completed.stderr) > _MAX_PROCESS_OUTPUT_BYTES
         ),
     }
-

@@ -1,11 +1,10 @@
 type: tool
 name: list_workspace
-description: List regular files in the candidate or evidence workspace with a safe relative glob.
+description: List regular files in the candidate, evidence, or immutable framework-reference workspace with a safe relative glob.
 input_schema:
   type: object
   properties:
-    source: {type: string, enum: [candidate, evidence]}
+    source: {type: string, enum: [candidate, evidence, reference]}
     pattern: {type: string, description: "Relative glob such as **/* or tools/*.py."}
   required: [source]
   additionalProperties: false
-

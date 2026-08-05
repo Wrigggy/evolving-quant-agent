@@ -8,17 +8,27 @@ import pytest
 def guarded_roots(tmp_path, monkeypatch):
     candidate = tmp_path / "candidate"
     evidence = tmp_path / "evidence"
+    reference = tmp_path / "reference"
+    runtime = tmp_path / "runtime"
     candidate.mkdir()
     evidence.mkdir()
+    reference.mkdir()
+    runtime.mkdir()
     (candidate / "systemprompt.md").write_text("Solve carefully.\n")
     (evidence / "overview.md").write_text(
         "task-a failed its public deliverable requirement.\n"
     )
+    (reference / "NEXAU_GUIDE.md").write_text("Use skills and middlewares.\n")
+    (runtime / "runtime_bridge.py").write_text(
+        "def marker():\n    return 'worker-runtime'\n"
+    )
     access_log = tmp_path / "access.jsonl"
     monkeypatch.setenv("QEA_CANDIDATE_ROOT", str(candidate))
     monkeypatch.setenv("QEA_EVIDENCE_ROOT", str(evidence))
+    monkeypatch.setenv("QEA_REFERENCE_ROOT", str(reference))
+    monkeypatch.setenv("QEA_RUNTIME_ROOT", str(runtime))
     monkeypatch.setenv("QEA_ACCESS_LOG", str(access_log))
-    return candidate, evidence, access_log
+    return candidate, evidence, reference, runtime, access_log
 
 
 def test_read_write_replace_and_list_candidate(guarded_roots):
@@ -29,7 +39,7 @@ def test_read_write_replace_and_list_candidate(guarded_roots):
         write_candidate,
     )
 
-    candidate, _, _ = guarded_roots
+    candidate, _, _, _, _ = guarded_roots
     listing = list_workspace(source="candidate", pattern="**/*")
     assert listing["paths"] == ["systemprompt.md"]
     assert read_workspace(
@@ -59,7 +69,7 @@ def test_evidence_reads_and_searches_append_access_audit(guarded_roots):
         search_evidence,
     )
 
-    _, _, access_log = guarded_roots
+    _, _, _, _, access_log = guarded_roots
     read = read_workspace(source="evidence", file_path="overview.md")
     search = search_evidence(pattern="deliverable", max_hits=10)
 
@@ -69,6 +79,21 @@ def test_evidence_reads_and_searches_append_access_audit(guarded_roots):
     assert [record["operation"] for record in records] == ["read", "search"]
     assert all(record["source"] == "evidence" for record in records)
     assert records[0]["relative_path"] == "overview.md"
+
+
+def test_reference_is_read_only_and_audited(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        list_workspace,
+        read_workspace,
+    )
+
+    _, _, _, _, access_log = guarded_roots
+    assert list_workspace(source="reference")["paths"] == ["NEXAU_GUIDE.md"]
+    assert "middlewares" in read_workspace(
+        source="reference", file_path="NEXAU_GUIDE.md"
+    )["content"]
+    records = [json.loads(line) for line in access_log.read_text().splitlines()]
+    assert [record["source"] for record in records] == ["reference", "reference"]
 
 
 @pytest.mark.parametrize(
@@ -94,7 +119,7 @@ def test_rejects_symlink_read_and_write_escape(guarded_roots, tmp_path):
         write_candidate,
     )
 
-    candidate, evidence, _ = guarded_roots
+    candidate, evidence, _, _, _ = guarded_roots
     outside = tmp_path / "outside.txt"
     outside.write_text("outside\n")
     (candidate / "escape.txt").symlink_to(outside)
@@ -135,7 +160,9 @@ def test_smoke_candidate_tool_imports_calls_and_times_out(guarded_roots):
         file_path="tools/fixture.py",
         content=(
             "import time\n\n"
+            "from runtime_bridge import marker\n\n"
             "def echo(value):\n    return {'value': value}\n\n"
+            "def runtime():\n    return {'value': marker()}\n\n"
             "def sleep(seconds):\n    time.sleep(seconds)\n    return {}\n"
         ),
     )
@@ -148,6 +175,13 @@ def test_smoke_candidate_tool_imports_calls_and_times_out(guarded_roots):
     )
     assert result["exit_code"] == 0
     assert json.loads(result["stdout"])["value"] == "ok"
+
+    runtime = smoke_candidate_tool(
+        module="tools.fixture",
+        function="runtime",
+        timeout_seconds=5,
+    )
+    assert json.loads(runtime["stdout"])["value"] == "worker-runtime"
 
     with pytest.raises(GuardedWorkspaceError, match="timed out"):
         smoke_candidate_tool(

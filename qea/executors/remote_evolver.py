@@ -122,12 +122,16 @@ def run(
     candidate_dir = candidate_dir.resolve(strict=True)
     evidence_dir = evidence_dir.resolve(strict=True)
     evolver_dir = evolver_dir.resolve(strict=True)
+    reference_dir = (evolver_dir / "reference").resolve(strict=True)
+    runtime_root = Path(__file__).resolve(strict=True).parent
     if str(evolver_dir) not in sys.path:
         sys.path.insert(0, str(evolver_dir))
     access_log = result_dir / "access_log.jsonl"
     access_log.touch()
     os.environ["QEA_CANDIDATE_ROOT"] = str(candidate_dir)
     os.environ["QEA_EVIDENCE_ROOT"] = str(evidence_dir)
+    os.environ["QEA_REFERENCE_ROOT"] = str(reference_dir)
+    os.environ["QEA_RUNTIME_ROOT"] = str(runtime_root)
     os.environ["QEA_ACCESS_LOG"] = str(access_log)
     config = AgentConfig.from_yaml(config_path=evolver_dir / "agent.yaml")
     for name in ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL"):
