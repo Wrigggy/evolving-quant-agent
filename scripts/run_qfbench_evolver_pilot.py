@@ -159,15 +159,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--results-dir", type=Path, required=True)
     parser.add_argument("--worker-concurrency", type=int, default=4)
     parser.add_argument("--verifier-concurrency", type=int, default=3)
+    parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--approve-external-run", action="store_true")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if not args.approve_external_run and os.environ.get(
-        "QEA_PAID_EVAL_AUTO_APPROVE"
-    ) != "1":
+    if (
+        not args.preflight_only
+        and not args.approve_external_run
+        and os.environ.get("QEA_PAID_EVAL_AUTO_APPROVE") != "1"
+    ):
         raise ValueError("external evolver/worker execution was not approved")
     source_evidence = authorize_evidence_tree(args.evidence_dir)
     selection = _json(source_evidence.root / "selection.json")
@@ -250,6 +253,22 @@ def main(argv: list[str] | None = None) -> int:
         results_root=results_root,
         include_evolver=True,
     )
+    if args.preflight_only:
+        runtime.close()
+        report = {
+            "schema_version": 1,
+            "stage": args.stage,
+            "run_id": args.run_id,
+            "status": "preflight_complete",
+            "selection": selection,
+            "task_ids": list(selected_task_ids),
+            "evidence_sha256": evidence.sha256,
+            "model_request_count": 0,
+        }
+        _atomic_json(run_dir / "pilot-preflight.json", report)
+        _atomic_json(run_dir / "pilot-progress.json", report)
+        print(json.dumps(report, sort_keys=True, indent=2))
+        return 0
     try:
         proposal = runtime.proposer.propose(
             candidate_dir=backbone,
