@@ -29,6 +29,22 @@ class EvidenceRecord:
     members: tuple[str, ...]
 
 
+_PRIVATE_EVIDENCE_PARTS = frozenset({
+    "gold",
+    "official-tests",
+    "official_tests",
+    "reference-data",
+    "reference_data",
+    "solution",
+    "tests",
+    "trusted-verifier",
+    "trusted_verifier",
+})
+_SECRET_LIKE_NAMES = frozenset({
+    ".env", "credentials.json", "id_ed25519", "id_rsa", "model-token"
+})
+
+
 def _write_json(path: Path, payload) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -195,6 +211,44 @@ def _digest_tree(root: Path) -> tuple[str, tuple[str, ...]]:
         digest.update(payload)
         members.append(relative)
     return digest.hexdigest(), tuple(members)
+
+
+def authorize_evidence_tree(root: str | Path) -> EvidenceRecord:
+    """Bind a prebuilt public pilot corpus to the sandbox evidence contract."""
+
+    supplied_root = Path(root).expanduser()
+    if supplied_root.is_symlink():
+        raise EvidenceContractError("evidence root must not be a symlink")
+    evidence_root = supplied_root.resolve()
+    if not evidence_root.is_dir():
+        raise EvidenceContractError("evidence root must be a regular directory")
+    access_log = evidence_root / "access_log.jsonl"
+    if not access_log.is_file() or access_log.is_symlink():
+        raise EvidenceContractError("evidence requires a root access_log.jsonl")
+    if access_log.read_bytes() != b"":
+        raise EvidenceContractError("evidence access_log.jsonl must start empty")
+    for path in sorted(evidence_root.rglob("*")):
+        relative = path.relative_to(evidence_root)
+        if path.is_symlink():
+            raise EvidenceContractError(f"symlink is forbidden in evidence: {relative}")
+        if any(part.casefold() in _PRIVATE_EVIDENCE_PARTS for part in relative.parts):
+            raise EvidenceContractError(f"private evaluator path in evidence: {relative}")
+        if path.name.casefold() in _SECRET_LIKE_NAMES:
+            raise EvidenceContractError(f"secret-like evidence path: {relative}")
+        if path.is_dir():
+            continue
+        if not path.is_file():
+            raise EvidenceContractError(
+                f"evidence member is not a regular file: {relative}"
+            )
+        try:
+            path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            raise EvidenceContractError(
+                f"pilot evidence must be UTF-8 text: {relative}"
+            ) from exc
+    sha256, members = _digest_tree(evidence_root)
+    return EvidenceRecord(root=evidence_root, sha256=sha256, members=members)
 
 
 def build_evolution_evidence(
