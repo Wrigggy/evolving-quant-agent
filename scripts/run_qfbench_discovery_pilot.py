@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -51,6 +52,31 @@ def _atomic_json(path: Path, payload: object) -> None:
         json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8"
     )
     os.replace(temporary, path)
+
+
+def _stage_evidence(record, run_dir: Path):
+    """Copy authorized evidence under the exact run root before sandbox use."""
+
+    destination = run_dir / "authorized-evidence"
+    if destination.exists():
+        staged = authorize_evidence_tree(destination)
+        if staged.sha256 != record.sha256 or staged.members != record.members:
+            raise ValueError("staged evidence differs from the authorized source")
+        return staged
+
+    temporary = run_dir / "authorized-evidence.tmp"
+    if temporary.exists():
+        raise ValueError("temporary staged evidence already exists")
+    try:
+        shutil.copytree(record.root, temporary, symlinks=False)
+        os.replace(temporary, destination)
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+    staged = authorize_evidence_tree(destination)
+    if staged.sha256 != record.sha256 or staged.members != record.members:
+        raise ValueError("staged evidence differs from the authorized source")
+    return staged
 
 
 def _cost(run_dir: Path) -> dict[str, object]:
@@ -193,12 +219,13 @@ def main(argv: list[str] | None = None) -> int:
             "status": "proposing",
         },
     )
+    staged_evidence = _stage_evidence(evidence, run_dir)
     try:
         if runtime.proposer is None:
             raise RuntimeError("discovery pilot runtime has no evolver proposer")
         proposal = runtime.proposer.propose(
             candidate_dir=backbone,
-            evidence_dir=evidence,
+            evidence_dir=staged_evidence,
             evolver_dir=evolver_dir,
             diagnosis={
                 "stage": "DISCOVERY",

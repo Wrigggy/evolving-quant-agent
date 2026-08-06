@@ -200,3 +200,21 @@ def test_post_a3_evidence_builder_keeps_raw_arms_matched_and_adds_debugger_index
     assert public["official_reward"] == 1.0
     assert authorize_evidence_tree(raw).sha256 == raw_report["sha256"]
     assert authorize_evidence_tree(indexed).sha256 == indexed_report["sha256"]
+
+
+def test_discovery_pilot_stages_evidence_under_exact_run(tmp_path):
+    from scripts.run_qfbench_discovery_pilot import _stage_evidence
+
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "access_log.jsonl").write_text("", encoding="utf-8")
+    (source / "fact.json").write_text('{"value": 1}\n', encoding="utf-8")
+    record = authorize_evidence_tree(source)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    staged = _stage_evidence(record, run_dir)
+
+    assert staged.root == (run_dir / "authorized-evidence").resolve()
+    assert staged.sha256 == record.sha256
+    assert staged.members == record.members
