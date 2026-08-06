@@ -1,7 +1,7 @@
 # QEA Repository Memory
 
 > Canonical research and architecture memory for future contributors and agents.
-> Last updated: 2026-08-03. This file records current decisions, not merely historical discussion.
+> Last updated: 2026-08-07. This file records current decisions, not merely historical discussion.
 
 ## How to Use This Memory
 
@@ -107,6 +107,28 @@ Public AutoDL “no-GPU mode” is **not** an E2B replacement for this project. 
 It may serve as a cheap manual watchdog, log viewer, or very low-concurrency coordinator after all heavy work is elsewhere. It cannot run high-parallel NexAU agents or preserve official QFBench Docker/Harbor semantics. If E2B must be avoided, use a persistent Docker-capable CPU VM (starting around 8 vCPU and 16–32 GB RAM), not AutoDL no-GPU mode.
 
 ## Current Evidence and Unfinished Work
+
+### 2026-08-07 exploratory evolver-discovery baseline
+
+The A1–A3 sequence established structural recombination and activation evidence,
+but it did not exercise broad autonomous full-harness discovery: A1 was an
+explicit skill mechanism test, while A2/A3 applied the same translocation
+operator to a source parent whose useful behavior lived in the system prompt.
+A3 activated the translocated skill on all four selected tasks, improved one
+task, preserved two, and regressed `fomc-tone-event-study`; activation routing
+was therefore not localized.
+
+For the next exploratory mechanism check, treat a strong evolver as the normal
+engineering baseline. Use GPT-5.4 xhigh reasoning, a longer bounded tool loop,
+agent-legible quant evidence queries, explicit candidate component/binding
+inspection, and a fail-closed evidence-backed write unlock. The debugger is a
+deterministic evidence librarian rather than a root-cause oracle. Compare one
+raw-evidence proposal with one indexed-evidence proposal on the same post-A3
+candidate, then score admitted candidates separately with the unchanged pinned
+DeepSeek worker route. This is an engineering canary, not a paper result or a
+formal statistical protocol. Full rationale and boundaries:
+[decision](decisions/2026-08-07-quant-evolver-discovery-canary.md) and
+[research note](reports/2026-08-07-agent-legible-evidence-and-discovery-research.md).
 
 Confirmed repository evidence:
 

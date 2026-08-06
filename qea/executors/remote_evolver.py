@@ -34,6 +34,15 @@ def _message_text(message) -> str:
         return str(getattr(message, "content", "") or "")
 
 
+def _role_name(message) -> str:
+    raw = getattr(message, "role", "")
+    value = getattr(raw, "value", raw)
+    role = str(value).casefold()
+    if "." in role:
+        role = role.rsplit(".", 1)[-1]
+    return role
+
+
 def _json_object(text: str) -> dict[str, Any] | None:
     decoder = json.JSONDecoder()
     for index, character in enumerate(text):
@@ -85,8 +94,9 @@ def _archive_candidate(candidate_dir: Path, output_path: Path) -> tuple[str, ...
     return tuple(members)
 
 
-def _access_summary(path: Path) -> dict[str, Any]:
+def _access_summary(path: Path, evidence_dir: Path) -> dict[str, Any]:
     operations: Counter[str] = Counter()
+    bytes_by_source: Counter[str] = Counter()
     evidence_paths: set[str] = set()
     records = 0
     if path.is_file():
@@ -97,12 +107,28 @@ def _access_summary(path: Path) -> dict[str, Any]:
                 continue
             records += 1
             operations[str(record.get("operation", "unknown"))] += 1
+            source = str(record.get("source", "unknown"))
+            returned = record.get("bytes_returned", 0)
+            if isinstance(returned, int) and returned >= 0:
+                bytes_by_source[source] += returned
             if record.get("source") == "evidence":
                 evidence_paths.add(str(record.get("relative_path", "")))
+    evidence_members = sorted(
+        path.relative_to(evidence_dir).as_posix()
+        for path in evidence_dir.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    )
+    exact_paths = sorted(set(evidence_members) & evidence_paths)
     return {
         "records": records,
         "operations": dict(sorted(operations.items())),
+        "bytes_returned_by_source": dict(sorted(bytes_by_source.items())),
         "evidence_paths": sorted(evidence_paths),
+        "evidence_member_count": len(evidence_members),
+        "exact_evidence_paths": exact_paths,
+        "exact_evidence_access_ratio": (
+            len(exact_paths) / len(evidence_members) if evidence_members else None
+        ),
     }
 
 
@@ -163,7 +189,7 @@ def run(
     trace_path = result_dir / "raw_trace.jsonl"
     with trace_path.open("w", encoding="utf-8") as trace:
         for item in agent.full_trace or ():
-            role = str(getattr(item, "role", ""))
+            role = _role_name(item)
             content = _redact(_message_text(item))
             record = json.dumps(
                 {"role": role, "content": content}, ensure_ascii=False
@@ -192,11 +218,37 @@ def run(
     (result_dir / "prediction.json").write_text(
         json.dumps(prediction, sort_keys=True, indent=2) + "\n"
     )
-    access_summary = _access_summary(access_log)
+    access_summary = _access_summary(access_log, evidence_dir)
     (result_dir / "access-summary.json").write_text(
         json.dumps(access_summary, sort_keys=True, indent=2) + "\n"
     )
     members = _archive_candidate(candidate_dir, result_dir / "candidate.tar")
+    discovery_state_path = result_dir / "discovery-hypothesis.json"
+    discovery_state = None
+    if discovery_state_path.is_file():
+        try:
+            discovery_state = json.loads(discovery_state_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            discovery_state = {"parse_error": "invalid discovery hypothesis JSON"}
+    try:
+        from evolver_discovery import measure_discovery_quality
+    except ModuleNotFoundError:  # Local repository tests; sandbox uses /qea module.
+        from qea.evolver_discovery import measure_discovery_quality
+
+    evidence_members = tuple(
+        path.relative_to(evidence_dir).as_posix()
+        for path in evidence_dir.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    )
+    discovery_quality = measure_discovery_quality(
+        prediction=prediction,
+        access_summary=access_summary,
+        discovery_state=discovery_state,
+        evidence_members=evidence_members,
+    )
+    (result_dir / "discovery-quality.json").write_text(
+        json.dumps(discovery_quality, sort_keys=True, indent=2) + "\n"
+    )
     summary = {
         "turns": turns,
         "tool_calls": tool_calls,
@@ -208,6 +260,8 @@ def run(
         "secs": round(time.time() - started, 3),
         "model_usage": usages or None,
         "model_usage_reason": None if usages else "not exposed by NexAU tracer",
+        "discovery": discovery_quality,
+        "discovery_hypothesis": discovery_state,
     }
     (result_dir / "summary.json").write_text(
         json.dumps(summary, sort_keys=True, indent=2) + "\n"

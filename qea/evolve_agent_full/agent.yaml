@@ -4,7 +4,7 @@ max_context_tokens: 200000
 system_prompt: ./systemprompt.md
 system_prompt_type: jinja
 tool_call_mode: openai
-max_iterations: 30
+max_iterations: 200
 
 llm_config:
   model: ${env.LLM_MODEL}
@@ -15,6 +15,10 @@ llm_config:
   stream: true
   api_type: openai_chat_completion
   timeout: 180
+  extra_body:
+    reasoning:
+      effort: xhigh
+      exclude: true
 
 tools:
   - name: list_workspace
@@ -26,6 +30,21 @@ tools:
   - name: search_evidence
     yaml_path: ./tool_descriptions/search_evidence.tool.yaml
     binding: tools.guarded_workspace:search_evidence
+  - name: map_evidence
+    yaml_path: ./tool_descriptions/map_evidence.tool.yaml
+    binding: tools.guarded_workspace:map_evidence
+  - name: trace_slice
+    yaml_path: ./tool_descriptions/trace_slice.tool.yaml
+    binding: tools.guarded_workspace:trace_slice
+  - name: compare_evidence
+    yaml_path: ./tool_descriptions/compare_evidence.tool.yaml
+    binding: tools.guarded_workspace:compare_evidence
+  - name: inspect_candidate
+    yaml_path: ./tool_descriptions/inspect_candidate.tool.yaml
+    binding: tools.guarded_workspace:inspect_candidate
+  - name: unlock_candidate
+    yaml_path: ./tool_descriptions/unlock_candidate.tool.yaml
+    binding: tools.guarded_workspace:unlock_candidate
   - name: write_candidate
     yaml_path: ./tool_descriptions/write_candidate.tool.yaml
     binding: tools.guarded_workspace:write_candidate

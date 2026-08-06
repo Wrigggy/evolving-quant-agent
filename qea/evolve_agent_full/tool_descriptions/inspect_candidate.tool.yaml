@@ -1,0 +1,7 @@
+type: tool
+name: inspect_candidate
+description: Inspect the candidate's component map, registrations, local bindings, YAML shape, and Python syntax; call before and after editing.
+input_schema:
+  type: object
+  properties: {}
+  additionalProperties: false

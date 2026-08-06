@@ -57,6 +57,7 @@ from .sandbox_runtime import (
 
 _REMOTE_RUNNER = Path(__file__).with_name("remote_evolver.py")
 _RUNTIME_BRIDGE = Path(__file__).parents[1] / "runtime_bridge.py"
+_DISCOVERY_METRICS = Path(__file__).parents[1] / "evolver_discovery.py"
 _REQUIRED_TMPFS = frozenset({"/tmp", "/qea"})
 _TASK_ID = "full-harness-evolver"
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -1270,6 +1271,7 @@ class SandboxFullHarnessProposer:
                         ("/qea/evolver-input.tar", input_bundle.path.read_bytes()),
                         ("/qea/remote_evolver.py", _REMOTE_RUNNER.read_bytes()),
                         ("/qea/runtime_bridge.py", _RUNTIME_BRIDGE.read_bytes()),
+                        ("/qea/evolver_discovery.py", _DISCOVERY_METRICS.read_bytes()),
                         ("/qea/diagnosis.txt", diagnosis_payload),
                     ):
                         backend_call(

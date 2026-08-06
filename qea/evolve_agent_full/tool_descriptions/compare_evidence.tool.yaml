@@ -1,0 +1,11 @@
+type: tool
+name: compare_evidence
+description: Produce a bounded unified diff between two exact authorized evidence files, such as successful and failed traces or candidate versions.
+input_schema:
+  type: object
+  properties:
+    left_path: {type: string, description: "Exact safe evidence path used as the left side."}
+    right_path: {type: string, description: "Exact safe evidence path used as the right side."}
+    max_lines: {type: integer, minimum: 1, maximum: 2000, default: 400}
+  required: [left_path, right_path]
+  additionalProperties: false

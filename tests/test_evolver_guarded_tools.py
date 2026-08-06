@@ -18,17 +18,46 @@ def guarded_roots(tmp_path, monkeypatch):
     (evidence / "overview.md").write_text(
         "task-a failed its public deliverable requirement.\n"
     )
+    (evidence / "counterexample.md").write_text(
+        "task-b succeeded without the proposed workflow.\n"
+    )
     (reference / "NEXAU_GUIDE.md").write_text("Use skills and middlewares.\n")
     (runtime / "runtime_bridge.py").write_text(
         "def marker():\n    return 'worker-runtime'\n"
     )
-    access_log = tmp_path / "access.jsonl"
+    access_log = tmp_path / "access_log.jsonl"
     monkeypatch.setenv("QEA_CANDIDATE_ROOT", str(candidate))
     monkeypatch.setenv("QEA_EVIDENCE_ROOT", str(evidence))
     monkeypatch.setenv("QEA_REFERENCE_ROOT", str(reference))
     monkeypatch.setenv("QEA_RUNTIME_ROOT", str(runtime))
     monkeypatch.setenv("QEA_ACCESS_LOG", str(access_log))
     return candidate, evidence, reference, runtime, access_log
+
+
+def _unlock(component="tools"):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        read_workspace,
+        unlock_candidate,
+    )
+
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    return unlock_candidate(
+        hypothesis={
+            "hypotheses_considered": [
+                "the worker lacks a deterministic operation",
+                "the worker is misreading the deliverable contract",
+            ],
+            "selected_mechanism": "a deterministic operation removes repeated error",
+            "evidence_refs": ["overview.md", "counterexample.md"],
+            "counterevidence": "task-b succeeded without the operation",
+            "uncertainty": "only two public traces are available",
+            "discriminating_probe": "compare artifact construction in both traces",
+            "component": component,
+            "prediction": {"task-a": "artifact construction becomes deterministic"},
+            "risk_tasks": ["task-b"],
+        }
+    )
 
 
 def test_read_write_replace_and_list_candidate(guarded_roots):
@@ -45,6 +74,7 @@ def test_read_write_replace_and_list_candidate(guarded_roots):
     assert read_workspace(
         source="candidate", file_path="systemprompt.md"
     )["content"] == "Solve carefully.\n"
+    assert _unlock()["unlocked"] is True
 
     written = write_candidate(
         file_path="tools/calc.py",
@@ -124,6 +154,7 @@ def test_rejects_symlink_read_and_write_escape(guarded_roots, tmp_path):
     outside.write_text("outside\n")
     (candidate / "escape.txt").symlink_to(outside)
     (evidence / "escape.txt").symlink_to(outside)
+    _unlock()
 
     with pytest.raises(GuardedWorkspaceError, match="symlink"):
         read_workspace(source="candidate", file_path="escape.txt")
@@ -139,6 +170,7 @@ def test_replace_requires_exact_expected_count(guarded_roots):
         replace_candidate,
     )
 
+    _unlock(component="systemprompt")
     with pytest.raises(GuardedWorkspaceError, match="expected 2 replacements, found 1"):
         replace_candidate(
             file_path="systemprompt.md",
@@ -155,6 +187,7 @@ def test_smoke_candidate_tool_imports_calls_and_times_out(guarded_roots):
         write_candidate,
     )
 
+    _unlock()
     write_candidate(file_path="tools/__init__.py", content="")
     write_candidate(
         file_path="tools/fixture.py",
@@ -204,10 +237,104 @@ def test_tool_descriptions_expose_only_guarded_operations():
         path.stem.removesuffix(".tool")
         for path in (root / "tool_descriptions").glob("*.tool.yaml")
     } == {
+        "compare_evidence",
+        "inspect_candidate",
         "list_workspace",
+        "map_evidence",
         "read_workspace",
         "replace_candidate",
         "search_evidence",
         "smoke_candidate_tool",
+        "trace_slice",
+        "unlock_candidate",
         "write_candidate",
     }
+
+
+def test_candidate_writes_require_evidence_backed_unlock(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        read_workspace,
+        unlock_candidate,
+        write_candidate,
+    )
+
+    with pytest.raises(GuardedWorkspaceError, match="writes are locked"):
+        write_candidate(file_path="memory/note.md", content="note\n")
+
+    read_workspace(source="evidence", file_path="overview.md")
+    with pytest.raises(GuardedWorkspaceError, match="read or inspected"):
+        unlock_candidate(
+            hypothesis={
+                "hypotheses_considered": ["one", "two"],
+                "selected_mechanism": "one",
+                "evidence_refs": ["overview.md", "counterexample.md"],
+                "counterevidence": "two",
+                "uncertainty": "limited evidence",
+                "discriminating_probe": "compare",
+                "component": "memory",
+                "prediction": "fewer repeated derivations",
+                "risk_tasks": [],
+            }
+        )
+
+    _unlock(component="memory")
+    assert write_candidate(
+        file_path="memory/note.md", content="note\n"
+    )["bytes_written"] == 5
+
+
+def test_discovery_queries_map_slice_and_compare_authorized_evidence(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        compare_evidence,
+        map_evidence,
+        trace_slice,
+    )
+
+    mapped = map_evidence()
+    assert mapped["file_count"] == 2
+    assert mapped["categories"] == {"other": 2}
+    assert [item["path"] for item in mapped["files"]] == [
+        "counterexample.md",
+        "overview.md",
+    ]
+
+    sliced = trace_slice(
+        file_path="overview.md", pattern="deliverable", context_lines=0
+    )
+    assert sliced["matches"][0]["match_line"] == 1
+    assert "task-a failed" in sliced["matches"][0]["content"]
+
+    compared = compare_evidence("overview.md", "counterexample.md")
+    assert "--- overview.md" in compared["diff"]
+    assert "+task-b succeeded" in compared["diff"]
+
+
+def test_inspect_candidate_reports_components_bindings_and_syntax(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import inspect_candidate
+
+    candidate, _, _, _, _ = guarded_roots
+    (candidate / "agent.yaml").write_text(
+        "tools:\n"
+        "  - name: calc\n"
+        "    yaml_path: ./tool_descriptions/calc.tool.yaml\n"
+        "    binding: tools.calc:add\n"
+        "skills:\n"
+        "  - ./skills/quant-contract\n"
+    )
+    (candidate / "tools").mkdir()
+    (candidate / "tools/calc.py").write_text(
+        "def add(a, b):\n    return a + b\n"
+    )
+    (candidate / "tool_descriptions").mkdir()
+    (candidate / "tool_descriptions/calc.tool.yaml").write_text(
+        "type: tool\nname: calc\n"
+    )
+    (candidate / "skills/quant-contract").mkdir(parents=True)
+    (candidate / "skills/quant-contract/SKILL.md").write_text("# Quant contract\n")
+
+    report = inspect_candidate()
+    assert report["valid"] is True
+    assert report["issues"] == []
+    assert "tools/calc.py" in report["components"]["tools"]
+    assert {item["kind"] for item in report["declarations"]} == {"tool", "skill"}

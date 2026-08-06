@@ -444,6 +444,7 @@ def test_evolver_uses_atomic_combined_lease_proxy_only_spec_and_structured_argv(
     assert b"Improve artifact validation." == backend.uploads["/qea/diagnosis.txt"]
     assert set(backend.uploads) == {
         "/qea/evolver-input.tar",
+        "/qea/evolver_discovery.py",
         "/qea/remote_evolver.py",
         "/qea/runtime_bridge.py",
         "/qea/diagnosis.txt",

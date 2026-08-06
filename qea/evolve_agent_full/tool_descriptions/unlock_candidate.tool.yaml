@@ -1,0 +1,32 @@
+type: tool
+name: unlock_candidate
+description: Unlock candidate writes after recording multiple hypotheses, exact evidence already inspected, counterevidence, uncertainty, a discriminating probe, component choice, falsifiable prediction, and risks.
+input_schema:
+  type: object
+  properties:
+    hypothesis:
+      type: object
+      properties:
+        hypotheses_considered:
+          type: array
+          minItems: 2
+          items: {type: string}
+        selected_mechanism: {type: string}
+        evidence_refs:
+          type: array
+          minItems: 2
+          items: {type: string}
+        counterevidence: {type: string}
+        uncertainty: {type: string}
+        discriminating_probe: {type: string}
+        component:
+          type: string
+          enum: [systemprompt, agent_config, tool_descriptions, tools, validator, skills, memory, middleware, routing]
+        prediction: {}
+        risk_tasks:
+          type: array
+          items: {type: string}
+      required: [hypotheses_considered, selected_mechanism, evidence_refs, counterevidence, uncertainty, discriminating_probe, component, prediction, risk_tasks]
+      additionalProperties: true
+  required: [hypothesis]
+  additionalProperties: false

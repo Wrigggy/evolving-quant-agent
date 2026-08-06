@@ -68,6 +68,7 @@ def _runtime_adapter_identity() -> dict[str, object]:
     package_root = Path(__file__).resolve().parent
     paths = {
         "evolver_runner": package_root / "executors" / "remote_evolver.py",
+        "evolver_discovery_metrics": package_root / "evolver_discovery.py",
         "worker_runner": package_root / "executors" / "remote_nexau_worker.py",
         "worker_runtime_bridge": package_root / "runtime_bridge.py",
     }

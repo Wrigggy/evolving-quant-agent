@@ -241,6 +241,7 @@ def test_evolver_uses_secure_header_injected_network_and_candidate_only_output(t
     assert set(sandbox.files.data) >= {
         "/qea/remote_evolver.py",
         "/qea/runtime_bridge.py",
+        "/qea/evolver_discovery.py",
         "/tmp/qea-evolver.tar",
     }
     assert b"def task_python(" in sandbox.files.data["/qea/runtime_bridge.py"]

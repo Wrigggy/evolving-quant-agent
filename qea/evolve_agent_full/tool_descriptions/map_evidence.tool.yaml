@@ -1,0 +1,8 @@
+type: tool
+name: map_evidence
+description: Build a bounded map of authorized evidence files, task coverage, evidence kinds, and compact JSON facts before drilling into exact files.
+input_schema:
+  type: object
+  properties:
+    max_files: {type: integer, minimum: 1, maximum: 1000, default: 500}
+  additionalProperties: false
