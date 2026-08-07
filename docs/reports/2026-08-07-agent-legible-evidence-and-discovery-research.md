@@ -4,6 +4,12 @@ Status: **source-audited framing plus an exploratory QFBench mechanism test in
 progress**. This note is not a paper result and does not claim that more exposed
 bytes monotonically improve an agent.
 
+> **Same-day correction.** The first version over-coupled the proposed canary to
+> AHE and one GPT-5.4/xhigh configuration. That design was superseded before a
+> successful proposal. AHE is related work and an attributed baseline, not the
+> implementation template or proposed novelty. The active design is
+> [QEA's model-configurable quant-discovery protocol in a self-hosted environment](../decisions/2026-08-07-self-hosted-model-configurable-quant-discovery.md).
+
 ## Conclusion first
 
 There is strong prior support for the narrower claim we need: an agent improves
@@ -39,7 +45,7 @@ hypothesis that evidence exposure and interaction design affect output quality.
 The transferable claim is about interface design, not about copying SWE-agent's
 commands.
 
-### AHE makes observability part of the evolution mechanism
+### AHE is relevant observability work, not our implementation template
 
 [Agentic Harness Engineering](https://arxiv.org/abs/2604.25850) organizes its
 closed loop around three matched forms of observability:
@@ -53,7 +59,9 @@ closed loop around three matched forms of observability:
 Its reported ablations localize gains primarily to tools, middleware, and
 long-term memory rather than the system prompt. This supports our concern that
 a prompt-only or prompt-to-skill study is not a test of full-harness discovery.
-AHE is still evidence from coding tasks, so transfer to QFBench must be measured.
+It does not license us to reuse AHE's complete control structure as our method.
+AHE remains coding-task evidence and a comparison point; QEA must define and
+test its own quant-specific evidence-to-intervention mechanism.
 
 ### Production agent practice favors maps and progressive disclosure
 
@@ -89,12 +97,13 @@ agent behavior over repeated trials rather than only final answers. For this
 exploratory canary, we use the trace to assess discovery behavior and retain the
 official QFBench scalar as the outcome; we do not expose private verifier inputs.
 
-## QEA mechanism derived from the sources
+## Independent QEA mechanism motivated by the problem
 
-The implemented baseline is intentionally “similar in spirit, not identical in
-form” to coding agents:
+The implemented mechanism is owned by QEA and treats the literature above as
+motivation and related work, not as a construction recipe:
 
-- GPT-5.4 with `xhigh` reasoning is used for the evolver proposal canary;
+- the exact evolver model/provider and supported deliberation request are bound
+  per run rather than hard-coded into the method;
 - the tool loop is expanded from 30 to 200 turns;
 - evidence is exposed through a map, contextual trace slicing, and exact-file
   comparison rather than an unrestricted shell;
@@ -106,8 +115,17 @@ form” to coding agents:
 
 The debugger is a deterministic evidence librarian. It creates an index and a
 change→activation→task-outcome graph but explicitly does not assert the root
-cause. The same high-reasoning evolver verifies the index against raw traces and
-then edits the harness, avoiding a lossy debugger-to-editor handoff.
+cause. The configured evolver verifies the index against raw traces before
+editing the harness, avoiding a lossy debugger-to-editor handoff.
+
+The inherited v0 AHE-derived falsification and manifest logic remains visibly
+attributed in the source and may be used as a baseline. It is not part of the
+candidate novelty claim. Nor do we claim generic long context, tool use,
+debugging, or structured traces. The research candidate is the combination of
+quant evidence topology, skeptical causal discovery, reachability-aware
+component choice, and an evidence-backed intervention contract. That candidate
+still needs a separate prior-art screen and ablation evidence before it can be
+described as novel.
 
 ## Exploratory test, not paper protocol
 
@@ -120,10 +138,10 @@ traces:
 | Raw | A1–A3 history, A3 diff, public scalar outcomes, process summaries, worker finals and traces | none |
 | Indexed | exactly the same raw evidence | deterministic debugger overview, task index, and change-outcome graph |
 
-Each arm receives one GPT-5.4 xhigh proposal. Admitted candidates are then
-scored in a separate run by the original pinned DeepSeek V4 Flash 0731 worker
-route on the four A3 tasks. This separation keeps the worker model fixed without
-requiring a production dual-model coordinator for an exploratory result.
+Each arm receives one proposal from the same explicitly selected self-hosted
+evolver model profile. Admitted candidates may then be scored by the same
+protected worker route on the four A3 tasks. This separation keeps the worker
+model fixed without making the evolver's model identity part of the method.
 
 The canary is considered useful if it demonstrates the complete observable loop:
 
@@ -152,4 +170,3 @@ competing-hypothesis count, counterevidence and uncertainty, the discriminating
 probe, prediction, and consistency between the write-unlock hypothesis and the
 final report. These are process measurements. Official task reward remains the
 outcome measurement.
-

@@ -1,10 +1,12 @@
 # QEA v0 — Evolving Quant Agent
 
-A **primitive but runnable** v0 of an evolutionary harness agent for quant/finance
-work. It reuses the `evolve -> falsify -> rollback` loop from a reproduced
-[Agentic Harness Engineering (AHE)](https://arxiv.org/abs/2604.25850) codebase,
-but swaps the component layer to quant semantics and drives evolution on the
-**GDPval finance/accounting** task set under a **soft rubric-percentage gate**.
+A quantitative-finance agent discovery, evolution, and verification project.
+The original runnable v0 explicitly reused the `evolve -> falsify -> rollback`
+loop from a reproduced
+[Agentic Harness Engineering (AHE)](https://arxiv.org/abs/2604.25850) codebase;
+that inherited baseline remains attributed and is not a QEA novelty claim.
+Current QFBench work develops a separate quant-specific discovery mechanism and
+runs it in QEA's self-hosted, evaluator-isolated environment.
 
 v0 is a **mechanism check, not a performance run.** Success is not a high score —
 it is that the closed loop demonstrably works (see [Acceptance](#acceptance)).

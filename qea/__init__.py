@@ -1,11 +1,11 @@
-"""QEA v0 — Evolving Quant Agent.
+"""QEA — Evolving Quant Agent.
 
-A task-family-aware evolutionary harness that reuses the AHE
-evolve -> falsify -> rollback loop with quant semantics. v0 targets one task
-family: the GDPval finance/accounting numeric (A-pile) tasks, with a soft-judged
-B-pile used only for transfer evaluation.
+A task-family-aware discovery, evolution, and verification harness for
+quantitative-finance agents. The original v0 includes an explicitly attributed
+AHE-derived falsification baseline; newer QFBench discovery mechanisms are kept
+methodologically separate from that provenance.
 
-See PLAN.md for the design and the four iron laws.
+See ``docs/PROJECT_MEMORY.md`` for the current architecture and decision record.
 """
 
 __version__ = "0.0.1"

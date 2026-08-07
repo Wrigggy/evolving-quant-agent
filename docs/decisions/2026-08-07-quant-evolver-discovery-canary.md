@@ -1,6 +1,12 @@
 # 2026-08-07 — Quant Evolver Discovery Canary
 
-Status: **implemented locally; paid rootless canary pending**.
+Status: **superseded before a mechanism run**.
+
+> Superseded later on 2026-08-07 by
+> [the self-hosted, model-configurable quant-discovery decision](2026-08-07-self-hosted-model-configurable-quant-discovery.md).
+> This record is retained to preserve how the abandoned GPT-5.4/AHE-shaped
+> canary was initially framed. No E2B discovery run and no successful model
+> proposal occurred under this decision.
 
 This decision extends the full-harness exposure work in
 [2026-08-05 evolver exposure and scheduler capacity](2026-08-05-evolver-exposure-and-scheduler-capacity.md)
@@ -76,4 +82,3 @@ that the model's diagnosis is correct.
 The paid canary will answer only whether the mechanism works well enough in this
 concrete post-A3 case to justify further engineering. It is not sized for a
 generalization or statistical-significance claim.
-

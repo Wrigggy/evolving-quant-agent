@@ -118,6 +118,9 @@ A3 activated the translocated skill on all four selected tasks, improved one
 task, preserved two, and regressed `fomc-tone-event-study`; activation routing
 was therefore not localized.
 
+**Superseded later on 2026-08-07:** the following paragraph records the initial
+canary framing but is not the active decision.
+
 For the next exploratory mechanism check, treat a strong evolver as the normal
 engineering baseline. Use GPT-5.4 xhigh reasoning, a longer bounded tool loop,
 agent-legible quant evidence queries, explicit candidate component/binding
@@ -129,6 +132,25 @@ DeepSeek worker route. This is an engineering canary, not a paper result or a
 formal statistical protocol. Full rationale and boundaries:
 [decision](decisions/2026-08-07-quant-evolver-discovery-canary.md) and
 [research note](reports/2026-08-07-agent-legible-evidence-and-discovery-research.md).
+
+### 2026-08-07 self-hosted, model-configurable quant discovery
+
+Do not reproduce AHE as the proposed QEA method. Keep the original v0's
+AHE-derived loop and verdict/manifest code explicitly attributed and outside the
+novelty claim. AHE is related work and may be a baseline; the active research
+object is QEA's own quant-specific evidence-to-intervention protocol: a quant
+evidence graph, deterministic debugger/indexer, competing causal hypotheses,
+counterevidence and uncertainty, a discriminating probe, reachability-aware
+component choice, and a fail-closed write contract.
+
+Run this track only in the self-hosted rootless Docker environment. Do not use
+E2B for the discovery canary. Bind the exact evolver model and provider through
+the rootless allowlisted route and materialize the supported deliberation level
+per run; model identity and reasoning level are experimental configuration, not
+the method. Preserve source/materialized digests and reject route drift on
+resume. The initial GPT-5.4 attempts were infrastructure-only failures before
+evidence inspection, and the E2B alternative never executed. See the
+[superseding decision](decisions/2026-08-07-self-hosted-model-configurable-quant-discovery.md).
 
 Confirmed repository evidence:
 

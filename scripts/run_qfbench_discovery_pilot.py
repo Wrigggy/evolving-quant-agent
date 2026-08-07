@@ -24,6 +24,10 @@ from qea.candidate_admission import (  # noqa: E402
 )
 from qea.evolve_runtime import dir_unified_diff  # noqa: E402
 from qea.evolution_evidence import authorize_evidence_tree  # noqa: E402
+from qea.evolver_profile import (  # noqa: E402
+    materialize_evolver_profile,
+    profile_as_dict,
+)
 from qea.rootless_full_harness import (  # noqa: E402
     build_rootless_full_harness_runtime,
     load_rootless_full_harness_config,
@@ -123,6 +127,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--evolver-dir", type=Path, required=True)
     parser.add_argument("--arm", choices=("raw", "indexed"), required=True)
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=("none", "minimal", "low", "medium", "high", "xhigh"),
+        default="none",
+        help="Deliberation request supported by the selected model route.",
+    )
     parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--approve-external-run", action="store_true")
     return parser
@@ -148,15 +158,25 @@ def main(argv: list[str] | None = None) -> int:
     backbone = args.backbone.resolve()
     if not backbone.is_dir():
         raise ValueError("backbone directory is unavailable")
-    evolver_dir = args.evolver_dir.resolve()
-    if not evolver_dir.is_dir():
+    evolver_source = args.evolver_dir.resolve()
+    if not evolver_source.is_dir():
         raise ValueError("evolver directory is unavailable")
+    if not config.required_provider:
+        raise ValueError("discovery runs require an exact model provider route")
 
     results_root = args.results_dir.expanduser().resolve()
     run_dir = results_root / args.run_id
+    evolver_profile = materialize_evolver_profile(
+        evolver_source,
+        run_dir / "inputs" / "evolver",
+        model=config.allowed_model,
+        provider=config.required_provider,
+        reasoning_effort=args.reasoning_effort,
+    )
+    evolver_dir = Path(evolver_profile.materialized_dir)
     plan = {
         "schema_version": 1,
-        "purpose": "exploratory proposal-only discovery canary",
+        "purpose": "self-hosted model-configurable quant discovery canary",
         "run_id": args.run_id,
         "arm": args.arm,
         "benchmark_commit": snapshot.commit,
@@ -164,7 +184,8 @@ def main(argv: list[str] | None = None) -> int:
         "evidence": str(evidence.root),
         "evidence_sha256": evidence.sha256,
         "evidence_members": list(evidence.members),
-        "evolver_dir": str(evolver_dir),
+        "evolver_source_dir": str(evolver_source),
+        "evolver_runtime_profile": profile_as_dict(evolver_profile),
         "qfbench_manifest_sha256": _sha256(args.qfbench_manifest.resolve()),
         "rootless_config_sha256": _sha256(args.rootless_config.resolve()),
         "image_set_sha256": _sha256(args.rootless_image_set_manifest.resolve()),

@@ -15,10 +15,6 @@ llm_config:
   stream: true
   api_type: openai_chat_completion
   timeout: 180
-  extra_body:
-    reasoning:
-      effort: xhigh
-      exclude: true
 
 tools:
   - name: list_workspace

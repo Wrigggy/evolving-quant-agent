@@ -23,14 +23,14 @@ def test_derive_route_config_changes_only_model_route(tmp_path: Path) -> None:
     derived = derive_route_config(
         source,
         destination,
-        model="openai/gpt-5.4",
-        provider="openai",
+        model="research/model-a",
+        provider="provider-a",
     )
 
     assert derived == {
         **original,
-        "allowed_model": "openai/gpt-5.4",
-        "required_provider": "openai",
+        "allowed_model": "research/model-a",
+        "required_provider": "provider-a",
     }
     assert json.loads(destination.read_text(encoding="utf-8")) == derived
     assert stat.S_IMODE(destination.stat().st_mode) == 0o600
@@ -55,7 +55,7 @@ def test_derive_route_config_refuses_overwrite(tmp_path: Path) -> None:
         derive_route_config(
             source,
             destination,
-            model="openai/gpt-5.4",
-            provider="openai",
+            model="research/model-a",
+            provider="provider-a",
         )
     assert destination.read_text(encoding="utf-8") == "preserve"
