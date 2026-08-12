@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -23,6 +24,7 @@ from qea.verifiers.quantcodeeval_sandbox import IsolatedQuantCodeEvalVerifier
 def _replay_execution(
     attempt: TaskAttempt,
     source_run: Path,
+    replay_root: Path | None = None,
 ) -> tuple[WorkerExecution, bool]:
     execution = load_worker_execution(attempt, source_run)
     if execution is not None:
@@ -32,10 +34,19 @@ def _replay_execution(
     if not contract_path.is_file():
         raise RuntimeError(f"{attempt.task_id} has no completed worker artifact")
     contract = json.loads(contract_path.read_text())
-    artifact_dir = attempt_dir / "artifacts"
-    strategy = artifact_dir / "strategy.py"
+    source_artifact_dir = attempt_dir / "artifacts"
+    strategy = source_artifact_dir / "strategy.py"
     if contract.get("outcome") != "official_worker_artifact_contract_zero" or not strategy.is_file():
         raise RuntimeError(f"{attempt.task_id} has no replayable strategy.py")
+    artifact_dir = (
+        replay_root / "fixtures" / attempt.attempt_id / "artifacts"
+        if replay_root is not None
+        else source_artifact_dir
+    )
+    if replay_root is not None:
+        artifact_dir.mkdir(parents=True)
+        shutil.copyfile(strategy, artifact_dir / "strategy.py")
+        strategy = artifact_dir / "strategy.py"
     return WorkerExecution(
         attempt_id=attempt.attempt_id,
         artifact_dir=artifact_dir,
@@ -116,7 +127,11 @@ def main() -> int:
                 continue
             attempt = TaskAttempt(**payload)
             try:
-                execution, contract_adjusted = _replay_execution(attempt, source)
+                execution, contract_adjusted = _replay_execution(
+                    attempt,
+                    source,
+                    output,
+                )
             except RuntimeError:
                 continue
             score = verifier.verify(

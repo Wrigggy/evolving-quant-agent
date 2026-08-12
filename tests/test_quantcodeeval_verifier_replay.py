@@ -24,8 +24,13 @@ def test_contract_adjusted_replay_uses_saved_strategy_only(tmp_path):
         "outcome": "official_worker_artifact_contract_zero",
     }))
 
-    execution, adjusted = _replay_execution(attempt, tmp_path)
+    replay_root = tmp_path / "replay"
+    execution, adjusted = _replay_execution(attempt, tmp_path, replay_root)
 
     assert adjusted is True
     assert [record.path for record in execution.artifacts] == ["strategy.py"]
     assert execution.summary == {"contract_adjusted_replay": True}
+    assert execution.artifact_dir == (
+        replay_root / "fixtures" / attempt.attempt_id / "artifacts"
+    )
+    assert [path.name for path in execution.artifact_dir.iterdir()] == ["strategy.py"]
