@@ -353,7 +353,10 @@ def _isolated_loader_source(official: Path, task_id: str) -> bytes:
         Path(__file__).resolve().parents[1]
         / "verifiers" / "quantcodeeval_rpc.py"
     ).read_text()
-    upstream = official.read_text()
+    upstream = official.read_text().replace(
+        "from __future__ import annotations\n",
+        "",
+    )
     return (
         client.rstrip()
         + "\n\n_qea_rpc_load_module = load_module\n"
@@ -398,11 +401,10 @@ def _trusted_run_all_source(official: Path) -> bytes:
 
 def _relocated_checker_source(official: Path, task_id: str) -> bytes:
     source = official.read_text()
-    if task_id == "T24" and official.parent.name == "a10_e2e_metric_consistency":
+    if official.parent.name == "a10_e2e_metric_consistency":
         needle = "RELEASE_ROOT = HERE.parents[3]"
-        if source.count(needle) != 1:
-            raise QuantCodeEvalConfigError("T24 A10 release-root adapter drifted")
-        source = source.replace(needle, "RELEASE_ROOT = Path('/tests')")
+        if needle in source:
+            source = source.replace(needle, "RELEASE_ROOT = Path('/tests')")
     return source.encode("utf-8")
 
 

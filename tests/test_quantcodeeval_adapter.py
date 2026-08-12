@@ -264,6 +264,7 @@ def test_isolated_loader_keeps_official_call_adapters(tmp_path):
 
     loader = tmp_path / "module_loader.py"
     loader.write_text(
+        "from __future__ import annotations\n"
         "def load_module(path, name='official'):\n"
         "    raise AssertionError('direct import must be replaced')\n"
         "def get_function(module, name):\n"
@@ -277,6 +278,21 @@ def test_isolated_loader_keeps_official_call_adapters(tmp_path):
     assert namespace["load_agent_module"] is namespace["load_module"]
     assert namespace["get_function"] is namespace["_qea_rpc_get_function"]
     assert namespace["adaptive_call"](lambda value: value + 1, {"value": 2}) == 3
+
+
+def test_a10_release_root_is_relocated_when_present(tmp_path):
+    from qea.benchmarks.quantcodeeval import _relocated_checker_source
+
+    checker = tmp_path / "a10_e2e_metric_consistency" / "checker.py"
+    checker.parent.mkdir()
+    checker.write_text(
+        "from pathlib import Path\n"
+        "HERE = Path(__file__).resolve().parent\n"
+        "RELEASE_ROOT = HERE.parents[3]\n"
+    )
+
+    relocated = _relocated_checker_source(checker, "T12").decode()
+    assert "RELEASE_ROOT = Path('/tests')" in relocated
 
 
 def test_snapshot_loader_rejects_manifested_file_tamper(tmp_path):
