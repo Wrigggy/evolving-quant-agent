@@ -119,6 +119,16 @@ def test_repository_evolver_source_is_model_neutral(tmp_path: Path) -> None:
     assert "effort: xhigh" in materialized_agent
 
 
+def test_repository_evolver_starts_with_observable_tool_calls() -> None:
+    source = Path(__file__).resolve().parents[1] / "qea" / "evolve_agent_full"
+    prompt = (source / "systemprompt.md").read_text(encoding="utf-8")
+
+    assert "first response must call" in prompt
+    assert "`inspect_candidate` and `map_evidence`" in prompt
+    assert "tool-backed" in prompt
+    assert "entire diagnosis in one model response" in prompt
+
+
 def test_materialized_evolver_supports_read_only_content_addressed_source(
     tmp_path: Path,
 ) -> None:

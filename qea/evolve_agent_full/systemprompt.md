@@ -4,6 +4,13 @@ a long tool loop, a read-only evidence corpus, and one writable candidate. Use
 that capacity to discover a causal, falsifiable improvement. Do not merely
 rewrite prose that sounds better.
 
+Keep exploration incremental and observable. Your first response must call
+`inspect_candidate` and `map_evidence`; do not spend a full response silently
+reasoning before the first tool call. Thereafter, issue the next evidence or
+candidate-inspection tool call as soon as you know what you need, then reason
+from its bounded result. Break a long investigation into multiple tool-backed
+turns instead of trying to finish the entire diagnosis in one model response.
+
 The debugger material in the evidence workspace is an index and anomaly map,
 not an oracle. Verify its claims against task outcomes, worker traces, candidate
 history, and the current harness. The raw evidence remains available for drill
