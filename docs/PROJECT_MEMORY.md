@@ -1436,6 +1436,15 @@ that guarantees final artifact delivery without applying quant validation to
 already-passing tasks. Do a local component smoke first, then a small task
 panel; do not add more general validator complexity.
 
+That component direction is an investigator hypothesis, not the answer to give
+the Evolver. The next live round must receive the answer-free r1/r4/r5/r6
+history and an open full-harness mutation surface, then autonomously propose
+the mechanism, choose its component, implement it, and design its local smoke.
+Do not instruct it to build an artifact finalizer or completion middleware.
+An investigator-written finalizer is reserved for a later diagnostic control
+only if autonomous search cannot localize or implement a working mechanism;
+that control would test the mechanism separately from search capability.
+
 ### 2026-08-12 speed-first experimental engineering policy
 
 Repository engineering is now explicitly mechanism-first rather than
@@ -1446,6 +1455,27 @@ does not require exhaustive equality of every runtime contract. Prefer a small
 smoke or preflight and fast iteration, while retaining only the minimum
 research boundaries around verifier answers, credentials, truthful scoring,
 and obviously invalid runs.
+
+Before the next live run, a macOS repository-health audit found no damaged Git
+repository in the active workspace or its sibling projects: all discovered
+repositories and nested benchmark repositories resolved normally, had no lock
+or interrupted-operation residue, and passed connectivity checks. The active
+repository does have three valid ignored worktrees under `.claude/worktrees`,
+with three additional benchmark repositories nested inside one worktree. It
+also retains a large set of old unreachable loose objects created together on
+2026-07-28; no cleanup was performed because those objects may still be useful
+for recovery.
+
+The heat symptom is operationally credible and should be mitigated before paid
+runs. During an otherwise idle eight-second window, macOS recorded 15 new Git
+processes, while Codex Desktop logs showed repeated review-summary Git commands
+being canceled rather than repository failures. A contemporaneous
+`syspolicyd` burst tracked many short-lived Git processes and was followed by
+repeated `trustd` signature checks. This matches an open Codex Desktop macOS
+issue involving source-control polling, nested repositories, and Gatekeeper
+validation. Prefer CLI-only execution for long runs, avoid opening the parent
+`Coding` directory as one Desktop workspace, and treat removal of old
+worktrees or Git object cleanup as separate user-approved maintenance.
 
 ## Memory Maintenance Rules
 
