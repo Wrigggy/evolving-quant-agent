@@ -270,6 +270,8 @@ def _seed_rejected_attempt_history(
 
 def _prior_attempt_paths(
     value: str | Path | Iterable[str | Path] | None,
+    *,
+    allow_duplicates: bool = False,
 ) -> tuple[Path, ...]:
     if value is None:
         return ()
@@ -278,7 +280,10 @@ def _prior_attempt_paths(
     paths = tuple(Path(item) for item in value)
     if not paths:
         raise QuantCodeEvalV2LiveError("prior rejected attempt list is empty")
-    if len({path.expanduser().resolve() for path in paths}) != len(paths):
+    if (
+        not allow_duplicates
+        and len({path.expanduser().resolve() for path in paths}) != len(paths)
+    ):
         raise QuantCodeEvalV2LiveError("prior rejected attempt list is duplicated")
     return paths
 
@@ -653,13 +658,23 @@ def run_quantcodeeval_v2_activation_canary(
             h0_evaluation_id=h0.evaluation_id,
         )
     scored_activations = _prior_attempt_paths(
-        prior_scored_candidate_activation_dir
+        prior_scored_candidate_activation_dir,
+        allow_duplicates=True,
     )
-    scored_runs = _prior_attempt_paths(prior_scored_candidate_run_dir)
+    scored_runs = _prior_attempt_paths(
+        prior_scored_candidate_run_dir,
+        allow_duplicates=True,
+    )
     if len(scored_activations) != len(scored_runs):
         raise QuantCodeEvalV2LiveError(
             "scored candidate activations and full runs must be paired"
         )
+    scored_pairs = tuple(
+        (activation.expanduser().resolve(), run.expanduser().resolve())
+        for activation, run in zip(scored_activations, scored_runs)
+    )
+    if len(set(scored_pairs)) != len(scored_pairs):
+        raise QuantCodeEvalV2LiveError("scored candidate pair is duplicated")
     prior_scored_candidates = [
         _seed_scored_candidate_history(
             history_root=root / "history",
@@ -669,7 +684,7 @@ def run_quantcodeeval_v2_activation_canary(
             h0_evaluation_id=h0.evaluation_id,
             h0_rewards=rewards,
         )
-        for activation_dir, full_run_dir in zip(scored_activations, scored_runs)
+        for activation_dir, full_run_dir in scored_pairs
     ]
 
     backend = RootlessDockerBackend(

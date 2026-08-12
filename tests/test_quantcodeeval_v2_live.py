@@ -430,6 +430,22 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
     assert entry["evaluation"]["h0_official_rewards"] == {"T16": 1.0, "T24": 0.0}
 
 
+def test_scored_history_paths_allow_one_candidate_with_distinct_evaluations():
+    activation = Path("activation")
+    first = Path("evaluation-one")
+    second = Path("evaluation-two")
+
+    activations = _prior_attempt_paths(
+        [activation, activation], allow_duplicates=True
+    )
+    runs = _prior_attempt_paths([first, second], allow_duplicates=True)
+
+    assert list(zip(activations, runs)) == [
+        (activation, first),
+        (activation, second),
+    ]
+
+
 def test_prior_path_lists_preserve_multiple_scored_rounds():
     from qea.quantcodeeval_v2_live import _prior_attempt_paths
 
