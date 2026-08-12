@@ -17,6 +17,7 @@ from typing import Mapping
 from .backends.rootless_docker import RootlessDockerBackend
 from .benchmarks.quantcodeeval import (
     QuantCodeEvalSnapshot,
+    QuantCodeEvalSplit,
     load_quantcodeeval_snapshot,
     verify_quantcodeeval_role_root,
 )
@@ -182,13 +183,15 @@ class QuantCodeEvalWorkerRouter:
                 network_scope=session.network_scope,
                 proxy_base_url=session.base_url,
                 model_name=MODEL,
-                max_output_files=3,
-                max_output_bytes=8 * 1024 * 1024,
+                max_output_files=20,
+                max_output_bytes=32 * 1024 * 1024,
                 expected_output_paths=("strategy.py",),
                 auxiliary_output_paths=(
                     "trade_log.json",
+                    "output/metrics.json",
                     "__pycache__/strategy.cpython-311.pyc",
                 ),
+                retain_additional_outputs=True,
             )
             return executor.execute(
                 attempt=attempt,
@@ -324,6 +327,7 @@ def prepare_quantcodeeval_h0(
     verifier_image_ref: str,
     proxy_image_ref: str,
     task_panel_path: str | Path | None = None,
+    task_ids: tuple[str, ...] | None = None,
 ) -> tuple[
     QuantCodeEvalSnapshot,
     QFBenchSandboxEvaluator,
@@ -340,6 +344,26 @@ def prepare_quantcodeeval_h0(
         public,
         task_panel_path=task_panel_path,
     )
+    if task_ids is not None:
+        available = {task.task_id: task for task in snapshot.optimize.tasks}
+        if (
+            not task_ids
+            or len(set(task_ids)) != len(task_ids)
+            or any(task_id not in available for task_id in task_ids)
+        ):
+            raise QuantCodeEvalBaselineError(
+                "requested tasks must be a unique non-empty optimize subset"
+            )
+        snapshot = QuantCodeEvalSnapshot(
+            root=snapshot.root,
+            repository_url=snapshot.repository_url,
+            commit=snapshot.commit,
+            optimize=QuantCodeEvalSplit(
+                "optimize",
+                tuple(available[task_id] for task_id in task_ids),
+            ),
+            held_out=snapshot.held_out,
+        )
     public_role = verify_quantcodeeval_role_root(public, "public")
     trusted_role = verify_quantcodeeval_role_root(trusted, "trusted-verifier")
     if public_role.commit != trusted_role.commit:
@@ -446,10 +470,12 @@ def prepare_quantcodeeval_h0(
             "submitted_paths": ["strategy.py"],
             "retained_not_submitted_paths": [
                 "trade_log.json",
+                "output/metrics.json",
                 "__pycache__/strategy.cpython-311.pyc",
             ],
-            "max_files": 3,
-            "max_total_bytes": 8 * 1024 * 1024,
+            "max_files": 20,
+            "max_total_bytes": 32 * 1024 * 1024,
+            "retain_additional_outputs": True,
         },
         "coordinator_source_sha256": _runtime_source_identity(),
         "resample_policy": "H0 sampled once; later iterations reuse exact scores",

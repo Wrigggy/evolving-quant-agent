@@ -328,6 +328,7 @@ class SandboxNexAUExecutor:
         max_output_bytes: int = 512 * 1024 * 1024,
         expected_output_paths: tuple[str, ...] | None = None,
         auxiliary_output_paths: tuple[str, ...] = (),
+        retain_additional_outputs: bool = False,
     ) -> None:
         _require_tmpfs(resource_contract, _WORKER_REQUIRED_TMPFS, role="worker")
         if type(max_output_files) is not int or max_output_files <= 0:
@@ -403,6 +404,7 @@ class SandboxNexAUExecutor:
                 "worker.config", "auxiliary output paths are invalid"
             )
         self.auxiliary_output_paths = normalized_auxiliary
+        self.retain_additional_outputs = bool(retain_additional_outputs)
 
     def execute(
         self,
@@ -638,7 +640,10 @@ class SandboxNexAUExecutor:
                 self.expected_output_paths is not None
                 and (
                     not set(self.expected_output_paths).issubset(found_paths)
-                    or not set(found_paths).issubset(allowed_paths)
+                    or (
+                        not self.retain_additional_outputs
+                        and not set(found_paths).issubset(allowed_paths)
+                    )
                 )
             ):
                 _atomic_json(
@@ -662,7 +667,13 @@ class SandboxNexAUExecutor:
             auxiliary_records = tuple(
                 record
                 for record in records
-                if record.path in self.auxiliary_output_paths
+                if (
+                    record.path in self.auxiliary_output_paths
+                    or (
+                        self.retain_additional_outputs
+                        and record.path not in set(self.expected_output_paths or ())
+                    )
+                )
             )
             if auxiliary_records:
                 auxiliary_root = attempt_dir / "worker-auxiliary-artifacts"
@@ -684,7 +695,7 @@ class SandboxNexAUExecutor:
                 records = tuple(
                     record
                     for record in records
-                    if record.path not in self.auxiliary_output_paths
+                    if record not in auxiliary_records
                 )
             mark_finished(lifecycle_path, at=self.clock())
             finished = True

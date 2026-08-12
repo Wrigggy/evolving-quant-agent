@@ -14,10 +14,39 @@ if __package__ in {None, ""}:
 
 from qea.backends.rootless_docker import RootlessDockerBackend
 from qea.benchmarks.quantcodeeval import load_quantcodeeval_snapshot
-from qea.evaluation import TaskAttempt
-from qea.executors.execution_record import load_worker_execution
+from qea.evaluation import ArtifactRecord, TaskAttempt
+from qea.executors.execution_record import WorkerExecution, load_worker_execution
 from qea.executors.sandbox_runtime import SandboxResourceContract
 from qea.verifiers.quantcodeeval_sandbox import IsolatedQuantCodeEvalVerifier
+
+
+def _replay_execution(
+    attempt: TaskAttempt,
+    source_run: Path,
+) -> tuple[WorkerExecution, bool]:
+    execution = load_worker_execution(attempt, source_run)
+    if execution is not None:
+        return execution, False
+    attempt_dir = source_run / "attempts" / attempt.attempt_id
+    contract_path = attempt_dir / "worker-artifact-contract.json"
+    if not contract_path.is_file():
+        raise RuntimeError(f"{attempt.task_id} has no completed worker artifact")
+    contract = json.loads(contract_path.read_text())
+    artifact_dir = attempt_dir / "artifacts"
+    strategy = artifact_dir / "strategy.py"
+    if contract.get("outcome") != "official_worker_artifact_contract_zero" or not strategy.is_file():
+        raise RuntimeError(f"{attempt.task_id} has no replayable strategy.py")
+    return WorkerExecution(
+        attempt_id=attempt.attempt_id,
+        artifact_dir=artifact_dir,
+        artifacts=(ArtifactRecord.from_file(strategy, root=artifact_dir),),
+        trace_uri=str(attempt_dir / "raw-trace.jsonl"),
+        log_uri=str(attempt_dir / "worker-command.json"),
+        final_text_uri=str(attempt_dir / "final.txt"),
+        summary={"contract_adjusted_replay": True},
+        sandbox_id="saved-worker-artifact",
+        cleaned_up=True,
+    ), True
 
 
 def main() -> int:
@@ -26,7 +55,7 @@ def main() -> int:
     parser.add_argument("--public-root", type=Path, required=True)
     parser.add_argument("--trusted-root", type=Path, required=True)
     parser.add_argument("--task-panel", type=Path, required=True)
-    parser.add_argument("--source-run", type=Path, required=True)
+    parser.add_argument("--source-run", type=Path, required=True, action="append")
     parser.add_argument("--output-run", type=Path, required=True)
     parser.add_argument("--verifier-image", required=True)
     args = parser.parse_args()
@@ -75,38 +104,44 @@ def main() -> int:
             },
         ),
     )
-    source = args.source_run.resolve()
+    sources = tuple(path.resolve() for path in args.source_run)
     tasks = {task.task_id: task for task in snapshot.optimize.tasks}
     rows = []
-    for attempt_path in sorted((source / "attempts").glob("*/attempt.json")):
-        payload = json.loads(attempt_path.read_text())
-        task_id = payload.get("task_id")
-        if task_id not in tasks:
-            continue
-        attempt = TaskAttempt(**payload)
-        execution = load_worker_execution(attempt, source)
-        if execution is None:
-            raise SystemExit(f"{task_id} has no completed worker artifact")
-        score = verifier.verify(
-            attempt=attempt,
-            task=tasks[task_id],
-            execution=execution,
-            run_dir=output,
-        )
-        answer_path = output / "attempts" / attempt.attempt_id / "verifier" / "answer-free-evidence.json"
-        rows.append({
-            "task_id": task_id,
-            "attempt_id": attempt.attempt_id,
-            "score": asdict(score),
-            "answer_free_evidence": json.loads(answer_path.read_text()),
-        })
+    seen = set()
+    for source in sources:
+        for attempt_path in sorted((source / "attempts").glob("*/attempt.json")):
+            payload = json.loads(attempt_path.read_text())
+            task_id = payload.get("task_id")
+            if task_id not in tasks or task_id in seen:
+                continue
+            attempt = TaskAttempt(**payload)
+            try:
+                execution, contract_adjusted = _replay_execution(attempt, source)
+            except RuntimeError:
+                continue
+            score = verifier.verify(
+                attempt=attempt,
+                task=tasks[task_id],
+                execution=execution,
+                run_dir=output,
+            )
+            answer_path = output / "attempts" / attempt.attempt_id / "verifier" / "answer-free-evidence.json"
+            rows.append({
+                "task_id": task_id,
+                "attempt_id": attempt.attempt_id,
+                "source_run": str(source),
+                "contract_adjusted": contract_adjusted,
+                "score": asdict(score),
+                "answer_free_evidence": json.loads(answer_path.read_text()),
+            })
+            seen.add(task_id)
     missing = sorted(set(tasks) - {row["task_id"] for row in rows})
     if missing:
         raise SystemExit(f"source run has no completed artifacts for {missing}")
     result = {
         "schema_version": 1,
         "protocol": "quantcodeeval-verifier-only-replay",
-        "source_run": str(source),
+        "source_runs": [str(source) for source in sources],
         "zero_model_requests": True,
         "results": rows,
     }

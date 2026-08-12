@@ -483,6 +483,53 @@ def test_worker_preserves_but_does_not_submit_declared_auxiliary_output(tmp_path
     assert auxiliary["artifact_records"][0]["path"] == "trade_log.json"
 
 
+def test_worker_can_retain_undeclared_diagnostic_outputs(tmp_path):
+    from qea.executors.sandbox_nexau import SandboxNexAUExecutor
+
+    class DiagnosticOutputBackend(FakeBackend):
+        def read_bytes(self, handle, path):
+            if path == "/qea/output.tar":
+                return _tar_bytes({
+                    "strategy.py": "VALUE = 1\n",
+                    "output/metrics.json": "{}\n",
+                    "managed_returns.csv": "date,return\n",
+                })
+            return super().read_bytes(handle, path)
+
+    backend = DiagnosticOutputBackend()
+    public_root, _ = _roots(tmp_path)
+    lifecycle_root = tmp_path / "lifecycles"
+    backend.lifecycle_root = lifecycle_root
+    executor = SandboxNexAUExecutor(
+        backend=backend,
+        lifecycle_root=lifecycle_root,
+        worker_image_ref="sha256:" + "a" * 64,
+        public_task_root=public_root,
+        resource_contract=_resources(),
+        worker_network_name="qea-run-001-internal",
+        proxy_base_url="http://qea-model-proxy:8080/v1",
+        model_name="fixture-model",
+        expected_output_paths=("strategy.py",),
+        retain_additional_outputs=True,
+    )
+
+    execution = executor.execute(
+        attempt=_attempt(),
+        task=_task(),
+        worker_dir=_worker(tmp_path),
+        run_dir=tmp_path / "run",
+        model_env={},
+    )
+
+    assert tuple(record.path for record in execution.artifacts) == ("strategy.py",)
+    auxiliary_root = (
+        tmp_path / "run" / "attempts" / _attempt().attempt_id
+        / "worker-auxiliary-artifacts"
+    )
+    assert (auxiliary_root / "output/metrics.json").is_file()
+    assert (auxiliary_root / "managed_returns.csv").is_file()
+
+
 def test_worker_refuses_real_model_credentials(tmp_path):
     from qea.executors.sandbox_nexau import SandboxInfrastructureError
 
