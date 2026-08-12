@@ -503,9 +503,27 @@ def _seed_scored_candidate_history(
     attempts = result.get("attempts")
     if not isinstance(attempts, list):
         raise QuantCodeEvalV2LiveError("completed panel lacks answer-free outcomes")
+    h0_on_panel = {
+        task_id: float(h0_rewards[task_id])
+        for task_id in official_rewards
+        if task_id in h0_rewards
+    }
+    deltas = [
+        official_rewards[task_id] - h0_on_panel[task_id]
+        for task_id in h0_on_panel
+    ]
+    if any(delta > 0 for delta in deltas) and any(delta < 0 for delta in deltas):
+        taskwise_outcome = "mixed"
+    elif any(delta > 0 for delta in deltas):
+        taskwise_outcome = "improved"
+    elif any(delta < 0 for delta in deltas):
+        taskwise_outcome = "regressed"
+    else:
+        taskwise_outcome = "tied"
     reason = (
-        "completed candidate panel did not improve H0: "
-        f"candidate={official_rewards}, h0={dict(h0_rewards)}"
+        "completed candidate panel recorded as search experience: "
+        f"taskwise_outcome={taskwise_outcome}, candidate={official_rewards}, "
+        f"h0_on_panel={h0_on_panel}"
     )
     append_quantcodeeval_history(
         history_root=history_root,

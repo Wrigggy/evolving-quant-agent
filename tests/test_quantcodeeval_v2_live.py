@@ -424,6 +424,7 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
         (tmp_path / "history/entries" / f"{index['entries'][0]}.json").read_text()
     )
     assert imported["official_rewards"] == {"T16": 0.0, "T24": 0.0}
+    assert "taskwise_outcome=regressed" in imported["reason"]
     assert entry["selection"] == "rejected"
     assert entry["evaluation"]["official_evaluated"] is True
     assert entry["evaluation"]["official_rewards"] == {"T16": 0.0, "T24": 0.0}
