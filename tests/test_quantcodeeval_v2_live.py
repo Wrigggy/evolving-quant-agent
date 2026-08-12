@@ -2,13 +2,17 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 from qea.loop_benchmark import hash_worker_directory
 from qea.quantcodeeval_v2_live import (
+    QuantCodeEvalV2LiveError,
     _activation_from_component_tests,
     _proxy_audit,
     _seed_full_candidate_failure_history,
     _seed_rejected_attempt_history,
     _seed_scored_candidate_history,
+    _prior_attempt_paths,
 )
 from qea.quantcodeeval_history import validate_quantcodeeval_history
 
@@ -57,6 +61,15 @@ def test_activation_requires_executable_digest_bound_final_smoke(tmp_path):
     assert passed["activated_primary_components"] == ["tools"]
     assert stale["status"] == "failed"
     assert prompt_only["status"] == "failed"
+
+
+def test_comparison_run_paths_preserve_order_and_reject_duplicates(tmp_path):
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+
+    assert _prior_attempt_paths([first, second]) == (first, second)
+    with pytest.raises(QuantCodeEvalV2LiveError, match="duplicated"):
+        _prior_attempt_paths([first, first])
 
 
 def test_proxy_audit_retains_exact_request_cost_and_ids(tmp_path):

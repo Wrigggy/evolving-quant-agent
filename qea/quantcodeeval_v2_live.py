@@ -586,6 +586,9 @@ def run_quantcodeeval_v2_activation_canary(
         str | Path | Iterable[str | Path] | None
     ) = None,
     prior_scored_candidate_run_dir: str | Path | Iterable[str | Path] | None = None,
+    comparison_h0_run_dir: str | Path | Iterable[str | Path] | None = None,
+    diagnosis_note: str | None = None,
+    validate_release: bool = True,
     preflight_only: bool = False,
 ) -> dict[str, object]:
     """Run or preflight one real Evolver round without resampling H0."""
@@ -593,7 +596,21 @@ def run_quantcodeeval_v2_activation_canary(
     root = Path(run_dir).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     release = Path(release_dir).expanduser().resolve()
-    release_identity = validate_quantcodeeval_release(release)
+    if validate_release:
+        release_identity = validate_quantcodeeval_release(release)
+    else:
+        required = (
+            release / "public",
+            release / "trusted",
+            release / "h0/workers/H0",
+            release / "h0/H0-PREFLIGHT.json",
+            release / "h0/H0-RESULT.json",
+        )
+        if any(not path.exists() for path in required):
+            raise QuantCodeEvalV2LiveError(
+                "engineering release layout lacks public, trusted, worker, or H0"
+            )
+        release_identity = "unpublished-engineering-layout"
     config_file = Path(config_path).expanduser().resolve()
     config = load_rootless_full_harness_config(config_file)
     if config.allowed_model != MODEL or config.required_provider != PROVIDER:
@@ -691,6 +708,11 @@ def run_quantcodeeval_v2_activation_canary(
         "prior_rejected_attempts": prior_rejected_attempts,
         "prior_full_candidate_failure": prior_full_candidate_failure,
         "prior_scored_candidates": prior_scored_candidates,
+        "comparison_h0_runs": [
+            path.expanduser().resolve().name
+            for path in _prior_attempt_paths(comparison_h0_run_dir)
+        ],
+        "diagnosis_note": diagnosis_note,
         "search_limits": asdict(
             QuantSearchLimits(
                 max_rounds=1,
@@ -744,11 +766,24 @@ def run_quantcodeeval_v2_activation_canary(
         resource_pool=pool,
         model_name=MODEL,
     )
-    attempts = materialize_h0_attempt_sources(
+    attempts = list(materialize_h0_attempt_sources(
         master_root=root,
         h0_root=h0_root,
         evaluation=h0,
-    )
+    ))
+    for comparison_root in _prior_attempt_paths(comparison_h0_run_dir):
+        comparison = h0_evaluation_ref(comparison_root)
+        if not set(comparison.task_results) <= set(h0.task_results):
+            raise QuantCodeEvalV2LiveError(
+                "comparison H0 contains a task outside the current panel"
+            )
+        attempts.extend(
+            materialize_h0_attempt_sources(
+                master_root=root,
+                h0_root=comparison_root.expanduser().resolve(),
+                evaluation=comparison,
+            )
+        )
     public_roots = {
         task_id: public / "tasks" / task_id for task_id in h0.task_results
     }
@@ -786,7 +821,7 @@ def run_quantcodeeval_v2_activation_canary(
             },
             official_evaluated=False,
             new_information=True,
-            reason="activation canary retained candidate without running T16/T24",
+            reason="activation canary retained candidate without running its task panel",
             # The outer loop already counts one proposer call.  A NexAU
             # proposal may contain many provider turns, so add the remainder
             # from the finalized exact proxy audit.
@@ -815,7 +850,9 @@ def run_quantcodeeval_v2_activation_canary(
         activation_runner=_activation_from_component_tests,
         candidate_evaluator=activation_only_evaluator,
         diagnosis_builder=lambda current, iteration: (
-            "T16 is protected at reward 1; T24 remains incomplete. Earlier five-round "
+            diagnosis_note.strip()
+            if diagnosis_note
+            else "Earlier five-round "
             "prompt-only mutations produced no gain or regressions. Later immutable "
             "history may include activation-passed candidates that failed the worker "
             "artifact contract before official scoring; treat those as component-level "

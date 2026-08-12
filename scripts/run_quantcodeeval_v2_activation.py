@@ -30,6 +30,16 @@ def main(argv: list[str] | None = None) -> int:
         "--prior-scored-candidate-activation", type=Path, action="append"
     )
     parser.add_argument("--prior-scored-candidate-run", type=Path, action="append")
+    parser.add_argument("--comparison-h0-run", type=Path, action="append")
+    parser.add_argument(
+        "--diagnosis-note",
+        help="Answer-free investigator context for this engineering round.",
+    )
+    parser.add_argument(
+        "--engineering-release",
+        action="store_true",
+        help="Use a complete local release layout without formal publication.",
+    )
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args(argv)
     result = run_quantcodeeval_v2_activation_canary(
@@ -47,6 +57,9 @@ def main(argv: list[str] | None = None) -> int:
             args.prior_scored_candidate_activation
         ),
         prior_scored_candidate_run_dir=args.prior_scored_candidate_run,
+        comparison_h0_run_dir=args.comparison_h0_run,
+        diagnosis_note=args.diagnosis_note,
+        validate_release=not args.engineering_release,
         preflight_only=args.preflight_only,
     )
     print(json.dumps(result, sort_keys=True, indent=2, ensure_ascii=False))
