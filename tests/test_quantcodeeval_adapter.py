@@ -193,6 +193,58 @@ def test_materializer_separates_public_inputs_from_trusted_checkers(tmp_path):
     assert snapshot.task("T16").reward_kind == "binary_all_properties"
 
 
+def test_task_panel_can_select_a_pinned_public_task_without_a_new_oracle_hash(
+    tmp_path,
+):
+    from qea.benchmarks.quantcodeeval import (
+        load_quantcodeeval_snapshot,
+        materialize_quantcodeeval_role_snapshot,
+    )
+
+    source, commit, track_sha = _source_fixture(tmp_path)
+    manifest = _manifest(tmp_path, commit, track_sha)
+    protocol = json.loads(manifest.read_text())
+    protocol["trusted_runtime"] = {}
+    manifest.write_text(json.dumps(protocol))
+    panel = tmp_path / "panel.json"
+    panel.write_text(json.dumps({
+        "schema_version": 1,
+        "name": "expansion-smoke",
+        "optimize": [{
+            "task_id": "T16",
+            "domain": "panel_override",
+            "lineage": "public-pinned-task",
+            "difficulty": "paper_reproduction",
+            "reward_kind": "binary_all_properties",
+            "agent_timeout_seconds": 60,
+            "verifier_timeout_seconds": 60,
+            "build_timeout_seconds": 60,
+            "cpus": 1,
+            "memory_mb": 512,
+        }],
+        "held_out": [],
+    }))
+
+    public = tmp_path / "public-panel"
+    trusted = tmp_path / "trusted-panel"
+    materialize_quantcodeeval_role_snapshot(
+        source,
+        public,
+        trusted,
+        manifest_path=manifest,
+        task_panel_path=panel,
+    )
+    snapshot = load_quantcodeeval_snapshot(
+        public,
+        manifest_path=manifest,
+        task_panel_path=panel,
+    )
+
+    assert snapshot.optimize.task_ids == ("T16",)
+    assert snapshot.task("T16").domain == "panel_override"
+    assert (trusted / "tasks/T16/tests/golden_ref.py").is_file()
+
+
 def test_snapshot_loader_rejects_manifested_file_tamper(tmp_path):
     from qea.benchmarks.quantcodeeval import (
         QuantCodeEvalConfigError,

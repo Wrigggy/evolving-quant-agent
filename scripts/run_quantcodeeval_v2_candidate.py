@@ -36,6 +36,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--verifier-image", required=True)
     parser.add_argument("--proxy-image", required=True)
     parser.add_argument("--task", dest="task_ids", action="append")
+    parser.add_argument("--task-panel", type=Path)
+    parser.add_argument(
+        "--source-h0-evaluation-id",
+        help="override the activation run's H0 identity for an expansion panel",
+    )
     parser.add_argument(
         "--token-file",
         type=Path,
@@ -68,8 +73,11 @@ def main(argv: list[str] | None = None) -> int:
         verifier_image_ref=args.verifier_image,
         proxy_image_ref=args.proxy_image,
         token_file=args.token_file,
-        source_h0_evaluation_id=live["h0_evaluation_id"],
+        source_h0_evaluation_id=(
+            args.source_h0_evaluation_id or live["h0_evaluation_id"]
+        ),
         task_ids=args.task_ids,
+        task_panel_path=args.task_panel,
         preflight_only=args.preflight_only,
     )
     print(json.dumps(result, sort_keys=True, indent=2, ensure_ascii=False))

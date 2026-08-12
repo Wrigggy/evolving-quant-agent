@@ -323,6 +323,7 @@ def prepare_quantcodeeval_h0(
     worker_image_ref: str,
     verifier_image_ref: str,
     proxy_image_ref: str,
+    task_panel_path: str | Path | None = None,
 ) -> tuple[
     QuantCodeEvalSnapshot,
     QFBenchSandboxEvaluator,
@@ -335,7 +336,10 @@ def prepare_quantcodeeval_h0(
     trusted = Path(trusted_root).resolve()
     run_root = Path(run_dir).resolve()
     run_root.mkdir(parents=True, exist_ok=True)
-    snapshot = load_quantcodeeval_snapshot(public)
+    snapshot = load_quantcodeeval_snapshot(
+        public,
+        task_panel_path=task_panel_path,
+    )
     public_role = verify_quantcodeeval_role_root(public, "public")
     trusted_role = verify_quantcodeeval_role_root(trusted, "trusted-verifier")
     if public_role.commit != trusted_role.commit:

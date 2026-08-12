@@ -112,6 +112,13 @@ def default_manifest_path() -> Path:
     )
 
 
+def default_expansion_panel_path() -> Path:
+    return (
+        Path(__file__).resolve().parents[2]
+        / "data" / "quantcodeeval" / "PANEL_EXPANSION.json"
+    )
+
+
 def public_track_task_ids() -> tuple[str, ...]:
     return _PUBLIC_TRACK
 
@@ -231,10 +238,31 @@ def _load_protocol_manifest(path: Path) -> dict:
     return payload
 
 
-def _task_entries(manifest: dict) -> tuple[dict, ...]:
-    pilot = manifest.get("pilot")
+def _task_splits(manifest: dict, task_panel_path: str | Path | None = None) -> dict:
+    if task_panel_path is None:
+        pilot = manifest.get("pilot")
+    else:
+        panel_path = Path(task_panel_path).expanduser().resolve()
+        try:
+            panel = json.loads(panel_path.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise QuantCodeEvalConfigError(f"cannot read task panel: {exc}") from exc
+        if panel.get("schema_version") != 1:
+            raise QuantCodeEvalConfigError("task panel schema_version must be 1")
+        pilot = {
+            "optimize": panel.get("optimize", []),
+            "held_out": panel.get("held_out", []),
+        }
     if not isinstance(pilot, dict):
         raise QuantCodeEvalConfigError("manifest pilot must be an object")
+    return pilot
+
+
+def _task_entries(
+    manifest: dict,
+    task_panel_path: str | Path | None = None,
+) -> tuple[dict, ...]:
+    pilot = _task_splits(manifest, task_panel_path)
     entries: list[dict] = []
     seen: set[str] = set()
     for split in ("optimize", "held_out"):
@@ -554,6 +582,7 @@ def materialize_quantcodeeval_role_snapshot(
     *,
     manifest_path: str | Path | None = None,
     trusted_oracle_root: str | Path | None = None,
+    task_panel_path: str | Path | None = None,
 ) -> QuantCodeEvalRoleSnapshotResult:
     """Create disjoint public and verifier-only roots from a pinned checkout."""
 
@@ -567,7 +596,7 @@ def materialize_quantcodeeval_role_snapshot(
             f"source commit mismatch: expected {protocol['commit']}, found {revision}"
         )
     public_track = _load_public_track(source, protocol)
-    entries = _task_entries(protocol)
+    entries = _task_entries(protocol, task_panel_path)
     task_ids = tuple(sorted(entry["task_id"] for entry in entries))
     oracle_root = Path(trusted_oracle_root or source).expanduser().resolve()
     oracle_records = protocol.get("trusted_runtime")
@@ -581,6 +610,7 @@ def materialize_quantcodeeval_role_snapshot(
         source / "scripts" / "run_checker_harness.py",
         *_regular_files(source / "quantcodeeval"),
     ]
+    consumed_oracle_paths: list[Path] = []
     for entry in entries:
         task_id = entry["task_id"]
         source_task = source / "tasks" / task_id
@@ -589,6 +619,9 @@ def materialize_quantcodeeval_role_snapshot(
             source_task / "paper_text.md",
             *_regular_files(source_task / "checkers"),
         ))
+        consumed_oracle_paths.append(
+            oracle_root / "tasks" / task_id / "golden_ref.py"
+        )
         track_task = public_track["tasks"].get(task_id)
         input_files = track_task.get("input_files") if isinstance(track_task, dict) else None
         if not isinstance(input_files, list) or not input_files:
@@ -605,6 +638,9 @@ def materialize_quantcodeeval_role_snapshot(
                 )
             consumed_source_paths.append(source / source_relative)
     _require_pinned_source_paths(source, tuple(consumed_source_paths))
+    if _source_revision(oracle_root) != revision:
+        raise QuantCodeEvalConfigError("trusted oracle checkout revision mismatch")
+    _require_pinned_source_paths(oracle_root, tuple(consumed_oracle_paths))
 
     public_target = Path(public_root).expanduser().resolve()
     trusted_target = Path(trusted_root).expanduser().resolve()
@@ -733,9 +769,7 @@ def materialize_quantcodeeval_role_snapshot(
         if not isinstance(expected_golden, str) or not re.fullmatch(
             r"[0-9a-f]{64}", expected_golden
         ):
-            raise QuantCodeEvalConfigError(
-                f"manifest has no trusted golden identity for {task_id}"
-            )
+            expected_golden = None
         golden = tests_root / "golden_ref.py"
         _copy_file(
             oracle_root / "tasks" / task_id / "golden_ref.py",
@@ -833,6 +867,7 @@ def load_quantcodeeval_snapshot(
     public_root: str | Path,
     *,
     manifest_path: str | Path | None = None,
+    task_panel_path: str | Path | None = None,
 ) -> QuantCodeEvalSnapshot:
     """Load a materialized public role using the QEA canary split."""
 
@@ -844,7 +879,10 @@ def load_quantcodeeval_snapshot(
     if verified.commit != protocol["commit"]:
         raise QuantCodeEvalConfigError("materialized revision mismatch")
     role_manifest = json.loads((root / "MANIFEST.json").read_text())
-    expected_ids = tuple(entry["task_id"] for entry in _task_entries(protocol))
+    pilot = _task_splits(protocol, task_panel_path)
+    expected_ids = tuple(
+        entry["task_id"] for entry in _task_entries(protocol, task_panel_path)
+    )
     if role_manifest.get("role") != "public" or tuple(
         role_manifest.get("task_ids", ())
     ) != expected_ids:
@@ -855,10 +893,10 @@ def load_quantcodeeval_snapshot(
         commit=protocol["commit"],
         optimize=QuantCodeEvalSplit(
             "optimize",
-            tuple(_load_task(root, row) for row in protocol["pilot"]["optimize"]),
+            tuple(_load_task(root, row) for row in pilot["optimize"]),
         ),
         held_out=QuantCodeEvalSplit(
             "held_out",
-            tuple(_load_task(root, row) for row in protocol["pilot"].get("held_out", [])),
+            tuple(_load_task(root, row) for row in pilot.get("held_out", [])),
         ),
     )

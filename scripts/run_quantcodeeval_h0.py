@@ -28,6 +28,7 @@ def main() -> int:
     parser.add_argument("--worker-image", required=True)
     parser.add_argument("--verifier-image", required=True)
     parser.add_argument("--proxy-image", required=True)
+    parser.add_argument("--task-panel", type=Path)
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args()
     run_dir = args.results_root.resolve() / args.run_id
@@ -40,6 +41,7 @@ def main() -> int:
         worker_image_ref=args.worker_image,
         verifier_image_ref=args.verifier_image,
         proxy_image_ref=args.proxy_image,
+        task_panel_path=args.task_panel,
     )
     if args.preflight_only:
         print(json.dumps(plan, sort_keys=True, indent=2))

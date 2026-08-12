@@ -120,6 +120,8 @@ def test_full_candidate_preflight_accepts_coherent_multifile_component(
 
 
 def test_full_candidate_rejects_failed_smoke_and_role_mismatch(tmp_path, monkeypatch):
+    if not hasattr(sys, "stdlib_module_names"):
+        monkeypatch.setattr(sys, "stdlib_module_names", frozenset(), raising=False)
     seed = _worker(tmp_path / "seed")
     candidate = _candidate(seed, tmp_path / "candidate")
     tasks = (SimpleNamespace(task_id="T16"), SimpleNamespace(task_id="T24"))

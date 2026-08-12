@@ -385,6 +385,7 @@ def run_quantcodeeval_full_candidate(
     token_file: str | Path | None = None,
     source_h0_evaluation_id: str,
     task_ids: Iterable[str] | None = None,
+    task_panel_path: str | Path | None = None,
     require_activation: bool = True,
     preflight_only: bool = False,
 ) -> dict[str, object]:
@@ -426,6 +427,7 @@ def run_quantcodeeval_full_candidate(
         worker_image_ref=worker_image_ref,
         verifier_image_ref=verifier_image_ref,
         proxy_image_ref=proxy_image_ref,
+        task_panel_path=task_panel_path,
     )
     available_tasks = {task.task_id: task for task in snapshot.optimize.tasks}
     requested_task_ids = tuple(task_ids or available_tasks)

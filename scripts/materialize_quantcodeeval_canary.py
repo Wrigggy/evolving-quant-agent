@@ -27,6 +27,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="separate pinned verifier-only root containing tasks/Txx/golden_ref.py",
     )
+    parser.add_argument(
+        "--task-panel",
+        type=Path,
+        help="optional public-task panel overriding the default T16/T24 canary",
+    )
     return parser
 
 
@@ -38,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         args.trusted_root,
         manifest_path=args.manifest,
         trusted_oracle_root=args.trusted_oracle_root,
+        task_panel_path=args.task_panel,
     )
     print(f"public role:  {result.public_root}")
     print(f"trusted role: {result.trusted_root}")

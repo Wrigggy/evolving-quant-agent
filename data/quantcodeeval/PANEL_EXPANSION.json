@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "name": "public-data-expansion",
+  "optimize": [
+    {
+      "task_id": "T01",
+      "domain": "time_series_momentum",
+      "lineage": "time-series-momentum-moskowitz-ooi-pedersen-2012",
+      "difficulty": "paper_reproduction",
+      "reward_kind": "binary_all_properties",
+      "agent_timeout_seconds": 3600,
+      "verifier_timeout_seconds": 3600,
+      "build_timeout_seconds": 900,
+      "cpus": 2,
+      "memory_mb": 4096
+    },
+    {
+      "task_id": "T12",
+      "domain": "factor_momentum",
+      "lineage": "factor-momentum-ehsani-linnainmaa-2022",
+      "difficulty": "paper_reproduction",
+      "reward_kind": "binary_all_properties",
+      "agent_timeout_seconds": 3600,
+      "verifier_timeout_seconds": 3600,
+      "build_timeout_seconds": 900,
+      "cpus": 2,
+      "memory_mb": 4096
+    },
+    {
+      "task_id": "T18",
+      "domain": "conditional_volatility_targeting",
+      "lineage": "conditional-volatility-targeting-harvey-hoyle-korgaonkar-rattray-sia-vonlanthen-2018",
+      "difficulty": "paper_reproduction",
+      "reward_kind": "binary_all_properties",
+      "agent_timeout_seconds": 3600,
+      "verifier_timeout_seconds": 3600,
+      "build_timeout_seconds": 900,
+      "cpus": 2,
+      "memory_mb": 4096
+    },
+    {
+      "task_id": "T19",
+      "domain": "downside_volatility_management",
+      "lineage": "downside-volatility-managed-portfolios",
+      "difficulty": "paper_reproduction",
+      "reward_kind": "binary_all_properties",
+      "agent_timeout_seconds": 3600,
+      "verifier_timeout_seconds": 3600,
+      "build_timeout_seconds": 900,
+      "cpus": 2,
+      "memory_mb": 4096
+    }
+  ],
+  "held_out": []
+}
