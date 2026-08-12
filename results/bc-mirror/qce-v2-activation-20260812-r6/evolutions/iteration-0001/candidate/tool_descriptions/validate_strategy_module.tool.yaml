@@ -1,0 +1,59 @@
+type: tool
+name: validate_strategy_module
+description: >-
+  Deterministic pre-submission validator for a quant strategy module. Reads one
+  strategy.py-style module and reports errors/warnings/info without touching any
+  checker, reference, property, verdict, or paper-text file. It parses the
+  module and verifies required top-level functions exist with the parameter
+  names from the task instruction; when the spec lists functions in pipeline
+  order it runs single-DataFrame functions on a shared fixed-seed synthetic
+  frame that accumulates each function's output columns, so chained steps
+  (e.g. compute_strategy_returns reading upstream columns) execute as in the
+  real pipeline. Checks: output columns present, non-empty, finite, NaN/lag
+  placement (first/last non-null), near-constant output, and output-vs-input
+  magnitude ratio >100x (percent-vs-decimal scale hazard). It also statically
+  scans for look-ahead shift(-1), percent-like module numeric constants
+  (including a warning when such constants appear with no explicit /100-style
+  decimal conversion anywhere in the module), and forbidden file reads. The
+  module is loaded from a temporary copy with bytecode writing disabled, so no
+  __pycache__ or *.pyc files are created in the output directory. When
+  output_dir is supplied, it removes any bytecode caches there and verifies
+  the required deliverables exist.
+input_schema:
+  type: object
+  properties:
+    module_path:
+      type: string
+      description: >-
+        Absolute path to the strategy module to validate (the file the task
+        asked you to save, e.g. /app/output/strategy.py).
+    required_functions:
+      type: object
+      description: >-
+        Map of function name to an interface spec, in pipeline order: {"fn_name":
+        {"input_columns": [...], "output_columns": [...], "expected_params": [...]}}.
+        expected_params (optional) must equal the function's positional
+        parameter names from the task instruction's function table. A list of
+        plain function names is also accepted for a static presence-only check.
+        Output-column and runtime checks run for single-DataFrame functions;
+        multi-argument functions are static-checked only. The spec must come
+        from the task instruction, never from evaluator/checker files.
+    sample_rows:
+      type: integer
+      description: >-
+        Number of synthetic rows for runtime checks (default 120, max 400).
+    output_dir:
+      type: string
+      description: >-
+        Optional absolute path of the deliverable output directory (e.g.
+        /app/output). When supplied, the validator removes bytecode caches
+        there and verifies the required deliverables exist.
+    required_deliverables:
+      type: array
+      items:
+        type: string
+      description: >-
+        Optional list of file names (relative to output_dir) that must exist
+        after the module is saved, e.g. ["strategy.py"].
+  required: [module_path]
+  additionalProperties: false

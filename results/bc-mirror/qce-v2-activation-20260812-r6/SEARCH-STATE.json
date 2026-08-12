@@ -1,0 +1,74 @@
+{
+  "archive": [
+    {
+      "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+      "history_entry_id": "191d5e32c0925716a0cbd4aae2611d88826c3cb3c0599761a46b4bfbf6aa0280",
+      "official_rewards": {
+        "T16": 1.0,
+        "T24": 0.0
+      },
+      "selection": "archived"
+    }
+  ],
+  "consecutive_abstain": 0,
+  "consecutive_no_information": 0,
+  "h0_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+  "limits": {
+    "max_archive_entries": 8,
+    "max_consecutive_abstain": 1,
+    "max_cost_usd": 1.0,
+    "max_model_requests": 64,
+    "max_no_information_rounds": 1,
+    "max_rounds": 1
+  },
+  "official_incumbent_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+  "official_rewards": {
+    "T16": 1.0,
+    "T24": 0.0
+  },
+  "protocol": "quant_property_v2_full_harness",
+  "rounds": [
+    {
+      "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+      "cost_usd": 0.0395237752,
+      "decision": "ACT",
+      "declared_roles": [
+        "tools",
+        "agent_config",
+        "tool_descriptions",
+        "systemprompt"
+      ],
+      "history_entry_id": "191d5e32c0925716a0cbd4aae2611d88826c3cb3c0599761a46b4bfbf6aa0280",
+      "iteration": 1,
+      "mechanism": "T24's submitted module stores exactly one module-level numeric constant VOL_SCALING_TARGET=5.34, the paper C.1 anchor '5.34% per month' (paper_text.md lines 6223/6314/6403/6479) in raw percent form. Instruction R3 says the target is a fixed paper constant and R1 says use total market return mkt. If applied without /100 to decimal-space weights/returns, portfolio_weight and strategy_return are ~100x too large, failing exactly the scale-sensitive properties (fingerprint: exactly one failing property per family 6/7 type_a, 9/10 type_b, all interface/structural checks green, zero errors).",
+      "model_requests": 31,
+      "new_information": true,
+      "official_rewards": {
+        "T16": 1.0,
+        "T24": 0.0
+      },
+      "parent_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+      "primary_components": [
+        "tools"
+      ],
+      "reason": "activation canary retained candidate without running T16/T24",
+      "selection": "archived"
+    }
+  ],
+  "run_id": "qce-v2-activation-20260812-r6",
+  "schema_version": 2,
+  "search_parent_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+  "search_parent_rewards": {
+    "T16": 1.0,
+    "T24": 0.0
+  },
+  "state_sha256": "649f648cd3ac09517d5202b30d7440175f8d3a806451cbe1a3c18533b1b46132",
+  "stop_reason": "budget_exhausted",
+  "stopped": true,
+  "task_ids": [
+    "T16",
+    "T24"
+  ],
+  "total_cost_usd": 0.0395237752,
+  "total_model_requests": 31
+}

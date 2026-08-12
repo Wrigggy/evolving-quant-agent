@@ -1,0 +1,45 @@
+{
+  "benchmark_commit": "9bdacc4898aeec08813764290b12d356e0a011d1",
+  "checkpoint": "quantcodeeval-v2-iteration-0001",
+  "run_id": "qce-v2-full-candidate-20260812-r2b",
+  "split": "engineering_canary_optimize",
+  "summary": {
+    "domain_scores": {
+      "event_strategy": 0.0,
+      "volatility": 0.0
+    },
+    "overall": 0.0,
+    "scores": [
+      {
+        "diagnostic_tags": [
+          "tests_failed"
+        ],
+        "domain": "volatility",
+        "log_uri": "/home/julius/qea/runtime/quantcodeeval/runs/qce-v2-full-candidate-20260812-r2b/attempts/93032e0bb267a9e0797479a36e12c7fc270fe24aa16f6bca8df4a0d9f4e0acfd/verifier/verifier-command.trusted.json",
+        "reward": 0.0,
+        "task_id": "T16",
+        "tests_failed": 6,
+        "tests_passed": 12,
+        "verifier_exit_code": 0
+      },
+      {
+        "diagnostic_tags": [
+          "missing_artifact"
+        ],
+        "domain": "event_strategy",
+        "log_uri": "/home/julius/qea/runtime/quantcodeeval/runs/qce-v2-full-candidate-20260812-r2b/attempts/b85302e8651f5e2db9d00938537c1b1da0c052eb2c6512e40032fece31ad053e/raw-trace.jsonl",
+        "reward": 0.0,
+        "task_id": "T24",
+        "tests_failed": null,
+        "tests_passed": null,
+        "verifier_exit_code": null
+      }
+    ],
+    "task_mean": 0.0,
+    "task_rewards": {
+      "T16": 0.0,
+      "T24": 0.0
+    }
+  },
+  "worker_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0"
+}

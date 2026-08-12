@@ -1,0 +1,11 @@
+{
+  "artifact_records": [
+    {
+      "path": "trade_log.json",
+      "sha256": "eb6458f4670e752abb0d5f97a3bc5798bee0b0360c445426f04e98b7dec179fb",
+      "size_bytes": 125861
+    }
+  ],
+  "purpose": "worker_validation_side_effects_not_submitted",
+  "schema_version": 1
+}

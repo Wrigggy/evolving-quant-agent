@@ -25,10 +25,32 @@ from .quantcodeeval_baseline import (
     MODEL,
     SPLIT,
     _atomic_private_json,
-    _route_evidence,
     prepare_quantcodeeval_h0,
 )
-from .quantcodeeval_candidate import _answer_free_sidecar
+
+
+def _answer_free_attempt_evidence(attempt_dir: Path) -> dict[str, object]:
+    """Load the normal summary or derive a compact missing-artifact summary."""
+
+    for path in (
+        attempt_dir / "verifier" / "answer-free-evidence.json",
+        attempt_dir / "answer-free-worker-zero.json",
+    ):
+        value = _read_json_mapping(path)
+        if value is not None:
+            return value
+    completed = _read_json_mapping(attempt_dir / "completed-score.json")
+    if completed is None:
+        raise QuantCodeEvalFullCandidateError(
+            "completed attempt has no answer-free score evidence"
+        )
+    return {
+        "benchmark": "quantcodeeval",
+        "official_reward": completed.get("reward"),
+        "diagnostic_tags": list(completed.get("diagnostic_tags") or []),
+        "tests_passed": completed.get("tests_passed"),
+        "tests_failed": completed.get("tests_failed"),
+    }
 
 
 class QuantCodeEvalFullCandidateError(ValueError):
@@ -360,7 +382,7 @@ def run_quantcodeeval_full_candidate(
     worker_image_ref: str,
     verifier_image_ref: str,
     proxy_image_ref: str,
-    token_file: str | Path,
+    token_file: str | Path | None = None,
     source_h0_evaluation_id: str,
     require_activation: bool = True,
     preflight_only: bool = False,
@@ -474,10 +496,32 @@ def run_quantcodeeval_full_candidate(
     assert isinstance(plan, dict)
     preflight_path = root / "FULL-CANDIDATE-PREFLIGHT.json"
     if preflight_path.is_file():
-        if json.loads(preflight_path.read_text(encoding="utf-8")) != plan:
+        persisted_plan = _read_json_mapping(preflight_path)
+        if persisted_plan is None:
             raise QuantCodeEvalFullCandidateError(
-                "persisted full-candidate preflight differs"
+                "persisted full-candidate preflight is invalid"
             )
+        # Resume is governed by the experimental setup, not by unrelated
+        # coordinator implementation details.  This allows a result-writing
+        # bug to be fixed after the paid task attempts have completed.
+        resume_keys = (
+            "protocol",
+            "run_id",
+            "iteration",
+            "mechanism",
+            "primary_components",
+            "declared_roles",
+            "source_h0_evaluation_id",
+            "candidate_worker_digest",
+            "checkpoint",
+            "task_ids",
+            "model",
+        )
+        if any(persisted_plan.get(key) != plan.get(key) for key in resume_keys):
+            raise QuantCodeEvalFullCandidateError(
+                "persisted full-candidate experimental setup differs"
+            )
+        plan = persisted_plan
     else:
         _atomic_private_json(preflight_path, plan)
     if preflight_only:
@@ -567,7 +611,16 @@ def run_quantcodeeval_full_candidate(
         checkpoint=checkpoint,
         split=SPLIT,
     )
-    route = _route_evidence(root, Path(token_file).resolve())
+    # The completed proxy audit already records the actual provider, model,
+    # requests, tokens, and cost.  A second provider-metadata lookup made a
+    # completed panel fail when the provider later returned 404, so the token
+    # path is retained only for CLI compatibility and is intentionally unused.
+    route = {
+        "model": MODEL,
+        "provider": "deepseek",
+        "allow_fallbacks": False,
+        "basis": "completed proxy audit",
+    }
     attempt_rows: list[dict[str, object]] = []
     for task in snapshot.optimize.tasks:
         attempt = TaskAttempt.create(
@@ -578,12 +631,13 @@ def run_quantcodeeval_full_candidate(
             checkpoint=checkpoint,
             worker_digest=candidate_digest,
         )
-        sidecar = _answer_free_sidecar(root / "attempts" / attempt.attempt_id)
         attempt_rows.append(
             {
                 "task_id": task.task_id,
                 "attempt_id": attempt.attempt_id,
-                "answer_free_evidence": json.loads(sidecar.read_text(encoding="utf-8")),
+                "answer_free_evidence": _answer_free_attempt_evidence(
+                    root / "attempts" / attempt.attempt_id
+                ),
             }
         )
     evaluation_identity = _canonical_sha256(

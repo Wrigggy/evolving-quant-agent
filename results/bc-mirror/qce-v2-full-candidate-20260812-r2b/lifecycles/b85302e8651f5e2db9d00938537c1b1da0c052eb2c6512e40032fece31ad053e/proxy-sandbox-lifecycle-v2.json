@@ -1,0 +1,32 @@
+{
+  "attempt_id": "b85302e8651f5e2db9d00938537c1b1da0c052eb2c6512e40032fece31ad053e",
+  "attempt_identity_sha256": "0c056569a06b21870bad95b9e159eeb4cc48e29c068600da91975bf059ab3b4e",
+  "backend": "rootless-docker",
+  "cleaned_at": "2026-08-12T07:42:42.346912+00:00",
+  "cleaned_up": true,
+  "cleanup_method": "exact-id",
+  "cleanup_result": "killed",
+  "created_at": "2026-08-12T07:39:57.455550+00:00",
+  "failure": "worker output membership differs from the benchmark contract: expected=['strategy.py'], found=[]",
+  "finished_at": "2026-08-12T07:42:41.916264+00:00",
+  "immutable_image_ref": "sha256:950280b19b6215c9a48ae81d5d9fdc6b69fa2192706ff4920efbb0981e33beae",
+  "native_id": "61fd0c6727ea05cfc9ce397935fd0a9b28dd74de93397a9d46450f4a6226e5f7",
+  "resource_contract": {
+    "cpu_count": 2,
+    "executable_tmpfs_paths": [],
+    "memory_mb": 4096,
+    "network_policy": "proxy-outbound",
+    "pids_limit": 128,
+    "timeout_seconds": 3600,
+    "writable_tmpfs_mb": {
+      "/run/qea-secrets": 16,
+      "/tmp": 128
+    }
+  },
+  "role": "proxy",
+  "run_id": "qce-v2-full-candidate-20260812-r2b",
+  "schema_version": 2,
+  "spec_sha256": "c3c23eb212f0f57c7e925524b0c47ad2c4e38525182d948e78234541f77cf095",
+  "started_at": "2026-08-12T07:39:57.793979+00:00",
+  "task_id": "T24"
+}

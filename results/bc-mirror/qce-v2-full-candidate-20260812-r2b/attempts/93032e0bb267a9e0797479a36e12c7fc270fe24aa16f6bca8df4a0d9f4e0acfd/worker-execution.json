@@ -1,0 +1,25 @@
+{
+  "artifact_dir": "artifacts",
+  "artifacts": [
+    {
+      "path": "strategy.py",
+      "sha256": "cea30f584b0717ae7590fdc551e9913f59aae0991c0ed073b4cefcac16fe874f",
+      "size_bytes": 10352
+    }
+  ],
+  "attempt_id": "93032e0bb267a9e0797479a36e12c7fc270fe24aa16f6bca8df4a0d9f4e0acfd",
+  "cleaned_up": true,
+  "final_text_uri": "final.txt",
+  "log_uri": "worker-command.json",
+  "sandbox_id": "9933229b5ba4f3277885139101c2104226145177470400bf9151f8ca3c43bd82",
+  "summary": {
+    "dependency_lock_sha256": "43f1d94bb7df2b6b855292a47a178cf9de5c9918d6c557831803fdeee2582271",
+    "files": 2,
+    "outcome": "completed",
+    "secs": 219.067,
+    "tool_calls": 21,
+    "tool_errors": 9,
+    "turns": 16
+  },
+  "trace_uri": "raw-trace.jsonl"
+}

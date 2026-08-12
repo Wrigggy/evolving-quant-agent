@@ -1,0 +1,40 @@
+{
+  "attempt_id": "93032e0bb267a9e0797479a36e12c7fc270fe24aa16f6bca8df4a0d9f4e0acfd",
+  "attempt_identity_sha256": "445a848ea8c9873b6777be0712be714d6959ba0ed209e12358c2370d574e530f",
+  "backend": "rootless-docker",
+  "cleaned_at": "2026-08-12T07:40:15.986222+00:00",
+  "cleaned_up": true,
+  "cleanup_method": "exact-id",
+  "cleanup_result": "killed",
+  "created_at": "2026-08-12T07:39:59.132184+00:00",
+  "failure": null,
+  "finished_at": "2026-08-12T07:40:15.631158+00:00",
+  "immutable_image_ref": "sha256:f2512a05e926a0dc86d8b2c4fa2a49b72d48ebe24831ba14ab3a5570b9b20c26",
+  "native_id": "d16095a109eaba3c44c4d4ffc5023bd5e190a6b028e93c477e834b28b040038e",
+  "resource_contract": {
+    "cpu_count": 2,
+    "executable_tmpfs_paths": [
+      "/opt/qea/uv-cache",
+      "/opt/qea/uv-tools"
+    ],
+    "memory_mb": 4096,
+    "network_policy": "worker-proxy-only",
+    "pids_limit": 256,
+    "timeout_seconds": 3600,
+    "writable_tmpfs_mb": {
+      "/app": 1024,
+      "/logs": 64,
+      "/opt/qea/uv-cache": 256,
+      "/opt/qea/uv-tools": 64,
+      "/qea": 512,
+      "/tests": 128,
+      "/tmp": 256
+    }
+  },
+  "role": "canary",
+  "run_id": "qce-v2-full-candidate-20260812-r2b",
+  "schema_version": 2,
+  "spec_sha256": "d29574a6b1254c6a77b153dbf68a696d1dc828ce3643236571d9813fc1dcd417",
+  "started_at": "2026-08-12T07:39:59.386375+00:00",
+  "task_id": "T16"
+}

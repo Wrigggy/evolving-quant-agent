@@ -269,6 +269,10 @@ def test_full_candidate_persists_answer_free_failure_and_reuses_it(
     )
 
     first = run_quantcodeeval_full_candidate(**kwargs)
+    monkeypatch.setattr(
+        "qea.quantcodeeval_full_candidate._source_sha256",
+        lambda: {"coordinator.py": "updated"},
+    )
     second = run_quantcodeeval_full_candidate(**kwargs)
 
     assert first == second

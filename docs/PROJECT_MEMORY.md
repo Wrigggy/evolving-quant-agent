@@ -1417,10 +1417,40 @@ attempts can be imported so the next round sees r1, r4 full-panel, and r5
 together. The result is measured component-contract evidence only; see the
 updated live/full-candidate report above.
 
+r6 then imported all three prior negatives: the r1 attribution mismatch, the
+r4 worker-delivery failure, and the r5 admission rejection. It removed the
+retained self-test, changed executable tool code plus its registration,
+description, and activation prompt, passed component smokes and independent
+admission, and reached activation `PASS`. The activation used 31 requests,
+2,134,291 tokens, and `$0.0395237752`; H0 was not resampled and all three
+recorded resources were cleaned.
+
+The r6 candidate subsequently completed the two-task panel, with a negative
+result. T16 regressed from 18/18 under H0 to 12/18 and reward 0. T24 again
+finished without `strategy.py` and received reward 0. The panel used 24
+requests, 362,946 tokens, and `$0.0131630576`; all eight recorded resources
+were cleaned. This falsifies the current broad validator intervention: it
+damaged the protected passing task and did not fix the target task's delivery.
+The next engineering direction is a smaller task/failure-conditioned component
+that guarantees final artifact delivery without applying quant validation to
+already-passing tasks. Do a local component smoke first, then a small task
+panel; do not add more general validator complexity.
+
+### 2026-08-12 speed-first experimental engineering policy
+
+Repository engineering is now explicitly mechanism-first rather than
+security-first. Avoid over-defensive infrastructure, new content hashes, and
+tests for implausible cases. Preserve enough evidence to reconstruct setup,
+candidate changes, scores, costs, and observed failures; an engineering canary
+does not require exhaustive equality of every runtime contract. Prefer a small
+smoke or preflight and fast iteration, while retaining only the minimum
+research boundaries around verifier answers, credentials, truthful scoring,
+and obviously invalid runs.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
 - Add detailed evidence as a dated report or decision record; keep this file an index and current-state summary.
 - Never silently rewrite historical result files. Record an explicit superseding decision instead.
-- Pin commit IDs, dataset hashes, image digests, verifier versions, model/provider identifiers, and run IDs in every publishable experiment.
+- Record the setup, benchmark version, verifier version, model/provider, and run ID needed to interpret each publishable experiment; do not add new content-hash gates.
 - Distinguish `measured`, `source-audited`, `proposed`, and `not yet tested` claims.

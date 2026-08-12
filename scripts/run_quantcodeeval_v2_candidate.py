@@ -35,7 +35,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--worker-image", required=True)
     parser.add_argument("--verifier-image", required=True)
     parser.add_argument("--proxy-image", required=True)
-    parser.add_argument("--token-file", required=True, type=Path)
+    parser.add_argument(
+        "--token-file",
+        type=Path,
+        help="Deprecated compatibility option; completed proxy evidence is used.",
+    )
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args(argv)
 

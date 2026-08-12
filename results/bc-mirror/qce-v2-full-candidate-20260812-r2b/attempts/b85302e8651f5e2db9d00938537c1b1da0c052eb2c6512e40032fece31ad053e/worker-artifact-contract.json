@@ -1,0 +1,11 @@
+{
+  "artifact_records": [],
+  "expected_paths": [
+    "strategy.py"
+  ],
+  "final_text_uri": "/home/julius/qea/runtime/quantcodeeval/runs/qce-v2-full-candidate-20260812-r2b/attempts/b85302e8651f5e2db9d00938537c1b1da0c052eb2c6512e40032fece31ad053e/final.txt",
+  "found_paths": [],
+  "outcome": "official_worker_artifact_contract_zero",
+  "schema_version": 1,
+  "trace_uri": "/home/julius/qea/runtime/quantcodeeval/runs/qce-v2-full-candidate-20260812-r2b/attempts/b85302e8651f5e2db9d00938537c1b1da0c052eb2c6512e40032fece31ad053e/raw-trace.jsonl"
+}

@@ -1,0 +1,47 @@
+{
+  "allow_fallbacks": false,
+  "benchmark_commit": "9bdacc4898aeec08813764290b12d356e0a011d1",
+  "checkpoint": "quantcodeeval-h0-shell-only",
+  "coordinator_source_sha256": {
+    "executors/execution_record.py": "84b8e1c51ae9a6c0cbe6e79204688688dfdc3dd71272826829b45db360490bfa",
+    "executors/sandbox_nexau.py": "58a681c9da6af5c4eb1fd2c0daf8589a5925de3654d8678e397c33f37945bc79",
+    "quantcodeeval_baseline.py": "fb435768e27993a1715c5b4eed5b34a521f7fc54f28a03c9e723e5702d904fdc",
+    "verifiers/quantcodeeval.py": "6bad4bf8d297be522740ab6bbe6c720c64e2911ad749cd991a4ca704513f0d30",
+    "verifiers/quantcodeeval_rpc.py": "30b1b624227f6ce600a40d1ffe1679a9a3e6cdfd17fd1bef8b15d3b0fcd778dd",
+    "verifiers/quantcodeeval_rpc_server.py": "fa25f08cc0e05f25f1a6d61d8a0b132bbda4e1ccf1bb5785af6313351230ba64",
+    "verifiers/quantcodeeval_sandbox.py": "d1aac50715dc842c1bda5d82139e985c491e1aed20a45d4f2d0d0e20a92373fb"
+  },
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "model_request_count": 0,
+  "output_contract": {
+    "max_files": 3,
+    "max_total_bytes": 8388608,
+    "retained_not_submitted_paths": [
+      "trade_log.json",
+      "__pycache__/strategy.cpython-311.pyc"
+    ],
+    "submitted_paths": [
+      "strategy.py"
+    ]
+  },
+  "protocol": "quantcodeeval-h0-shell-only-v1",
+  "proxy_image_ref": "sha256:950280b19b6215c9a48ae81d5d9fdc6b69fa2192706ff4920efbb0981e33beae",
+  "public_manifest_sha256": "d3a2b4c2e6869e12788a0e2d31ec354a39f66f742ce36d8ad05a590175e1a2d2",
+  "required_provider": "deepseek",
+  "resample_policy": "H0 sampled once; later iterations reuse exact scores",
+  "rootless_preflight_identity_sha256": "3541f59e7fa9b1d176efa13d7476663f92e8e8f7a92d305031884c9515579c75",
+  "runtime_identity_sha256": "fe8b2fc664dfdfddfb388020149f8bacd7dd8546ad661db0690e4f358fc8d535",
+  "schema_version": 1,
+  "split": "engineering_canary_optimize",
+  "status": "preflight_complete",
+  "task_ids": [
+    "T16",
+    "T24"
+  ],
+  "trusted_manifest_sha256": "1ebe7cbfc9e1d8a878142b88c7881849ad6e724c8389dca60792aee5e1661b0f",
+  "verifier_concurrency": 1,
+  "verifier_image_ref": "sha256:f2512a05e926a0dc86d8b2c4fa2a49b72d48ebe24831ba14ab3a5570b9b20c26",
+  "worker_concurrency": 1,
+  "worker_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+  "worker_image_ref": "sha256:d347f20bf36d5b0ca9f0493f3b939ad707de61f1ccd7d687a09402fb4087bd00"
+}

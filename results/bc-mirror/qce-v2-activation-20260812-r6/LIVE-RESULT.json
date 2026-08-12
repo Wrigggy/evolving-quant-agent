@@ -1,0 +1,303 @@
+{
+  "activation": {
+    "activated_primary_components": [
+      "tools"
+    ],
+    "basis": "trusted Evolver sandbox component smoke bound to final candidate digest",
+    "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+    "executable_primary_components": [
+      "tools"
+    ],
+    "iteration": 1,
+    "official_worker_evaluation_run": false,
+    "primary_components": [
+      "tools"
+    ],
+    "schema_version": 1,
+    "status": "passed"
+  },
+  "benchmark_score_claimed": false,
+  "candidate_benchmark_evaluated": false,
+  "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+  "component_tests": [
+    {
+      "candidate_digest": "48b65ee803348de8d10b761ad0efa47d2895bed79b5c8e96e138e4579e142fed",
+      "component": "tools",
+      "exit_code": 0,
+      "operation": "call",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"errors\": [\"module file not found: /nonexistent/strategy.py\"], \"info\": [], \"module_path\": \"/nonexistent/strategy.py\", \"ok\": false, \"schema_version\": 2, \"warnings\": []}\n",
+      "target": "tools.strategy_validate:validate_strategy_module",
+      "test_index": 1
+    },
+    {
+      "candidate_digest": "48b65ee803348de8d10b761ad0efa47d2895bed79b5c8e96e138e4579e142fed",
+      "component": "agent_config",
+      "exit_code": 0,
+      "operation": "graph",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "E2B SDK not installed. Install it with: pip install e2b\n",
+      "stdout": "{\"tools\": 2}\n",
+      "target": "agent.yaml",
+      "test_index": 2
+    },
+    {
+      "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+      "component": "tools",
+      "exit_code": 0,
+      "operation": "import",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"module\": \"tools.strategy_validate\"}\n",
+      "target": "tools.strategy_validate",
+      "test_index": 3
+    },
+    {
+      "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+      "component": "agent_config",
+      "exit_code": 0,
+      "operation": "graph",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "E2B SDK not installed. Install it with: pip install e2b\n",
+      "stdout": "{\"tools\": 2}\n",
+      "target": "agent.yaml",
+      "test_index": 4
+    },
+    {
+      "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+      "component": "tools",
+      "exit_code": 0,
+      "operation": "call",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"errors\": [\"module file not found: /nonexistent/strategy.py\"], \"info\": [], \"module_path\": \"/nonexistent/strategy.py\", \"ok\": false, \"schema_version\": 2, \"warnings\": []}\n",
+      "target": "tools.strategy_validate:validate_strategy_module",
+      "test_index": 5
+    },
+    {
+      "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+      "checks": [
+        "file_manifest",
+        "protected_config",
+        "python_compile",
+        "declared_imports",
+        "subprocess_timeouts",
+        "local_bindings",
+        "local_skills",
+        "local_middlewares",
+        "component_reachability"
+      ],
+      "kind": "independent_full_harness_admission",
+      "status": "passed"
+    }
+  ],
+  "decision": {
+    "abstain_reason": "",
+    "component_override_reason": "quant_property_v2 prior for quant_definition_estimation lists [tools, skills, memory]; the deterministic pre-submission validator mechanism is implemented under tools/ (validator behavior in tools/*.py is the tools role per contract semantics), so tools is the sole primary causal role; skills/memory do not change. agent_config and tool_descriptions are binding surfaces (registration + schema); systemprompt activates the workflow. No validator/ directory changes, so the validator role is not declared.",
+    "components": [
+      "tools",
+      "agent_config",
+      "tool_descriptions",
+      "systemprompt"
+    ],
+    "counterevidence": "The corpus is answer-free: artifact and trace contents are hashes only, so the exact failing property cannot be read and h1 vs h2 cannot be fully discriminated; the module storing VOL_SCALING_TARGET=5.34 does not by itself prove misuse (code may divide by 100 at use); the historical validator candidate never reached official scoring, so its quant effect is unproven; T16's success shows the harness can pass without any added tool, making the intervention a risk on a protected task.",
+    "decision": "ACT",
+    "evidence_refs": [
+      "history/archive/diffs/41960a1905f309aed2bb50de7b370233fe06fbbf6f1db34c6957cf3fb1a9630c.patch",
+      "history/archive/entries/299b627ef246d73f1b6085c3d3b76dd5e1e84fd13b4692f830e536b9868d620b.json",
+      "history/archive/entries/8b88adcfad99b49cb962a417db643d57defc26ce179f326f999e72059b34db9e.json",
+      "history/archive/entries/926ce7e3c76b1fedd004b0e16bf08b6fb6f1ad8db4270ff38cac11067471f740.json",
+      "tasks/T16/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/official_and_families.json",
+      "tasks/T16/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/strategy_ast_facts.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/official_and_families.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/process_facts.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/strategy_ast_facts.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/trace_facts.json",
+      "tasks/T24/instruction.md",
+      "tasks/T24/paper_text.md"
+    ],
+    "failure_class": "quant_definition_estimation",
+    "hypotheses_considered": [
+      {
+        "failure_type_id": "quant_definition_estimation",
+        "hypothesis_id": "h1_unit_scale",
+        "mechanism": "T24's submitted module stores exactly one module-level numeric constant VOL_SCALING_TARGET=5.34, the paper C.1 anchor '5.34% per month' (paper_text.md lines 6223/6314/6403/6479) in raw percent form. Instruction R3 says the target is a fixed paper constant and R1 says use total market return mkt. If applied without /100 to decimal-space weights/returns, portfolio_weight and strategy_return are ~100x too large, failing exactly the scale-sensitive properties (fingerprint: exactly one failing property per family 6/7 type_a, 9/10 type_b, all interface/structural checks green, zero errors).",
+        "prediction": "With the validator flagging percent-form constants lacking an explicit /100-style conversion plus output-vs-input magnitude ratio >100x, the worker rescales to decimal space; the currently failing scale-sensitive properties pass while structural properties stay green (fingerprint moves from one-failure-per-family to zero failures), and T16 stays at reward 1.0 with no percent-form constant present.",
+        "success_counterfactual": "T16 passes all 18 properties with zero module numeric constants (c solved from sample per R6), so the percent-form fixed constant is a T24-specific hazard and the validator should remain silent on T16's module."
+      },
+      {
+        "failure_type_id": "data_temporal_integrity",
+        "hypothesis_id": "h2_temporal_lag",
+        "mechanism": "T24 instruction R2 requires expanding_mean to exclude the current month, sum_4_newsy to use strictly-prior newsy months, and R3/R4 mandate a shift(1) lag on portfolio_weight (no same-month trading). A wrong endpoint misaligns strategy_return and fails causality/NaN-placement properties.",
+        "prediction": "The validator's NaN-placement audit (leading-NaN vs trailing-NaN, look-ahead shift(-1) scan) would catch a wrong-direction lag; if h2 is the real cause, alignment/causality properties pass after the worker fixes flagged lag issues while magnitude properties stay green.",
+        "success_counterfactual": "T16's strict one-month lag rules pass under the same worker digest, proving the worker can implement lag rules when the instruction states them; T24's newsy-month window structure leaves room for an endpoint slip, so h2 cannot be fully excluded from the answer-free corpus."
+      },
+      {
+        "failure_type_id": "artifact_interface",
+        "hypothesis_id": "h3_naive_binding_delivery",
+        "mechanism": "The historical validator candidate (digest 9a72fc74) passed full admission but failed at the worker artifact contract: T16 output file limit exceeded (4>3: __pycache__/strategy.cpython-311.pyc, -312.pyc, trade_log.json) and T24 missing_submission_artifact (found=[]) because the binding imported the module from the deliverable directory (writing __pycache__) and the systemprompt directed the worker to run the module (T16 main writes trade_log.json). The baseline worker delivers exactly strategy.py on both tasks (files=2), so the added tool's side effects/workflow broke delivery, not the quant logic.",
+        "prediction": "A corrected binding - import from a temp copy with sys.dont_write_bytecode=True, output-directory delivery audit removing bytecode caches and verifying exactly the required deliverable, and a systemprompt that never tells the worker to run the module or write extra artifacts - keeps T16 at reward 1.0 (delivery clean, 18/18) and guarantees T24 writes /app/output/strategy.py before finishing.",
+        "success_counterfactual": "The baseline worker delivers strategy.py on both tasks (T16 files=2, T24 files=2), so delivery hygiene is achievable without the validator; the historical binding's extra-file side effects are the eliminated cause of that candidate's failure."
+      }
+    ],
+    "hypotheses_eliminated": [
+      "h3_naive_binding_delivery"
+    ],
+    "prediction": {
+      "process_changes": "worker saves the module to /app/output/strategy.py first, calls validate_strategy_module on the saved draft, fixes flagged errors/warnings, and finalizes only after the delivery audit reports exactly the required file; no task-specific answer or expected value is encoded",
+      "task_outcomes": {
+        "T16": "official_reward stays 1.0; output directory contains exactly strategy.py (no __pycache__, no trade_log.json)",
+        "T24": "official_reward > 0 with diagnostic_tags no longer containing properties_incomplete if h1/h2 holds; at minimum the module is delivered and the quant-failure fingerprint changes"
+      }
+    },
+    "primary_components": [
+      "tools"
+    ],
+    "probe_ids_used": [
+      "t24_failure_mechanism_discrimination"
+    ],
+    "risk_tasks": [
+      "T16"
+    ],
+    "selected_hypothesis_id": "h1_unit_scale",
+    "uncertainty": "Cannot confirm which T24 property fails or that 5.34 is applied raw. The validator is deliberately mechanism-agnostic (covers unit scale AND lag endpoints AND delivery hygiene) without encoding any task answer. Delivery failures of the historical binding are concrete and directly addressed; residual risk is that the T24 worker again finishes without saving, mitigated by write-first/finalize-discipline prompting that never runs the module."
+  },
+  "h0_evaluation_id": "d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06",
+  "h0_resampled": false,
+  "history_entry_id": "191d5e32c0925716a0cbd4aae2611d88826c3cb3c0599761a46b4bfbf6aa0280",
+  "plan_identity_sha256": "ac125625775072e7b90770fcd9b4d5936bed9abfe377945db2fe7e6e43caf4d3",
+  "protocol": "quant_property_v2_live_activation_canary",
+  "proxy_audit": {
+    "all_requests_completed": true,
+    "completed_request_count": 31,
+    "cost_complete": true,
+    "input_tokens": 2057253,
+    "output_tokens": 77038,
+    "provider_cost_usd": 0.0395237752,
+    "provider_request_ids": [
+      "gen-1786519337-KCEHTkJu1NaANI3aEGxr",
+      "gen-1786519340-anmWqNHAI21nmNW6hxCR",
+      "gen-1786519345-6J3Yn7ercvBWXsXBb9Ku",
+      "gen-1786519352-Cn3hTUp4q4zKHSEvHHCa",
+      "gen-1786519360-PRTyInaAHu0sJ3dlqZQB",
+      "gen-1786519368-9nIwX0Dmq2mriqywoBDe",
+      "gen-1786519373-kVsEwyCwPhH8kIedtse0",
+      "gen-1786519379-l8Q8Zwum22672P82qs2d",
+      "gen-1786519401-O98h5vJPFw9mtTJlDxKx",
+      "gen-1786519437-UZJJi1A7aGPXWQXX4cMY",
+      "gen-1786519475-927r9zBXZX9cy4VjGYCH",
+      "gen-1786519522-Dn8eYM4d1HV7HbCNgA7U",
+      "gen-1786519555-84KMp8euVoJHnov7YHgd",
+      "gen-1786519664-0SxWgGG5oZJKU9UdlUTM",
+      "gen-1786519669-lB4xDCBjLbP2rhzuweAG",
+      "gen-1786519749-QjzB9zRLwTLMVQnljH8s",
+      "gen-1786519758-pHbC87AueKJYFY1ohlJ3",
+      "gen-1786519831-umHIinQnANH3mXFIuxar",
+      "gen-1786519855-lGrB6oVS01CxIpRoDwfA",
+      "gen-1786519935-epvq8kQK4nljmYcnmIyX",
+      "gen-1786519948-atSwyehJ7hnGIQhy3SFC",
+      "gen-1786519954-agzw9H3LrhIugpRXXQDn",
+      "gen-1786519965-iq2NCGHSFb6d3O3XwMn3",
+      "gen-1786519988-04ESGMwTe6jABMYmpv4H",
+      "gen-1786519994-sfnpFugrQWtA0D9qg7nk",
+      "gen-1786520000-yZSSJ8vPb5TjokIiJfNO",
+      "gen-1786520025-eANzg4Ylm73hwMSuNf4a",
+      "gen-1786520031-uJSNgHzUayVp5ZPj1PQ3",
+      "gen-1786520037-62fQyTpYL0jQ5LvgEoEf",
+      "gen-1786520043-yus4UJHxofTPQllN7eVn",
+      "gen-1786520054-RsRt0rSnPrnPb8UdZEFE"
+    ],
+    "provider_request_ids_unique": true,
+    "request_count": 31,
+    "total_tokens": 2134291
+  },
+  "result_identity_sha256": "365e00dcf2c866a1e5f1e3f34897cb350a27529de717d487862807b75e3e1282",
+  "schema_version": 1,
+  "search_state": {
+    "archive": [
+      {
+        "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+        "history_entry_id": "191d5e32c0925716a0cbd4aae2611d88826c3cb3c0599761a46b4bfbf6aa0280",
+        "official_rewards": {
+          "T16": 1.0,
+          "T24": 0.0
+        },
+        "selection": "archived"
+      }
+    ],
+    "consecutive_abstain": 0,
+    "consecutive_no_information": 0,
+    "h0_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+    "limits": {
+      "max_archive_entries": 8,
+      "max_consecutive_abstain": 1,
+      "max_cost_usd": 1.0,
+      "max_model_requests": 64,
+      "max_no_information_rounds": 1,
+      "max_rounds": 1
+    },
+    "official_incumbent_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+    "official_rewards": {
+      "T16": 1.0,
+      "T24": 0.0
+    },
+    "protocol": "quant_property_v2_full_harness",
+    "rounds": [
+      {
+        "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+        "cost_usd": 0.0395237752,
+        "decision": "ACT",
+        "declared_roles": [
+          "tools",
+          "agent_config",
+          "tool_descriptions",
+          "systemprompt"
+        ],
+        "history_entry_id": "191d5e32c0925716a0cbd4aae2611d88826c3cb3c0599761a46b4bfbf6aa0280",
+        "iteration": 1,
+        "mechanism": "T24's submitted module stores exactly one module-level numeric constant VOL_SCALING_TARGET=5.34, the paper C.1 anchor '5.34% per month' (paper_text.md lines 6223/6314/6403/6479) in raw percent form. Instruction R3 says the target is a fixed paper constant and R1 says use total market return mkt. If applied without /100 to decimal-space weights/returns, portfolio_weight and strategy_return are ~100x too large, failing exactly the scale-sensitive properties (fingerprint: exactly one failing property per family 6/7 type_a, 9/10 type_b, all interface/structural checks green, zero errors).",
+        "model_requests": 31,
+        "new_information": true,
+        "official_rewards": {
+          "T16": 1.0,
+          "T24": 0.0
+        },
+        "parent_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+        "primary_components": [
+          "tools"
+        ],
+        "reason": "activation canary retained candidate without running T16/T24",
+        "selection": "archived"
+      }
+    ],
+    "run_id": "qce-v2-activation-20260812-r6",
+    "schema_version": 2,
+    "search_parent_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+    "search_parent_rewards": {
+      "T16": 1.0,
+      "T24": 0.0
+    },
+    "state_sha256": "649f648cd3ac09517d5202b30d7440175f8d3a806451cbe1a3c18533b1b46132",
+    "stop_reason": "budget_exhausted",
+    "stopped": true,
+    "task_ids": [
+      "T16",
+      "T24"
+    ],
+    "total_cost_usd": 0.0395237752,
+    "total_model_requests": 31
+  },
+  "selection": "archived",
+  "status": "PASS"
+}

@@ -256,3 +256,43 @@ letting them escape as coordinator exceptions. Prior rejected-attempt import
 also recognizes both exact-role mismatches and independent admission failures,
 and accepts multiple ordered prior attempts. A later round can therefore see
 r1, the r4 full-panel failure, and r5's retained self-test simultaneously.
+
+## Follow-up activation r6 and full panel
+
+r6 demonstrated that the Evolver can use several kinds of prior failure in one
+new attempt. Before its first model request it received the r1 attribution
+rejection, the r4 worker-delivery failure, and the r5 admission rejection. It
+removed the stray self-test and submitted a five-file harness containing the
+base shell tool plus a new validation tool, its registration and description,
+and a revised system prompt. Final tool import/call, agent-graph smoke, and
+independent admission all passed, so activation status was `PASS`.
+
+The activation used 31 completed provider requests, 2,057,253 input and 77,038
+output tokens, 2,134,291 total, and `$0.0395237752`. H0 was not resampled and no
+benchmark score was produced during activation. All three recorded resources
+were cleaned. The compact activation evidence is stored at
+`results/bc-mirror/qce-v2-activation-20260812-r6/`.
+
+The same candidate then ran on both QuantCodeEval tasks. The result was a clear
+negative:
+
+- T16 regressed from the H0 result of 18/18 to 12/18, so its official reward
+  fell from 1 to 0.
+- T24 again did not deliver `strategy.py`, so no verifier ran and its official
+  reward remained 0.
+
+The candidate vector was therefore `[0, 0]`, versus H0 `[1, 0]`, with task mean
+0. The panel used 24 requests, 362,946 tokens, and `$0.0131630576`. All eight
+recorded worker, verifier, proxy, and network resources were cleaned. Evidence
+is stored at
+`results/bc-mirror/qce-v2-full-candidate-20260812-r2b/`.
+
+The mechanism conclusion is more useful than the score itself: a broad
+pre-submission quant validator is currently the wrong intervention. It adds
+behavior to the protected task strongly enough to break six properties, yet
+does not guarantee the target task's only indispensable delivery condition.
+The next candidate should isolate a much smaller artifact-finalization
+component, invoke it only for delivery-type failures, and leave already-passing
+quant implementations alone. A local component smoke followed by the two-task
+panel is enough for the next engineering iteration; no exhaustive runtime
+identity comparison is needed.

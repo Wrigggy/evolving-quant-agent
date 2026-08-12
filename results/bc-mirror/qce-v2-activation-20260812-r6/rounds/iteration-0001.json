@@ -1,0 +1,217 @@
+{
+  "activation": {
+    "activated_primary_components": [
+      "tools"
+    ],
+    "basis": "trusted Evolver sandbox component smoke bound to final candidate digest",
+    "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+    "executable_primary_components": [
+      "tools"
+    ],
+    "iteration": 1,
+    "official_worker_evaluation_run": false,
+    "primary_components": [
+      "tools"
+    ],
+    "schema_version": 1,
+    "status": "passed"
+  },
+  "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+  "component_tests": [
+    {
+      "candidate_digest": "48b65ee803348de8d10b761ad0efa47d2895bed79b5c8e96e138e4579e142fed",
+      "component": "tools",
+      "exit_code": 0,
+      "operation": "call",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"errors\": [\"module file not found: /nonexistent/strategy.py\"], \"info\": [], \"module_path\": \"/nonexistent/strategy.py\", \"ok\": false, \"schema_version\": 2, \"warnings\": []}\n",
+      "target": "tools.strategy_validate:validate_strategy_module",
+      "test_index": 1
+    },
+    {
+      "candidate_digest": "48b65ee803348de8d10b761ad0efa47d2895bed79b5c8e96e138e4579e142fed",
+      "component": "agent_config",
+      "exit_code": 0,
+      "operation": "graph",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "E2B SDK not installed. Install it with: pip install e2b\n",
+      "stdout": "{\"tools\": 2}\n",
+      "target": "agent.yaml",
+      "test_index": 2
+    },
+    {
+      "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+      "component": "tools",
+      "exit_code": 0,
+      "operation": "import",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"module\": \"tools.strategy_validate\"}\n",
+      "target": "tools.strategy_validate",
+      "test_index": 3
+    },
+    {
+      "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+      "component": "agent_config",
+      "exit_code": 0,
+      "operation": "graph",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "E2B SDK not installed. Install it with: pip install e2b\n",
+      "stdout": "{\"tools\": 2}\n",
+      "target": "agent.yaml",
+      "test_index": 4
+    },
+    {
+      "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+      "component": "tools",
+      "exit_code": 0,
+      "operation": "call",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"errors\": [\"module file not found: /nonexistent/strategy.py\"], \"info\": [], \"module_path\": \"/nonexistent/strategy.py\", \"ok\": false, \"schema_version\": 2, \"warnings\": []}\n",
+      "target": "tools.strategy_validate:validate_strategy_module",
+      "test_index": 5
+    },
+    {
+      "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+      "checks": [
+        "file_manifest",
+        "protected_config",
+        "python_compile",
+        "declared_imports",
+        "subprocess_timeouts",
+        "local_bindings",
+        "local_skills",
+        "local_middlewares",
+        "component_reachability"
+      ],
+      "kind": "independent_full_harness_admission",
+      "status": "passed"
+    }
+  ],
+  "decision": {
+    "abstain_reason": "",
+    "component_override_reason": "quant_property_v2 prior for quant_definition_estimation lists [tools, skills, memory]; the deterministic pre-submission validator mechanism is implemented under tools/ (validator behavior in tools/*.py is the tools role per contract semantics), so tools is the sole primary causal role; skills/memory do not change. agent_config and tool_descriptions are binding surfaces (registration + schema); systemprompt activates the workflow. No validator/ directory changes, so the validator role is not declared.",
+    "components": [
+      "tools",
+      "agent_config",
+      "tool_descriptions",
+      "systemprompt"
+    ],
+    "counterevidence": "The corpus is answer-free: artifact and trace contents are hashes only, so the exact failing property cannot be read and h1 vs h2 cannot be fully discriminated; the module storing VOL_SCALING_TARGET=5.34 does not by itself prove misuse (code may divide by 100 at use); the historical validator candidate never reached official scoring, so its quant effect is unproven; T16's success shows the harness can pass without any added tool, making the intervention a risk on a protected task.",
+    "decision": "ACT",
+    "evidence_refs": [
+      "history/archive/diffs/41960a1905f309aed2bb50de7b370233fe06fbbf6f1db34c6957cf3fb1a9630c.patch",
+      "history/archive/entries/299b627ef246d73f1b6085c3d3b76dd5e1e84fd13b4692f830e536b9868d620b.json",
+      "history/archive/entries/8b88adcfad99b49cb962a417db643d57defc26ce179f326f999e72059b34db9e.json",
+      "history/archive/entries/926ce7e3c76b1fedd004b0e16bf08b6fb6f1ad8db4270ff38cac11067471f740.json",
+      "tasks/T16/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/official_and_families.json",
+      "tasks/T16/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/strategy_ast_facts.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/official_and_families.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/process_facts.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/strategy_ast_facts.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/trace_facts.json",
+      "tasks/T24/instruction.md",
+      "tasks/T24/paper_text.md"
+    ],
+    "failure_class": "quant_definition_estimation",
+    "hypotheses_considered": [
+      {
+        "failure_type_id": "quant_definition_estimation",
+        "hypothesis_id": "h1_unit_scale",
+        "mechanism": "T24's submitted module stores exactly one module-level numeric constant VOL_SCALING_TARGET=5.34, the paper C.1 anchor '5.34% per month' (paper_text.md lines 6223/6314/6403/6479) in raw percent form. Instruction R3 says the target is a fixed paper constant and R1 says use total market return mkt. If applied without /100 to decimal-space weights/returns, portfolio_weight and strategy_return are ~100x too large, failing exactly the scale-sensitive properties (fingerprint: exactly one failing property per family 6/7 type_a, 9/10 type_b, all interface/structural checks green, zero errors).",
+        "prediction": "With the validator flagging percent-form constants lacking an explicit /100-style conversion plus output-vs-input magnitude ratio >100x, the worker rescales to decimal space; the currently failing scale-sensitive properties pass while structural properties stay green (fingerprint moves from one-failure-per-family to zero failures), and T16 stays at reward 1.0 with no percent-form constant present.",
+        "success_counterfactual": "T16 passes all 18 properties with zero module numeric constants (c solved from sample per R6), so the percent-form fixed constant is a T24-specific hazard and the validator should remain silent on T16's module."
+      },
+      {
+        "failure_type_id": "data_temporal_integrity",
+        "hypothesis_id": "h2_temporal_lag",
+        "mechanism": "T24 instruction R2 requires expanding_mean to exclude the current month, sum_4_newsy to use strictly-prior newsy months, and R3/R4 mandate a shift(1) lag on portfolio_weight (no same-month trading). A wrong endpoint misaligns strategy_return and fails causality/NaN-placement properties.",
+        "prediction": "The validator's NaN-placement audit (leading-NaN vs trailing-NaN, look-ahead shift(-1) scan) would catch a wrong-direction lag; if h2 is the real cause, alignment/causality properties pass after the worker fixes flagged lag issues while magnitude properties stay green.",
+        "success_counterfactual": "T16's strict one-month lag rules pass under the same worker digest, proving the worker can implement lag rules when the instruction states them; T24's newsy-month window structure leaves room for an endpoint slip, so h2 cannot be fully excluded from the answer-free corpus."
+      },
+      {
+        "failure_type_id": "artifact_interface",
+        "hypothesis_id": "h3_naive_binding_delivery",
+        "mechanism": "The historical validator candidate (digest 9a72fc74) passed full admission but failed at the worker artifact contract: T16 output file limit exceeded (4>3: __pycache__/strategy.cpython-311.pyc, -312.pyc, trade_log.json) and T24 missing_submission_artifact (found=[]) because the binding imported the module from the deliverable directory (writing __pycache__) and the systemprompt directed the worker to run the module (T16 main writes trade_log.json). The baseline worker delivers exactly strategy.py on both tasks (files=2), so the added tool's side effects/workflow broke delivery, not the quant logic.",
+        "prediction": "A corrected binding - import from a temp copy with sys.dont_write_bytecode=True, output-directory delivery audit removing bytecode caches and verifying exactly the required deliverable, and a systemprompt that never tells the worker to run the module or write extra artifacts - keeps T16 at reward 1.0 (delivery clean, 18/18) and guarantees T24 writes /app/output/strategy.py before finishing.",
+        "success_counterfactual": "The baseline worker delivers strategy.py on both tasks (T16 files=2, T24 files=2), so delivery hygiene is achievable without the validator; the historical binding's extra-file side effects are the eliminated cause of that candidate's failure."
+      }
+    ],
+    "hypotheses_eliminated": [
+      "h3_naive_binding_delivery"
+    ],
+    "prediction": {
+      "process_changes": "worker saves the module to /app/output/strategy.py first, calls validate_strategy_module on the saved draft, fixes flagged errors/warnings, and finalizes only after the delivery audit reports exactly the required file; no task-specific answer or expected value is encoded",
+      "task_outcomes": {
+        "T16": "official_reward stays 1.0; output directory contains exactly strategy.py (no __pycache__, no trade_log.json)",
+        "T24": "official_reward > 0 with diagnostic_tags no longer containing properties_incomplete if h1/h2 holds; at minimum the module is delivered and the quant-failure fingerprint changes"
+      }
+    },
+    "primary_components": [
+      "tools"
+    ],
+    "probe_ids_used": [
+      "t24_failure_mechanism_discrimination"
+    ],
+    "risk_tasks": [
+      "T16"
+    ],
+    "selected_hypothesis_id": "h1_unit_scale",
+    "uncertainty": "Cannot confirm which T24 property fails or that 5.34 is applied raw. The validator is deliberately mechanism-agnostic (covers unit scale AND lag endpoints AND delivery hygiene) without encoding any task answer. Delivery failures of the historical binding are concrete and directly addressed; residual risk is that the T24 worker again finishes without saving, mitigated by write-first/finalize-discipline prompting that never runs the module."
+  },
+  "evaluation": {
+    "answer_free_evaluation": {
+      "activation": {
+        "activated_primary_components": [
+          "tools"
+        ],
+        "basis": "trusted Evolver sandbox component smoke bound to final candidate digest",
+        "candidate_digest": "8579aab0428435c5677f8ade2e3a5bac5e77af6ea904b5418ac67fd239544dd0",
+        "executable_primary_components": [
+          "tools"
+        ],
+        "iteration": 1,
+        "official_worker_evaluation_run": false,
+        "primary_components": [
+          "tools"
+        ],
+        "schema_version": 1,
+        "status": "passed"
+      },
+      "h0_evaluation_id": "d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06",
+      "official_candidate_panel_run": false,
+      "schema_version": 1
+    },
+    "cost_usd": 0.0395237752,
+    "model_requests": 30,
+    "new_information": true,
+    "official_evaluated": false,
+    "official_rewards": {
+      "T16": 1.0,
+      "T24": 0.0
+    },
+    "reason": "activation canary retained candidate without running T16/T24"
+  },
+  "evidence_sha256": "db3d4cd16409d983de15cffa2ff7e7bd2d56ea7fa696ea73125a56a28904719c",
+  "history_entry_id": "191d5e32c0925716a0cbd4aae2611d88826c3cb3c0599761a46b4bfbf6aa0280",
+  "iteration": 1,
+  "prediction": {
+    "final_sha256": "1a0298fd9e0f056652234a6874362d7374e1a8e56df2d275355696ec101cb2ea",
+    "parse_error": "final response did not contain a JSON object"
+  },
+  "protocol": "quant_property_v2_full_harness",
+  "schema_version": 2,
+  "selection": "archived"
+}

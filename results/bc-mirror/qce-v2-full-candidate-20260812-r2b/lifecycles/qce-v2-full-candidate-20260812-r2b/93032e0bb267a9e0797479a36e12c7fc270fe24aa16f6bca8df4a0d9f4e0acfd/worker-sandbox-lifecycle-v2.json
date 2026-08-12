@@ -1,0 +1,33 @@
+{
+  "attempt_id": "93032e0bb267a9e0797479a36e12c7fc270fe24aa16f6bca8df4a0d9f4e0acfd",
+  "attempt_identity_sha256": "e5f59f13c048aca1eea40a154619a6553c01bb3f709dcf81486dee175d175687",
+  "backend": "rootless-docker",
+  "cleaned_at": "2026-08-12T07:39:56.189804+00:00",
+  "cleaned_up": true,
+  "cleanup_method": "exact-id",
+  "cleanup_result": "killed",
+  "created_at": "2026-08-12T07:36:11.959024+00:00",
+  "failure": null,
+  "finished_at": "2026-08-12T07:39:55.828764+00:00",
+  "immutable_image_ref": "sha256:d347f20bf36d5b0ca9f0493f3b939ad707de61f1ccd7d687a09402fb4087bd00",
+  "native_id": "9933229b5ba4f3277885139101c2104226145177470400bf9151f8ca3c43bd82",
+  "resource_contract": {
+    "cpu_count": 2,
+    "executable_tmpfs_paths": [],
+    "memory_mb": 4096,
+    "network_policy": "worker-proxy-only",
+    "pids_limit": 256,
+    "timeout_seconds": 5400,
+    "writable_tmpfs_mb": {
+      "/app": 2048,
+      "/qea": 512,
+      "/tmp": 256
+    }
+  },
+  "role": "worker",
+  "run_id": "qce-v2-full-candidate-20260812-r2b",
+  "schema_version": 2,
+  "spec_sha256": "3bb64f429c918882c646d6169d5e93902ea12090722286ec645fe580517e1f1f",
+  "started_at": "2026-08-12T07:36:12.207670+00:00",
+  "task_id": "T16"
+}
