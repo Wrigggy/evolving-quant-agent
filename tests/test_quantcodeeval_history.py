@@ -107,7 +107,7 @@ def test_history_evidence_projection_is_read_only_and_complete(tmp_path):
     projected = tmp_path / "evidence/history"
     assert not (projected / "tests").exists()
     assert (
-        projected / "component_checks" / f"{result.candidate_digest}.json"
+        projected / "component_checks" / f"{result.entry_id}.json"
     ).is_file()
     assert all(
         "tests" not in path.relative_to(projected).parts
@@ -188,13 +188,40 @@ def test_history_detects_component_test_tampering(tmp_path):
     candidate = _candidate(parent, tmp_path / "candidate")
     history = tmp_path / "history"
     result = _append(history, parent, candidate)
-    tests = history / "tests" / f"{result.candidate_digest}.json"
+    tests = history / "tests" / f"{result.entry_id}.json"
     payload = json.loads(tests.read_text())
     payload["tests"][0]["status"] = "failed"
     tests.write_text(json.dumps(payload))
 
     with pytest.raises(QuantCodeEvalHistoryError, match="component-test"):
         validate_quantcodeeval_history(history)
+
+
+def test_same_candidate_can_retain_distinct_attempt_tests(tmp_path):
+    parent = _worker(tmp_path / "parent")
+    candidate = _candidate(parent, tmp_path / "candidate")
+    history = tmp_path / "history"
+
+    first = _append(
+        history,
+        parent,
+        candidate,
+        run_id="qce-first-attempt",
+        component_tests=({"kind": "tool", "status": "passed", "test_index": 1},),
+    )
+    second = _append(
+        history,
+        parent,
+        candidate,
+        run_id="qce-second-attempt",
+        component_tests=({"kind": "tool", "status": "passed", "test_index": 2},),
+    )
+
+    assert first.candidate_digest == second.candidate_digest
+    assert first.entry_id != second.entry_id
+    assert (history / "tests" / f"{first.entry_id}.json").is_file()
+    assert (history / "tests" / f"{second.entry_id}.json").is_file()
+    assert validate_quantcodeeval_history(history)["entry_count"] == 2
 
 
 def test_history_rejects_forbidden_candidate_tree(tmp_path):

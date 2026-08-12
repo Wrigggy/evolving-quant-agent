@@ -360,9 +360,14 @@ def append_quantcodeeval_history(
     reused_candidate = _publish_snapshot(candidate, root / "objects", candidate_digest)
     reused_diff = _publish_immutable(root / "diffs" / f"{diff_sha256}.patch", diff)
     tests_payload = _canonical_json(
-        {"schema_version": 1, "candidate_digest": candidate_digest, "tests": normalized_tests}
+        {
+            "schema_version": 1,
+            "entry_id": entry_id,
+            "candidate_digest": candidate_digest,
+            "tests": normalized_tests,
+        }
     )
-    _publish_immutable(root / "tests" / f"{candidate_digest}.json", tests_payload)
+    _publish_immutable(root / "tests" / f"{entry_id}.json", tests_payload)
     reused_entry = _publish_immutable(root / "entries" / f"{entry_id}.json", entry_payload)
 
     index = _load_index(root)
@@ -421,7 +426,7 @@ def validate_quantcodeeval_history(history_root: str | Path) -> dict[str, object
         if diff_path.is_symlink() or not diff_path.is_file() or _sha256(diff_path.read_bytes()) != diff_digest:
             raise QuantCodeEvalHistoryError(f"history diff differs: {diff_digest}")
         referenced_diffs.add(diff_digest)
-        tests_path = root / "tests" / f"{payload['candidate_digest']}.json"
+        tests_path = root / "tests" / f"{entry_id}.json"
         if tests_path.is_symlink() or not tests_path.is_file():
             raise QuantCodeEvalHistoryError("history component-test record is missing")
         try:
@@ -432,6 +437,7 @@ def validate_quantcodeeval_history(history_root: str | Path) -> dict[str, object
             ) from exc
         expected_tests = {
             "schema_version": 1,
+            "entry_id": entry_id,
             "candidate_digest": payload["candidate_digest"],
             "tests": payload["component_tests"],
         }
