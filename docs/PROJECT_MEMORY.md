@@ -1646,6 +1646,37 @@ binary solve, run a focused repeat before incumbent promotion. Keep T19 as the
 protection task. Full evidence and exact run identities are in the
 [public-probe expansion report](reports/2026-08-13-quantcodeeval-public-probe-expansion.md).
 
+**Measured later on 2026-08-13:** the next autonomous round crossed the
+prompt-only boundary. Using the same candidate's contradictory T12 outcomes as
+history, the Evolver selected and implemented an executable public-behavior
+audit in `tools/public_behavior_probe.py` plus its tool description. It read
+the exact rejected candidate source on the following retry, ran a final tools
+component smoke, passed independent admission, and the new runner was observed
+executing inside the official worker against the generated strategy and public
+data. This establishes a working cumulative full-harness mutation mechanism;
+it does not establish a benchmark benefit.
+
+The focused candidate panel was negative: T12 passed `9/16` (Type-A `4/8`,
+Type-B `5/8`) versus the diagnostic parent's `12/16`, while T19 remained
+`18/18`. The official vector stayed `0,1` on the local T12/T19 panel, so the
+candidate is rejected and the experiment does not expand to T01/T18. Candidate
+cost was 65 requests, 2,833,409 tokens, and `$0.0733250952`; the completed r3d
+activation cost 26 requests, 1,448,502 tokens, and `$0.0291706968`.
+
+Three observed controller failures were fixed without broadening defensive
+infrastructure: terminal reserve now recognizes QuantCodeEval decisions;
+final-smoke rejections can enter searchable history; and component-test records
+belong to an attempt/history entry rather than globally to candidate code.
+R3d's completed activation was recovered after its post-run history append
+failed, using its already-persisted ACT, candidate, proxy audit, admission, and
+final component smoke; it was not model-resampled and was explicitly marked as
+recovered. The next search should not add more parameter prose or promote this
+audit. Prefer an externally materialized public-definition fixture or
+candidate finalization/state component that binds the selected definition to
+submitted code. Start with T12 and protect T19; expand only if a focused gain
+survives an immediate repeat. Full evidence is in the
+[public-probe expansion report](reports/2026-08-13-quantcodeeval-public-probe-expansion.md).
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

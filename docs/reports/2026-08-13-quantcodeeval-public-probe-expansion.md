@@ -308,3 +308,82 @@ The complete new evidence is mirrored additively under:
 - `results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r2-toolfirst/`
 - `results/bc-mirror/qce-public-probe-autonomous-candidate-20260813-r2-toolfirst/`
 - `results/bc-mirror/qce-public-probe-autonomous-candidate-20260813-r2-t12-repeat1/`
+
+## Autonomous executable-audit round
+
+Status: measured mechanism success but benchmark negative; executable component
+was Evolver-selected, activated, and locally evaluated, but it did not improve
+T12 and is not promoted
+
+Run identities:
+
+- terminal-protocol failure: `qce-public-probe-autonomous-activation-20260813-r3b`;
+- final-smoke rejection: `qce-public-probe-autonomous-activation-20260813-r3c`;
+- recovered passed activation: `qce-public-probe-autonomous-activation-20260813-r3d`; and
+- local candidate panel: `qce-public-probe-autonomous-candidate-20260813-r3d-local`.
+
+The third search round received three scored experiences, including the same
+parameter-identity candidate's T12 pass and immediate repeat failure. It
+explicitly compared worker/code-sampling variance, implementation defects,
+and environment differences. The environment was held fixed; the answer-free
+AST facts showed different submitted structures across samples, while a prior
+worker's internally green probes still failed official properties. The
+Evolver therefore selected an executable public-behavior audit rather than
+another prompt-only parameter rule.
+
+This round also exposed and repaired three concrete controller problems. The
+terminal middleware did not recognize `quant_property_v2` decisions, causing
+r3b to exhaust its terminal calls after a real ACT and tool implementation.
+After that fix, r3c completed but was rejected because its last tool edit came
+after its last component smoke. The exact rejected source and reason were
+imported for r3d. R3d then reused the mechanism, performed a final tools smoke,
+and completed a legal unscored activation. Its history append failed because
+component-test records were keyed only by candidate code, even though the same
+candidate can have different attempt evidence. Component checks are now scoped
+to the history entry. Since the full r3d candidate, ACT, proxy audit, admission,
+and final smoke had already completed, the activation was recovered without a
+second model run and marked `recovered_after=history_append_failure`.
+
+The candidate modified two files: executable
+`tools/public_behavior_probe.py` and its tool description. It added an optional
+structural pre-audit that imports the generated strategy in an isolated
+temporary directory and invokes named public functions against the real public
+data before bespoke assertions. The final tools component smoke and independent
+full-harness admission passed. During the official T12 worker run, the new
+runner was observed executing with the generated strategy, real `/app/data`,
+probe, and audit inputs, so this is an activated executable intervention rather
+than a dormant code edit.
+
+The focused official panel produced:
+
+| Task | diagnostic parent | executable-audit candidate | official reward |
+| --- | ---: | ---: | ---: |
+| T12 | 12/16 | 9/16 (Type-A 4/8, Type-B 5/8) | 0 |
+| T19 | 18/18 | 18/18 (Type-A 7/7, Type-B 11/11) | 1 |
+
+The panel used 65 completed model requests, 2,833,409 tokens, and
+`$0.0733250952`, with no fallback and clean completion. The r3d activation used
+26 completed requests, 1,448,502 tokens, and `$0.0291706968`. R3c used 35
+completed requests, 2,289,760 tokens, and `$0.0390771472`; it is a rejected
+component attempt, not a benchmark score. R3b is retained as an infrastructure
+failure and was not evaluated.
+
+The result falsifies the current audit mechanism as a T12 improvement. It
+proves the broader evolution mechanism can accumulate positive and negative
+evaluations, retrieve a failed candidate's exact source, autonomously choose
+executable code, activate it in a worker, and pass component/admission checks.
+But an audit whose contract is still declared by the same worker can remain
+self-confirming, and adding more repair effort can make a sampled solution
+worse. The next useful search target is not more prompt prose or a larger
+panel. It is an externally materialized public-definition fixture or a
+candidate finalization/state mechanism that forces the chosen definition into
+submitted code and can discriminate it independently. T19 remains the
+protection task. T12 should be the first local target; expand only after a gain
+survives a focused repeat.
+
+The evidence is mirrored additively under:
+
+- `results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r3b/`
+- `results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r3c/`
+- `results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r3d/`
+- `results/bc-mirror/qce-public-probe-autonomous-candidate-20260813-r3d-local/`
