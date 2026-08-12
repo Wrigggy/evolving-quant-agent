@@ -614,6 +614,84 @@ def _activation_from_component_tests(
     }
 
 
+def recover_quantcodeeval_v2_activation_canary(
+    *, run_dir: str | Path, release_dir: str | Path
+) -> dict[str, object]:
+    """Recover a completed activation whose history append failed afterward."""
+
+    root = Path(run_dir).expanduser().resolve()
+    release = Path(release_dir).expanduser().resolve()
+    live_path = root / "LIVE-RESULT.json"
+    if live_path.exists() or live_path.is_symlink():
+        raise QuantCodeEvalV2LiveError("activation already has a live result")
+    preflight = json.loads((root / "LIVE-PREFLIGHT.json").read_text(encoding="utf-8"))
+    attempt = root / "evolutions/iteration-0001"
+    summary = json.loads((attempt / "summary.json").read_text(encoding="utf-8"))
+    raw_result = json.loads((attempt / "result.json").read_text(encoding="utf-8"))
+    candidate = attempt / "candidate"
+    discovery = summary.get("discovery_hypothesis")
+    if (
+        preflight.get("status") != "preflight_complete"
+        or not isinstance(discovery, Mapping)
+        or discovery.get("schema_version") != 4
+        or discovery.get("protocol") != "quant_property_v2"
+        or discovery.get("decision") != "ACT"
+    ):
+        raise QuantCodeEvalV2LiveError("completed activation records are inconsistent")
+    decision = discovery.get("hypothesis")
+    if not isinstance(decision, Mapping) or decision.get("decision") != "ACT":
+        raise QuantCodeEvalV2LiveError("completed activation lacks a legal ACT")
+    candidate_digest = hash_worker_directory(candidate)
+    if raw_result.get("candidate_digest") != candidate_digest:
+        raise QuantCodeEvalV2LiveError("completed activation candidate differs")
+    components = tuple(str(value) for value in decision.get("components", ()))
+    primary = tuple(str(value) for value in decision.get("primary_components", ()))
+    metrics = measure_mutation(
+        before_root=release / "h0/workers/H0",
+        after_root=candidate,
+        declared_roles=components,
+    )
+    if metrics["declared_roles_match_actual"] is not True:
+        raise QuantCodeEvalV2LiveError("completed activation component roles differ")
+    admit_candidate(
+        release / "h0/workers/H0", candidate, AdmissionPolicy.qfbench_full()
+    )
+    raw_tests = summary.get("component_tests")
+    if not isinstance(raw_tests, list) or any(
+        not isinstance(value, Mapping) for value in raw_tests
+    ):
+        raise QuantCodeEvalV2LiveError("completed activation tests are invalid")
+    tests = tuple(dict(value) for value in raw_tests)
+    activation = _activation_from_component_tests(candidate, decision, tests, 1)
+    if activation["status"] != "passed":
+        raise QuantCodeEvalV2LiveError("completed activation lacks a final component smoke")
+    result_material = {
+        "schema_version": 1,
+        "protocol": PROTOCOL,
+        "status": "PASS",
+        "recovered_after": "history_append_failure",
+        "plan_identity_sha256": preflight.get("plan_identity_sha256"),
+        "h0_evaluation_id": preflight.get("h0_evaluation_id"),
+        "h0_resampled": False,
+        "candidate_benchmark_evaluated": False,
+        "benchmark_score_claimed": False,
+        "decision": dict(decision),
+        "candidate_digest": candidate_digest,
+        "history_entry_id": None,
+        "selection": "recovered_unscored",
+        "activation": activation,
+        "component_tests": list(tests),
+        "mutation_metrics": metrics,
+        "proxy_audit": _proxy_audit(root),
+    }
+    result = {
+        **result_material,
+        "result_identity_sha256": _canonical_sha256(result_material),
+    }
+    _atomic_json(live_path, result)
+    return result
+
+
 def run_quantcodeeval_v2_activation_canary(
     *,
     config_path: str | Path,
@@ -963,5 +1041,6 @@ def run_quantcodeeval_v2_activation_canary(
 
 __all__ = [
     "QuantCodeEvalV2LiveError",
+    "recover_quantcodeeval_v2_activation_canary",
     "run_quantcodeeval_v2_activation_canary",
 ]
