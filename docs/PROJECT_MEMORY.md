@@ -1473,9 +1473,19 @@ being canceled rather than repository failures. A contemporaneous
 `syspolicyd` burst tracked many short-lived Git processes and was followed by
 repeated `trustd` signature checks. This matches an open Codex Desktop macOS
 issue involving source-control polling, nested repositories, and Gatekeeper
-validation. Prefer CLI-only execution for long runs, avoid opening the parent
-`Coding` directory as one Desktop workspace, and treat removal of old
-worktrees or Git object cleanup as separate user-approved maintenance.
+validation.
+
+The post-exit A/B check refined the attribution. After Codex Desktop and its
+helper had fully exited, `syspolicyd` and `trustd` remained idle and the Git
+spawn rate fell from about 1.9 per second to about 0.7 per second. The remaining
+activity arrived as four-process waves approximately every five seconds. A
+short parent-process trace attributed every captured Git process in those waves
+to the Visual Studio Code extension host (`Code Helper (Plugin)`), not to Codex
+CLI. Therefore Desktop was a contributor to the original amplification but not
+the only source of Git polling. For the cleanest long-run setup, use Codex CLI,
+fully quit VS Code as well, and recheck activity; if VS Code must stay open,
+limit it to the repository and disable unnecessary Git refresh or fetch. Treat
+worktree removal or Git object cleanup as separate user-approved maintenance.
 
 ## Memory Maintenance Rules
 
