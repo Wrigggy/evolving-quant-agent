@@ -1445,6 +1445,16 @@ An investigator-written finalizer is reserved for a later diagnostic control
 only if autonomous search cannot localize or implement a working mechanism;
 that control would test the mechanism separately from search capability.
 
+The accepted execution order is now explicit. Reuse the published H0 without
+resampling, run the focused deterministic mechanism tests, then launch one real
+autonomous round. Only a non-empty candidate that passes its component smoke
+and independent admission reaches the T16/T24 panel. Feed its answer-free result
+back into later rounds and continue while the search adds new information; five
+rounds is not a requirement. A diagnostic improvement may become the next
+search parent without becoming the official incumbent. Expand beyond T16/T24
+only after this mechanism canary works. See the
+[next-round decision](decisions/2026-08-12-quantcodeeval-next-autonomous-round.md).
+
 ### 2026-08-12 speed-first experimental engineering policy
 
 Repository engineering is now explicitly mechanism-first rather than
@@ -1486,6 +1496,15 @@ the only source of Git polling. For the cleanest long-run setup, use Codex CLI,
 fully quit VS Code as well, and recheck activity; if VS Code must stay open,
 limit it to the repository and disable unnecessary Git refresh or fetch. Treat
 worktree removal or Git object cleanup as separate user-approved maintenance.
+
+A complete Desktop restartability check then passed. No Desktop process or
+helper remained before launch; the app restarted with its renderer, service,
+app-server, and computer-use helper alive after the startup interval and without
+an immediate crash. A normal application quit removed the Desktop main process
+and runtime helpers again. Four older `node_repl` processes were verified as
+children of the active terminal Codex CLI and intentionally left running. The
+machine is therefore back in CLI-only state, and a full Desktop exit does not
+prevent a later normal restart.
 
 ## Memory Maintenance Rules
 
