@@ -8,6 +8,7 @@ from qea.quantcodeeval_v2_live import (
     _proxy_audit,
     _seed_full_candidate_failure_history,
     _seed_rejected_attempt_history,
+    _seed_scored_candidate_history,
 )
 from qea.quantcodeeval_history import validate_quantcodeeval_history
 
@@ -317,3 +318,100 @@ def test_failed_full_candidate_becomes_unscored_searchable_history(tmp_path):
     assert entry["evaluation"]["task_outcomes"][1]["failure_class"] == (
         "missing_submission_artifact"
     )
+
+
+def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
+    source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
+    seed = tmp_path / "seed"
+    shutil.copytree(source, seed)
+    activation = tmp_path / "qce-v2-activation"
+    candidate = activation / "evolutions/iteration-0001/candidate"
+    candidate.parent.mkdir(parents=True)
+    shutil.copytree(seed, candidate)
+    prompt = candidate / "systemprompt.md"
+    prompt.write_text(prompt.read_text() + "Validate every task.\n")
+    digest = hash_worker_directory(candidate)
+    decision = {
+        "decision": "ACT",
+        "hypotheses_considered": [
+            {"hypothesis_id": "h1", "mechanism": "broad validation"}
+        ],
+        "selected_hypothesis_id": "h1",
+        "primary_components": ["systemprompt"],
+        "components": ["systemprompt"],
+    }
+    component_tests = [
+        {
+            "status": "passed",
+            "component": "systemprompt",
+            "candidate_digest": digest,
+        }
+    ]
+    activation_payload = {"status": "passed", "candidate_digest": digest}
+    (activation / "LIVE-RESULT.json").write_text(
+        json.dumps(
+            {
+                "status": "PASS",
+                "candidate_benchmark_evaluated": False,
+                "candidate_digest": digest,
+                "decision": decision,
+                "component_tests": component_tests,
+                "activation": activation_payload,
+            }
+        )
+    )
+    full = tmp_path / "qce-v2-full-candidate"
+    full.mkdir()
+    h0_id = "7" * 64
+    (full / "FULL-CANDIDATE-PREFLIGHT.json").write_text(
+        json.dumps(
+            {
+                "status": "preflight_complete",
+                "source_h0_evaluation_id": h0_id,
+                "candidate_worker_digest": digest,
+                "iteration": 1,
+            }
+        )
+    )
+    (full / "FULL-CANDIDATE-RESULT.json").write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "official_evaluated": True,
+                "candidate_worker_digest": digest,
+                "score_summary": {"task_rewards": {"T16": 0.0, "T24": 0.0}},
+                "attempts": [
+                    {
+                        "task_id": "T16",
+                        "answer_free_evidence": {"official_reward": 0.0},
+                    },
+                    {
+                        "task_id": "T24",
+                        "answer_free_evidence": {
+                            "diagnostic_tags": ["missing_artifact"]
+                        },
+                    },
+                ],
+                "cost_audit": {"request_count": 24},
+            }
+        )
+    )
+
+    imported = _seed_scored_candidate_history(
+        history_root=tmp_path / "history",
+        activation_run_dir=activation,
+        full_candidate_run_dir=full,
+        seed_worker_dir=seed,
+        h0_evaluation_id=h0_id,
+        h0_rewards={"T16": 1.0, "T24": 0.0},
+    )
+
+    index = json.loads((tmp_path / "history/INDEX.json").read_text())
+    entry = json.loads(
+        (tmp_path / "history/entries" / f"{index['entries'][0]}.json").read_text()
+    )
+    assert imported["official_rewards"] == {"T16": 0.0, "T24": 0.0}
+    assert entry["selection"] == "rejected"
+    assert entry["evaluation"]["official_evaluated"] is True
+    assert entry["evaluation"]["official_rewards"] == {"T16": 0.0, "T24": 0.0}
+    assert entry["evaluation"]["h0_official_rewards"] == {"T16": 1.0, "T24": 0.0}

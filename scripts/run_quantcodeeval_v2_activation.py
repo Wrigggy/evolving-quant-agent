@@ -26,6 +26,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prior-rejected-attempt", type=Path, action="append")
     parser.add_argument("--prior-failed-candidate-activation", type=Path)
     parser.add_argument("--prior-failed-candidate-run", type=Path)
+    parser.add_argument("--prior-scored-candidate-activation", type=Path)
+    parser.add_argument("--prior-scored-candidate-run", type=Path)
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args(argv)
     result = run_quantcodeeval_v2_activation_canary(
@@ -39,6 +41,10 @@ def main(argv: list[str] | None = None) -> int:
             args.prior_failed_candidate_activation
         ),
         prior_failed_candidate_run_dir=args.prior_failed_candidate_run,
+        prior_scored_candidate_activation_dir=(
+            args.prior_scored_candidate_activation
+        ),
+        prior_scored_candidate_run_dir=args.prior_scored_candidate_run,
         preflight_only=args.preflight_only,
     )
     print(json.dumps(result, sort_keys=True, indent=2, ensure_ascii=False))
