@@ -1,7 +1,7 @@
 # QEA Repository Memory
 
 > Canonical research and architecture memory for future contributors and agents.
-> Last updated: 2026-08-12. This file records current decisions, not merely historical discussion.
+> Last updated: 2026-08-13. This file records current decisions, not merely historical discussion.
 
 ## How to Use This Memory
 
@@ -1549,6 +1549,43 @@ and runtime helpers again. Four older `node_repl` processes were verified as
 children of the active terminal Codex CLI and intentionally left running. The
 machine is therefore back in CLI-only state, and a full Desktop exit does not
 prevent a later normal restart.
+
+### 2026-08-13 QuantCodeEval public-probe expansion
+
+The self-contained QuantCodeEval engineering panel now contains T01, T12, T18,
+and T19 and does not require WRDS. Its shell H0 replay vector was all zero at
+the official all-properties gate, with property progress `2/17`, `14/16`,
+`16/18`, and `16/18`. Transferring the autonomous r8 static-audit candidate
+produced `T01=0, T12=0, T18=0, T19=1`: T19 reached 18/18, while T12 regressed
+to 8/16 and T01/T18 were unchanged. This is a narrow positive transfer, not a
+general harness improvement.
+
+An investigator-authored public behavior-probe worker then tested a different
+mechanism. It adds a quant-definition arbitration skill plus an executable
+probe over public instructions, public data, and synthetic examples; it does
+not receive checker output. T12 v1 passed 7/16. After making competing
+definitions, public basis, and portable data lookup explicit, a T12-only v2
+sample passed 16/16, but a fresh four-task sample passed only 12/16. The full
+fresh vector was again `0,0,0,1`: T01 remained 2/17, T18 produced no artifact,
+and T19 passed 18/18. A separate T18 retry wrote a candidate, activated the
+probe and skill, and still passed only 16/18, identical to H0. Therefore the
+T12 effect is promising but not stable, and T18's missing artifact is a
+separate sampling-sensitive completion problem rather than evidence that the
+probe was sufficient.
+
+This localizes the next search target. Do not globally accumulate more static
+rules or claim the manual component was Evolver-discovered. Use the manual
+worker as a diagnostic search parent and expose the answer-free contrast to the
+Evolver: activated success on T19, activated non-improvement on T01, unstable
+definition choice on T12, and completion-versus-correctness separation on T18.
+Keep the full mutation surface open and let the Evolver choose among routing,
+memory/state, executable candidate/probe consistency, completion middleware,
+or another supported mechanism. These are competing investigator hypotheses,
+not a prescribed artifact finalizer. Retain every attempt as searchable
+history, run a local component smoke before a small official panel, and keep
+the search variable-length. Full measurements, costs, activation counts, and
+evidence paths are in the
+[public-probe expansion report](reports/2026-08-13-quantcodeeval-public-probe-expansion.md).
 
 ## Memory Maintenance Rules
 
