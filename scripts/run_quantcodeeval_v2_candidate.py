@@ -35,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--worker-image", required=True)
     parser.add_argument("--verifier-image", required=True)
     parser.add_argument("--proxy-image", required=True)
+    parser.add_argument("--task", dest="task_ids", action="append")
     parser.add_argument(
         "--token-file",
         type=Path,
@@ -68,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         proxy_image_ref=args.proxy_image,
         token_file=args.token_file,
         source_h0_evaluation_id=live["h0_evaluation_id"],
+        task_ids=args.task_ids,
         preflight_only=args.preflight_only,
     )
     print(json.dumps(result, sort_keys=True, indent=2, ensure_ascii=False))

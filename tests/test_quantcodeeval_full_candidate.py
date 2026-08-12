@@ -52,9 +52,10 @@ def test_full_candidate_preflight_accepts_coherent_multifile_component(
         monkeypatch.setattr(sys, "stdlib_module_names", frozenset(), raising=False)
     seed = _worker(tmp_path / "seed")
     candidate = _candidate(seed, tmp_path / "candidate")
+    tasks = (SimpleNamespace(task_id="T16"), SimpleNamespace(task_id="T24"))
     snapshot = SimpleNamespace(
         commit="9" * 40,
-        optimize=SimpleNamespace(task_ids=("T16", "T24")),
+        optimize=SimpleNamespace(task_ids=("T16", "T24"), tasks=tasks),
     )
     preflight = {
         "public_manifest_sha256": "1" * 64,
@@ -101,6 +102,7 @@ def test_full_candidate_preflight_accepts_coherent_multifile_component(
         proxy_image_ref="sha256:" + "6" * 64,
         token_file=tmp_path / "token",
         source_h0_evaluation_id="7" * 64,
+        task_ids=("T24",),
         preflight_only=True,
     )
 
@@ -114,14 +116,16 @@ def test_full_candidate_preflight_accepts_coherent_multifile_component(
     ]
     assert result["mutation_metrics"]["changed_file_count"] == 4
     assert result["mutation_metrics"]["declared_roles_match_actual"] is True
+    assert result["task_ids"] == ["T24"]
 
 
 def test_full_candidate_rejects_failed_smoke_and_role_mismatch(tmp_path, monkeypatch):
     seed = _worker(tmp_path / "seed")
     candidate = _candidate(seed, tmp_path / "candidate")
+    tasks = (SimpleNamespace(task_id="T16"), SimpleNamespace(task_id="T24"))
     snapshot = SimpleNamespace(
         commit="9" * 40,
-        optimize=SimpleNamespace(task_ids=("T16", "T24")),
+        optimize=SimpleNamespace(task_ids=("T16", "T24"), tasks=tasks),
     )
     monkeypatch.setattr(
         "qea.quantcodeeval_full_candidate.prepare_quantcodeeval_h0",

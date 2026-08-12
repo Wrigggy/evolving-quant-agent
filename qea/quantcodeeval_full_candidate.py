@@ -384,6 +384,7 @@ def run_quantcodeeval_full_candidate(
     proxy_image_ref: str,
     token_file: str | Path | None = None,
     source_h0_evaluation_id: str,
+    task_ids: Iterable[str] | None = None,
     require_activation: bool = True,
     preflight_only: bool = False,
 ) -> dict[str, object]:
@@ -426,6 +427,17 @@ def run_quantcodeeval_full_candidate(
         verifier_image_ref=verifier_image_ref,
         proxy_image_ref=proxy_image_ref,
     )
+    available_tasks = {task.task_id: task for task in snapshot.optimize.tasks}
+    requested_task_ids = tuple(task_ids or available_tasks)
+    if (
+        not requested_task_ids
+        or len(set(requested_task_ids)) != len(requested_task_ids)
+        or any(task_id not in available_tasks for task_id in requested_task_ids)
+    ):
+        raise QuantCodeEvalFullCandidateError(
+            "requested tasks must be a unique non-empty subset of the optimize panel"
+        )
+    selected_tasks = tuple(available_tasks[task_id] for task_id in requested_task_ids)
     admission = admit_candidate(
         frozen_seed,
         candidate,
@@ -449,7 +461,7 @@ def run_quantcodeeval_full_candidate(
         "benchmark_commit": snapshot.commit,
         "public_manifest_sha256": baseline_preflight["public_manifest_sha256"],
         "trusted_manifest_sha256": baseline_preflight["trusted_manifest_sha256"],
-        "task_ids": list(snapshot.optimize.task_ids),
+        "task_ids": list(requested_task_ids),
     }
     sampling_identity = {
         "model": MODEL,
@@ -488,7 +500,7 @@ def run_quantcodeeval_full_candidate(
             "component_tests": tests,
             "activation": activation_payload,
             "checkpoint": checkpoint,
-            "task_ids": list(snapshot.optimize.task_ids),
+            "task_ids": list(requested_task_ids),
             "model_request_count": 0,
         },
         label="candidate preflight",
@@ -580,14 +592,14 @@ def run_quantcodeeval_full_candidate(
     try:
         summary = evaluator.evaluate(
             worker_dir=candidate,
-            tasks=snapshot.optimize.tasks,
+            tasks=selected_tasks,
             split=SPLIT,
             checkpoint=checkpoint,
             run_dir=root,
         )
     except Exception as exc:
         failed_attempts, partial_audit = _answer_free_failed_attempts(
-            root, snapshot.optimize.tasks
+            root, selected_tasks
         )
         result = {
             **plan,
@@ -607,7 +619,7 @@ def run_quantcodeeval_full_candidate(
         return result
     cost = audit_fixed_checkpoint_proxy_costs(
         root,
-        expected_attempts=len(snapshot.optimize.tasks),
+        expected_attempts=len(selected_tasks),
         checkpoint=checkpoint,
         split=SPLIT,
     )
@@ -622,7 +634,7 @@ def run_quantcodeeval_full_candidate(
         "basis": "completed proxy audit",
     }
     attempt_rows: list[dict[str, object]] = []
-    for task in snapshot.optimize.tasks:
+    for task in selected_tasks:
         attempt = TaskAttempt.create(
             run_id=root.name,
             benchmark_commit=snapshot.commit,
