@@ -1,0 +1,31 @@
+type: tool
+name: probe_public_behavior
+description: >-
+  Import a saved strategy module in a fresh temporary directory and execute a
+  small public-contract behavior probe. The probe code receives `strategy`
+  (the imported candidate module), `data_dir` (a pathlib.Path for public task
+  data), `pd`, `np`, and `json`. Use assertions whose expected values are
+  calculated independently from the instruction, paper, or a synthetic
+  fixture. This tool never reads checker, reference, property, verdict, or
+  solution files and does not modify the submitted module.
+input_schema:
+  type: object
+  properties:
+    module_path:
+      type: string
+      description: Absolute path to the saved strategy.py.
+    probe_code:
+      type: string
+      description: >-
+        Python statements containing independent public behavior assertions.
+        `strategy`, `data_dir`, `pd`, `np`, and `json` are already defined.
+    data_dir:
+      type: string
+      description: Public data directory; defaults to /app/data.
+    timeout_seconds:
+      type: integer
+      minimum: 1
+      maximum: 180
+      description: Probe timeout; defaults to 90 seconds.
+  required: [module_path, probe_code]
+  additionalProperties: false
