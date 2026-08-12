@@ -1612,6 +1612,40 @@ harness mutation surface open and T19 as the protection task. Detailed
 evidence is appended to the
 [public-probe expansion report](reports/2026-08-13-quantcodeeval-public-probe-expansion.md).
 
+**Measured later on 2026-08-13:** a second autonomous round successfully used
+the exact scored history from the rejected contract-audit candidate. Two
+initial activations failed before mutation because long model responses returned
+no usable content. Requiring the Evolver to inspect the candidate and map
+evidence in its first response repaired the response-control failure. The next
+activation completed, compared three causes, rejected environment mismatch and
+failure-to-read-the-paper, and selected a parameter-identity gap. It modified
+the quant-contract-arbitration skill plus system prompt to derive library
+arguments from paper equations and test each mapping with an independently
+computed fixture. Component smoke and admission passed.
+
+The resulting four-task candidate sample produced property progress
+`5/17, 16/16, 16/18, 18/18` and official vector `0,1,0,1`, for a task mean of
+`0.50`. This is the first autonomous branch in this panel to solve an
+additional task while preserving T19. It is not promoted, because an immediate
+T12-only repeat of the same harness passed only `8/16` and returned reward 0.
+The observed gain is therefore sampling-sensitive, not a stable mechanism
+result. The full panel cost 104 requests, 3,266,600 tokens, and
+`$0.1133131552`; the repeat cost 16 requests, 320,141 tokens, and
+`$0.0170303784`. The successful activation cost 39 requests, 2,294,526 tokens,
+and `$0.0346782856`; the two failed response-control attempts are retained as
+negative evidence.
+
+Do not cumulatively layer or promote this candidate. Keep it in searchable
+history because it proves that the Evolver can use prior wrong edits and
+outcomes to change both its cause attribution and selected component. The next
+search target is cross-sample reliability: prefer an executable
+competing-definition probe that materializes alternative mappings, runs
+discriminating fixtures, and binds the selected definition to submitted code,
+rather than adding more skill prose. When a small panel appears to gain a
+binary solve, run a focused repeat before incumbent promotion. Keep T19 as the
+protection task. Full evidence and exact run identities are in the
+[public-probe expansion report](reports/2026-08-13-quantcodeeval-public-probe-expansion.md).
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

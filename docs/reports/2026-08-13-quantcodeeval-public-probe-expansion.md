@@ -216,3 +216,95 @@ The complete new evidence is mirrored additively under:
 
 - `results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r1/`
 - `results/bc-mirror/qce-public-probe-autonomous-candidate-20260813-r1/`
+
+## Autonomous parameter-identity round
+
+Status: measured autonomous search with accumulated candidate history; one
+sampling-sensitive solved task, so the candidate is not promoted
+
+Run identities:
+
+- failed activation attempts:
+  `qce-public-probe-autonomous-activation-20260813-r2` and
+  `qce-public-probe-autonomous-activation-20260813-r2-retry1`;
+- successful activation:
+  `qce-public-probe-autonomous-activation-20260813-r2-toolfirst`;
+- four-task candidate panel:
+  `qce-public-probe-autonomous-candidate-20260813-r2-toolfirst`; and
+- T12 repeat:
+  `qce-public-probe-autonomous-candidate-20260813-r2-t12-repeat1`.
+
+The first two activation attempts ended before a candidate because a long
+model response returned no usable content. They were provider/NexAU response
+failures rather than Evolver abstentions or benchmark outcomes. Their completed
+proxy records contain 17 requests and `$0.0369052712`, then 14 requests and
+`$0.0190436848`. A minimal Evolver control change required the first response
+to inspect the candidate and map the evidence, followed by incremental tool
+use instead of a full silent investigation. The tool-first retry then completed
+normally. This repair changes search observability and response pacing; it does
+not alter benchmark answers.
+
+The successful Evolver read the exact prior scored candidate entry and diff,
+all four current answer-free outcomes, the independent T12 comparison, task
+instructions, AST/process facts, and relevant public paper text. It compared
+three explanations: incorrect library parameterization after reading the
+paper constants, a worker/checker environment mismatch, and failure to read
+the quantitative conventions. Same-harness T19 and historical T12 successes
+rejected the environment explanation; the T01 AST already containing 261, 60,
+0.4, and 12 rejected the missing-reading explanation. The selected cause was a
+parameter-identity gap: constants can look correct while `com`, `span`,
+`halflife`, annualization, window endpoints, or return alignment remain wrong.
+
+The candidate modified the `quant-contract-arbitration` skill and the system
+prompt. It requires workers to write the paper identity before selecting a
+library argument and validate the mapping on a small independently computed
+fixture. The skill was explicitly loaded twice in component smoke and the
+full-harness admission passed. This was an Evolver-selected skill intervention,
+but its file-level mutation remained guidance-only rather than executable
+Python code. Activation used 39 requests, 2,294,526 tokens, and
+`$0.0346782856`.
+
+The fresh four-task panel produced:
+
+| Task | diagnostic parent | prior candidate | parameter-identity candidate | official reward |
+| --- | ---: | ---: | ---: | ---: |
+| T01 | 2/17 | 3/17 | 5/17 | 0 |
+| T12 | 12/16 | 15/16 | 16/16 | 1 |
+| T18 | 16/18 | 16/18 | 16/18 | 0 |
+| T19 | 18/18 | 18/18 | 18/18 | 1 |
+
+The binary vector was `0,1,0,1`, raising the single-panel task mean from
+`0.25` to `0.50` while preserving T19. T01's Type-A improved to `4/7` and its
+previously untouched Type-B improved to `1/10`; T18 remained exactly
+Type-A `2/4`, Type-B `14/14`. The panel used 104 completed requests,
+3,266,600 tokens, and `$0.1133131552`, with no fallback or infrastructure
+failure.
+
+This initially looked like a working local mechanism, but T12 had previously
+produced an isolated H0 `16/16`, so one fresh full pass was not enough for
+promotion. A direct T12 candidate repeat used the same candidate and runtime
+without resampling H0. It passed only `8/16` (Type-A `4/8`, Type-B `4/8`) and
+returned reward 0. The repeat used 16 completed requests, 320,141 tokens, and
+`$0.0170303784`. An earlier zero-request repeat preflight mistakenly omitted
+the bound panel and was rejected before generation; it has no model cost and
+is not a measurement.
+
+Therefore this candidate is retained as a useful but rejected search branch,
+not promoted as the incumbent. Accumulated history worked as intended: the
+second Evolver saw what the first changed and why it failed, changed causal
+hypothesis, selected a different component, and produced different worker
+behavior. The remaining bottleneck is reliability across independent worker
+samples. More prose is unlikely to solve it. The next search should favor an
+executable competing-definition component that materializes alternative
+parameter mappings, runs discriminating fixtures, and binds the selected
+definition to submitted code. Candidate admission should include a small
+repeatability probe when an apparent binary gain occurs, while retaining T19
+as the protection task.
+
+The complete new evidence is mirrored additively under:
+
+- `results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r2/`
+- `results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r2-retry1/`
+- `results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r2-toolfirst/`
+- `results/bc-mirror/qce-public-probe-autonomous-candidate-20260813-r2-toolfirst/`
+- `results/bc-mirror/qce-public-probe-autonomous-candidate-20260813-r2-t12-repeat1/`
