@@ -1,0 +1,33 @@
+Candidate is final: valid graph, all declared roles match exactly the changed file roles (`tools`, `tool_descriptions`, `agent_config`, `systemprompt`), no phantom roles. The report:
+
+## Experiment contract — iteration 1 (ACT)
+
+**Decision:** ACT — deterministic pre-submission strategy-module validator, registered as a worker tool and bound through the agent config + tool description + system-prompt workflow.
+
+**Failure type:** `quant_definition_estimation` (single-task evidence: T24; T16 excluded as the protected success contrast — the contract forbids forcing heterogeneous/single-task failures into a fabricated cross-task type, and `decide_candidate`'s min-2 member constraint confirmed no honest multi-task label exists).
+
+**Evidence inspected (exact paths):**
+- `tasks/T24/evaluations/.../strategy_ast_facts.json` — module's **only** numeric constant is `VOL_SCALING_TARGET = 5.34` (raw percent form)
+- `tasks/T24/evaluations/.../official_and_families.json` — exactly 1 failed property per family (type_a 6/7, type_b 9/10), `properties_incomplete`
+- `tasks/T24/paper_text.md` — anchor quoted only as "5.34% per month" (never 0.0534)
+- `tasks/T24/instruction.md` — R2/R4 causal-endpoint and mandatory `shift(1)` rules
+- `tasks/T16/.../strategy_ast_facts.json` — **zero** numeric constants; `official_and_families.json` 18/18 pass
+- `history/archive/entries/926ce...json` + `diffs/ec56c0...patch` + `objects/5d732.../tools/strategy_validate.py` — prior executable attempt rejected solely on the declared-vs-actual role mismatch (`validator` declared, no `validator/` file changed); all its component tests passed; **never worker-evaluated**
+
+**Probes:** `t24_scale_anchor_vs_t16`, `prior_attempt_role_mismatch` (pre-registered competing expectations; both confirmed the structural fingerprint and the declarative-rejection cause).
+
+**Mechanisms considered:** h1 unit-scale (percent-form fixed constant applied to decimal returns → ~100× outputs, fails scale-sensitive property per family) vs h2 temporal-lag endpoint (causal expanding-mean endpoint / shift(1) lag misalignment). Selected **h1**; h2 not eliminated but the intervention is deliberately mechanism-agnostic, covering both.
+
+**Intervention (roles = exact changed files):**
+- `tools/strategy_validate.py` (new, improved over the rejected draft: `augment:true` input-preservation check; percent-like constant detection refined to non-integer magnitudes so annualization counts like 12/22/252 are not flagged; new use-site audit that flags a percent-form constant referenced without `/100` or `*0.01` — the good fixture converts at use and is not hard-blocked)
+- `tool_descriptions/validate_strategy_module.tool.yaml` (new, schema v2 describing `augment`)
+- `agent.yaml` (registered `validate_strategy_module` → `tools.strategy_validate:validate_strategy_module`)
+- `systemprompt.md` (workflow: call validator before finalizing; fix every error, review warnings; units/causality/interface discipline; no forbidden-file reads)
+
+**Validation:** `inspect_candidate` → valid, no issues, roles match. Smoke: bad fixture → `ok:false` with unit-scale warning, look-ahead `shift(-1)`, trailing-NaN warning; good fixture → `ok:true` with only the advisory percent reminder; fixtures deleted afterward.
+
+**Predicted fixes/process:** T24 worker now self-checks before submission; T24 reward > 0 (no `properties_incomplete`) or at least the currently failing scale/lag property flips to pass; T16 stays 1.0 (no constants for the new audit to flag).
+
+**Risks:** T16 (protected; validator is advisory-only and its checks are generic, so no behavioral regression expected); no task-specific numeric answers or branches encoded anywhere.
+
+**Counterevidence/uncertainty:** corpus is answer-free (exact failing property unreadable); `VOL_SCALING_TARGET=5.34` could in principle be converted at use (the AST facts can't show it); h2 remains a live competitor; five prior prompt-only mutations gained nothing. These are precisely why the validator is mechanism-agnostic and warning-based rather than answer-encoding.

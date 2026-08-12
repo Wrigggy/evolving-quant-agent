@@ -1325,6 +1325,14 @@ def inspect_candidate() -> dict[str, Any]:
 def unlock_candidate(hypothesis: Mapping[str, Any]) -> dict[str, Any]:
     """Unlock writes only after a falsifiable, evidence-backed discovery plan."""
 
+    contract_path = _root("evidence") / "contract.json"
+    if (
+        contract_path.is_file()
+        and _contract().get("decision_protocol") == "quant_property_v2"
+    ):
+        raise GuardedWorkspaceError(
+            "quant_property_v2 requires decide_candidate; legacy unlock is forbidden"
+        )
     if not isinstance(hypothesis, Mapping):
         raise GuardedWorkspaceError("hypothesis must be an object")
     required_text = (

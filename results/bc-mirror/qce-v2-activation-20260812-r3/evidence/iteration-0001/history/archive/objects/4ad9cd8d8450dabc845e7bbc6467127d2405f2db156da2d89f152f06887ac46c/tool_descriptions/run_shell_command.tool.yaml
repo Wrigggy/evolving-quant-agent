@@ -1,0 +1,14 @@
+type: tool
+name: run_shell_command
+description: >-
+  Execute a shell command as `bash -c <command>` in the working directory.
+  Returns combined stdout/stderr.
+input_schema:
+  type: object
+  properties:
+    command: {type: string, description: "Exact bash command to execute."}
+    description: {type: string, description: "Brief description of the command."}
+    is_background: {type: boolean, description: "(optional) run in background; default false."}
+    dir_path: {type: string, description: "(optional) directory to run in; default the working directory."}
+  required: [command]
+  additionalProperties: false

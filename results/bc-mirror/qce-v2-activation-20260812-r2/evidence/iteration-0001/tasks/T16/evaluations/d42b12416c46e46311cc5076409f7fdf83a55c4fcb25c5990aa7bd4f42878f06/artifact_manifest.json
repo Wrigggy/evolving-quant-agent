@@ -1,0 +1,11 @@
+{
+  "artifacts": [
+    {
+      "path": "strategy.py",
+      "sha256": "7042581312fc4ee44fcd9bf224f6bea8bd40885c3bfb75be9b8b72c8ab64274b",
+      "size_bytes": 10255
+    }
+  ],
+  "content_exposed": false,
+  "schema_version": 1
+}

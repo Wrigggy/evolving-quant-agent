@@ -1,0 +1,76 @@
+{
+  "import_roots": [
+    "numpy",
+    "pandas"
+  ],
+  "line_count": 144,
+  "module_numeric_constants": [
+    {
+      "name": "VOL_SCALING_TARGET",
+      "value": 5.34
+    }
+  ],
+  "parse_valid": true,
+  "path": "strategy.py",
+  "schema_version": 1,
+  "sha256": "08ba52bd7047bc1ea537329e09eb7a218530e004636ec6c45673b26a0ae664a0",
+  "size_bytes": 6200,
+  "syntax_error": null,
+  "top_level_symbols": [
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "_with_datetime",
+      "positional_arguments": [
+        "df"
+      ]
+    },
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "compute_demeaned_signal",
+      "positional_arguments": [
+        "ff_factors_monthly"
+      ]
+    },
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "compute_regression_coefficient",
+      "positional_arguments": [
+        "demeaned_signal_df"
+      ]
+    },
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "compute_portfolio_weight",
+      "positional_arguments": [
+        "regression_coefficient_df"
+      ]
+    },
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "compute_strategy_returns",
+      "positional_arguments": [
+        "portfolio_weight_df"
+      ]
+    }
+  ]
+}

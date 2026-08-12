@@ -1,0 +1,42 @@
+type: tool
+name: validate_strategy_module
+description: >-
+  Deterministic pre-submission validator for a quant strategy module. Reads one
+  strategy.py-style module and reports errors/warnings/info without touching any
+  checker, reference, property, verdict, or paper-text file. It parses and
+  imports the module in an isolated namespace, verifies required top-level
+  functions exist, and for each function that takes exactly one DataFrame and
+  declares input/output column names it runs the function on fixed-seed
+  synthetic data and checks: output columns present, non-empty, finite,
+  NaN/lag placement (first/last non-null), near-constant output, input columns
+  preserved when the spec marks augment:true, and output-vs-input magnitude
+  ratio >100x (percent-vs-decimal scale hazard). It also statically scans for
+  look-ahead shift(-1), percent-like module numeric constants and whether they
+  are used with an explicit /100 (or *0.01) conversion, and forbidden file
+  reads. All checks are generic and encode no task-specific numeric answer.
+input_schema:
+  type: object
+  properties:
+    module_path:
+      type: string
+      description: >-
+        Absolute path to the strategy module to validate (the file the task
+        asked you to save, e.g. /app/output/strategy.py).
+    required_functions:
+      type: object
+      description: >-
+        Map of function name to an interface spec: {"fn_name":
+        {"input_columns": [...], "output_columns": [...], "augment": true}}.
+        A list of plain function names is also accepted for a static
+        presence-only check. Output-column and runtime checks only run for
+        functions with a single DataFrame parameter and a declared spec. Set
+        augment:true when the instruction says the input DataFrame is
+        augmented with the output columns (it then also checks that no input
+        column is dropped). The spec must come from the task instruction,
+        never from evaluator/checker files.
+    sample_rows:
+      type: integer
+      description: >-
+        Number of synthetic rows for runtime checks (default 120, max 400).
+  required: [module_path]
+  additionalProperties: false

@@ -106,3 +106,38 @@ The full-candidate gate now permits failed draft smokes in chronological
 history but requires every final primary component's latest passed smoke to be
 bound to the submitted candidate digest. This preserves room for
 edit-test-repair within an Evolver round without weakening final admission.
+
+## Follow-up mechanism diagnostics r2 and r3
+
+Run r2 imported r1 into trusted history and passed zero-model preflight, then
+failed before any model request because the Evolver firewall reserves every
+path named `tests` for possible private evaluator material. The history store's
+answer-free component-test records had used that directory name. Their Evolver
+projection is now named `component_checks/`; the trusted store and hashes are
+unchanged. r2 is a zero-request infrastructure negative.
+
+Run r3 then demonstrated the requested inter-round learning behavior with a
+real model. Its access log proves the Evolver read r1's exact 10,290-byte entry,
+9,327 bytes of the exact diff, the full 15,225-byte validator source, and the
+prior candidate's agent configuration and system prompt. It also ran a
+registered competing-expectation probe and correctly identified r1 as a
+declarative role mismatch rather than an evaluated mechanism failure.
+
+r3 regenerated an improved validator-tool candidate, corrected the exact roles
+to `tools, tool_descriptions, agent_config, systemprompt`, and passed a
+digest-bound tool import smoke. It was still rejected before benchmark scoring
+because the `decide_candidate` JSON schema required hypothesis field
+`failure_prediction`, while the Python implementation required `prediction`.
+After repeated valid-looking calls were rejected on alternating sides of that
+mismatch, the Evolver fell back to the legacy unlock protocol; the coordinator
+correctly refused that schema-1 decision for quant v2.
+
+r3 made 29 successful model requests, used 1,428,999 input and 77,131 output
+tokens (1,506,130 total), and cost `$0.036206044`. Its proxy audit SHA-256 is
+`f581fefa8f34718dbffb1302500a8b80c788460eca452556869ba1f96e46b5dd`.
+No worker or verifier ran and all managed resources were cleaned.
+
+The schema and implementation now both use `prediction`. Quant v2 explicitly
+forbids the legacy unlock path, so a future candidate must persist the exact
+schema-4 `quant_property_v2` decision or remain write-locked. r2 and r3 are
+retained additively under `results/bc-mirror/`; neither is a benchmark result.

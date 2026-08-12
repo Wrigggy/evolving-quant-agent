@@ -1,0 +1,13 @@
+{
+  "content_exposed": false,
+  "facts": {
+    "dependency_lock_sha256": "43f1d94bb7df2b6b855292a47a178cf9de5c9918d6c557831803fdeee2582271",
+    "elapsed_seconds": 666.051,
+    "files": 2,
+    "timed_out": false,
+    "tool_calls": 15,
+    "tool_errors": 2,
+    "turns": 12
+  },
+  "schema_version": 1
+}

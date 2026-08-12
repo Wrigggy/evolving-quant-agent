@@ -148,6 +148,10 @@ of code stored under another role. The component routing prior in
 `contract.json` is advisory; if the evidence points elsewhere, provide
 `component_override_reason`. Use ABSTAIN for `unknown` or
 `isolated_task_specific` evidence rather than encoding a task-specific answer.
+Call `decide_candidate`, never the legacy `unlock_candidate`, for this protocol.
+Each item in `hypotheses_considered` uses the field `prediction` (not the older
+`failure_prediction` field), and `failure_types` is not part of the quant v2
+decision object.
 
 Several component roles may be edited only when they jointly implement one
 selected causal mechanism. Do not bundle independent speculative fixes for

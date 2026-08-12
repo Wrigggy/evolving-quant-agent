@@ -46,10 +46,10 @@ input_schema:
               hypothesis_id: {type: string}
               failure_type_id: {type: string}
               mechanism: {type: string}
-              failure_prediction: {type: string}
+              prediction: {type: string}
               success_counterfactual: {type: string}
               insufficient_contrast: {type: boolean}
-            required: [hypothesis_id, failure_type_id, mechanism, failure_prediction]
+            required: [hypothesis_id, failure_type_id, mechanism, prediction]
             additionalProperties: true
         selected_hypothesis_id: {type: [string, "null"]}
         probe_ids_used:

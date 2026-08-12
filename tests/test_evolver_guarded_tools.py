@@ -837,6 +837,37 @@ def test_quant_v2_uses_exact_history_and_unlocks_binding_components(guarded_root
     assert (candidate / "tools/estimator.py").is_file()
 
 
+def test_quant_v2_forbids_legacy_unlock_and_schema_uses_prediction(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        unlock_candidate,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+
+    schema = (
+        Path(__file__).resolve().parents[1]
+        / "qea/evolve_agent_full/tool_descriptions/decide_candidate.tool.yaml"
+    ).read_text()
+    assert "prediction: {type: string}" in schema
+    assert "failure_prediction" not in schema
+    with pytest.raises(GuardedWorkspaceError, match="legacy unlock is forbidden"):
+        unlock_candidate(
+            hypothesis={
+                "selected_mechanism": "legacy path",
+                "counterevidence": "counter",
+                "uncertainty": "uncertain",
+                "discriminating_probe": "probe",
+                "hypotheses_considered": ["h1", "h2"],
+                "evidence_refs": ["overview.md", "counterexample.md"],
+                "component": "tools",
+                "risk_tasks": [],
+                "prediction": "change",
+            }
+        )
+
+
 def test_quant_v2_rejects_unread_or_missing_exact_history(guarded_roots):
     from qea.evolve_agent_full.tools.guarded_workspace import (
         GuardedWorkspaceError,

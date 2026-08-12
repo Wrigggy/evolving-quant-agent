@@ -1369,6 +1369,17 @@ smokes. A follow-up activation can import r1's exact candidate/diff/decision as
 round history. See the
 [measured r1 report](reports/2026-08-12-quantcodeeval-v2-live-activation-r1.md).
 
+Follow-up r2 proved exact r1 history import but exposed a zero-request evidence
+firewall naming collision (`history/tests`); the Evolver projection is now
+`component_checks`. r3 then measured real inter-round recall: the Evolver read
+r1's exact entry, diff, validator source, config, and prompt, and correctly
+probed that r1 was rejected for declarative attribution rather than mechanism
+failure. r3 still stopped before scoring because the decision tool schema used
+`failure_prediction` while its implementation used `prediction`, leading the
+model to fall back to a legacy schema-1 unlock. This is now fixed and legacy
+unlock is forbidden under quant v2. r3 used 29 requests, 1,506,130 tokens, and
+`$0.036206044`; H0 was not resampled and no worker/verifier ran.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
