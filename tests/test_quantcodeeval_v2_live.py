@@ -219,6 +219,62 @@ def test_prior_admission_rejection_becomes_exact_searchable_history(tmp_path):
     assert validate_quantcodeeval_history(tmp_path / "history")["entry_count"] == 1
 
 
+def test_prior_final_smoke_rejection_becomes_searchable_history(tmp_path):
+    source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
+    seed = tmp_path / "seed"
+    shutil.copytree(source, seed)
+    prior = tmp_path / "qce-v2-final-smoke-rejected"
+    attempt = prior / "evolutions/iteration-0001"
+    candidate = attempt / "candidate"
+    candidate.parent.mkdir(parents=True)
+    shutil.copytree(seed, candidate)
+    prompt = candidate / "systemprompt.md"
+    prompt.write_text(prompt.read_text() + "Validate units.\n")
+    digest = hash_worker_directory(candidate)
+    decision = {
+        "decision": "ACT",
+        "hypotheses_considered": [
+            {"hypothesis_id": "h1", "mechanism": "validate units"}
+        ],
+        "selected_hypothesis_id": "h1",
+        "primary_components": ["systemprompt"],
+        "components": ["systemprompt"],
+    }
+    (attempt / "summary.json").write_text(
+        json.dumps(
+            {
+                "discovery_hypothesis": {
+                    "decision": "ACT",
+                    "hypothesis": decision,
+                },
+                "component_tests": [],
+            }
+        )
+    )
+    (attempt / "result.json").write_text(json.dumps({"candidate_digest": digest}))
+    (prior / "LIVE-RESULT.json").write_text(
+        json.dumps(
+            {
+                "activation": {
+                    "status": "failed",
+                    "failure_stage": "candidate_contract",
+                    "reason": "primary components lack a final digest-bound passed smoke: systemprompt",
+                }
+            }
+        )
+    )
+
+    imported = _seed_rejected_attempt_history(
+        history_root=tmp_path / "history",
+        prior_attempt_dir=prior,
+        seed_worker_dir=seed,
+        h0_rewards={"T16": 1.0, "T24": 0.0},
+    )
+
+    assert "final digest-bound passed smoke" in imported["reason"]
+    assert validate_quantcodeeval_history(tmp_path / "history")["entry_count"] == 1
+
+
 def test_failed_full_candidate_becomes_unscored_searchable_history(tmp_path):
     source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
     seed = tmp_path / "seed"

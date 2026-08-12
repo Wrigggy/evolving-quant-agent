@@ -173,6 +173,13 @@ def _seed_rejected_attempt_history(
         )
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     result = json.loads(result_path.read_text(encoding="utf-8"))
+    live_result_path = prior / "LIVE-RESULT.json"
+    live_result = (
+        json.loads(live_result_path.read_text(encoding="utf-8"))
+        if live_result_path.is_file()
+        else {}
+    )
+    recorded_activation = live_result.get("activation", {})
     discovery = summary.get("discovery_hypothesis")
     if not isinstance(discovery, Mapping) or discovery.get("decision") != "ACT":
         raise QuantCodeEvalV2LiveError("prior rejected attempt is not a persisted ACT")
@@ -198,7 +205,15 @@ def _seed_rejected_attempt_history(
             )
         except CandidateAdmissionError as exc:
             admission_error = str(exc)
-    if not attribution_mismatch and admission_error is None:
+    recorded_reason = (
+        str(recorded_activation.get("reason"))
+        if isinstance(recorded_activation, Mapping)
+        and recorded_activation.get("status") == "failed"
+        and recorded_activation.get("failure_stage") == "candidate_contract"
+        and recorded_activation.get("reason")
+        else None
+    )
+    if not attribution_mismatch and admission_error is None and recorded_reason is None:
         raise QuantCodeEvalV2LiveError(
             "prior rejected attempt now passes attribution and admission"
         )
@@ -224,10 +239,14 @@ def _seed_rejected_attempt_history(
             f"actual={metrics['component_roles']}"
         )
         failure_stage = "candidate_contract"
-    else:
+    elif admission_error is not None:
         assert admission_error is not None
         reason = "independent full-harness admission failed: " + admission_error
         failure_stage = "candidate_admission"
+    else:
+        assert recorded_reason is not None
+        reason = recorded_reason
+        failure_stage = "candidate_contract"
     history = append_quantcodeeval_history(
         history_root=history_root,
         run_id=prior.name,
