@@ -639,6 +639,9 @@ def materialize_quantcodeeval_role_snapshot(
                     f"task {task_id} input path escapes data root"
                 )
             consumed_source_paths.append(source / source_relative)
+        descriptor = source_task / "data" / "data_descriptor.json"
+        if descriptor.is_file():
+            consumed_source_paths.append(descriptor)
     _require_pinned_source_paths(source, tuple(consumed_source_paths))
     if _source_revision(oracle_root) != revision:
         raise QuantCodeEvalConfigError("trusted oracle checkout revision mismatch")
@@ -718,6 +721,32 @@ def materialize_quantcodeeval_role_snapshot(
             trusted_records.append(_record(
                 trusted_data, trusted_staging, source_path=source_relative,
             ))
+
+        descriptor = source_task / "data" / "data_descriptor.json"
+        if descriptor.is_file():
+            source_relative = f"tasks/{task_id}/data/data_descriptor.json"
+            public_descriptor = (
+                public_staging / "tasks" / task_id
+                / "environment" / "data" / "data_descriptor.json"
+            )
+            trusted_descriptor = (
+                trusted_staging / "tasks" / task_id
+                / "tests" / "data" / "data_descriptor.json"
+            )
+            if not public_descriptor.exists():
+                _copy_file(descriptor, public_descriptor, trusted=False)
+                public_records.append(_record(
+                    public_descriptor,
+                    public_staging,
+                    source_path=source_relative,
+                ))
+            if not trusted_descriptor.exists():
+                _copy_file(descriptor, trusted_descriptor, trusted=True)
+                trusted_records.append(_record(
+                    trusted_descriptor,
+                    trusted_staging,
+                    source_path=source_relative,
+                ))
 
         tests_root = trusted_staging / "tasks" / task_id / "tests"
         _copy_tree(source_task / "checkers", tests_root / "checkers")
