@@ -137,10 +137,16 @@ evidence you inspected. From the second outer round onward the contract sets
 `history_required: true`: read at least one prior immutable history entry plus
 its exact diff or candidate source before deciding, so a rejected or ineffective
 edit remains usable experience. Name `primary_components` as the one or two
-causal intervention loci and name `components` as the complete set of roles
-whose files must change to bind and activate that mechanism. The component
-routing prior in `contract.json` is advisory; if the evidence points elsewhere,
-provide `component_override_reason`. Use ABSTAIN for `unknown` or
+causal *file roles* and name `components` as the complete, exact set of file
+roles whose files actually changed to bind and activate that mechanism. Roles
+are structural, not conceptual labels: validator behavior implemented in
+`tools/*.py` is the `tools` role, and `validator` may be declared only when a
+file below `validator/` actually changes. Likewise, registration is
+`agent_config`, a tool schema is `tool_descriptions`, and prompt activation is
+`systemprompt`. Never add a role merely because its name describes the purpose
+of code stored under another role. The component routing prior in
+`contract.json` is advisory; if the evidence points elsewhere, provide
+`component_override_reason`. Use ABSTAIN for `unknown` or
 `isolated_task_specific` evidence rather than encoding a task-specific answer.
 
 Several component roles may be edited only when they jointly implement one

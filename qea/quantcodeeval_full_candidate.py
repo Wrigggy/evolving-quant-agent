@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict
 from pathlib import Path
 from typing import Iterable, Mapping
@@ -61,25 +62,45 @@ def _normalized_json(value: object, *, label: str) -> object:
 
 
 def _validate_component_tests(
-    values: Iterable[Mapping[str, object]], *, candidate_digest: str
+    values: Iterable[Mapping[str, object]],
+    *,
+    candidate_digest: str,
+    primary_components: Iterable[str],
 ) -> list[dict[str, object]]:
     normalized: list[dict[str, object]] = []
+    latest: dict[str, dict[str, object]] = {}
     for index, value in enumerate(values):
         item = _normalized_json(dict(value), label=f"component_tests[{index}]")
         assert isinstance(item, dict)
-        if item.get("status") != "passed":
+        if item.get("status") not in {"passed", "failed"}:
             raise QuantCodeEvalFullCandidateError(
-                "every declared component test must have status=passed"
+                "component test status must be passed or failed"
             )
         bound = item.get("candidate_digest")
-        if bound is not None and bound != candidate_digest:
+        if bound is not None and (
+            not isinstance(bound, str) or re.fullmatch(r"[0-9a-f]{64}", bound) is None
+        ):
             raise QuantCodeEvalFullCandidateError(
-                "component test candidate digest differs"
+                "component test candidate digest is invalid"
             )
+        component = item.get("component")
+        if isinstance(component, str):
+            latest[component] = item
         normalized.append(item)
     if not normalized:
         raise QuantCodeEvalFullCandidateError(
             "full-harness candidate requires at least one component test"
+        )
+    missing = sorted(
+        component
+        for component in primary_components
+        if latest.get(component, {}).get("status") != "passed"
+        or latest.get(component, {}).get("candidate_digest") != candidate_digest
+    )
+    if missing:
+        raise QuantCodeEvalFullCandidateError(
+            "primary components lack a final digest-bound passed smoke: "
+            + ", ".join(missing)
         )
     return normalized
 
@@ -125,7 +146,9 @@ def run_quantcodeeval_full_candidate(
     candidate_digest = hash_worker_directory(candidate)
     parent_digest = hash_worker_directory(parent)
     tests = _validate_component_tests(
-        component_tests, candidate_digest=candidate_digest
+        component_tests,
+        candidate_digest=candidate_digest,
+        primary_components=primary,
     )
     activation_payload = _normalized_json(
         dict(activation or {"status": "not_run"}), label="activation"

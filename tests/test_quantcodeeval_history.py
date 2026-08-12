@@ -129,6 +129,40 @@ def test_history_rejects_oracle_keys_and_role_mismatch(tmp_path):
         )
 
 
+def test_history_can_retain_rejected_role_mismatch_as_search_experience(tmp_path):
+    parent = _worker(tmp_path / "parent")
+    candidate = _candidate(parent, tmp_path / "candidate")
+
+    result = _append(
+        tmp_path / "history",
+        parent,
+        candidate,
+        declared_roles=("tools",),
+        rollback_reason="declared file roles omitted agent_config",
+        allow_rejected_attribution_mismatch=True,
+    )
+
+    entry = json.loads(result.entry_path.read_text())
+    assert entry["selection"] == "rejected"
+    assert entry["declared_roles"] == ["tools"]
+    assert entry["mutation_metrics"]["component_roles"] == [
+        "agent_config",
+        "tools",
+    ]
+    assert entry["mutation_metrics"]["declared_roles_match_actual"] is False
+
+    with pytest.raises(QuantCodeEvalHistoryError, match="declared roles"):
+        _append(
+            tmp_path / "accepted-history",
+            parent,
+            candidate,
+            declared_roles=("tools",),
+            selection="accepted",
+            rollback_reason=None,
+            allow_rejected_attribution_mismatch=True,
+        )
+
+
 def test_history_detects_snapshot_and_entry_tampering(tmp_path):
     parent = _worker(tmp_path / "parent")
     candidate = _candidate(parent, tmp_path / "candidate")

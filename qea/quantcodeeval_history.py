@@ -274,6 +274,7 @@ def append_quantcodeeval_history(
     evaluation: Mapping[str, object] | None = None,
     selection: str = "pending",
     rollback_reason: str | None = None,
+    allow_rejected_attribution_mismatch: bool = False,
 ) -> QuantHistoryAppendResult:
     """Append one immutable mutation experience and content-addressed snapshots."""
 
@@ -307,7 +308,13 @@ def append_quantcodeeval_history(
     )
     if metrics["changed_file_count"] == 0:
         raise QuantCodeEvalHistoryError("history ACT requires a non-empty mutation")
-    if metrics["declared_roles_match_actual"] is not True:
+    attribution_mismatch_allowed = (
+        allow_rejected_attribution_mismatch and selection == "rejected"
+    )
+    if (
+        metrics["declared_roles_match_actual"] is not True
+        and not attribution_mismatch_allowed
+    ):
         raise QuantCodeEvalHistoryError("declared roles differ from the exact mutation")
     diff = dir_unified_diff(parent, candidate).encode("utf-8")
     if not diff:

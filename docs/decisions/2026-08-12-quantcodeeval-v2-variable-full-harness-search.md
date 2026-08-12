@@ -2,9 +2,9 @@
 
 > Date: 2026-08-12
 >
-> Status: implemented and measured with a deterministic no-model mechanism
-> canary; real one-round Evolver activation runner implemented; live activation
-> and QuantCodeEval candidate scoring not yet run through v2
+> Status: deterministic mechanism canary passed; live activation r1 produced an
+> admitted executable validator-tool candidate but was correctly rejected for
+> exact component-role mismatch; candidate scoring not yet run through v2
 
 ## Decision
 
@@ -119,3 +119,26 @@ uppercase task IDs, QuantCodeEval parser injection, exact `strategy.py`
 contract, answer-free evidence sanitizer, and checker/strategy isolation. Do
 not spend a multi-round score budget until the one-round activation result is
 usable and the scoring path is identity-bound.
+
+## Live activation r1 and superseding contract clarification
+
+Run `qce-v2-activation-20260812-r1` made 34 successful real Evolver requests
+and produced a coherent deterministic strategy-validation tool. Independent
+candidate admission passed, temporary self-test fixtures were removed, and the
+final tool/import/graph smokes were bound to candidate digest
+`5d73211371ffdaf116f845846d980d14e4370d412ced3fba910bdb27607488f3`.
+No worker or verifier ran and H0 was not resampled.
+
+The candidate was rejected because it declared `validator` as a component even
+though validator behavior was implemented under `tools/`; the exact changed
+roles did not include `validator`. The contract now distinguishes conceptual
+capabilities from structural file roles. `components` must equal the exact set
+of changed file roles, and `primary_components` must name causal file loci.
+
+This rejected candidate, its exact source, diff, decision, tests, activation
+failure, and rollback reason are now legal immutable history. A follow-up live
+run can seed that history so the next Evolver must inspect r1 rather than repeat
+it from an empty state. Draft smoke failures also remain in chronological
+experience; only the latest final-digest smoke for each primary executable
+component must pass. See the
+[r1 report](../reports/2026-08-12-quantcodeeval-v2-live-activation-r1.md).

@@ -274,7 +274,7 @@ def test_no_model_loop_reuses_rejected_round_and_promotes_full_component(tmp_pat
     assert second["component_tests"][0]["status"] == "passed"
 
 
-def test_loop_rejects_component_smoke_from_stale_candidate_digest(tmp_path):
+def test_loop_archives_component_smoke_from_stale_candidate_digest(tmp_path):
     source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
     seed = tmp_path / "seed"
     shutil.copytree(source, seed)
@@ -297,7 +297,7 @@ def test_loop_rejects_component_smoke_from_stale_candidate_digest(tmp_path):
         run_id="qce-v2-stale-smoke",
         h0_digest=hash_worker_directory(seed),
         h0_official_rewards={"T16": 1.0, "T24": 0.0},
-        limits=QuantSearchLimits(max_rounds=8),
+        limits=QuantSearchLimits(max_rounds=2),
     )
 
     def evidence_builder(current, iteration, history_root):
@@ -323,19 +323,23 @@ def test_loop_rejects_component_smoke_from_stale_candidate_digest(tmp_path):
             reason="no change",
         )
 
-    import pytest
+    final = run_quantcodeeval_v2_loop(
+        state=state,
+        run_dir=run,
+        seed_worker_dir=seed,
+        evolver_dir=evolver,
+        proposer=StaleSmokeProposer(),
+        evidence_builder=evidence_builder,
+        activation_runner=lambda candidate, decision, tests, iteration: {
+            "status": "passed"
+        },
+        candidate_evaluator=evaluate,
+        diagnosis_builder=lambda current, iteration: f"round {iteration}",
+    )
 
-    with pytest.raises(ValueError, match="digest-bound passed smoke"):
-        run_quantcodeeval_v2_loop(
-            state=state,
-            run_dir=run,
-            seed_worker_dir=seed,
-            evolver_dir=evolver,
-            proposer=StaleSmokeProposer(),
-            evidence_builder=evidence_builder,
-            activation_runner=lambda candidate, decision, tests, iteration: {
-                "status": "passed"
-            },
-            candidate_evaluator=evaluate,
-            diagnosis_builder=lambda current, iteration: f"round {iteration}",
-        )
+    assert final.rounds[-1].selection is SearchSelection.REJECTED
+    archived = json.loads((run / "rounds/iteration-0002.json").read_text())
+    assert archived["selection"] == "rejected"
+    assert archived["activation"]["failure_stage"] == "candidate_contract"
+    assert "digest-bound passed smoke" in archived["activation"]["reason"]
+    assert archived["evaluation"]["official_evaluated"] is False

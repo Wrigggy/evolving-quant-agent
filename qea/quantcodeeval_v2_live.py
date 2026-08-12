@@ -23,11 +23,13 @@ from .executors.sandbox_evolver import (
 )
 from .executors.sandbox_proxy import SandboxProxyConfig, SandboxProxyManager
 from .loop_benchmark import hash_worker_directory
+from .mutation_metrics import measure_mutation
 from .quantcodeeval_experiment import (
     h0_evaluation_ref,
     materialize_h0_attempt_sources,
 )
 from .quantcodeeval_release import validate_quantcodeeval_release
+from .quantcodeeval_history import append_quantcodeeval_history
 from .quantcodeeval_search import (
     QuantSearchLimits,
     initialize_quantcodeeval_search,
@@ -146,6 +148,105 @@ def _proxy_audit(run_root: Path) -> dict[str, object]:
     }
 
 
+def _seed_rejected_attempt_history(
+    *,
+    history_root: Path,
+    prior_attempt_dir: Path,
+    seed_worker_dir: Path,
+    h0_rewards: Mapping[str, float],
+) -> dict[str, object]:
+    """Import one exact, answer-free rejected activation as searchable history."""
+
+    prior = prior_attempt_dir.expanduser().resolve()
+    attempt = prior / "evolutions/iteration-0001"
+    summary_path = attempt / "summary.json"
+    result_path = attempt / "result.json"
+    candidate = attempt / "candidate"
+    if not summary_path.is_file() or not result_path.is_file() or not candidate.is_dir():
+        raise QuantCodeEvalV2LiveError(
+            "prior rejected attempt lacks summary, result, or candidate"
+        )
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    discovery = summary.get("discovery_hypothesis")
+    if not isinstance(discovery, Mapping) or discovery.get("decision") != "ACT":
+        raise QuantCodeEvalV2LiveError("prior rejected attempt is not a persisted ACT")
+    decision = discovery.get("hypothesis")
+    if not isinstance(decision, Mapping) or decision.get("decision") != "ACT":
+        raise QuantCodeEvalV2LiveError("prior rejected ACT decision is inconsistent")
+    candidate_digest = hash_worker_directory(candidate)
+    if result.get("candidate_digest") != candidate_digest:
+        raise QuantCodeEvalV2LiveError("prior rejected candidate digest differs")
+    components = tuple(str(value) for value in decision.get("components", ()))
+    primary = tuple(str(value) for value in decision.get("primary_components", ()))
+    metrics = measure_mutation(
+        before_root=seed_worker_dir,
+        after_root=candidate,
+        declared_roles=components,
+    )
+    if metrics["declared_roles_match_actual"] is True:
+        raise QuantCodeEvalV2LiveError(
+            "prior attempt is not the expected component-attribution rejection"
+        )
+    hypotheses = decision.get("hypotheses_considered", ())
+    mechanism = next(
+        (
+            str(value.get("mechanism"))
+            for value in hypotheses
+            if isinstance(value, Mapping)
+            and value.get("hypothesis_id") == decision.get("selected_hypothesis_id")
+        ),
+        str(decision.get("selected_hypothesis_id", "unknown mechanism")),
+    )
+    raw_tests = summary.get("component_tests", [])
+    if not isinstance(raw_tests, list) or any(
+        not isinstance(value, Mapping) for value in raw_tests
+    ):
+        raise QuantCodeEvalV2LiveError("prior component tests are invalid")
+    reason = (
+        "declared component file roles differ from the exact mutation: "
+        f"declared={metrics['declared_roles']}, actual={metrics['component_roles']}"
+    )
+    history = append_quantcodeeval_history(
+        history_root=history_root,
+        run_id=prior.name,
+        iteration=1,
+        parent_worker_dir=seed_worker_dir,
+        candidate_worker_dir=candidate,
+        decision=decision,
+        mechanism=mechanism,
+        primary_components=primary,
+        declared_roles=components,
+        component_tests=tuple(dict(value) for value in raw_tests),
+        activation={
+            "status": "failed",
+            "failure_stage": "candidate_contract",
+            "candidate_digest": candidate_digest,
+            "reason": reason,
+            "official_worker_evaluation_run": False,
+        },
+        evaluation={
+            "official_evaluated": False,
+            "official_rewards": dict(h0_rewards),
+            "new_information": True,
+            "reason": reason,
+        },
+        selection="rejected",
+        rollback_reason=reason,
+        allow_rejected_attribution_mismatch=True,
+    )
+    return {
+        "run_id": prior.name,
+        "entry_id": history.entry_id,
+        "candidate_digest": candidate_digest,
+        "summary_sha256": _sha256(summary_path),
+        "result_sha256": _sha256(result_path),
+        "declared_roles": list(metrics["declared_roles"]),
+        "actual_roles": list(metrics["component_roles"]),
+        "reason": reason,
+    }
+
+
 def _activation_from_component_tests(
     candidate: Path,
     decision: Mapping[str, object],
@@ -189,6 +290,7 @@ def run_quantcodeeval_v2_activation_canary(
     run_dir: str | Path,
     evolver_image_ref: str,
     proxy_image_ref: str,
+    prior_rejected_attempt_dir: str | Path | None = None,
     preflight_only: bool = False,
 ) -> dict[str, object]:
     """Run or preflight one real Evolver round without resampling H0."""
@@ -213,6 +315,14 @@ def run_quantcodeeval_v2_activation_canary(
         task_id: float(result.official_reward)
         for task_id, result in h0.task_results.items()
     }
+    prior_rejected_attempt = None
+    if prior_rejected_attempt_dir is not None:
+        prior_rejected_attempt = _seed_rejected_attempt_history(
+            history_root=root / "history",
+            prior_attempt_dir=Path(prior_rejected_attempt_dir),
+            seed_worker_dir=seed,
+            h0_rewards=rewards,
+        )
 
     backend = RootlessDockerBackend(
         docker_host=config.docker_host,
@@ -247,6 +357,7 @@ def run_quantcodeeval_v2_activation_canary(
         "proxy_image_ref": proxy_image_ref,
         "docker_preflight_identity_sha256": docker_preflight.identity_sha256,
         "source_sha256": _source_identity(),
+        "prior_rejected_attempt": prior_rejected_attempt,
         "search_limits": asdict(
             QuantSearchLimits(
                 max_rounds=1,
@@ -360,7 +471,9 @@ def run_quantcodeeval_v2_activation_canary(
         diagnosis_builder=lambda current, iteration: (
             "T16 is protected at reward 1; T24 remains incomplete. Earlier five-round "
             "prompt-only mutations produced no gain or regressions. Use the exact "
-            "answer-free evidence to choose between at least two mechanisms. If ACT, "
+            "answer-free evidence and any immutable rejected-attempt history to choose "
+            "between at least two mechanisms. Components are exact changed file roles, "
+            "not conceptual capability names. If ACT, "
             "prefer a testable executable harness component, edit it coherently with "
             "its bindings, and rerun its component smoke after the final edit."
         ),

@@ -129,11 +129,8 @@ def _proposal_usage(proposal: EvolverProposal) -> tuple[int, float | None]:
     return len(usage), sum(costs) if len(costs) == len(usage) else None
 
 
-def _proposal_component_tests(
+def _proposal_component_test_records(
     proposal: EvolverProposal,
-    *,
-    primary_components: tuple[str, ...],
-    candidate_digest: str,
 ) -> tuple[Mapping[str, object], ...]:
     summary = _json_object(Path(proposal.summary_uri), label="Evolver summary")
     raw = summary.get("component_tests", [])
@@ -144,7 +141,6 @@ def _proposal_component_tests(
         range(1, len(records) + 1)
     ):
         raise QuantCodeEvalV2LoopError("Evolver component test order is invalid")
-    latest: dict[str, Mapping[str, object]] = {}
     for value in records:
         component = value.get("component")
         if (
@@ -153,7 +149,20 @@ def _proposal_component_tests(
             or not isinstance(component, str)
         ):
             raise QuantCodeEvalV2LoopError("Evolver component test schema differs")
-        latest[component] = value
+    return records
+
+
+def _require_final_primary_component_smokes(
+    records: tuple[Mapping[str, object], ...],
+    *,
+    primary_components: tuple[str, ...],
+    candidate_digest: str,
+) -> None:
+    latest: dict[str, Mapping[str, object]] = {}
+    for value in records:
+        component = value.get("component")
+        if isinstance(component, str):
+            latest[component] = value
     executable = {
         "agent_config",
         "tools",
@@ -178,7 +187,18 @@ def _proposal_component_tests(
             "primary components lack a final digest-bound passed smoke: "
             + ", ".join(missing)
         )
-    return records
+
+
+def _selected_mechanism(decision: Mapping[str, object]) -> str:
+    return next(
+        (
+            str(value.get("mechanism"))
+            for value in decision.get("hypotheses_considered", ())
+            if isinstance(value, Mapping)
+            and value.get("hypothesis_id") == decision.get("selected_hypothesis_id")
+        ),
+        str(decision.get("selected_hypothesis_id", "unknown mechanism")),
+    )
 
 
 def _selection(
@@ -351,16 +371,11 @@ def run_quantcodeeval_v2_loop(
             or not primary
             or not set(primary) <= set(components)
             or metrics["changed_file_count"] == 0
-            or metrics["declared_roles_match_actual"] is not True
         ):
             raise QuantCodeEvalV2LoopError(
                 "ACT candidate failed independent admission or component attribution"
             )
-        evolver_tests = _proposal_component_tests(
-            proposal,
-            primary_components=primary,
-            candidate_digest=actual_digest,
-        )
+        evolver_tests = _proposal_component_test_records(proposal)
         component_tests: tuple[Mapping[str, object], ...] = (
             *evolver_tests,
             {
@@ -370,9 +385,36 @@ def run_quantcodeeval_v2_loop(
                 "checks": list(admission.checks),
             },
         )
-        activation = dict(
-            activation_runner(candidate, decision, component_tests, iteration)
-        )
+        contract_rejection_reason: str | None = None
+        if metrics["declared_roles_match_actual"] is not True:
+            contract_rejection_reason = (
+                "declared component file roles differ from the exact mutation: "
+                f"declared={metrics['declared_roles']}, "
+                f"actual={metrics['component_roles']}"
+            )
+        else:
+            try:
+                _require_final_primary_component_smokes(
+                    evolver_tests,
+                    primary_components=primary,
+                    candidate_digest=actual_digest,
+                )
+            except QuantCodeEvalV2LoopError as exc:
+                contract_rejection_reason = str(exc)
+        if contract_rejection_reason is None:
+            activation = dict(
+                activation_runner(candidate, decision, component_tests, iteration)
+            )
+        else:
+            activation = {
+                "schema_version": 1,
+                "status": "failed",
+                "iteration": iteration,
+                "candidate_digest": actual_digest,
+                "failure_stage": "candidate_contract",
+                "reason": contract_rejection_reason,
+                "official_worker_evaluation_run": False,
+            }
         if activation.get("status") not in {"passed", "failed"}:
             raise QuantCodeEvalV2LoopError("activation must return passed or failed")
         if activation["status"] == "passed":
@@ -390,26 +432,25 @@ def run_quantcodeeval_v2_loop(
                 answer_free_evaluation={"official_evaluated": False},
                 official_evaluated=False,
                 new_information=True,
-                reason="component activation failed before official evaluation",
+                reason=(
+                    contract_rejection_reason
+                    or "component activation failed before official evaluation"
+                ),
             )
         if set(evaluation.official_rewards) != set(state.task_ids):
             raise QuantCodeEvalV2LoopError("candidate reward panel differs")
-        selection = _selection(state, evaluation)
+        selection = (
+            SearchSelection.REJECTED
+            if contract_rejection_reason is not None
+            else _selection(state, evaluation)
+        )
         history_selection = {
             SearchSelection.OFFICIAL_PROMOTED: "accepted",
             SearchSelection.DIAGNOSTIC_PROMOTED: "accepted",
             SearchSelection.ARCHIVED: "archived",
             SearchSelection.REJECTED: "rejected",
         }[selection]
-        mechanism = next(
-            (
-                str(value.get("mechanism"))
-                for value in decision.get("hypotheses_considered", ())
-                if isinstance(value, Mapping)
-                and value.get("hypothesis_id") == decision.get("selected_hypothesis_id")
-            ),
-            str(decision.get("selected_hypothesis_id", "unknown mechanism")),
-        )
+        mechanism = _selected_mechanism(decision)
         history = append_quantcodeeval_history(
             history_root=history_root,
             run_id=state.run_id,
@@ -431,6 +472,9 @@ def run_quantcodeeval_v2_loop(
             },
             selection=history_selection,
             rollback_reason=(evaluation.reason if history_selection == "rejected" else None),
+            allow_rejected_attribution_mismatch=(
+                metrics["declared_roles_match_actual"] is not True
+            ),
         )
         state = record_quantcodeeval_search_round(
             state,

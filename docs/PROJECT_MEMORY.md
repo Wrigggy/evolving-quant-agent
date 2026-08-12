@@ -1346,6 +1346,29 @@ quant correctness should then be tested separately with executable `tools` or
 [superseding v2 decision](decisions/2026-08-12-quantcodeeval-v2-variable-full-harness-search.md)
 and [mechanism report](reports/2026-08-12-quantcodeeval-v2-mechanism-canary.md).
 
+### 2026-08-12 QuantCodeEval v2 live activation r1
+
+The first real v2 activation did not repeat prompt-only search. It compared
+unit-scale and temporal-lag mechanisms, added and registered a deterministic
+strategy-validation tool, exercised clean/defective/100-times-scale local
+fixtures, removed those fixtures, and passed independent full-harness
+admission. The exact candidate digest is
+`5d73211371ffdaf116f845846d980d14e4370d412ced3fba910bdb27607488f3`.
+
+The candidate was correctly rejected before benchmark evaluation because its
+decision declared conceptual role `validator` while all validator code lived
+under structural role `tools`; declared and actual file roles differed. H0 was
+not resampled, no worker/verifier ran, and no candidate QuantCodeEval score is
+claimed. The run used 34 successful requests, 1,611,603 tokens, and exact cost
+`$0.0377605312`; all managed resources were cleaned.
+
+The superseding mechanism contract now makes component roles exact file loci,
+stores attribution/stale-smoke rejection as immutable searchable history, and
+allows earlier failed draft tests while requiring latest final-digest primary
+smokes. A follow-up activation can import r1's exact candidate/diff/decision as
+round history. See the
+[measured r1 report](reports/2026-08-12-quantcodeeval-v2-live-activation-r1.md).
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

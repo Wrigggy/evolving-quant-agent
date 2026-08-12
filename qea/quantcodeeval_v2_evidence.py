@@ -178,6 +178,12 @@ def build_quantcodeeval_v2_evidence(
                 "max_declared_components": max_declared_components,
                 "preferred_primary_components": _PREFERRED_PRIMARY_COMPONENTS,
                 "component_priors_are_advisory": True,
+                "component_role_semantics": (
+                    "components and primary_components are exact candidate file roles, "
+                    "not conceptual capabilities; declare validator only when validator/** "
+                    "changes, and declare tools for validator behavior implemented in tools/**"
+                ),
+                "declared_components_must_equal_exact_changed_file_roles": True,
                 "exact_history_content_exposed": history_summary["entry_count"] != 0,
                 "oracle_fields_exposed": False,
             },

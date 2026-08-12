@@ -1,0 +1,54 @@
+{
+  "benchmark": "quantcodeeval",
+  "component_priors_are_advisory": true,
+  "current_evaluation_id": "d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06",
+  "decision_protocol": "quant_property_v2",
+  "exact_history_content_exposed": false,
+  "feedback_tier": "answer_free_property_family_v2",
+  "history_entry_ids": [],
+  "history_required": false,
+  "max_declared_components": 6,
+  "max_primary_components": 2,
+  "oracle_fields_exposed": false,
+  "preferred_primary_components": {
+    "artifact_interface": [
+      "validator",
+      "tools",
+      "tool_descriptions"
+    ],
+    "data_temporal_integrity": [
+      "tools",
+      "validator",
+      "skills"
+    ],
+    "isolated_task_specific": [],
+    "portfolio_execution": [
+      "tools",
+      "validator",
+      "routing"
+    ],
+    "quant_definition_estimation": [
+      "tools",
+      "skills",
+      "memory"
+    ],
+    "resource_termination": [
+      "middleware",
+      "routing",
+      "agent_config"
+    ],
+    "unknown": []
+  },
+  "protection_task_ids": [
+    "T16"
+  ],
+  "schema_version": 2,
+  "stage": "PGBHS_V2",
+  "target_task_ids": [
+    "T24"
+  ],
+  "task_ids": [
+    "T16",
+    "T24"
+  ]
+}

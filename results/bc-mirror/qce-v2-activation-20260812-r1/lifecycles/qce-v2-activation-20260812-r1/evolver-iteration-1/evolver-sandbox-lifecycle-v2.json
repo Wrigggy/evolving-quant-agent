@@ -1,0 +1,32 @@
+{
+  "attempt_id": "evolver-iteration-1",
+  "attempt_identity_sha256": "96da03a04915da5060686334699214e50983c88814165efada5be943eaa19906",
+  "backend": "rootless-docker",
+  "cleaned_at": "2026-08-12T05:25:45.913949+00:00",
+  "cleaned_up": true,
+  "cleanup_method": "exact-id",
+  "cleanup_result": "killed",
+  "created_at": "2026-08-12T05:11:22.669455+00:00",
+  "failure": null,
+  "finished_at": "2026-08-12T05:25:45.569825+00:00",
+  "immutable_image_ref": "sha256:adb2a68688488fe94e0fffbe1ffecf8c5416a4c3d2325cee6379e854521b29d2",
+  "native_id": "3e66b47fdee122f45a6a8fa011992cc92a1264e1d44220c2a333a763fc8b6a5f",
+  "resource_contract": {
+    "cpu_count": 2,
+    "executable_tmpfs_paths": [],
+    "memory_mb": 4096,
+    "network_policy": "worker-proxy-only",
+    "pids_limit": 512,
+    "timeout_seconds": 3600,
+    "writable_tmpfs_mb": {
+      "/qea": 2048,
+      "/tmp": 512
+    }
+  },
+  "role": "evolver",
+  "run_id": "qce-v2-activation-20260812-r1",
+  "schema_version": 2,
+  "spec_sha256": "b38177a1ded7dc5996d4e17f568e325c2728f6e70eae5e47af9ab4ad71be2d89",
+  "started_at": "2026-08-12T05:11:22.916122+00:00",
+  "task_id": "full-harness-evolver"
+}

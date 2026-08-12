@@ -80,7 +80,18 @@ def test_full_candidate_preflight_accepts_coherent_multifile_component(
         primary_components=("tools",),
         declared_roles=("agent_config", "tool_descriptions", "tools"),
         component_tests=(
-            {"status": "passed", "kind": "tool", "candidate_digest": digest},
+            {
+                "status": "failed",
+                "kind": "tool",
+                "component": "tools",
+                "candidate_digest": "0" * 64,
+            },
+            {
+                "status": "passed",
+                "kind": "tool",
+                "component": "tools",
+                "candidate_digest": digest,
+            },
         ),
         activation={"status": "not_run"},
         worker_image_ref="sha256:" + "4" * 64,
@@ -141,7 +152,7 @@ def test_full_candidate_rejects_failed_smoke_and_role_mismatch(tmp_path, monkeyp
         source_h0_evaluation_id="7" * 64,
         preflight_only=True,
     )
-    with pytest.raises(QuantCodeEvalFullCandidateError, match="status=passed"):
+    with pytest.raises(QuantCodeEvalFullCandidateError, match="final digest-bound"):
         run_quantcodeeval_full_candidate(
             **common,
             run_dir=tmp_path / "failed-smoke",
@@ -153,5 +164,11 @@ def test_full_candidate_rejects_failed_smoke_and_role_mismatch(tmp_path, monkeyp
             **common,
             run_dir=tmp_path / "role-mismatch",
             declared_roles=("tools",),
-            component_tests=({"status": "passed"},),
+            component_tests=(
+                {
+                    "status": "passed",
+                    "component": "tools",
+                    "candidate_digest": hash_worker_directory(candidate),
+                },
+            ),
         )

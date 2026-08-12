@@ -1,0 +1,29 @@
+All files verified, graph valid, tool import/call pass, self-test fixtures removed. The experiment contract is complete.
+
+## Experiment report
+
+**Decision: ACT** (quant_property_v2, one coherent mechanism)
+
+**Mechanism:** Pre-submission deterministic validation of quant strategy modules, addressing two competing failure mechanisms for the T24 target without encoding any answer.
+
+**Evidence (answer-free):**
+- `tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/official_and_families.json` — reward 0.0, `properties_incomplete`, exactly 1 failure per family (6/7, 9/10): one systematic convention defect, functions exist.
+- `tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/strategy_ast_facts.json` — all four required functions with correct signatures; **only** module numeric constant `VOL_SCALING_TARGET = 5.34`.
+- `tasks/T24/paper_text.md` (C.1, lines 6223/6244/6314) — paper-quoted target "5.34% per month" (percent); `tasks/T24/instruction.md` R2/R3/R4 — causal expanding mean, fixed constant, mandatory `shift(1)`.
+- `tasks/T16/evaluations/.../official_and_families.json` + `strategy_ast_facts.json` — protected task passes 18/18 with **no** module numeric constants (c solved from sample), a clean contrast.
+- `process_facts.json` (T24: 15 tool calls, 12 turns, 2 tool errors) and probe `t24_scale_anchor_vs_module` (corpus content-free — not discriminating).
+
+**Hypotheses:** h1 unit-scale (percent 5.34 applied in decimal space → ~100× weights/returns) vs h2 temporal-lag endpoint (current-month inclusion / `shift(-1)`). The answer-free corpus cannot eliminate either; the intervention deliberately covers both mechanically.
+
+**Change (5 files, one mechanism):**
+- `tools/strategy_validate.py` — validator: parse/import, required-function presence, synthetic single-DataFrame execution with fixed seed, output-column/finite checks, NaN-lag placement (leading-causal vs trailing-look-ahead), output/input ratio >100× scale hazard, static scan for `shift(-1)` and percent-like constants and forbidden reads. No task answers, no network, no evaluator files.
+- `tool_descriptions/validate_strategy_module.tool.yaml` + `agent.yaml` registration (2 tools now) + `systemprompt.md` workflow/quant-discipline activation.
+
+**Validation:** `inspect_candidate` valid, no issues; graph smoke `{"tools": 2}` passed; tool call smoke passed; three self-test fixtures exercised and then deleted:
+- defective (percent constant + `shift(-1)` + trailing NaN) → 5 targeted warnings;
+- clean (causal `shift(1)`, decimal `/100`) → 0 warnings, correct leading-NaN pattern;
+- 100× scale → magnitude-ratio warning fires.
+
+**Prediction:** T24 improves beyond `properties_incomplete` (failing convention property fixed), T16 stays at 1.0 (protected). **Risk tasks:** T16 (validator must never reject its passing logic — its single-arg functions with causal lags pass the clean-path audit).
+
+**Components changed:** `tools` (primary), `validator` (primary role per contract: declarable locus — logic lives in `tools/strategy_validate.py`), `tool_descriptions`, `agent_config`, `systemprompt` (bindings). `component_override_reason` recorded: evidence points to validator+tools over the advisory skills/memory prior.
