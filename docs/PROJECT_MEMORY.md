@@ -1476,6 +1476,29 @@ focus its autonomous component choice on the residual Type-A semantics while
 retaining T16 as the protected passing task. See the
 [r8 autonomous tool canary report](reports/2026-08-12-quantcodeeval-r8-autonomous-tool-canary.md).
 
+r9 then imported both r6 and r8 as independently scored history, in addition
+to the earlier rejected and unscored failures. The Evolver correctly recognized
+the r8 partial result and expanded the static audit to cover declared output
+columns, window causality, and calendar indicators. Tool import, graph smoke,
+and admission all passed, but the official panel regressed to `T16=0, T24=0`.
+T16 passed only 3/18 properties. T24 did not produce an artifact because the
+model consumed the full 32,000-token reasoning allowance and returned an empty
+response; a fixed-candidate T24-only retry reproduced the same five-request
+failure. Search, panel, and retry together used 49 requests, 2,908,883 tokens,
+and `$0.0808046904`, with no residual experiment containers or networks.
+
+This falsifies continued growth of a broad static audit as the immediate
+mechanism direction. Trusted diagnosis also found that r8's only T24 property
+failure crossed an inconsistent interface: the public contract specifies a
+one-argument strategy-return function, while the differential reference
+pipeline calls it with the separate scale returned by the preceding function.
+Do not teach that hidden call to the Evolver. Correct and rebaseline the T24
+adapter separately. For mechanism discovery, retain r8 as partial evidence,
+test a compact investigator-authored public-data behavior probe, and expand to
+self-contained tasks T01, T12, T18, and T19 rather than further overfitting T24.
+See the
+[r9 negative report](reports/2026-08-12-quantcodeeval-r9-structural-audit-negative.md).
+
 ### 2026-08-12 speed-first experimental engineering policy
 
 Repository engineering is now explicitly mechanism-first rather than
