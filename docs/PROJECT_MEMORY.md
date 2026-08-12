@@ -1455,6 +1455,27 @@ search parent without becoming the official incumbent. Expand beyond T16/T24
 only after this mechanism canary works. See the
 [next-round decision](decisions/2026-08-12-quantcodeeval-next-autonomous-round.md).
 
+The next autonomous round, r8, then established the missing end-to-end
+activation result. The Evolver read the accumulated answer-free r1/r4/r5/r6
+history, selected a T24 unit-scale hypothesis, and changed agent configuration,
+the system prompt, a tool description, and executable tool code. Its new static
+strategy audit passed component smokes and admission and was actually called by
+the real T24 worker. This is the first measured QuantCodeEval round here in
+which an autonomously proposed executable component was both activated and
+evaluated.
+
+The official candidate vector remained `T16=1, T24=0`, task mean `0.5`, so no
+benchmark gain is claimed. The more informative property result was partial:
+H0 failed one Type-A and one Type-B T24 property, while r8 passed every Type-B
+property and retained one Type-A failure. The mechanism therefore helped one
+failure family without crossing the benchmark's all-properties gate. Search
+and evaluation together used 56 requests, 2,875,559 tokens, and
+`$0.0958629504`; both services exited successfully with no residual experiment
+containers or networks. The next round should import this scored result and
+focus its autonomous component choice on the residual Type-A semantics while
+retaining T16 as the protected passing task. See the
+[r8 autonomous tool canary report](reports/2026-08-12-quantcodeeval-r8-autonomous-tool-canary.md).
+
 ### 2026-08-12 speed-first experimental engineering policy
 
 Repository engineering is now explicitly mechanism-first rather than
