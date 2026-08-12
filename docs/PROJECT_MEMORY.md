@@ -1393,6 +1393,19 @@ r4 used 48 requests, 3,037,562 tokens, and `$0.0345887416`. It did not run the
 candidate benchmark panel and makes no T16/T24 score claim. Provider-turn
 request/cost reconciliation is now wired into outer search accounting.
 
+The first r4 full-candidate launch subsequently passed exact preflight but
+failed before verifier scoring at the worker artifact contract. T16 completed
+seven requests and exceeded the three-file output limit with bytecode-cache
+side effects; T24 completed eight requests and delivered no `strategy.py`.
+Together they used 226,685 tokens and exact cost `$0.0218750168`; every
+recorded resource was cleaned. This is measured component-delivery failure,
+not a task reward vector. The original exception lacked a top-level result, so
+the mirror now contains an explicitly recovered answer-free failure record,
+and future runs persist that record during the failing call. A later Evolver
+round may import the exact failed candidate as immutable history while keeping
+H0 as incumbent and unresampled. See the updated
+[live activation and full-candidate report](reports/2026-08-12-quantcodeeval-v2-live-activation-r1.md).
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

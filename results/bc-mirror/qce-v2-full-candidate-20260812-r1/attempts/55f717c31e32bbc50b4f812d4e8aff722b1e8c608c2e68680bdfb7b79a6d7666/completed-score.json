@@ -1,0 +1,12 @@
+{
+  "diagnostic_tags": [
+    "missing_artifact"
+  ],
+  "domain": "event_strategy",
+  "log_uri": "/home/julius/qea/runtime/quantcodeeval/runs/qce-v2-full-candidate-20260812-r1/attempts/55f717c31e32bbc50b4f812d4e8aff722b1e8c608c2e68680bdfb7b79a6d7666/raw-trace.jsonl",
+  "reward": 0.0,
+  "task_id": "T24",
+  "tests_failed": null,
+  "tests_passed": null,
+  "verifier_exit_code": null
+}

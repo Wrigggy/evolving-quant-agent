@@ -1,0 +1,6 @@
+{
+  "exit_code": 0,
+  "stderr": "E2B SDK not installed. Install it with: pip install e2b\nSandbox is not running. Try resuming it...\n",
+  "stdout": "",
+  "timed_out": false
+}

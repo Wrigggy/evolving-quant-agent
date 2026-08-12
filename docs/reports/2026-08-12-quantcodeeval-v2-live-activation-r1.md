@@ -168,3 +168,49 @@ The live evaluator now reconciles the outer state against the finalized proxy
 audit so request/cost stopping limits use provider-turn accounting. The exact
 r4 artifact is retained under
 `results/bc-mirror/qce-v2-activation-20260812-r4/`.
+
+## First full-candidate panel: worker-contract rejection
+
+The archived r4 candidate was next launched as
+`qce-v2-full-candidate-20260812-r1` against T16 and T24. Full-candidate
+preflight passed: the candidate source, exact declared roles, final-digest
+component tests, independent admission, runtime identity, task panel, and H0
+reuse all matched. The candidate digest remained
+`9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089`.
+
+The run produced no valid QuantCodeEval candidate score. Both tasks stopped at
+the worker artifact contract before a verifier ran:
+
+- T16 completed seven provider requests and then reported
+  `output file limit exceeded: 4 > 3`. Partial extraction retained
+  `trade_log.json` plus Python 3.11 and 3.12 bytecode cache files. The fourth
+  output was not extracted after the fail-closed file-count rejection, so its
+  membership is not inferred.
+- T24 completed eight provider requests but delivered no `strategy.py`; its
+  artifact contract recorded an empty output membership.
+
+The two tasks used 168,293 input and 58,392 output tokens, 226,685 total, with
+exact audited cost `$0.0218750168`. All 15 proxy requests completed. All six
+worker/proxy/network lifecycle records report `cleaned_up=true`. Because no
+verifier completed, these outcomes are component-level delivery failures, not
+official rewards of zero and not evidence for or against the validator's
+quantitative hypothesis.
+
+The original coordinator exited on the T16 archive exception before writing a
+top-level result. The immutable mirror retains that absence as historical
+behavior. A new recovery path read only preflight, worker artifact-contract,
+proxy-audit, and lifecycle records and wrote an explicitly marked
+`RecoveredInterruptedPanel` result. It did not inspect checker output. The
+preflight SHA-256 is
+`59fe46540461178aad8b0f83f3dbaeabe59f6b33c68611879e6a5184fac3a5e3`;
+the recovered fail-closed result SHA-256 is
+`72e63a654623ed8cee3d239d4af13139bea2f773056c8702e56ac280075b1c3b`.
+The additive evidence is under
+`results/bc-mirror/qce-v2-full-candidate-20260812-r1/`.
+
+Future full-candidate runs persist the same answer-free failure result during
+the failing invocation and reuse it on resume, preventing accidental paid
+resampling. The next activation may import this exact r4 candidate, diff,
+decision, component tests, passed activation, task-local artifact failures,
+cost, and cleanup state as immutable search history. It must treat r4 as
+rejected and H0 as the incumbent; H0 is not resampled.

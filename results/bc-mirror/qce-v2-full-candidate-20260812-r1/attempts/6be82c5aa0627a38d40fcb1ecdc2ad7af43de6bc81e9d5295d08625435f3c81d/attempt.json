@@ -1,0 +1,9 @@
+{
+  "attempt_id": "6be82c5aa0627a38d40fcb1ecdc2ad7af43de6bc81e9d5295d08625435f3c81d",
+  "benchmark_commit": "9bdacc4898aeec08813764290b12d356e0a011d1",
+  "checkpoint": "quantcodeeval-v2-iteration-0001",
+  "run_id": "qce-v2-full-candidate-20260812-r1",
+  "split": "engineering_canary_optimize",
+  "task_id": "T16",
+  "worker_digest": "9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089"
+}

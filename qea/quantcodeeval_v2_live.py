@@ -247,6 +247,143 @@ def _seed_rejected_attempt_history(
     }
 
 
+def _selected_mechanism(decision: Mapping[str, object]) -> str:
+    selected = decision.get("selected_hypothesis_id")
+    hypotheses = decision.get("hypotheses_considered", ())
+    if isinstance(hypotheses, (str, bytes)) or not isinstance(hypotheses, list):
+        raise QuantCodeEvalV2LiveError("ACT hypotheses are invalid")
+    for value in hypotheses:
+        if isinstance(value, Mapping) and value.get("hypothesis_id") == selected:
+            mechanism = value.get("mechanism")
+            if isinstance(mechanism, str) and mechanism.strip():
+                return mechanism.strip()
+    raise QuantCodeEvalV2LiveError("ACT lacks its selected mechanism")
+
+
+def _seed_full_candidate_failure_history(
+    *,
+    history_root: Path,
+    activation_run_dir: Path,
+    full_candidate_run_dir: Path,
+    seed_worker_dir: Path,
+    h0_evaluation_id: str,
+) -> dict[str, object]:
+    """Import one activation-passed, worker-contract-failed candidate."""
+
+    activation_root = activation_run_dir.expanduser().resolve()
+    full_root = full_candidate_run_dir.expanduser().resolve()
+    live_path = activation_root / "LIVE-RESULT.json"
+    preflight_path = full_root / "FULL-CANDIDATE-PREFLIGHT.json"
+    failure_path = full_root / "FULL-CANDIDATE-RESULT.json"
+    candidate = activation_root / "evolutions/iteration-0001/candidate"
+    for path in (live_path, preflight_path, failure_path):
+        if path.is_symlink() or not path.is_file():
+            raise QuantCodeEvalV2LiveError(
+                "full-candidate failure import lacks an immutable result surface"
+            )
+    if candidate.is_symlink() or not candidate.is_dir():
+        raise QuantCodeEvalV2LiveError(
+            "full-candidate failure import lacks its candidate snapshot"
+        )
+    live = json.loads(live_path.read_text(encoding="utf-8"))
+    preflight = json.loads(preflight_path.read_text(encoding="utf-8"))
+    failure = json.loads(failure_path.read_text(encoding="utf-8"))
+    if (
+        not isinstance(live, Mapping)
+        or live.get("status") != "PASS"
+        or live.get("candidate_benchmark_evaluated") is not False
+    ):
+        raise QuantCodeEvalV2LiveError("source activation is not an unscored PASS")
+    if (
+        not isinstance(preflight, Mapping)
+        or preflight.get("status") != "preflight_complete"
+        or preflight.get("source_h0_evaluation_id") != h0_evaluation_id
+    ):
+        raise QuantCodeEvalV2LiveError("full-candidate preflight identity differs")
+    if (
+        not isinstance(failure, Mapping)
+        or failure.get("status") != "evaluation_failed"
+        or failure.get("official_evaluated") is not False
+        or failure.get("benchmark_score_claimed") is not False
+    ):
+        raise QuantCodeEvalV2LiveError(
+            "full-candidate result is not a fail-closed unscored panel"
+        )
+    candidate_digest = hash_worker_directory(candidate)
+    if (
+        candidate_digest != live.get("candidate_digest")
+        or candidate_digest != preflight.get("candidate_worker_digest")
+        or candidate_digest != failure.get("candidate_worker_digest")
+    ):
+        raise QuantCodeEvalV2LiveError("failed candidate digest differs")
+    decision = live.get("decision")
+    if not isinstance(decision, Mapping) or decision.get("decision") != "ACT":
+        raise QuantCodeEvalV2LiveError("failed candidate lacks a legal ACT")
+    components = tuple(str(value) for value in decision.get("components", ()))
+    primary = tuple(
+        str(value) for value in decision.get("primary_components", ())
+    )
+    if list(preflight.get("declared_roles", ())) != sorted(set(components)):
+        raise QuantCodeEvalV2LiveError("failed candidate declared roles differ")
+    tests = live.get("component_tests")
+    if not isinstance(tests, list) or any(
+        not isinstance(value, Mapping) for value in tests
+    ):
+        raise QuantCodeEvalV2LiveError("failed candidate component tests are invalid")
+    activation = live.get("activation")
+    if not isinstance(activation, Mapping) or activation.get("status") != "passed":
+        raise QuantCodeEvalV2LiveError("failed candidate activation did not pass")
+    attempts = failure.get("attempts")
+    partial_audit = failure.get("partial_cost_and_lifecycle_audit")
+    if not isinstance(attempts, list) or not attempts or any(
+        not isinstance(value, Mapping) for value in attempts
+    ):
+        raise QuantCodeEvalV2LiveError("failed candidate has no task outcomes")
+    if not isinstance(partial_audit, Mapping):
+        raise QuantCodeEvalV2LiveError("failed candidate has no partial audit")
+    if any(value.get("official_score_available") is not False for value in attempts):
+        raise QuantCodeEvalV2LiveError("failed panel unexpectedly exposes a score")
+    reason = (
+        "candidate passed component activation but failed before official scoring "
+        "at the worker artifact contract"
+    )
+    history = append_quantcodeeval_history(
+        history_root=history_root,
+        run_id=full_root.name,
+        iteration=int(preflight.get("iteration", 1)),
+        parent_worker_dir=seed_worker_dir,
+        candidate_worker_dir=candidate,
+        decision=dict(decision),
+        mechanism=_selected_mechanism(decision),
+        primary_components=primary,
+        declared_roles=components,
+        component_tests=tuple(dict(value) for value in tests),
+        activation=dict(activation),
+        evaluation={
+            "schema_version": 1,
+            "candidate_panel_attempted": True,
+            "official_evaluated": False,
+            "benchmark_score_claimed": False,
+            "task_outcomes": [dict(value) for value in attempts],
+            "cost_and_lifecycle_audit": dict(partial_audit),
+            "new_information": True,
+            "reason": reason,
+        },
+        selection="rejected",
+        rollback_reason=reason,
+    )
+    return {
+        "run_id": full_root.name,
+        "activation_run_id": activation_root.name,
+        "entry_id": history.entry_id,
+        "candidate_digest": candidate_digest,
+        "live_result_sha256": _sha256(live_path),
+        "preflight_sha256": _sha256(preflight_path),
+        "failure_result_sha256": _sha256(failure_path),
+        "reason": reason,
+    }
+
+
 def _activation_from_component_tests(
     candidate: Path,
     decision: Mapping[str, object],
@@ -291,6 +428,8 @@ def run_quantcodeeval_v2_activation_canary(
     evolver_image_ref: str,
     proxy_image_ref: str,
     prior_rejected_attempt_dir: str | Path | None = None,
+    prior_failed_candidate_activation_dir: str | Path | None = None,
+    prior_failed_candidate_run_dir: str | Path | None = None,
     preflight_only: bool = False,
 ) -> dict[str, object]:
     """Run or preflight one real Evolver round without resampling H0."""
@@ -322,6 +461,22 @@ def run_quantcodeeval_v2_activation_canary(
             prior_attempt_dir=Path(prior_rejected_attempt_dir),
             seed_worker_dir=seed,
             h0_rewards=rewards,
+        )
+    if (prior_failed_candidate_activation_dir is None) != (
+        prior_failed_candidate_run_dir is None
+    ):
+        raise QuantCodeEvalV2LiveError(
+            "failed candidate activation and full run must be supplied together"
+        )
+    prior_full_candidate_failure = None
+    if prior_failed_candidate_run_dir is not None:
+        assert prior_failed_candidate_activation_dir is not None
+        prior_full_candidate_failure = _seed_full_candidate_failure_history(
+            history_root=root / "history",
+            activation_run_dir=Path(prior_failed_candidate_activation_dir),
+            full_candidate_run_dir=Path(prior_failed_candidate_run_dir),
+            seed_worker_dir=seed,
+            h0_evaluation_id=h0.evaluation_id,
         )
 
     backend = RootlessDockerBackend(
@@ -358,6 +513,7 @@ def run_quantcodeeval_v2_activation_canary(
         "docker_preflight_identity_sha256": docker_preflight.identity_sha256,
         "source_sha256": _source_identity(),
         "prior_rejected_attempt": prior_rejected_attempt,
+        "prior_full_candidate_failure": prior_full_candidate_failure,
         "search_limits": asdict(
             QuantSearchLimits(
                 max_rounds=1,
@@ -483,10 +639,13 @@ def run_quantcodeeval_v2_activation_canary(
         candidate_evaluator=activation_only_evaluator,
         diagnosis_builder=lambda current, iteration: (
             "T16 is protected at reward 1; T24 remains incomplete. Earlier five-round "
-            "prompt-only mutations produced no gain or regressions. Use the exact "
-            "answer-free evidence and any immutable rejected-attempt history to choose "
-            "between at least two mechanisms. Components are exact changed file roles, "
-            "not conceptual capability names. If ACT, "
+            "prompt-only mutations produced no gain or regressions. Later immutable "
+            "history may include activation-passed candidates that failed the worker "
+            "artifact contract before official scoring; treat those as component-level "
+            "delivery evidence, never as task reward zero. Use the exact answer-free "
+            "evidence and immutable attempt history to choose between at least two "
+            "mechanisms. Components are exact changed file roles, not conceptual "
+            "capability names. If ACT, "
             "prefer a testable executable harness component, edit it coherently with "
             "its bindings, and rerun its component smoke after the final edit."
         ),

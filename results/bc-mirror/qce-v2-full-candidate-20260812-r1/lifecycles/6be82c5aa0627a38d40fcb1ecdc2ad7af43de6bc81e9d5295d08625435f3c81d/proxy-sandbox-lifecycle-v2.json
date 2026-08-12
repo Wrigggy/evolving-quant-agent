@@ -1,0 +1,32 @@
+{
+  "attempt_id": "6be82c5aa0627a38d40fcb1ecdc2ad7af43de6bc81e9d5295d08625435f3c81d",
+  "attempt_identity_sha256": "8119fc4ac0e99347333495baed64117986bcab9ea6b0d29645845541c30ece2a",
+  "backend": "rootless-docker",
+  "cleaned_at": "2026-08-12T06:16:37.604647+00:00",
+  "cleaned_up": true,
+  "cleanup_method": "exact-id",
+  "cleanup_result": "killed",
+  "created_at": "2026-08-12T06:13:03.653355+00:00",
+  "failure": "worker.artifacts: OutputArchiveError: output file limit exceeded: 4 > 3",
+  "finished_at": "2026-08-12T06:16:37.196447+00:00",
+  "immutable_image_ref": "sha256:950280b19b6215c9a48ae81d5d9fdc6b69fa2192706ff4920efbb0981e33beae",
+  "native_id": "ea13b562294718b0a6091d85d6ce632cb1dcd3e4e28a83b6b8fed4fb445e8f80",
+  "resource_contract": {
+    "cpu_count": 2,
+    "executable_tmpfs_paths": [],
+    "memory_mb": 4096,
+    "network_policy": "proxy-outbound",
+    "pids_limit": 128,
+    "timeout_seconds": 3600,
+    "writable_tmpfs_mb": {
+      "/run/qea-secrets": 16,
+      "/tmp": 128
+    }
+  },
+  "role": "proxy",
+  "run_id": "qce-v2-full-candidate-20260812-r1",
+  "schema_version": 2,
+  "spec_sha256": "ebec653d72540661c9fbedc3e26060b1d26f0792f72e15840bb9fa7ee7f56b85",
+  "started_at": "2026-08-12T06:13:04.003101+00:00",
+  "task_id": "T16"
+}

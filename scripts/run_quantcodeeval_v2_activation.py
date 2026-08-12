@@ -24,6 +24,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--evolver-image", required=True)
     parser.add_argument("--proxy-image", required=True)
     parser.add_argument("--prior-rejected-attempt", type=Path)
+    parser.add_argument("--prior-failed-candidate-activation", type=Path)
+    parser.add_argument("--prior-failed-candidate-run", type=Path)
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args(argv)
     result = run_quantcodeeval_v2_activation_canary(
@@ -33,6 +35,10 @@ def main(argv: list[str] | None = None) -> int:
         evolver_image_ref=args.evolver_image,
         proxy_image_ref=args.proxy_image,
         prior_rejected_attempt_dir=args.prior_rejected_attempt,
+        prior_failed_candidate_activation_dir=(
+            args.prior_failed_candidate_activation
+        ),
+        prior_failed_candidate_run_dir=args.prior_failed_candidate_run,
         preflight_only=args.preflight_only,
     )
     print(json.dumps(result, sort_keys=True, indent=2, ensure_ascii=False))

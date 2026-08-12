@@ -1,0 +1,33 @@
+{
+  "attempt_id": "6be82c5aa0627a38d40fcb1ecdc2ad7af43de6bc81e9d5295d08625435f3c81d",
+  "attempt_identity_sha256": "b7faf73f59baaf91bf744705b261d868ddc93fdbbbeecdcb4aa051b4f129489f",
+  "backend": "rootless-docker",
+  "cleaned_at": "2026-08-12T06:16:36.862409+00:00",
+  "cleaned_up": true,
+  "cleanup_method": "exact-id",
+  "cleanup_result": "killed",
+  "created_at": "2026-08-12T06:13:04.578636+00:00",
+  "failure": "worker.artifacts: OutputArchiveError: output file limit exceeded: 4 > 3",
+  "finished_at": "2026-08-12T06:16:36.511930+00:00",
+  "immutable_image_ref": "sha256:d347f20bf36d5b0ca9f0493f3b939ad707de61f1ccd7d687a09402fb4087bd00",
+  "native_id": "35b24d99abd7b01434d1e87743c52a68368974c257ffc6918ecc4aaa924a18e9",
+  "resource_contract": {
+    "cpu_count": 2,
+    "executable_tmpfs_paths": [],
+    "memory_mb": 4096,
+    "network_policy": "worker-proxy-only",
+    "pids_limit": 256,
+    "timeout_seconds": 5400,
+    "writable_tmpfs_mb": {
+      "/app": 2048,
+      "/qea": 512,
+      "/tmp": 256
+    }
+  },
+  "role": "worker",
+  "run_id": "qce-v2-full-candidate-20260812-r1",
+  "schema_version": 2,
+  "spec_sha256": "208d816550c9706bd362e594905e13467cd82537f093b8cbd3ec107eee5f41ea",
+  "started_at": "2026-08-12T06:13:04.866564+00:00",
+  "task_id": "T16"
+}

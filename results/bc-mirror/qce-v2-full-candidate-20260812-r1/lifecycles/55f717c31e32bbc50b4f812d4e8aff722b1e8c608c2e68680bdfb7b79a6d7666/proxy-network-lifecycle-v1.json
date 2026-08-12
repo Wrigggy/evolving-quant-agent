@@ -1,0 +1,14 @@
+{
+  "backend": "rootless-docker",
+  "cleaned_at": "2026-08-12T06:21:09.112280+00:00",
+  "cleaned_up": true,
+  "cleanup_method": "exact-id",
+  "cleanup_result": "killed",
+  "created_at": "2026-08-12T06:16:37.877362+00:00",
+  "identity_sha256": "798189c582263a04595e0a09e51e7b3874239647e8edc6349cb3cf962635f1d9",
+  "name": "qea-qce-v2-full-candidate-20260812-r1-55f717c31e32bbc50b4f812d4e8aff722b1e8c608c2e68680bdfb7b79a6d7666-798189c58226-internal",
+  "native_id": "51ae3d24303452518e8be4ba0dccdc24ebc31eacf930f776a58749da028a0c0c",
+  "network_scope": "55f717c31e32bbc50b4f812d4e8aff722b1e8c608c2e68680bdfb7b79a6d7666",
+  "run_id": "qce-v2-full-candidate-20260812-r1",
+  "schema_version": 1
+}

@@ -6,6 +6,7 @@ from qea.loop_benchmark import hash_worker_directory
 from qea.quantcodeeval_v2_live import (
     _activation_from_component_tests,
     _proxy_audit,
+    _seed_full_candidate_failure_history,
     _seed_rejected_attempt_history,
 )
 from qea.quantcodeeval_history import validate_quantcodeeval_history
@@ -140,3 +141,117 @@ def test_prior_rejected_attempt_becomes_exact_searchable_history(tmp_path):
     assert imported["declared_roles"] == ["systemprompt", "validator"]
     assert imported["actual_roles"] == ["systemprompt"]
     assert validate_quantcodeeval_history(tmp_path / "history")["entry_count"] == 1
+
+
+def test_failed_full_candidate_becomes_unscored_searchable_history(tmp_path):
+    source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
+    seed = tmp_path / "seed"
+    shutil.copytree(source, seed)
+    activation = tmp_path / "qce-v2-activation"
+    candidate = activation / "evolutions/iteration-0001/candidate"
+    candidate.parent.mkdir(parents=True)
+    shutil.copytree(seed, candidate)
+    (candidate / "tools").mkdir()
+    (candidate / "tools/checkpoint.py").write_text(
+        "def checkpoint():\n    return True\n", encoding="utf-8"
+    )
+    digest = hash_worker_directory(candidate)
+    decision = {
+        "decision": "ACT",
+        "hypotheses_considered": [
+            {"hypothesis_id": "h1", "mechanism": "checkpoint exact output"}
+        ],
+        "selected_hypothesis_id": "h1",
+        "primary_components": ["tools"],
+        "components": ["tools"],
+    }
+    component_tests = [
+        {
+            "status": "passed",
+            "component": "tools",
+            "candidate_digest": digest,
+        }
+    ]
+    activation_payload = {
+        "status": "passed",
+        "candidate_digest": digest,
+        "official_worker_evaluation_run": False,
+    }
+    (activation / "LIVE-RESULT.json").write_text(
+        json.dumps(
+            {
+                "status": "PASS",
+                "candidate_benchmark_evaluated": False,
+                "candidate_digest": digest,
+                "decision": decision,
+                "component_tests": component_tests,
+                "activation": activation_payload,
+            }
+        ),
+        encoding="utf-8",
+    )
+    full = tmp_path / "qce-v2-full-candidate"
+    full.mkdir()
+    h0_id = "7" * 64
+    (full / "FULL-CANDIDATE-PREFLIGHT.json").write_text(
+        json.dumps(
+            {
+                "status": "preflight_complete",
+                "source_h0_evaluation_id": h0_id,
+                "candidate_worker_digest": digest,
+                "declared_roles": ["tools"],
+                "iteration": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (full / "FULL-CANDIDATE-RESULT.json").write_text(
+        json.dumps(
+            {
+                "status": "evaluation_failed",
+                "official_evaluated": False,
+                "benchmark_score_claimed": False,
+                "candidate_worker_digest": digest,
+                "attempts": [
+                    {
+                        "task_id": "T16",
+                        "failure_stage": "worker_artifact_contract",
+                        "failure_class": "output_membership_overflow",
+                        "official_score_available": False,
+                    },
+                    {
+                        "task_id": "T24",
+                        "failure_stage": "worker_artifact_contract",
+                        "failure_class": "missing_submission_artifact",
+                        "official_score_available": False,
+                    },
+                ],
+                "partial_cost_and_lifecycle_audit": {
+                    "request_count": 15,
+                    "all_recorded_resources_cleaned": True,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    imported = _seed_full_candidate_failure_history(
+        history_root=tmp_path / "history",
+        activation_run_dir=activation,
+        full_candidate_run_dir=full,
+        seed_worker_dir=seed,
+        h0_evaluation_id=h0_id,
+    )
+
+    validation = validate_quantcodeeval_history(tmp_path / "history")
+    entry = json.loads(
+        (tmp_path / "history/entries" / f"{imported['entry_id']}.json").read_text()
+    )
+    assert validation["entry_count"] == 1
+    assert entry["selection"] == "rejected"
+    assert entry["activation"]["status"] == "passed"
+    assert entry["evaluation"]["official_evaluated"] is False
+    assert entry["evaluation"]["benchmark_score_claimed"] is False
+    assert entry["evaluation"]["task_outcomes"][1]["failure_class"] == (
+        "missing_submission_artifact"
+    )

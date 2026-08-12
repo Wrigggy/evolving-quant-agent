@@ -105,6 +105,243 @@ def _validate_component_tests(
     return normalized
 
 
+def _read_json_mapping(path: Path) -> dict[str, object] | None:
+    if path.is_symlink() or not path.is_file():
+        return None
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return dict(value) if isinstance(value, Mapping) else None
+
+
+def _proxy_attempt_audit(path: Path) -> dict[str, object]:
+    rows: list[dict[str, object]] = []
+    if path.is_file() and not path.is_symlink():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                return {
+                    "audit_present": True,
+                    "audit_complete": False,
+                    "reason": "proxy audit contains malformed JSON",
+                }
+            if not isinstance(value, Mapping):
+                return {
+                    "audit_present": True,
+                    "audit_complete": False,
+                    "reason": "proxy audit contains a non-object row",
+                }
+            rows.append(dict(value))
+    completed = [
+        row
+        for row in rows
+        if row.get("request_state") == "completed"
+        and row.get("failure_class") is None
+        and row.get("upstream_status_code") == 200
+    ]
+    costs = [row.get("provider_cost_usd") for row in completed]
+    numeric_costs = [
+        float(value)
+        for value in costs
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    ]
+    return {
+        "audit_present": path.is_file() and not path.is_symlink(),
+        "audit_complete": bool(rows) and len(rows) == len(completed),
+        "request_count": len(rows),
+        "completed_request_count": len(completed),
+        "input_tokens": sum(int(row.get("input_tokens") or 0) for row in completed),
+        "output_tokens": sum(int(row.get("output_tokens") or 0) for row in completed),
+        "total_tokens": sum(int(row.get("total_tokens") or 0) for row in completed),
+        "provider_cost_usd": (
+            sum(numeric_costs) if len(numeric_costs) == len(completed) else None
+        ),
+    }
+
+
+def _answer_free_failed_attempts(
+    root: Path, tasks: Iterable[object]
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """Collect worker-contract failure facts without reading checker output."""
+
+    lifecycle_by_task: dict[str, list[dict[str, object]]] = {}
+    lifecycle_rows: list[dict[str, object]] = []
+    for path in sorted(root.glob("lifecycles/**/*.json")):
+        value = _read_json_mapping(path)
+        if value is None:
+            continue
+        task_id = value.get("task_id")
+        if isinstance(task_id, str):
+            lifecycle_by_task.setdefault(task_id, []).append(value)
+        lifecycle_rows.append(value)
+
+    attempts: list[dict[str, object]] = []
+    total_requests = 0
+    total_input = 0
+    total_output = 0
+    total_tokens = 0
+    total_cost = 0.0
+    cost_complete = True
+    for task in tasks:
+        task_id = str(task if isinstance(task, str) else getattr(task, "task_id"))
+        # Attempt identity also binds checkpoint and worker digest, so locate
+        # the directory through its public attempt metadata rather than guessing.
+        attempt_dir = None
+        for metadata_path in sorted((root / "attempts").glob("*/attempt.json")):
+            metadata = _read_json_mapping(metadata_path)
+            if metadata is not None and metadata.get("task_id") == task_id:
+                attempt_dir = metadata_path.parent
+                break
+        if attempt_dir is None:
+            attempts.append(
+                {
+                    "task_id": task_id,
+                    "attempt_id": None,
+                    "failure_stage": "attempt_materialization",
+                    "failure_class": "missing_attempt_record",
+                    "official_score_available": False,
+                }
+            )
+            continue
+        metadata = _read_json_mapping(attempt_dir / "attempt.json") or {}
+        contract = _read_json_mapping(
+            attempt_dir / "worker-artifact-contract.json"
+        )
+        extracted = sorted(
+            path.relative_to(attempt_dir / "artifacts").as_posix()
+            for path in (attempt_dir / "artifacts").rglob("*")
+            if path.is_file() and not path.is_symlink()
+        ) if (attempt_dir / "artifacts").is_dir() else []
+        lifecycles = lifecycle_by_task.get(task_id, [])
+        failures = sorted(
+            {
+                str(value["failure"])
+                for value in lifecycles
+                if isinstance(value.get("failure"), str) and value["failure"]
+            }
+        )
+        proxy = _proxy_attempt_audit(attempt_dir / "proxy-audit.jsonl")
+        total_requests += int(proxy.get("request_count") or 0)
+        total_input += int(proxy.get("input_tokens") or 0)
+        total_output += int(proxy.get("output_tokens") or 0)
+        total_tokens += int(proxy.get("total_tokens") or 0)
+        cost = proxy.get("provider_cost_usd")
+        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+            total_cost += float(cost)
+        else:
+            cost_complete = False
+        if contract is not None and contract.get("found_paths") == []:
+            failure_class = "missing_submission_artifact"
+        elif any("file limit exceeded" in value for value in failures):
+            failure_class = "output_membership_overflow"
+        else:
+            failure_class = "worker_artifact_contract"
+        attempts.append(
+            {
+                "task_id": task_id,
+                "attempt_id": metadata.get("attempt_id"),
+                "failure_stage": "worker_artifact_contract",
+                "failure_class": failure_class,
+                "failure_messages": failures,
+                "required_submission_paths": (
+                    list(contract.get("expected_paths", []))
+                    if contract is not None
+                    and isinstance(contract.get("expected_paths"), list)
+                    else ["strategy.py"]
+                ),
+                "reported_submission_paths": (
+                    list(contract.get("found_paths", []))
+                    if contract is not None
+                    and isinstance(contract.get("found_paths"), list)
+                    else None
+                ),
+                "partially_extracted_paths": extracted,
+                "official_score_available": False,
+                "provider_audit": proxy,
+            }
+        )
+    cleaned_rows = [
+        value.get("cleaned_up")
+        for value in lifecycle_rows
+        if "cleaned_up" in value
+    ]
+    aggregate = {
+        "request_count": total_requests,
+        "input_tokens": total_input,
+        "output_tokens": total_output,
+        "total_tokens": total_tokens,
+        "provider_cost_usd": total_cost if cost_complete else None,
+        "cost_complete": cost_complete,
+        "lifecycle_record_count": len(lifecycle_rows),
+        "all_recorded_resources_cleaned": bool(cleaned_rows) and all(
+            value is True for value in cleaned_rows
+        ),
+    }
+    return attempts, aggregate
+
+
+def materialize_quantcodeeval_full_candidate_failure_result(
+    run_dir: str | Path,
+) -> dict[str, object]:
+    """Recover a structured failure result for a legacy interrupted panel.
+
+    This reads only preflight, worker artifact-contract, proxy audit, and
+    lifecycle records.  It deliberately does not inspect checker output.
+    """
+
+    root = Path(run_dir).expanduser().resolve()
+    preflight_path = root / "FULL-CANDIDATE-PREFLIGHT.json"
+    preflight = _read_json_mapping(preflight_path)
+    if preflight is None or preflight.get("status") != "preflight_complete":
+        raise QuantCodeEvalFullCandidateError(
+            "legacy failure recovery requires a complete candidate preflight"
+        )
+    result_path = root / "FULL-CANDIDATE-RESULT.json"
+    if result_path.exists() or result_path.is_symlink():
+        result = _read_json_mapping(result_path)
+        if result is None:
+            raise QuantCodeEvalFullCandidateError(
+                "persisted full-candidate result is invalid"
+            )
+        return result
+    task_ids = preflight.get("task_ids")
+    if not isinstance(task_ids, list) or any(
+        not isinstance(value, str) for value in task_ids
+    ):
+        raise QuantCodeEvalFullCandidateError("candidate preflight task IDs are invalid")
+    attempts, partial_audit = _answer_free_failed_attempts(root, task_ids)
+    if not attempts or all(
+        value.get("failure_class") == "missing_attempt_record" for value in attempts
+    ):
+        raise QuantCodeEvalFullCandidateError(
+            "legacy run has no worker failure artifacts to recover"
+        )
+    result = {
+        **preflight,
+        "status": "evaluation_failed",
+        "official_evaluated": False,
+        "benchmark_score_claimed": False,
+        "evaluation_attempted": True,
+        "failure": {
+            "exception_type": "RecoveredInterruptedPanel",
+            "message": (
+                "recovered from immutable worker artifact-contract and lifecycle "
+                "records; the original coordinator exited before result persistence"
+            ),
+        },
+        "attempts": attempts,
+        "partial_cost_and_lifecycle_audit": partial_audit,
+        "preflight_sha256": _canonical_sha256(preflight),
+        "recovered_from_existing_artifacts": True,
+    }
+    _atomic_private_json(result_path, result)
+    return result
+
+
 def run_quantcodeeval_full_candidate(
     *,
     config_path: str | Path,
@@ -245,6 +482,47 @@ def run_quantcodeeval_full_candidate(
         _atomic_private_json(preflight_path, plan)
     if preflight_only:
         return plan
+    result_path = root / "FULL-CANDIDATE-RESULT.json"
+    if result_path.exists() or result_path.is_symlink():
+        if result_path.is_symlink() or not result_path.is_file():
+            raise QuantCodeEvalFullCandidateError(
+                "persisted full-candidate result is unsafe"
+            )
+        persisted = _read_json_mapping(result_path)
+        if persisted is None:
+            raise QuantCodeEvalFullCandidateError(
+                "persisted full-candidate result is invalid"
+            )
+        if persisted.get("status") not in {
+            "activation_failed",
+            "evaluation_failed",
+            "complete",
+        }:
+            raise QuantCodeEvalFullCandidateError(
+                "persisted full-candidate result status is invalid"
+            )
+        bound_keys = (
+            "plan_identity_sha256",
+            "candidate_worker_digest",
+            "source_h0_evaluation_id",
+            "checkpoint",
+        )
+        # Older plans predate an explicit plan identity.  Every other bound
+        # field remains exact, and new results carry the preflight SHA below.
+        for key in bound_keys:
+            if key in persisted and persisted.get(key) != plan.get(key):
+                raise QuantCodeEvalFullCandidateError(
+                    "persisted full-candidate result differs from preflight"
+                )
+        persisted_preflight = persisted.get("preflight_sha256")
+        if (
+            persisted_preflight is not None
+            and persisted_preflight != _canonical_sha256(plan)
+        ):
+            raise QuantCodeEvalFullCandidateError(
+                "persisted full-candidate result preflight differs"
+            )
+        return persisted
     if require_activation and activation_payload.get("status") != "passed":
         result = {
             **plan,
@@ -252,16 +530,37 @@ def run_quantcodeeval_full_candidate(
             "official_evaluated": False,
             "activation_failure": activation_payload,
         }
-        _atomic_private_json(root / "FULL-CANDIDATE-RESULT.json", result)
+        _atomic_private_json(result_path, result)
         return result
 
-    summary = evaluator.evaluate(
-        worker_dir=candidate,
-        tasks=snapshot.optimize.tasks,
-        split=SPLIT,
-        checkpoint=checkpoint,
-        run_dir=root,
-    )
+    try:
+        summary = evaluator.evaluate(
+            worker_dir=candidate,
+            tasks=snapshot.optimize.tasks,
+            split=SPLIT,
+            checkpoint=checkpoint,
+            run_dir=root,
+        )
+    except Exception as exc:
+        failed_attempts, partial_audit = _answer_free_failed_attempts(
+            root, snapshot.optimize.tasks
+        )
+        result = {
+            **plan,
+            "status": "evaluation_failed",
+            "official_evaluated": False,
+            "benchmark_score_claimed": False,
+            "evaluation_attempted": True,
+            "failure": {
+                "exception_type": type(exc).__name__,
+                "message": str(exc)[:2_000],
+            },
+            "attempts": failed_attempts,
+            "partial_cost_and_lifecycle_audit": partial_audit,
+            "preflight_sha256": _canonical_sha256(plan),
+        }
+        _atomic_private_json(result_path, result)
+        return result
     cost = audit_fixed_checkpoint_proxy_costs(
         root,
         expected_attempts=len(snapshot.optimize.tasks),
@@ -313,7 +612,6 @@ def run_quantcodeeval_full_candidate(
         "route_evidence": route,
         "evaluation_identity_sha256": evaluation_identity,
     }
-    result_path = root / "FULL-CANDIDATE-RESULT.json"
     if result_path.is_file():
         if json.loads(result_path.read_text(encoding="utf-8")) != result:
             raise QuantCodeEvalFullCandidateError(
@@ -324,4 +622,8 @@ def run_quantcodeeval_full_candidate(
     return result
 
 
-__all__ = ["QuantCodeEvalFullCandidateError", "run_quantcodeeval_full_candidate"]
+__all__ = [
+    "QuantCodeEvalFullCandidateError",
+    "materialize_quantcodeeval_full_candidate_failure_result",
+    "run_quantcodeeval_full_candidate",
+]
