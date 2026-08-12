@@ -245,6 +245,40 @@ def test_task_panel_can_select_a_pinned_public_task_without_a_new_oracle_hash(
     assert (trusted / "tasks/T16/tests/golden_ref.py").is_file()
 
 
+def test_official_runner_without_traceback_patch_point_is_preserved(tmp_path):
+    from qea.benchmarks.quantcodeeval import _trusted_run_all_source
+
+    runner = tmp_path / "run_all.py"
+    runner.write_text(
+        "try:\n"
+        "    run()\n"
+        "except Exception as exc:\n"
+        "    result = {'verdict': 'ERROR', 'detail': str(exc)}\n"
+    )
+
+    assert _trusted_run_all_source(runner) == runner.read_bytes()
+
+
+def test_isolated_loader_keeps_official_call_adapters(tmp_path):
+    from qea.benchmarks.quantcodeeval import _isolated_loader_source
+
+    loader = tmp_path / "module_loader.py"
+    loader.write_text(
+        "def load_module(path, name='official'):\n"
+        "    raise AssertionError('direct import must be replaced')\n"
+        "def get_function(module, name):\n"
+        "    return 'official'\n"
+        "def adaptive_call(func, available_args):\n"
+        "    return func(**available_args)\n"
+    )
+    namespace = {}
+    exec(_isolated_loader_source(loader, "T01"), namespace)
+
+    assert namespace["load_agent_module"] is namespace["load_module"]
+    assert namespace["get_function"] is namespace["_qea_rpc_get_function"]
+    assert namespace["adaptive_call"](lambda value: value + 1, {"value": 2}) == 3
+
+
 def test_snapshot_loader_rejects_manifested_file_tamper(tmp_path):
     from qea.benchmarks.quantcodeeval import (
         QuantCodeEvalConfigError,

@@ -263,9 +263,19 @@ def load_module(code_path: str, module_name: str = "isolated_strategy") -> Modul
     return RemoteModule(module_name)
 
 
-def get_function(module: ModuleType, func_name: str):
+def get_function(
+    module: ModuleType,
+    func_name: str,
+    aliases: list[str] | None = None,
+):
     function = getattr(module, func_name, None)
-    return function if callable(function) else None
+    if callable(function):
+        return function
+    for alias in aliases or []:
+        function = getattr(module, alias, None)
+        if callable(function):
+            return function
+    return None
 
 
 def get_si_function(code_path: str, function_name: str):

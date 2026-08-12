@@ -353,17 +353,17 @@ def _isolated_loader_source(official: Path, task_id: str) -> bytes:
         Path(__file__).resolve().parents[1]
         / "verifiers" / "quantcodeeval_rpc.py"
     ).read_text()
-    if task_id != "T24":
-        return client.encode("utf-8")
     upstream = official.read_text()
-    marker = (
-        "# ---------------------------------------------------------------------------\n"
-        "# Adaptive calling (aligned with M01/P5 signature)\n"
-        "# ---------------------------------------------------------------------------\n"
-    )
-    if marker not in upstream:
-        raise QuantCodeEvalConfigError("T24 module loader adapter marker drifted")
-    return (client.rstrip() + "\n\n" + marker + upstream.split(marker, 1)[1]).encode(
+    return (
+        client.rstrip()
+        + "\n\n_qea_rpc_load_module = load_module\n"
+        + "_qea_rpc_get_function = get_function\n\n"
+        + upstream.rstrip()
+        + "\n\n# Keep official task-specific adapters, but route strategy access over RPC.\n"
+        + "load_module = _qea_rpc_load_module\n"
+        + "load_agent_module = _qea_rpc_load_module\n"
+        + "get_function = _qea_rpc_get_function\n"
+    ).encode(
         "utf-8"
     )
 
@@ -385,11 +385,11 @@ def _trusted_run_all_source(official: Path) -> bytes:
     """Retain official semantics while preserving trusted exception types/traces."""
 
     source = official.read_text()
-    if "import traceback\n" not in source:
-        source = source.replace("import sys\n", "import sys\nimport traceback\n", 1)
     needle = '"detail": str(e),'
     if source.count(needle) != 1:
-        raise QuantCodeEvalConfigError("run_all exception adapter drifted")
+        return source.encode("utf-8")
+    if "import traceback\n" not in source:
+        source = source.replace("import sys\n", "import sys\nimport traceback\n", 1)
     return source.replace(
         needle,
         '"detail": f"{type(e).__name__}: {e}\\n{traceback.format_exc()}",',
