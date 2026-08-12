@@ -283,6 +283,9 @@ def test_proxy_entrypoint_emits_required_provider_only_when_configured(
         "connect_timeout_seconds": 10.0,
         "read_timeout_seconds": 300.0,
         "pre_accept_connect_attempts": 3,
+        "rate_limit_max_attempts": 3,
+        "rate_limit_retry_budget_seconds": 60.0,
+        "rate_limit_backoff_seconds": 1.0,
     }
     captured = []
 
@@ -312,6 +315,18 @@ def test_proxy_entrypoint_emits_required_provider_only_when_configured(
         "--pre-accept-connect-attempts",
         "3",
     )
+    assert pinned_argv[
+        pinned_argv.index("--rate-limit-max-attempts") :
+        pinned_argv.index("--rate-limit-max-attempts") + 2
+    ] == ("--rate-limit-max-attempts", "3")
+    assert pinned_argv[
+        pinned_argv.index("--rate-limit-retry-budget-seconds") :
+        pinned_argv.index("--rate-limit-retry-budget-seconds") + 2
+    ] == ("--rate-limit-retry-budget-seconds", "60.0")
+    assert pinned_argv[
+        pinned_argv.index("--rate-limit-backoff-seconds") :
+        pinned_argv.index("--rate-limit-backoff-seconds") + 2
+    ] == ("--rate-limit-backoff-seconds", "1.0")
 
 
 def test_trusted_host_build_network_is_explicit_and_identity_bound(tmp_path) -> None:

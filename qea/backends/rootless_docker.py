@@ -34,6 +34,7 @@ _NATIVE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _NETWORK_SCOPE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _NETWORK_IDENTITY = re.compile(r"[0-9a-f]{64}\Z")
+_DOCKER_CONTAINER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,254}\Z")
 _DOCKER_NETWORK_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,254}\Z")
 _ALLOWED_FILTER_LABELS = frozenset(
     {
@@ -228,6 +229,19 @@ def _safe_network_name(value: str) -> str:
     if not isinstance(value, str) or _DOCKER_NETWORK_NAME.fullmatch(value) is None:
         raise RootlessDockerError(f"invalid Docker network name: {value!r}")
     return value
+
+
+def _container_name(spec: SandboxSpec) -> str:
+    logical_identity = hashlib.sha256(
+        (
+            "qea-rootless-container-v1\x00"
+            f"{spec.role}\x00{spec.run_id}\x00{spec.attempt_id}"
+        ).encode("utf-8")
+    ).hexdigest()
+    name = f"qea-{spec.role}-{logical_identity}"
+    if _DOCKER_CONTAINER_NAME.fullmatch(name) is None:
+        raise RootlessDockerError(f"invalid Docker container name: {name!r}")
+    return name
 
 
 def _network_identity_sha256(run_id: str, network_scope: str | None) -> str:
@@ -474,7 +488,7 @@ class RootlessDockerBackend:
         arguments: list[str] = [
             "create",
             "--name",
-            f"qea-{spec.role}-{spec.attempt_id}",
+            _container_name(spec),
         ]
         for name, value in sorted(labels.items()):
             arguments.extend(("--label", f"{name}={value}"))

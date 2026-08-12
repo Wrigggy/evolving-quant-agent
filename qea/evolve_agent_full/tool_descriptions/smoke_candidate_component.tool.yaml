@@ -1,0 +1,19 @@
+type: tool
+name: smoke_candidate_component
+description: Run a bounded, credential-free smoke for a declared component module, registered skill, or complete NexAU agent configuration graph.
+input_schema:
+  type: object
+  properties:
+    component:
+      type: string
+      enum: [agent_config, tools, validator, skills, memory, middleware, routing]
+    target: {type: string, description: "Dotted local module, skills/*/SKILL.md, or agent.yaml."}
+    operation:
+      type: string
+      enum: [import, call, construct, load, graph]
+      default: import
+    symbol: {type: string, default: "", description: "Public function or class for call/construct."}
+    args_json: {type: string, default: "{}", description: "JSON object passed as keyword arguments."}
+    timeout_seconds: {type: integer, minimum: 1, maximum: 120, default: 20}
+  required: [component, target]
+  additionalProperties: false

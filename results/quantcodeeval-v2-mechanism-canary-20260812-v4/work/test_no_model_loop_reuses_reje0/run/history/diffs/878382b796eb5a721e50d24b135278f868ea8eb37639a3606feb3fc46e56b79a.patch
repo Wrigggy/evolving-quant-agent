@@ -1,0 +1,32 @@
+--- a/agent.yaml
++++ b/agent.yaml
+@@ -24,5 +24,9 @@
+     yaml_path: ./tool_descriptions/run_shell_command.tool.yaml
+     binding: nexau.archs.tool.builtin.shell_tools.run_shell_command:run_shell_command
+ 
++  - name: robust_estimator
++    yaml_path: ./tool_descriptions/robust_estimator.tool.yaml
++    binding: tools.robust_estimator:robust_estimator
++
+ tracers:
+   - import: nexau.archs.tracer.adapters.in_memory:InMemoryTracer
+--- a/tool_descriptions/robust_estimator.tool.yaml
++++ b/tool_descriptions/robust_estimator.tool.yaml
+@@ -0,0 +1,11 @@
++type: tool
++name: robust_estimator
++description: Compute a deterministic arithmetic estimate.
++input_schema:
++  type: object
++  properties:
++    values:
++      type: array
++      items: {type: number}
++  required: [values]
++  additionalProperties: false
+--- a/tools/robust_estimator.py
++++ b/tools/robust_estimator.py
+@@ -0,0 +1,3 @@
++def robust_estimator(values):
++    values = [float(value) for value in values]
++    return {'estimate': sum(values) / len(values)}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 
 import pytest
@@ -116,6 +117,106 @@ def test_repository_evolver_source_is_model_neutral(tmp_path: Path) -> None:
     materialized_agent = (destination / "agent.yaml").read_text(encoding="utf-8")
     assert "extra_body" not in source_agent
     assert "effort: xhigh" in materialized_agent
+
+
+def test_materialized_evolver_supports_read_only_content_addressed_source(
+    tmp_path: Path,
+) -> None:
+    source = _source_evolver(tmp_path)
+    nested = source / "reference"
+    nested.mkdir()
+    (nested / "guide.md").write_text("Public guidance.\n", encoding="utf-8")
+    executable = source / "tools" / "runner.sh"
+    executable.parent.mkdir()
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    source_files = [path for path in source.rglob("*") if path.is_file()]
+    source_dirs = [source, *(path for path in source.rglob("*") if path.is_dir())]
+    for path in source_files:
+        path.chmod(0o555 if path == executable else 0o444)
+    for path in reversed(source_dirs):
+        path.chmod(0o555)
+    source_snapshot = {
+        path.relative_to(source).as_posix(): (
+            path.read_bytes(),
+            stat.S_IMODE(path.stat().st_mode),
+        )
+        for path in source_files
+    }
+    source_dir_modes = {
+        path.relative_to(source).as_posix(): stat.S_IMODE(path.stat().st_mode)
+        for path in source_dirs
+    }
+
+    destination = tmp_path / "run" / "evolver"
+    profile = materialize_evolver_profile(
+        source,
+        destination,
+        model="research/model-a",
+        provider="provider-a",
+        reasoning_effort="high",
+    )
+
+    assert "effort: high" in (destination / "agent.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert (destination / ".qea-runtime-profile.json").is_file()
+    assert all(
+        stat.S_IMODE(path.stat().st_mode) == 0o700
+        for path in (
+            destination,
+            *(item for item in destination.rglob("*") if item.is_dir()),
+        )
+    )
+    assert all(
+        stat.S_IMODE(path.stat().st_mode)
+        == (0o700 if path.relative_to(destination) == Path("tools/runner.sh") else 0o600)
+        for path in destination.rglob("*")
+        if path.is_file()
+    )
+    assert profile.source_sha256
+    assert {
+        path.relative_to(source).as_posix(): (
+            path.read_bytes(),
+            stat.S_IMODE(path.stat().st_mode),
+        )
+        for path in source_files
+    } == source_snapshot
+    assert {
+        path.relative_to(source).as_posix(): stat.S_IMODE(path.stat().st_mode)
+        for path in source_dirs
+    } == source_dir_modes
+
+
+def test_read_only_source_failure_removes_private_temporary_copy(
+    tmp_path: Path,
+) -> None:
+    source = _source_evolver(tmp_path)
+    agent_path = source / "agent.yaml"
+    agent_path.write_text(
+        agent_path.read_text(encoding="utf-8").replace(
+            "${env.LLM_MODEL}", "research/hardcoded"
+        ),
+        encoding="utf-8",
+    )
+    for path in (item for item in source.rglob("*") if item.is_file()):
+        path.chmod(0o444)
+    for path in reversed(
+        [source, *(item for item in source.rglob("*") if item.is_dir())]
+    ):
+        path.chmod(0o555)
+    destination = tmp_path / "run" / "evolver"
+
+    with pytest.raises(ValueError, match="runtime-selected model"):
+        materialize_evolver_profile(
+            source,
+            destination,
+            model="research/model-a",
+            provider="provider-a",
+            reasoning_effort="high",
+        )
+
+    assert not destination.exists()
+    assert not list(destination.parent.glob(".qea-evolver-profile-*"))
 
 
 def test_runtime_profile_digest_ignores_interpreter_cache(tmp_path: Path) -> None:

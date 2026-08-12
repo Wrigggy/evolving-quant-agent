@@ -69,6 +69,7 @@ def _runtime_adapter_identity() -> dict[str, object]:
     paths = {
         "evolver_runner": package_root / "executors" / "remote_evolver.py",
         "evolver_discovery_metrics": package_root / "evolver_discovery.py",
+        "public_contract_evidence": package_root / "public_contract_evidence.py",
         "worker_runner": package_root / "executors" / "remote_nexau_worker.py",
         "worker_runtime_bridge": package_root / "runtime_bridge.py",
     }
@@ -601,6 +602,28 @@ class RootlessFullHarnessRuntime:
         self._coordinator_lock.close()
 
 
+def rootless_scheduler_identity(
+    config: RootlessFullHarnessConfig,
+) -> str:
+    """Return the scheduler digest without constructing a Docker runtime."""
+
+    scheduler_payload: dict[str, object] = {
+        "schema_version": 4,
+        "capacity": _capacity_payload(config.capacity),
+        "headroom": _headroom_payload(config.headroom),
+        "worker_concurrency": config.worker_concurrency,
+        "verifier_concurrency": config.verifier_concurrency,
+        "lease_timeout_seconds": config.lease_timeout_seconds,
+    }
+    if config.scheduler_epoch is not None:
+        scheduler_payload["scheduler_epoch"] = config.scheduler_epoch
+    if config.worker_launch_interval_seconds:
+        scheduler_payload["worker_launch_interval_seconds"] = (
+            config.worker_launch_interval_seconds
+        )
+    return _canonical_digest(scheduler_payload)
+
+
 def _selected_image_entries(image_set) -> tuple[Mapping[str, object], ...]:
     entries: list[Mapping[str, object]] = []
     for role in ("base", "proxy", "evolver"):
@@ -1115,21 +1138,7 @@ def build_rootless_full_harness_runtime(
             ),
         )
 
-        scheduler_payload: dict[str, object] = {
-            "schema_version": 4,
-            "capacity": _capacity_payload(config.capacity),
-            "headroom": _headroom_payload(config.headroom),
-            "worker_concurrency": config.worker_concurrency,
-            "verifier_concurrency": config.verifier_concurrency,
-            "lease_timeout_seconds": config.lease_timeout_seconds,
-        }
-        if config.scheduler_epoch is not None:
-            scheduler_payload["scheduler_epoch"] = config.scheduler_epoch
-        if config.worker_launch_interval_seconds:
-            scheduler_payload["worker_launch_interval_seconds"] = (
-                config.worker_launch_interval_seconds
-            )
-        scheduler_identity = _canonical_digest(scheduler_payload)
+        scheduler_identity = rootless_scheduler_identity(config)
         task_panel = [
             {
                 "task_id": task.task_id,
@@ -1190,6 +1199,9 @@ def build_rootless_full_harness_runtime(
                 "proxy_runtime_policy": {
                     "listen_port": proxy_config.listen_port,
                     "timeout_seconds": proxy_config.timeout_seconds,
+                    "finalize_timeout_seconds": (
+                        proxy_config.finalize_timeout_seconds
+                    ),
                     "expect_request": proxy_config.expect_request,
                 },
                 "evolver_runtime_policy": evolver_policy,
@@ -1230,4 +1242,5 @@ __all__ = [
     "build_rootless_full_harness_runtime",
     "load_rootless_full_harness_config",
     "rootless_model_route_identity",
+    "rootless_scheduler_identity",
 ]

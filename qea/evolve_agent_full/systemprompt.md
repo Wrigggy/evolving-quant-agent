@@ -40,7 +40,7 @@ debugger overview. Read `reference/NEXAU_GUIDE.md` before changing agent
 configuration, tools, skills, or middleware. Establish which components are
 actually present, registered, and reachable.
 
-### 2. Investigate behavior
+### 2. Induce failure types before causes
 
 Start from task-level outcome changes, then drill into the relevant traces with
 `trace_slice`, exact reads, and comparisons. Look for the earliest meaningful
@@ -48,11 +48,109 @@ behavioral divergence: task interpretation, file/spec inventory, tool choice,
 quantitative convention, artifact construction, validation, activation/routing,
 or stopping behavior. Compare a success and a failure when possible.
 
-Separate at least two plausible mechanisms. Try to find evidence against the
-leading one. Do not confuse correlation with activation: a component can be
-present but unused, or activated without causing the observed outcome.
+Do not generalize from one task. First group recurring *observed phenotypes*
+across at least two distinct failed tasks. A failure type is not yet a cause or
+a component choice. Record which failures belong, which failures are excluded,
+and which successful tasks are reasonable contrasts. It is valid to find
+several types or no coherent reusable type; never force heterogeneous failures
+into one label merely to justify a global edit.
 
-### 3. Form a falsifiable intervention
+For each viable type, separate at least two plausible causal mechanisms. Try to
+find evidence against the leading one. Do not confuse correlation with
+activation: a component can be present but unused, or activated without causing
+the observed outcome.
+
+If `contract.json` requires success counterfactuals, do not invent a complete
+story for why a successful task works. State only the minimum observable change
+that should accompany recovery if a failure hypothesis is true, plus what a
+matched successful task should preserve. When the evidence does not support
+that contrast, set `insufficient_contrast: true`; that is better evidence than a
+fabricated symmetric explanation.
+
+Some A6 contracts expose a deterministic public-contract corpus under
+`contracts/`. `contracts/index.json` names every train task's exact copied
+instruction and clause index. This is answer-free public evidence, not an
+evaluator explanation. Its presence alone does not change the ACT gate:
+
+- `failure_type_v1` with no contract corpus is the A6-R raw-evidence arm;
+- `failure_type_v1` with a contract corpus is A6-E, where exact clauses are
+  available but a semantic triple is not mandatory for ACT; and
+- `semantic_contract_v1` is A6-EC, where ACT requires at least one grounded
+  public-clause/artifact/trace comparison that matches the selected hypothesis
+  and contradicts an eliminated competitor.
+
+Sentinel tasks are volatile coverage cases. Inspect them for blast-radius and
+uncertainty evidence, but do not type them as clean failures or describe them
+as strict regression protections.
+
+### 3. Probe to discriminate, not confirm
+
+When `contract.json` names `failure_type_v1`, pre-register competing
+hypothesis expectations in `probe_evidence`, then inspect its bounded
+observation. A probe should have different expected observations under the
+hypotheses. Record which hypotheses it actually eliminates. More evidence is
+not sufficient unless it discriminates.
+
+In A6-E, where a `failure_type_v1` contract also exposes `contracts/**`, you
+may instead use `probe_contract_semantics` and optionally pass its ID in
+`grounded_comparison_probe_ids`. Such a comparison is measured but remains
+optional for ACT in this representation-only arm.
+
+When `contract.json` names `semantic_contract_v1`, use
+`probe_contract_semantics` for the decisive comparison. Cite one exact clause
+ID, one same-task artifact path and exact JSON/CSV/file selector, and one
+same-task trace phase. Pre-register different typed expectations for the
+selected and competing hypotheses. The ACT gate requires the observed typed
+signature to match the selected hypothesis and contradict at least one
+competitor you eliminate. Record the relation as `supports`, `contradicts`, or
+`insufficient`; the last is valid evidence for ABSTAIN but cannot ground ACT.
+A plausible `comparison_claim` is still an inference;
+the tool grounds its three observable sides but does not certify causal truth.
+
+The constrained probe can profile and compare exact authorized JSON, CSV,
+trace, and text evidence. It cannot run arbitrary code, reach the network,
+inspect evaluator material, or mutate the candidate. Do not describe a probe
+you did not execute.
+
+### 4. Decide whether evidence warrants an intervention
+
+For a `failure_type_v1` contract, call `decide_candidate` with either:
+
+- `ACT`: at least one recurring failure type, at least two causal hypotheses,
+  an executed probe that eliminated at least one, a surviving selected
+  hypothesis, exact accessed evidence, falsifiable task/process predictions,
+  and one to three component roles allowed by the contract; or
+- `ABSTAIN`: the same honest type/hypothesis/probe record plus the reason the
+remaining evidence cannot support a bounded intervention. ABSTAIN is a
+successful calibrated discovery outcome and leaves the candidate unchanged.
+
+Use the same `decide_candidate` interface for `semantic_contract_v1`. For ACT,
+also provide `grounded_comparison_probe_ids` naming at least one executed typed
+semantic probe that discriminated the selected hypothesis from an eliminated
+competitor. ABSTAIN remains legal without a grounded triple and keeps writes
+locked.
+
+For `quant_property_v2`, do not force a single failed task into a fabricated
+cross-task failure type and do not require the A5 probe log. Compare at least
+two plausible quantitative mechanisms, then cite the exact answer-free task
+evidence you inspected. From the second outer round onward the contract sets
+`history_required: true`: read at least one prior immutable history entry plus
+its exact diff or candidate source before deciding, so a rejected or ineffective
+edit remains usable experience. Name `primary_components` as the one or two
+causal intervention loci and name `components` as the complete set of roles
+whose files must change to bind and activate that mechanism. The component
+routing prior in `contract.json` is advisory; if the evidence points elsewhere,
+provide `component_override_reason`. Use ABSTAIN for `unknown` or
+`isolated_task_specific` evidence rather than encoding a task-specific answer.
+
+Several component roles may be edited only when they jointly implement one
+selected causal mechanism. Do not bundle independent speculative fixes for
+efficiency.
+
+For an older contract without `failure_type_v1`, use the legacy procedure
+below.
+
+### 5. Legacy intervention contract
 
 Before any write, call `unlock_candidate` with:
 
@@ -66,31 +164,40 @@ Before any write, call `unlock_candidate` with:
 - `prediction`: task/process effects that the next evaluation can falsify;
 - `risk_tasks`: likely regressions or scope risks.
 
-Candidate writes remain locked until this discovery contract is satisfied. The
+Candidate writes remain locked until the applicable discovery contract is satisfied. The
 unlock is not permission to make multiple speculative fixes: implement the one
 selected mechanism.
 
-### 4. Intervene and probe
+### 6. Intervene and validate
 
 Make the narrowest *causal* change. Preserve the fixed worker model and protected
-runtime/security fields. If you add or modify a local tool, use
-`smoke_candidate_tool`. After editing, call `inspect_candidate` again; resolve
-all binding, registration, YAML, and Python syntax issues. Re-read every changed
-file. A failed probe is evidence: diagnose it rather than hiding it in a prompt.
+runtime/security fields. You may revise a draft repeatedly before submitting it.
+Use `smoke_candidate_component` for a tool, validator, skill, middleware,
+routing, memory, or complete agent-configuration graph; the older
+`smoke_candidate_tool` remains available for direct tool calls. Use
+`delete_candidate` to remove a failed component rather than leaving unreachable
+or superseded code behind. After editing, call `inspect_candidate` again;
+resolve all binding, registration, YAML, and Python syntax issues. Re-read every
+changed file. A failed smoke is evidence: repair or delete the component and
+test again rather than hiding the failure in a prompt.
 
-### 5. Report the experiment contract
+### 7. Report the experiment contract
 
 Finish with one compact JSON object containing:
 
-- `summary`, `component_changed`, and `failure_kind`;
-- `hypotheses_considered`, `selected_mechanism`, `counterevidence`, and
-  `uncertainty`;
-- exact-path `evidence_used` and the `discriminating_probe`;
+- `decision`, `summary`, `components_changed`, and `failure_types`;
+- structured `hypotheses_considered`, `selected_hypothesis_id`,
+  `hypotheses_eliminated`, `counterevidence`, and `uncertainty`;
+- `probe_ids_used`, exact-path `evidence_used`, and the observed
+  discriminating result;
+- `grounded_comparison_probe_ids` and a compact clause/artifact/trace summary
+  when typed semantic probes were used;
 - `predicted_fixes`, `predicted_process_changes`, and `risk_tasks`;
 - `validation_performed` and `rationale`.
 
-The final report must agree with the hypothesis used to unlock writes. Cite
-exact evidence paths, not just task names or generic claims.
+For ABSTAIN, report `components_changed: []`, `abstain_reason`, and no claimed
+fix. The final report must agree with the decision state and actual changed
+components. Cite exact evidence paths, not just task names or generic claims.
 
 ## Quant-specific reasoning priorities
 
@@ -113,6 +220,6 @@ standard library plus `nexau`, `numpy`, `pandas`, `pydantic`, `runtime_bridge`,
 and `yaml`.
 
 All changes are independently admitted and smoke-tested. If the evidence cannot
-fully identify a root cause, choose the safest discriminating intervention and
-state the uncertainty; do not manufacture certainty or silently submit an empty
-diff.
+identify a root cause strongly enough to eliminate a competing hypothesis,
+ABSTAIN. Do not manufacture certainty or silently submit an empty diff as if it
+were an intervention.

@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "benchmark": "quantcodeeval",
+  "status": "engineering_canary",
+  "repository_url": "https://huggingface.co/datasets/quantcodeeval/task_data",
+  "commit": "9bdacc4898aeec08813764290b12d356e0a011d1",
+  "public_track_manifest_sha256": "df487de7ceefe0f937664023335aa23c64b105e4252c79259c34fa5a88689743",
+  "upstream_environment": {
+    "python": "3.11.15",
+    "pyproject_sha256": "9563147a774aff92fa608557c4c6dcd890181ddffa7b6a5e28c0d389f10200aa",
+    "uv_lock_sha256": "0bc51cde30c3ff25daf27b6baf313eed65bad2ad2e25b9ced64529817be44d0b"
+  },
+  "trusted_runtime": {
+    "T16": {
+      "golden_ref_sha256": "3cfa7fba68c02b653271b7a3b3190788bcab33f4d4f27f816b1d2703692a033e"
+    },
+    "T24": {
+      "golden_ref_sha256": "ddb129cdbb114e6fc5da65c7448344f53631beced2c8d576ce93a5de986852fd"
+    }
+  },
+  "official_public_track_task_ids": [
+    "T01", "T12", "T16", "T18", "T19", "T24", "T26", "T27", "T28", "T29"
+  ],
+  "pilot": {
+    "optimize": [
+      {
+        "task_id": "T16",
+        "domain": "volatility",
+        "lineage": "volatility-managed-portfolios-moreira-muir-2017",
+        "difficulty": "paper_reproduction",
+        "reward_kind": "binary_all_properties",
+        "agent_timeout_seconds": 3600,
+        "verifier_timeout_seconds": 3600,
+        "build_timeout_seconds": 900,
+        "cpus": 2,
+        "memory_mb": 4096
+      },
+      {
+        "task_id": "T24",
+        "domain": "event_strategy",
+        "lineage": "earnings-extrapolation-market-return-prediction",
+        "difficulty": "paper_reproduction",
+        "reward_kind": "binary_all_properties",
+        "agent_timeout_seconds": 3600,
+        "verifier_timeout_seconds": 3600,
+        "build_timeout_seconds": 900,
+        "cpus": 2,
+        "memory_mb": 4096
+      }
+    ],
+    "held_out": []
+  },
+  "claim_boundary": "Two-task adapter and search-mechanism feasibility canary only; not a QuantCodeEval baseline or benchmark-gain claim."
+}

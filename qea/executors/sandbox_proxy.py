@@ -19,6 +19,7 @@ from ..model_proxy import (
     _validate_provider_slug,
     build_model_proxy_sandbox_plan,
     model_proxy_plan_identity,
+    model_proxy_wire_request_identity,
 )
 from ..sandbox_backend import (
     SandboxBackend,
@@ -43,8 +44,10 @@ from .sandbox_nexau import SandboxResourceContract
 _PRIVATE_CONFIG_PATH = "/run/qea-secrets/proxy-config.json"
 _PRIVATE_TOKEN_PATH = "/run/qea-secrets/model-token"
 _PRIVATE_AUDIT_PATH = "/run/qea-secrets/proxy-audit.jsonl"
+_UNSEALED_AUDIT_NAME = "proxy-audit.unsealed.jsonl"
 _PROXY_ALIAS = "qea-model-proxy"
 _READY_TIMEOUT_SECONDS = 30
+_UPSTREAM_READ_TIMEOUT_SECONDS = 300
 _MAX_AUDIT_BYTES = 16 * 1024 * 1024
 _MAX_AUDIT_LATENCY_MS = 7 * 24 * 60 * 60 * 1000
 _MAX_REQUEST_IDENTITIES = 10_000
@@ -58,9 +61,11 @@ _STATUS_MUST_BE_ERROR = "must_be_400_through_599"
 _AUDIT_STATUS_RULES: Mapping[tuple[str, str | None], str] = {
     ("not_accepted", "policy_rejection"): _STATUS_MUST_BE_NULL,
     ("not_accepted", "pre_accept_transport"): _STATUS_MUST_BE_NULL,
+    ("not_accepted", "rate_limited"): _STATUS_MUST_BE_ERROR,
     ("completed", None): _STATUS_MUST_BE_NON_ERROR,
     ("completed", "provider_http_error"): _STATUS_MUST_BE_ERROR,
     ("quarantined", "post_accept_transport"): _STATUS_MAY_BE_NULL,
+    ("quarantined", "downstream_delivery"): _STATUS_MUST_BE_PRESENT,
     ("quarantined", "unsafe_upstream_response"): _STATUS_MUST_BE_PRESENT,
     ("quarantined", "invalid_upstream_response"): _STATUS_MUST_BE_PRESENT,
     ("quarantined", "upstream_response_limit"): _STATUS_MUST_BE_PRESENT,
@@ -69,6 +74,15 @@ _AUDIT_STATUS_RULES: Mapping[tuple[str, str | None], str] = {
 _REQUEST_STATES = frozenset(state for state, _ in _AUDIT_STATUS_RULES)
 _FAILURE_CLASSES = frozenset(failure for _, failure in _AUDIT_STATUS_RULES)
 _CROSS_ATTEMPT_DENIAL_FAILURES = frozenset(
+    {
+        "post_accept_transport",
+        "downstream_delivery",
+        "unsafe_upstream_response",
+        "invalid_upstream_response",
+        "upstream_response_limit",
+    }
+)
+_SESSION_FATAL_ACCEPTED_FAILURES = frozenset(
     {
         "post_accept_transport",
         "unsafe_upstream_response",
@@ -94,6 +108,9 @@ _AUDIT_KEYS = frozenset(
         "provider_cost_usd",
         "failure_class",
     }
+)
+_AUDIT_V2_KEYS = _AUDIT_KEYS | frozenset(
+    {"logical_request_identity_sha256", "retry_index"}
 )
 _READY_CODE = """
 import socket
@@ -151,6 +168,7 @@ class SandboxProxyConfig:
     allowed_model: str
     listen_port: int = 8080
     timeout_seconds: int = 120
+    finalize_timeout_seconds: int = 360
     expect_request: bool = True
     required_provider: str | None = None
     pre_accept_connect_attempts: int = 3
@@ -169,6 +187,13 @@ class SandboxProxyConfig:
             raise SandboxProxyError("listen_port must be an integer in [1, 65535]")
         if type(self.timeout_seconds) is not int or self.timeout_seconds <= 0:
             raise SandboxProxyError("timeout_seconds must be a positive integer")
+        if (
+            type(self.finalize_timeout_seconds) is not int
+            or self.finalize_timeout_seconds < _UPSTREAM_READ_TIMEOUT_SECONDS
+        ):
+            raise SandboxProxyError(
+                "finalize_timeout_seconds must cover the upstream read timeout"
+            )
         if type(self.expect_request) is not bool:
             raise SandboxProxyError("expect_request must be a boolean")
         if (
@@ -385,15 +410,29 @@ def _parse_audit(
             raise SandboxProxyError(
                 f"proxy audit line {line_number} is invalid JSON"
             ) from exc
-        if not isinstance(record, dict) or set(record) != _AUDIT_KEYS:
+        if not isinstance(record, dict):
             raise SandboxProxyError(
                 f"proxy audit line {line_number} has an unsafe schema"
             )
-        if record["schema_version"] != 1:
+        schema_version = record.get("schema_version")
+        expected_keys = _AUDIT_KEYS if schema_version == 1 else _AUDIT_V2_KEYS
+        if set(record) != expected_keys or schema_version not in {1, 2}:
             raise SandboxProxyError("proxy audit schema version is unsupported")
         identity = record["request_identity_sha256"]
         if not isinstance(identity, str) or _SHA256.fullmatch(identity) is None:
             raise SandboxProxyError("proxy audit request identity is invalid")
+        if schema_version == 2:
+            logical_identity = record["logical_request_identity_sha256"]
+            retry_index = record["retry_index"]
+            if (
+                not isinstance(logical_identity, str)
+                or _SHA256.fullmatch(logical_identity) is None
+                or type(retry_index) is not int
+                or not 0 <= retry_index < 3
+                or identity
+                != model_proxy_wire_request_identity(logical_identity, retry_index)
+            ):
+                raise SandboxProxyError("proxy audit retry identity is invalid")
         if record["request_state"] not in _REQUEST_STATES:
             raise SandboxProxyError("proxy audit request state is invalid")
         model = record["model"]
@@ -447,6 +486,51 @@ def _parse_audit(
     return tuple(records)
 
 
+def _rate_limit_groups_are_complete(
+    records: Sequence[Mapping[str, object]],
+) -> bool:
+    """Validate v2 retry groups without changing historical v1 semantics."""
+
+    groups: dict[str, list[Mapping[str, object]]] = {}
+    for record in records:
+        if record.get("schema_version") != 2:
+            continue
+        logical = str(record["logical_request_identity_sha256"])
+        groups.setdefault(logical, []).append(record)
+    for group in groups.values():
+        ordered = sorted(group, key=lambda item: int(item["retry_index"]))
+        if [item["retry_index"] for item in ordered] != list(range(len(ordered))):
+            return False
+        rate_limited = [
+            item
+            for item in ordered
+            if item["request_state"] == "not_accepted"
+            and item["failure_class"] == "rate_limited"
+        ]
+        completed = [
+            item for item in ordered if item["request_state"] == "completed"
+        ]
+        if rate_limited:
+            if ordered[:-1] != rate_limited:
+                return False
+            final = ordered[-1]
+            if not (
+                final["request_state"] == "completed"
+                and final["failure_class"] is None
+                and final["upstream_status_code"] == 200
+            ):
+                return False
+        elif completed and not (
+            len(ordered) == 1
+            and len(completed) == 1
+            and completed[0]["retry_index"] == 0
+            and completed[0]["failure_class"] is None
+            and completed[0]["upstream_status_code"] == 200
+        ):
+            return False
+    return True
+
+
 def _request_state(records: Sequence[Mapping[str, object]]) -> str:
     states = {record["request_state"] for record in records}
     if "quarantined" in states:
@@ -463,6 +547,38 @@ def _requires_cross_attempt_denial(record: Mapping[str, object]) -> bool:
     )
 
 
+def _requires_session_failure(record: Mapping[str, object]) -> bool:
+    """Reject unresolved ambiguity other than caller-confirmable delivery.
+
+    A downstream socket failure happens after the proxy has read and accounted
+    for the full upstream response. If the sandbox caller nevertheless exits
+    successfully and publishes its bounded result, the proposal/worker output
+    resolves delivery at the experiment boundary. The request identity remains
+    denied across attempts so it can never be silently replayed.
+    """
+
+    return (
+        record.get("request_state") == "quarantined"
+        and record.get("failure_class") in _SESSION_FATAL_ACCEPTED_FAILURES
+    )
+
+
+def _is_downstream_delivery(record: Mapping[str, object]) -> bool:
+    return (
+        record.get("request_state") == "quarantined"
+        and record.get("failure_class") == "downstream_delivery"
+    )
+
+
+def _is_completed_provider_http_error(record: Mapping[str, object]) -> bool:
+    """Reject the exact delivered provider-error boundary seen in A6 r8."""
+
+    return (
+        record.get("request_state") == "completed"
+        and record.get("failure_class") == "provider_http_error"
+    )
+
+
 def _is_retryable_replay_denial(
     records: Sequence[Mapping[str, object]],
 ) -> bool:
@@ -476,7 +592,7 @@ def _is_retryable_replay_denial(
 
 def _attempt_paths(
     run_dir: Path, attempt_id: str
-) -> tuple[Path, Path, Path, Path]:
+) -> tuple[Path, Path, Path, Path, Path]:
     lifecycle = (
         run_dir
         / "lifecycles"
@@ -488,7 +604,8 @@ def _attempt_paths(
     )
     audit = run_dir / "attempts" / attempt_id / "proxy-audit.jsonl"
     quarantine = audit.with_suffix(".quarantined.json")
-    return lifecycle, network_lifecycle, audit, quarantine
+    unsealed = audit.with_name(_UNSEALED_AUDIT_NAME)
+    return lifecycle, network_lifecycle, audit, quarantine, unsealed
 
 
 def _request_registry_path(run_dir: Path) -> Path:
@@ -565,14 +682,15 @@ def _collect_denied_request_identities(
                 allowed_model=allowed_model,
             )
             for record in records:
+                identity_field = (
+                    "logical_request_identity_sha256"
+                    if record.get("schema_version") == 2
+                    else "request_identity_sha256"
+                )
                 if record["request_state"] in {"completed", "quarantined"}:
-                    persisted_identities.add(
-                        str(record["request_identity_sha256"])
-                    )
+                    persisted_identities.add(str(record[identity_field]))
                 if _requires_cross_attempt_denial(record):
-                    denied_identities.add(
-                        str(record["request_identity_sha256"])
-                    )
+                    denied_identities.add(str(record[identity_field]))
     orphaned = recorded_registry - persisted_identities
     if orphaned:
         raise SandboxProxyError(
@@ -598,19 +716,42 @@ def _archive_retryable_replay_denial(path: Path) -> Path:
     return archive
 
 
-def _quarantine_marker(path: Path, *, reason: str) -> None:
+def _quarantine_marker(
+    path: Path,
+    *,
+    reason: str,
+    unsealed_payload: bytes | None = None,
+    unsealed_record_count: int | None = None,
+) -> None:
+    marker: dict[str, object] = {
+        "schema_version": 1,
+        "request_state": "quarantined",
+        "reason": reason,
+    }
+    if unsealed_payload is not None:
+        if (
+            type(unsealed_record_count) is not int
+            or not 0 <= unsealed_record_count <= _MAX_REQUEST_IDENTITIES
+        ):
+            raise SandboxProxyError("unsealed proxy audit record count is invalid")
+        unsealed_path = path.with_name(_UNSEALED_AUDIT_NAME)
+        if unsealed_path.exists() or unsealed_path.is_symlink():
+            raise SandboxProxyError("unsealed proxy audit already exists")
+        _atomic_private_write(unsealed_path, unsealed_payload)
+        marker = {
+            "schema_version": 2,
+            "request_state": "quarantined",
+            "reason": reason,
+            "accounting_complete": False,
+            "unsealed_audit_sha256": hashlib.sha256(
+                unsealed_payload
+            ).hexdigest(),
+            "unsealed_record_count": unsealed_record_count,
+        }
     _atomic_private_write(
         path,
         (
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "request_state": "quarantined",
-                    "reason": reason,
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            )
+            json.dumps(marker, sort_keys=True, separators=(",", ":"))
             + "\n"
         ).encode(),
     )
@@ -652,6 +793,7 @@ class SandboxProxyManager:
             network_lifecycle_uri,
             audit_uri,
             quarantine_uri,
+            unsealed_uri,
         ) = _attempt_paths(run_root, attempt_id)
         try:
             raw_token = _read_token_bytes(self.config.token_file)
@@ -660,7 +802,12 @@ class SandboxProxyManager:
         token_buffer = bytearray(raw_token)
         del raw_token
         try:
-            if quarantine_uri.exists():
+            if (
+                quarantine_uri.exists()
+                or quarantine_uri.is_symlink()
+                or unsealed_uri.exists()
+                or unsealed_uri.is_symlink()
+            ):
                 raise SandboxProxyError(
                     "quarantined request identity requires a new attempt identity"
                 )
@@ -878,10 +1025,10 @@ class SandboxProxyManager:
                                 "-c",
                                 _FINALIZE_CODE,
                                 str(self.config.listen_port),
-                                str(self.config.timeout_seconds),
+                                str(self.config.finalize_timeout_seconds),
                             ),
                             environment={},
-                            timeout_seconds=self.config.timeout_seconds,
+                            timeout_seconds=self.config.finalize_timeout_seconds,
                         ),
                         secret=token_buffer,
                     )
@@ -933,6 +1080,10 @@ class SandboxProxyManager:
                             "proxy audit has no persisted request record"
                         )
                     _atomic_private_write(audit_uri, audit_payload)
+                    if not _rate_limit_groups_are_complete(records):
+                        audit_policy_error = SandboxProxyError(
+                            "proxy audit has an incomplete rate-limit retry group"
+                        )
                     registry_identities = _collect_denied_request_identities(
                         run_root,
                         secret=token_buffer,
@@ -941,18 +1092,52 @@ class SandboxProxyManager:
                     _write_request_registry(
                         _request_registry_path(run_root), registry_identities
                     )
-                    if any(
-                        _requires_cross_attempt_denial(record)
-                        for record in records
+                    if any(_requires_session_failure(record) for record in records) or (
+                        caller_role != "evolver"
+                        and any(_is_downstream_delivery(record) for record in records)
                     ):
                         audit_policy_error = SandboxProxyError(
                             "proxy audit contains an ambiguous accepted request"
                         )
+                    if any(
+                        _is_completed_provider_http_error(record)
+                        for record in records
+                    ):
+                        audit_policy_error = SandboxProxyError(
+                            "proxy audit contains a completed provider HTTP error"
+                        )
                 except SandboxProxyError as exc:
                     audit_errors.append(exc)
+                    unsealed_payload: bytes | None = None
+                    unsealed_record_count: int | None = None
+                    if not audit_uri.exists() and not audit_uri.is_symlink():
+                        try:
+                            candidate = _backend_call(
+                                "proxy.audit.unsealed-download",
+                                lambda: self.backend.read_bytes(
+                                    handle, _PRIVATE_AUDIT_PATH
+                                ),
+                                secret=token_buffer,
+                            )
+                            if not isinstance(candidate, bytes):
+                                raise SandboxProxyError(
+                                    "unsealed proxy audit download returned non-bytes data"
+                                )
+                            unsealed_records = _parse_audit(
+                                candidate,
+                                secret=token_buffer,
+                                allowed_model=self.config.allowed_model,
+                            )
+                            unsealed_payload = candidate
+                            unsealed_record_count = len(unsealed_records)
+                        except SandboxProxyError as capture_exc:
+                            audit_errors.append(capture_exc)
                     try:
                         _quarantine_marker(
-                            quarantine_uri, reason="audit_download_or_validation_failed"
+                            quarantine_uri,
+                            reason="audit_download_or_validation_failed",
+                            unsealed_payload=unsealed_payload,
+                            unsealed_record_count=unsealed_record_count,
                         )
                     except SandboxProxyError as marker_exc:
                         cleanup_errors.append(marker_exc)

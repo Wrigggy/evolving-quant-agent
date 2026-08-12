@@ -1,0 +1,13 @@
+{
+  "claim_scope": "mechanism only: rejected-history reuse, full-component admission, variable-length stop; no QuantCodeEval benchmark score",
+  "protocol": "quant_property_v2_no_model_mechanism_canary",
+  "python": "3.14.3 (main, Mar 25 2026, 03:28:18) [Clang 22.1.1 ]",
+  "schema_version": 1,
+  "source_sha256": {
+    "qea/quantcodeeval_history.py": "8c849295c578521125cca608cacd073fd7ea8c3f5cbf5a0fe50ce0b0f112e12a",
+    "qea/quantcodeeval_search.py": "f7c94adf7ea0ead536ec58ef6d2d1833e125feaedeeb675d96df3bafc05cf2fd",
+    "qea/quantcodeeval_v2_loop.py": "38980f31ded344f34ffb818eee71f74b48e69fd478cb4adb658fd6cb97b59a27",
+    "tests/test_quantcodeeval_v2_loop.py": "ac304cafb68651488aaa2c55ae01ff34d371e8854e3b3a860d3d06113fd19661"
+  },
+  "test": "tests/test_quantcodeeval_v2_loop.py::test_no_model_loop_reuses_rejected_round_and_promotes_full_component"
+}

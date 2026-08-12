@@ -1,0 +1,105 @@
+{
+  "archive": [
+    {
+      "candidate_digest": "dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c",
+      "history_entry_id": "4cd19ea653342556b352c0897e43c408d89df0ecbbf85a38bd27cb206ed430f2",
+      "official_rewards": {
+        "T16": 1.0,
+        "T24": 1.0
+      },
+      "selection": "official_promoted"
+    },
+    {
+      "candidate_digest": "4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d",
+      "history_entry_id": "dec35a2c76afa8ef728b74cb0a216796abeeca429acb6f190bd73a8b8fa157f2",
+      "official_rewards": {
+        "T16": 1.0,
+        "T24": 0.0
+      },
+      "selection": "rejected"
+    }
+  ],
+  "consecutive_abstain": 0,
+  "consecutive_no_information": 0,
+  "h0_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+  "limits": {
+    "max_archive_entries": 8,
+    "max_consecutive_abstain": 2,
+    "max_cost_usd": null,
+    "max_model_requests": null,
+    "max_no_information_rounds": 3,
+    "max_rounds": 8
+  },
+  "official_incumbent_digest": "dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c",
+  "official_rewards": {
+    "T16": 1.0,
+    "T24": 1.0
+  },
+  "protocol": "quant_property_v2_full_harness",
+  "rounds": [
+    {
+      "candidate_digest": "4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d",
+      "cost_usd": 0.0,
+      "decision": "ACT",
+      "declared_roles": [
+        "systemprompt"
+      ],
+      "history_entry_id": "dec35a2c76afa8ef728b74cb0a216796abeeca429acb6f190bd73a8b8fa157f2",
+      "iteration": 1,
+      "mechanism": "generic prompt guidance is missing",
+      "model_requests": 3,
+      "new_information": false,
+      "official_rewards": {
+        "T16": 1.0,
+        "T24": 0.0
+      },
+      "parent_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+      "primary_components": [
+        "systemprompt"
+      ],
+      "reason": "prompt-only mutation produced no property-family change",
+      "selection": "rejected"
+    },
+    {
+      "candidate_digest": "dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c",
+      "cost_usd": 0.0,
+      "decision": "ACT",
+      "declared_roles": [
+        "agent_config",
+        "tool_descriptions",
+        "tools"
+      ],
+      "history_entry_id": "4cd19ea653342556b352c0897e43c408d89df0ecbbf85a38bd27cb206ed430f2",
+      "iteration": 2,
+      "mechanism": "a deterministic estimator operation is missing",
+      "model_requests": 3,
+      "new_information": true,
+      "official_rewards": {
+        "T16": 1.0,
+        "T24": 1.0
+      },
+      "parent_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+      "primary_components": [
+        "tools"
+      ],
+      "reason": "deterministic estimator improved the fixed task panel",
+      "selection": "official_promoted"
+    }
+  ],
+  "run_id": "qce-v2-no-model",
+  "schema_version": 2,
+  "search_parent_digest": "dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c",
+  "search_parent_rewards": {
+    "T16": 1.0,
+    "T24": 1.0
+  },
+  "state_sha256": "ad24f4ec19b336b7e6a9a9759d9e3b6a777f6df20d37da1009d83f333787f57e",
+  "stop_reason": "target_reached",
+  "stopped": true,
+  "task_ids": [
+    "T16",
+    "T24"
+  ],
+  "total_cost_usd": 0.0,
+  "total_model_requests": 6
+}

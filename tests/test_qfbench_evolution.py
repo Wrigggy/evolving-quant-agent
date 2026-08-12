@@ -931,6 +931,130 @@ def test_sandbox_evaluator_recovers_persisted_timeout_without_external_calls(
     }
 
 
+def test_sandbox_evaluator_records_missing_worker_artifact_as_official_zero(
+    tmp_path,
+):
+    from qea.executors.execution_record import WorkerArtifactContractError
+    from qea.loop_benchmark import QFBenchSandboxEvaluator, hash_worker_directory
+
+    task = SimpleNamespace(task_id="missing-output", domain="execution", lineage="m")
+    worker = _seed_worker(tmp_path)
+    run_dir = tmp_path / "run"
+
+    class MissingArtifactExecutor:
+        def execute(self, **kwargs):
+            raise WorkerArtifactContractError(
+                "strategy.py is missing", log_uri="worker-command.json"
+            )
+
+    class RefusingVerifier:
+        def verify(self, **kwargs):
+            raise AssertionError("missing worker output must not enter the verifier")
+
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="missing-artifact",
+        executor=MissingArtifactExecutor(),
+        verifier=RefusingVerifier(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+
+    summary = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=(task,),
+        split="optimize",
+        checkpoint="candidate-optimize",
+        run_dir=run_dir,
+    )
+
+    assert summary.overall == 0.0
+    assert summary.scores[0].diagnostic_tags == ("missing_artifact",)
+    attempt = TaskAttempt.create(
+        run_id="missing-artifact",
+        benchmark_commit="0" * 40,
+        task_id=task.task_id,
+        split="optimize",
+        checkpoint="candidate-optimize",
+        worker_digest=hash_worker_directory(worker),
+    )
+    persisted = json.loads(
+        (run_dir / "attempts" / attempt.attempt_id / "completed-score.json").read_text()
+    )
+    assert persisted["reward"] == 0.0
+    assert persisted["diagnostic_tags"] == ["missing_artifact"]
+
+
+def test_sandbox_evaluator_recovers_persisted_artifact_zero_without_resampling(
+    tmp_path,
+):
+    from qea.loop_benchmark import QFBenchSandboxEvaluator, hash_worker_directory
+
+    task = SimpleNamespace(task_id="missing-output", domain="execution", lineage="m")
+    worker = _seed_worker(tmp_path)
+    run_dir = tmp_path / "run"
+    attempt = TaskAttempt.create(
+        run_id="artifact-resume",
+        benchmark_commit="0" * 40,
+        task_id=task.task_id,
+        split="optimize",
+        checkpoint="candidate-optimize",
+        worker_digest=hash_worker_directory(worker),
+    )
+    attempt_dir = run_dir / "attempts" / attempt.attempt_id
+    attempt_dir.mkdir(parents=True)
+    (attempt_dir / "attempt.json").write_text(json.dumps(attempt.__dict__))
+    (attempt_dir / "raw-trace.jsonl").write_text("{}\n")
+    (attempt_dir / "final.txt").write_text("maximum iterations reached\n")
+    (attempt_dir / "worker-command.json").write_text(
+        json.dumps({"exit_code": 0, "stdout": "", "stderr": "", "timed_out": False})
+    )
+    contract = {
+        "schema_version": 1,
+        "outcome": "official_worker_artifact_contract_zero",
+        "expected_paths": ["strategy.py"],
+        "found_paths": [],
+        "artifact_records": [],
+        "trace_uri": str((attempt_dir / "raw-trace.jsonl").resolve()),
+        "final_text_uri": str((attempt_dir / "final.txt").resolve()),
+    }
+    (attempt_dir / "worker-artifact-contract.json").write_text(json.dumps(contract))
+
+    class RefusingExecutor:
+        def execute(self, **kwargs):
+            raise AssertionError("persisted artifact zero must not resample the model")
+
+    class RefusingVerifier:
+        def verify(self, **kwargs):
+            raise AssertionError("persisted artifact zero must not enter verifier")
+
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id="artifact-resume",
+        executor=RefusingExecutor(),
+        verifier=RefusingVerifier(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+    )
+    summary = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=(task,),
+        split="optimize",
+        checkpoint="candidate-optimize",
+        run_dir=run_dir,
+    )
+
+    assert summary.overall == 0.0
+    assert summary.scores[0].diagnostic_tags == ("missing_artifact",)
+    recovery = json.loads(
+        (attempt_dir / "artifact-contract-recovery.json").read_text()
+    )
+    assert recovery["attempt_id"] == attempt.attempt_id
+    assert recovery["outcome"] == "official_worker_artifact_contract_zero"
+
+
 def test_sandbox_evaluator_mixed_state_resume_runs_only_pending_worker(tmp_path):
     from qea.executors.execution_record import persist_worker_execution
     from qea.loop_benchmark import QFBenchSandboxEvaluator, hash_worker_directory

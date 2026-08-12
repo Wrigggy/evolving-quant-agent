@@ -6,17 +6,74 @@ import argparse
 import hashlib
 import io
 import json
+import math
 import os
 import sys
 import tarfile
 import time
 from collections import Counter
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-
 _MAX_TRACE_BYTES = 4 * 1024 * 1024
 _MAX_FINAL_BYTES = 512 * 1024
+_MAX_TERMINAL_RESERVE_BYTES = 256 * 1024
+_MIN_MODEL_CLIENT_TIMEOUT_SECONDS = 360.0
+
+
+def _pin_no_replay_policy(config) -> None:
+    """Force one SDK call per Evolver model turn, including sub-agents."""
+
+    pending = [config]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        llm_config = getattr(current, "llm_config", None)
+        if llm_config is None or not callable(
+            getattr(llm_config, "to_client_kwargs", None)
+        ):
+            raise RuntimeError("NexAU no-replay policy requires an LLM config")
+        current.retry_attempts = 1
+        llm_config.max_retries = 0
+        timeout = getattr(llm_config, "timeout", None)
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            timeout = _MIN_MODEL_CLIENT_TIMEOUT_SECONDS
+        llm_config.timeout = max(
+            float(timeout), _MIN_MODEL_CLIENT_TIMEOUT_SECONDS
+        )
+        original_client_kwargs = llm_config.to_client_kwargs
+
+        def exact_client_kwargs(
+            original_client_kwargs=original_client_kwargs,
+            llm_config=llm_config,
+        ):
+            kwargs = dict(original_client_kwargs())
+            kwargs["max_retries"] = 0
+            kwargs["timeout"] = llm_config.timeout
+            return kwargs
+
+        llm_config.to_client_kwargs = exact_client_kwargs
+        sub_agents = getattr(current, "sub_agents", None) or {}
+        if not isinstance(sub_agents, Mapping):
+            raise RuntimeError("NexAU sub-agent config is not a mapping")
+        pending.extend(sub_agents.values())
+
+
+def _verify_no_replay_client(agent) -> None:
+    client = getattr(agent, "openai_client", None)
+    if type(getattr(client, "max_retries", None)) is not int or (
+        client.max_retries != 0
+    ):
+        raise RuntimeError("NexAU model client retry policy drifted")
 
 
 def _redact(text: str) -> str:
@@ -132,6 +189,74 @@ def _access_summary(path: Path, evidence_dir: Path) -> dict[str, Any]:
     }
 
 
+def _component_tests(result_dir: Path) -> list[dict[str, Any]]:
+    """Load the bounded smoke log produced by guarded candidate tools."""
+
+    path = result_dir / "component-tests.jsonl"
+    if not path.is_file():
+        return []
+    records: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("component test log is invalid JSON") from exc
+        if (
+            not isinstance(value, dict)
+            or value.get("schema_version") != 1
+            or value.get("status") not in {"passed", "failed"}
+            or not isinstance(value.get("component"), str)
+            or type(value.get("test_index")) is not int
+        ):
+            raise RuntimeError("component test log has an invalid record")
+        records.append(value)
+        if len(records) > 100:
+            raise RuntimeError("component test log exceeds record limit")
+    if [value["test_index"] for value in records] != list(
+        range(1, len(records) + 1)
+    ):
+        raise RuntimeError("component test log order is invalid")
+    return records
+
+
+def _terminal_reserve_summary(result_dir: Path) -> dict[str, Any]:
+    path = result_dir / "terminal-reserve.json"
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError("terminal reserve audit is missing")
+    payload = path.read_bytes()
+    if not payload or len(payload) > _MAX_TERMINAL_RESERVE_BYTES:
+        raise RuntimeError("terminal reserve audit exceeds its bounded contract")
+    try:
+        value = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("terminal reserve audit is invalid JSON") from exc
+    if not isinstance(value, dict) or value.get("schema_version") != 1:
+        raise RuntimeError("terminal reserve audit has an invalid schema")
+    activated = value.get("activated")
+    phase = value.get("phase")
+    if not isinstance(activated, bool) or phase not in {
+        "explore",
+        "complete",
+        "invalid",
+    }:
+        raise RuntimeError("terminal reserve audit has an unfinished phase")
+    if (activated and phase == "explore") or (
+        not activated and phase != "explore"
+    ):
+        raise RuntimeError("terminal reserve activation and phase disagree")
+    if value.get("model_guard") is not None:
+        raise RuntimeError("terminal reserve model guard was not consumed")
+    if not isinstance(value.get("events"), list) or not isinstance(
+        value.get("candidate"), dict
+    ):
+        raise RuntimeError("terminal reserve audit is incomplete")
+    return {
+        "audit": value,
+        "bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
 def run(
     *,
     candidate_dir: Path,
@@ -160,16 +285,19 @@ def run(
     os.environ["QEA_RUNTIME_ROOT"] = str(runtime_root)
     os.environ["QEA_ACCESS_LOG"] = str(access_log)
     config = AgentConfig.from_yaml(config_path=evolver_dir / "agent.yaml")
+    _pin_no_replay_policy(config)
     for name in ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL"):
         os.environ.pop(name, None)
 
     agent = Agent(config=config)
+    _verify_no_replay_client(agent)
     message = (
         f"Evolution iteration: {iteration}\n"
         "Coordinator diagnosis (non-authoritative; verify against evidence):\n"
         f"{diagnosis}\n\n"
-        "Inspect the authorized evidence and candidate, then make one coherent "
-        "full-harness improvement."
+        "Inspect the authorized evidence and candidate, execute the applicable "
+        "discovery contract, and make a calibrated ACT or ABSTAIN decision. If "
+        "you ACT, implement one coherent full-harness intervention."
     )
     context = {
         "date": os.environ.get("QEA_EVAL_DATE", "2026-07-27"),
@@ -262,6 +390,8 @@ def run(
         "model_usage_reason": None if usages else "not exposed by NexAU tracer",
         "discovery": discovery_quality,
         "discovery_hypothesis": discovery_state,
+        "component_tests": _component_tests(result_dir),
+        "terminal_reserve": _terminal_reserve_summary(result_dir),
     }
     (result_dir / "summary.json").write_text(
         json.dumps(summary, sort_keys=True, indent=2) + "\n"

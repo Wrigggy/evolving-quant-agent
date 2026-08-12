@@ -1164,6 +1164,7 @@ def test_runtime_adapter_identity_hashes_exact_uploaded_worker_bytes() -> None:
     assert set(files) == {
         "evolver_discovery_metrics",
         "evolver_runner",
+        "public_contract_evidence",
         "worker_runner",
         "worker_runtime_bridge",
     }
@@ -1178,6 +1179,9 @@ def test_runtime_adapter_identity_hashes_exact_uploaded_worker_bytes() -> None:
     ).hexdigest()
     assert files["evolver_discovery_metrics"]["sha256"] == hashlib.sha256(
         sandbox_evolver._DISCOVERY_METRICS.read_bytes()
+    ).hexdigest()
+    assert files["public_contract_evidence"]["sha256"] == hashlib.sha256(
+        sandbox_evolver._PUBLIC_CONTRACT_EVIDENCE.read_bytes()
     ).hexdigest()
 
 

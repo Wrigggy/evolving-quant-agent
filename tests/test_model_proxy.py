@@ -291,6 +291,68 @@ def _start_blocking_upstream():
     return server, thread
 
 
+class RateLimitThenSuccessHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length)
+        with self.server.capture_lock:
+            index = len(self.server.captured)
+            self.server.captured.append(
+                {
+                    "body": body,
+                    "client_port": self.client_address[1],
+                    "headers": {
+                        key.lower(): value for key, value in self.headers.items()
+                    },
+                }
+            )
+        if index < self.server.rate_limit_count:
+            payload = b'{"error":{"type":"rate_limited"}}'
+            self.send_response(429)
+            if self.server.retry_after is not None:
+                self.send_header("Retry-After", self.server.retry_after)
+            if self.server.ambiguous:
+                self.send_header("X-Request-Id", "accepted-429")
+                payload = (
+                    b'{"error":{"type":"rate_limited"},'
+                    b'"usage":{"prompt_tokens":1,"completion_tokens":0,'
+                    b'"total_tokens":1,"cost":0.01}}'
+                )
+        else:
+            payload = (
+                b'{"ok":true,"usage":{"prompt_tokens":11,'
+                b'"completion_tokens":7,"total_tokens":18,"cost":0.00125}}'
+            )
+            self.send_response(200)
+            self.send_header("X-Request-Id", "provider-success-after-retry")
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, format, *args):
+        return
+
+
+def _start_rate_limit_upstream(
+    *, rate_limit_count=2, retry_after="0", ambiguous=False
+):
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", 0), RateLimitThenSuccessHandler
+    )
+    server.captured = []
+    server.capture_lock = threading.Lock()
+    server.rate_limit_count = rate_limit_count
+    server.retry_after = retry_after
+    server.ambiguous = ambiguous
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread
+
+
 def test_proxy_routes_fixed_path_injects_token_and_strips_hop_headers(tmp_path):
     upstream, upstream_thread = _start_upstream()
     proxy, proxy_thread = _start_proxy(tmp_path, upstream)
@@ -361,7 +423,289 @@ def test_required_provider_injects_strict_routing_and_binds_forwarded_body(
             b"POST\x00/api/v1/chat/completions\x00" + captured["body"]
         ).hexdigest()
         [audit] = _read_audit(tmp_path)
-        assert audit["request_identity_sha256"] == expected_identity
+        assert audit["logical_request_identity_sha256"] == expected_identity
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_rate_limit_replay_uses_three_fresh_exact_pinned_wire_requests(tmp_path):
+    from qea.model_proxy import model_proxy_wire_request_identity
+
+    upstream, upstream_thread = _start_rate_limit_upstream()
+    proxy, proxy_thread = _start_proxy(
+        tmp_path, upstream, required_provider="deepseek"
+    )
+    original = b'{"model":"fixture","messages":[{"content":"exact"}]}'
+    try:
+        status, _, payload = _request(proxy, body=original)
+
+        assert status == 200
+        assert json.loads(payload)["ok"] is True
+        assert len(upstream.captured) == 3
+        assert len({item["client_port"] for item in upstream.captured}) == 3
+        [forwarded] = {item["body"] for item in upstream.captured}
+        forwarded_payload = json.loads(forwarded)
+        assert forwarded_payload["messages"] == [{"content": "exact"}]
+        assert forwarded_payload["provider"] == {
+            "only": ["deepseek"],
+            "allow_fallbacks": False,
+        }
+        assert {
+            item["headers"]["authorization"] for item in upstream.captured
+        } == {f"Bearer {REAL_TOKEN}"}
+        records = _read_audit(tmp_path)
+        assert len(records) == 3
+        logical = {item["logical_request_identity_sha256"] for item in records}
+        assert len(logical) == 1
+        [logical_identity] = logical
+        assert [item["retry_index"] for item in records] == [0, 1, 2]
+        assert [item["request_state"] for item in records] == [
+            "not_accepted",
+            "not_accepted",
+            "completed",
+        ]
+        assert [item["failure_class"] for item in records] == [
+            "rate_limited",
+            "rate_limited",
+            None,
+        ]
+        assert len({item["request_identity_sha256"] for item in records}) == 3
+        for index, record in enumerate(records):
+            assert record["schema_version"] == 2
+            assert record["request_identity_sha256"] == (
+                model_proxy_wire_request_identity(logical_identity, index)
+            )
+        for record in records[:2]:
+            assert record["upstream_status_code"] == 429
+            assert record["provider_request_id"] is None
+            assert record["input_tokens"] is None
+            assert record["output_tokens"] is None
+            assert record["total_tokens"] is None
+            assert record["provider_cost_usd"] is None
+        assert records[2]["upstream_status_code"] == 200
+        assert records[2]["provider_request_id"] == (
+            "provider-success-after-retry"
+        )
+        finalize_status, seal_payload = _finalize(proxy)
+        assert finalize_status == 200
+        assert json.loads(seal_payload)["record_count"] == 3
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_rate_limit_retry_after_precedes_fallback_backoff(
+    tmp_path, monkeypatch
+):
+    import qea.model_proxy as model_proxy
+
+    upstream, upstream_thread = _start_rate_limit_upstream(
+        rate_limit_count=1, retry_after="1"
+    )
+    sleeps = []
+    monkeypatch.setattr(model_proxy.time, "sleep", sleeps.append)
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, _ = _request(proxy)
+
+        assert status == 200
+        assert sleeps == [1.0]
+        assert len(upstream.captured) == 2
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+@pytest.mark.parametrize("retry_after", ["bad", "-1", "999999"])
+def test_present_unsafe_retry_after_fails_closed_without_fallback(
+    tmp_path, monkeypatch, retry_after
+):
+    import qea.model_proxy as model_proxy
+
+    upstream, upstream_thread = _start_rate_limit_upstream(
+        rate_limit_count=3, retry_after=retry_after
+    )
+    sleeps = []
+    monkeypatch.setattr(model_proxy.time, "sleep", sleeps.append)
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, payload = _request(proxy)
+
+        assert status == 429
+        assert json.loads(payload)["error"]["code"] == (
+            "rate_limit_retry_exhausted"
+        )
+        assert sleeps == []
+        assert len(upstream.captured) == 1
+        [record] = _read_audit(tmp_path)
+        assert record["request_state"] == "not_accepted"
+        assert record["failure_class"] == "rate_limited"
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_rate_limit_retry_bound_exhausts_without_provider_payload(tmp_path):
+    upstream, upstream_thread = _start_rate_limit_upstream(rate_limit_count=3)
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, payload = _request(proxy)
+
+        assert status == 429
+        assert b"rate_limited" not in payload
+        assert len(upstream.captured) == 3
+        records = _read_audit(tmp_path)
+        assert len(records) == 3
+        assert all(record["request_state"] == "not_accepted" for record in records)
+        assert all(record["failure_class"] == "rate_limited" for record in records)
+        finalize_status, _ = _finalize(proxy)
+        assert finalize_status == 200
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_real_nexau_outer_retry_policy_keeps_exhaustion_to_three_wires(
+    tmp_path,
+):
+    nexau = pytest.importorskip("nexau")
+    from nexau.archs.llm.llm_config import LLMConfig
+
+    from qea.executors.remote_evolver import (
+        _pin_no_replay_policy,
+        _verify_no_replay_client,
+    )
+
+    upstream, upstream_thread = _start_rate_limit_upstream(
+        rate_limit_count=99,
+        retry_after="0",
+    )
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    config = nexau.AgentConfig(
+        type="agent",
+        name="retry-boundary-fixture",
+        system_prompt="Return a short answer.",
+        llm_config=LLMConfig(
+            model="fixture",
+            base_url=(
+                f"http://127.0.0.1:{proxy.server_address[1]}/v1"
+            ),
+            api_key="qea-proxy-placeholder",
+            max_tokens=16,
+            timeout=2,
+            max_retries=7,
+        ),
+        max_iterations=2,
+        retry_attempts=5,
+    )
+    try:
+        _pin_no_replay_policy(config)
+        assert config.retry_attempts == 1
+        assert config.llm_config.max_retries == 0
+        assert config.llm_config.timeout >= 360
+
+        agent = nexau.Agent(config=config)
+        _verify_no_replay_client(agent)
+        try:
+            agent.run(message="hello", context={})
+        except Exception:  # noqa: BLE001 - terminal provider failure is expected
+            pass
+
+        assert len(upstream.captured) == 3
+        assert len({item["client_port"] for item in upstream.captured}) == 3
+        assert len({item["body"] for item in upstream.captured}) == 1
+        records = _read_audit(tmp_path)
+        assert len(records) == 3
+        assert [record["retry_index"] for record in records] == [0, 1, 2]
+        assert all(
+            record["request_state"] == "not_accepted"
+            and record["failure_class"] == "rate_limited"
+            and record["upstream_status_code"] == 429
+            for record in records
+        )
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_retry_wire_cannot_return_success_after_monotonic_deadline(
+    tmp_path, monkeypatch
+):
+    from qea.model_proxy import _ModelProxyHandler
+
+    upstream, upstream_thread = _start_rate_limit_upstream(
+        rate_limit_count=1, retry_after="0"
+    )
+    # Keep the retry within budget through connect and response read, then
+    # expire immediately before the buffered 200 could be returned downstream.
+    clock_values = iter((0.0, 0.0, 0.0, 0.0, 0.0, 61.0))
+    last_clock = [61.0]
+
+    def fake_retry_clock(self):
+        try:
+            last_clock[0] = next(clock_values)
+        except StopIteration:
+            pass
+        return last_clock[0]
+
+    seen_policies = []
+    original_connect = _ModelProxyHandler._connect_upstream
+
+    def recording_connect(self, policy):
+        seen_policies.append(policy)
+        return original_connect(self, policy)
+
+    monkeypatch.setattr(_ModelProxyHandler, "_retry_monotonic", fake_retry_clock)
+    monkeypatch.setattr(_ModelProxyHandler, "_connect_upstream", recording_connect)
+    proxy, proxy_thread = _start_proxy(
+        tmp_path, upstream, read_timeout_seconds=300.0
+    )
+    try:
+        status, _, payload = _request(proxy)
+
+        assert status == 502
+        assert json.loads(payload)["error"]["code"] == (
+            "rate_limit_retry_deadline_expired"
+        )
+        assert len(upstream.captured) == 2
+        assert len(seen_policies) == 2
+        assert seen_policies[0].read_timeout_seconds == 300.0
+        assert seen_policies[1].read_timeout_seconds == 60.0
+        records = _read_audit(tmp_path)
+        assert [record["request_state"] for record in records] == [
+            "not_accepted",
+            "quarantined",
+        ]
+        assert records[0]["failure_class"] == "rate_limited"
+        assert records[1]["failure_class"] == "post_accept_transport"
+        assert records[1]["upstream_status_code"] == 200
+        assert records[1]["total_tokens"] == 18
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_ambiguous_rate_limit_with_accounting_is_not_retried(tmp_path):
+    upstream, upstream_thread = _start_rate_limit_upstream(
+        rate_limit_count=3, ambiguous=True
+    )
+    proxy, proxy_thread = _start_proxy(tmp_path, upstream)
+    try:
+        status, _, payload = _request(proxy)
+
+        assert status == 502
+        assert json.loads(payload)["error"]["code"] == (
+            "ambiguous_rate_limit_response"
+        )
+        assert len(upstream.captured) == 1
+        [record] = _read_audit(tmp_path)
+        assert record["request_state"] == "quarantined"
+        assert record["failure_class"] == "invalid_upstream_response"
+        assert record["upstream_status_code"] == 429
+        assert record["provider_request_id"] == "accepted-429"
+        assert record["total_tokens"] == 1
+        assert record["provider_cost_usd"] == 0.01
     finally:
         _stop(proxy, proxy_thread)
         _stop(upstream, upstream_thread)
@@ -425,7 +769,7 @@ def test_required_provider_rejection_binds_rewritten_oversize_body(tmp_path):
             b"POST\x00/api/v1/chat/completions\x00" + rewritten
         ).hexdigest()
         [audit] = _read_audit(tmp_path)
-        assert audit["request_identity_sha256"] == expected_identity
+        assert audit["logical_request_identity_sha256"] == expected_identity
     finally:
         _stop(proxy, proxy_thread)
         _stop(upstream, upstream_thread)
@@ -496,6 +840,8 @@ def test_proxy_audit_has_only_safe_completed_request_fields(tmp_path):
         assert set(audit) == {
             "schema_version",
             "request_identity_sha256",
+            "logical_request_identity_sha256",
+            "retry_index",
             "model",
             "started_at",
             "finished_at",
@@ -509,8 +855,10 @@ def test_proxy_audit_has_only_safe_completed_request_fields(tmp_path):
             "provider_cost_usd",
             "failure_class",
         }
-        assert audit["schema_version"] == 1
+        assert audit["schema_version"] == 2
         assert len(audit["request_identity_sha256"]) == 64
+        assert len(audit["logical_request_identity_sha256"]) == 64
+        assert audit["retry_index"] == 0
         assert audit["model"] == "fixture"
         assert audit["latency_ms"] >= 0
         assert audit["request_state"] == "completed"
@@ -820,7 +1168,7 @@ def test_new_proxy_attempt_rejects_prior_request_hash_before_second_upstream_cal
         second_dir,
         upstream,
         denied_request_identities_sha256=(
-            first_audit["request_identity_sha256"],
+            first_audit["logical_request_identity_sha256"],
         ),
     )
     try:
@@ -829,8 +1177,8 @@ def test_new_proxy_attempt_rejects_prior_request_hash_before_second_upstream_cal
         assert json.loads(payload)["error"]["code"] == "request_replay_forbidden"
         assert len(upstream.captured) == 1
         [second_audit] = _read_audit(second_dir)
-        assert second_audit["request_identity_sha256"] == (
-            first_audit["request_identity_sha256"]
+        assert second_audit["logical_request_identity_sha256"] == (
+            first_audit["logical_request_identity_sha256"]
         )
         assert second_audit["request_state"] == "quarantined"
         assert second_audit["failure_class"] == "replay_denied"
@@ -862,7 +1210,7 @@ def test_pinned_proxy_replay_denial_uses_rewritten_request_identity(tmp_path):
         upstream,
         required_provider="deepseek",
         denied_request_identities_sha256=(
-            first_audit["request_identity_sha256"],
+            first_audit["logical_request_identity_sha256"],
         ),
     )
     try:
@@ -871,8 +1219,8 @@ def test_pinned_proxy_replay_denial_uses_rewritten_request_identity(tmp_path):
         assert json.loads(payload)["error"]["code"] == "request_replay_forbidden"
         assert len(upstream.captured) == 1
         [second_audit] = _read_audit(second_dir)
-        assert second_audit["request_identity_sha256"] == (
-            first_audit["request_identity_sha256"]
+        assert second_audit["logical_request_identity_sha256"] == (
+            first_audit["logical_request_identity_sha256"]
         )
         assert second_audit["request_state"] == "quarantined"
         assert second_audit["failure_class"] == "replay_denied"

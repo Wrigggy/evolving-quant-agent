@@ -35,21 +35,46 @@ tools:
   - name: compare_evidence
     yaml_path: ./tool_descriptions/compare_evidence.tool.yaml
     binding: tools.guarded_workspace:compare_evidence
+  - name: probe_evidence
+    yaml_path: ./tool_descriptions/probe_evidence.tool.yaml
+    binding: tools.guarded_workspace:probe_evidence
+  - name: probe_contract_semantics
+    yaml_path: ./tool_descriptions/probe_contract_semantics.tool.yaml
+    binding: tools.guarded_workspace:probe_contract_semantics
   - name: inspect_candidate
     yaml_path: ./tool_descriptions/inspect_candidate.tool.yaml
     binding: tools.guarded_workspace:inspect_candidate
   - name: unlock_candidate
     yaml_path: ./tool_descriptions/unlock_candidate.tool.yaml
     binding: tools.guarded_workspace:unlock_candidate
+  - name: decide_candidate
+    yaml_path: ./tool_descriptions/decide_candidate.tool.yaml
+    binding: tools.guarded_workspace:decide_candidate
   - name: write_candidate
     yaml_path: ./tool_descriptions/write_candidate.tool.yaml
     binding: tools.guarded_workspace:write_candidate
   - name: replace_candidate
     yaml_path: ./tool_descriptions/replace_candidate.tool.yaml
     binding: tools.guarded_workspace:replace_candidate
+  - name: delete_candidate
+    yaml_path: ./tool_descriptions/delete_candidate.tool.yaml
+    binding: tools.guarded_workspace:delete_candidate
+  - name: smoke_candidate_component
+    yaml_path: ./tool_descriptions/smoke_candidate_component.tool.yaml
+    binding: tools.guarded_workspace:smoke_candidate_component
   - name: smoke_candidate_tool
     yaml_path: ./tool_descriptions/smoke_candidate_tool.tool.yaml
     binding: tools.guarded_workspace:smoke_candidate_tool
+
+middlewares:
+  - import: middleware.terminal_reserve:DiscoveryTerminalReserve
+    params:
+      max_context_tokens: 200000
+      terminal_reserve_tokens: 64000
+      terminal_output_tokens: 32000
+      compact_state_max_bytes: 65536
+      recent_message_max_bytes: 8192
+      max_terminal_model_calls: 3
 
 tracers:
   - import: nexau.archs.tracer.adapters.in_memory:InMemoryTracer

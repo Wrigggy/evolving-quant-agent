@@ -18,7 +18,12 @@ from typing import Callable, Mapping, Sequence
 
 from ..evaluation import ArtifactRecord, OfficialTaskScore, TaskAttempt
 from ..qfbench_images import NEXAU_REQUIREMENTS_LOCK, NEXAU_RUNTIME_PYTHON
-from ..sandbox_backend import SandboxBackend, SandboxCommandResult, SandboxSpec
+from ..sandbox_backend import (
+    SandboxBackend,
+    SandboxCommandResult,
+    SandboxSpec,
+    validate_sandbox_environment,
+)
 from ..sandbox_lifecycle import (
     create_lifecycle,
     mark_finished,
@@ -30,6 +35,7 @@ from ..verifiers.qfbench import (
 )
 from .bundles import build_verifier_bundle, build_worker_bundle
 from .execution_record import (
+    WorkerArtifactContractError,
     WorkerBehaviorTimeout,
     WorkerExecution,
     persist_worker_execution,
@@ -137,6 +143,12 @@ raise SystemExit(0 if actual == expected else 87)
 
 class SandboxWorkerTimeout(WorkerBehaviorTimeout, SandboxExecutionError):
     """The worker's task command, and only that command, reached its timeout."""
+
+
+class SandboxWorkerArtifactContractError(
+    WorkerArtifactContractError, SandboxExecutionError
+):
+    """The completed worker returned the wrong artifact membership."""
 
 
 def _task_timeout(task, attribute: str, cap: int, *, phase: str) -> int:
@@ -314,6 +326,8 @@ class SandboxNexAUExecutor:
         clock: Callable[[], datetime] = _utc_now,
         max_output_files: int = 2_000,
         max_output_bytes: int = 512 * 1024 * 1024,
+        expected_output_paths: tuple[str, ...] | None = None,
+        auxiliary_output_paths: tuple[str, ...] = (),
     ) -> None:
         _require_tmpfs(resource_contract, _WORKER_REQUIRED_TMPFS, role="worker")
         if type(max_output_files) is not int or max_output_files <= 0:
@@ -349,6 +363,46 @@ class SandboxNexAUExecutor:
         self.clock = clock
         self.max_output_files = max_output_files
         self.max_output_bytes = max_output_bytes
+        if expected_output_paths is not None:
+            normalized = tuple(sorted(set(expected_output_paths)))
+            if (
+                not normalized
+                or len(normalized) != len(expected_output_paths)
+                or any(
+                    not isinstance(path, str)
+                    or path.startswith("/")
+                    or path in {"", "."}
+                    or ".." in Path(path).parts
+                    for path in normalized
+                )
+            ):
+                raise SandboxInfrastructureError(
+                    "worker.config", "expected output paths are invalid"
+                )
+            self.expected_output_paths = normalized
+        else:
+            self.expected_output_paths = None
+        normalized_auxiliary = tuple(sorted(set(auxiliary_output_paths)))
+        if (
+            len(normalized_auxiliary) != len(auxiliary_output_paths)
+            or any(
+                not isinstance(path, str)
+                or path.startswith("/")
+                or path in {"", "."}
+                or ".." in Path(path).parts
+                for path in normalized_auxiliary
+            )
+            or (
+                self.expected_output_paths is not None
+                and set(normalized_auxiliary).intersection(
+                    self.expected_output_paths
+                )
+            )
+        ):
+            raise SandboxInfrastructureError(
+                "worker.config", "auxiliary output paths are invalid"
+            )
+        self.auxiliary_output_paths = normalized_auxiliary
 
     def execute(
         self,
@@ -545,9 +599,6 @@ class SandboxNexAUExecutor:
                 raise SandboxInfrastructureError(
                     "worker.artifacts", f"{type(exc).__name__}: {exc}"
                 ) from exc
-            records = tuple(
-                ArtifactRecord.from_file(path, root=artifact_dir) for path in extracted
-            )
             trace = _backend_call(
                 "worker.download",
                 lambda: self.backend.read_bytes(handle, "/qea/result/raw_trace.jsonl"),
@@ -576,9 +627,72 @@ class SandboxNexAUExecutor:
             summary["dependency_lock_sha256"] = hashlib.sha256(
                 dependency_lock
             ).hexdigest()
+            records = tuple(
+                ArtifactRecord.from_file(path, root=artifact_dir) for path in extracted
+            )
+            found_paths = tuple(sorted(record.path for record in records))
+            allowed_paths = set(self.expected_output_paths or ()) | set(
+                self.auxiliary_output_paths
+            )
+            if (
+                self.expected_output_paths is not None
+                and (
+                    not set(self.expected_output_paths).issubset(found_paths)
+                    or not set(found_paths).issubset(allowed_paths)
+                )
+            ):
+                _atomic_json(
+                    attempt_dir / "worker-artifact-contract.json",
+                    {
+                        "schema_version": 1,
+                        "outcome": "official_worker_artifact_contract_zero",
+                        "expected_paths": list(self.expected_output_paths),
+                        "found_paths": list(found_paths),
+                        "artifact_records": [asdict(record) for record in records],
+                        "trace_uri": str(trace_path),
+                        "final_text_uri": str(final_path),
+                    },
+                )
+                raise SandboxWorkerArtifactContractError(
+                    "worker output membership differs from the benchmark contract: "
+                    f"expected={list(self.expected_output_paths)}, "
+                    f"found={list(found_paths)}",
+                    log_uri=str(trace_path.resolve()),
+                )
+            auxiliary_records = tuple(
+                record
+                for record in records
+                if record.path in self.auxiliary_output_paths
+            )
+            if auxiliary_records:
+                auxiliary_root = attempt_dir / "worker-auxiliary-artifacts"
+                for record in auxiliary_records:
+                    source = artifact_dir / record.path
+                    target = auxiliary_root / record.path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    source.replace(target)
+                _atomic_json(
+                    attempt_dir / "worker-auxiliary-artifacts.json",
+                    {
+                        "schema_version": 1,
+                        "purpose": "worker_validation_side_effects_not_submitted",
+                        "artifact_records": [
+                            asdict(record) for record in auxiliary_records
+                        ],
+                    },
+                )
+                records = tuple(
+                    record
+                    for record in records
+                    if record.path not in self.auxiliary_output_paths
+                )
             mark_finished(lifecycle_path, at=self.clock())
             finished = True
-        except (SandboxInfrastructureError, SandboxWorkerTimeout) as exc:
+        except (
+            SandboxInfrastructureError,
+            SandboxWorkerArtifactContractError,
+            SandboxWorkerTimeout,
+        ) as exc:
             primary_error = exc
         except Exception as exc:  # noqa: BLE001 - final typed boundary.
             primary_error = SandboxInfrastructureError(
@@ -624,6 +738,12 @@ class SandboxQFBenchVerifier:
         trusted_task_root: str | Path,
         resource_contract: SandboxResourceContract,
         clock: Callable[[], datetime] = _utc_now,
+        score_parser: Callable[..., OfficialTaskScore] = parse_official_qfbench_score,
+        answer_free_evidence_builder: Callable[[str | Path], dict[str, object]] | None = None,
+        sandbox_role: str = "verifier",
+        network_policy: str = "none",
+        network_scope: str | None = None,
+        verifier_environment: Mapping[str, str] | None = None,
     ) -> None:
         _require_tmpfs(resource_contract, _VERIFIER_REQUIRED_TMPFS, role="verifier")
         self.backend = backend
@@ -632,6 +752,32 @@ class SandboxQFBenchVerifier:
         self.trusted_task_root = Path(trusted_task_root).expanduser().resolve()
         self.resource_contract = resource_contract
         self.clock = clock
+        if not callable(score_parser):
+            raise SandboxInfrastructureError(
+                "verifier.config", "score_parser must be callable"
+            )
+        self.score_parser = score_parser
+        if answer_free_evidence_builder is not None and not callable(
+            answer_free_evidence_builder
+        ):
+            raise SandboxInfrastructureError(
+                "verifier.config", "answer-free evidence builder must be callable"
+            )
+        if sandbox_role not in {"verifier", "canary"}:
+            raise SandboxInfrastructureError(
+                "verifier.config", "verifier sandbox role is invalid"
+            )
+        if network_policy not in {"none", "worker-proxy-only"}:
+            raise SandboxInfrastructureError(
+                "verifier.config", "verifier network policy is invalid"
+            )
+        self.answer_free_evidence_builder = answer_free_evidence_builder
+        self.sandbox_role = sandbox_role
+        self.network_policy = network_policy
+        self.network_scope = network_scope
+        self.verifier_environment = validate_sandbox_environment(
+            verifier_environment or {}
+        )
 
     def verify(
         self,
@@ -665,7 +811,7 @@ class SandboxQFBenchVerifier:
             phase="verifier.config",
         )
         spec = SandboxSpec(
-            role="verifier",
+            role=self.sandbox_role,
             run_id=attempt.run_id,
             attempt_id=attempt.attempt_id,
             task_id=task.task_id,
@@ -674,10 +820,11 @@ class SandboxQFBenchVerifier:
             memory_mb=self.resource_contract.memory_mb,
             pids_limit=self.resource_contract.pids_limit,
             timeout_seconds=self.resource_contract.timeout_seconds,
-            network_policy="none",
-            environment={},
+            network_policy=self.network_policy,
+            environment=self.verifier_environment,
             writable_tmpfs_mb=self.resource_contract.writable_tmpfs_mb,
             executable_tmpfs_paths=_VERIFIER_EXECUTABLE_TMPFS,
+            network_scope=self.network_scope,
         )
         identity = _attempt_identity(
             role="verifier",
@@ -801,7 +948,10 @@ class SandboxQFBenchVerifier:
                 lambda: self.backend.run(
                     handle,
                     ("bash", "/tmp/qea-offline-test.sh"),
-                    environment=_OFFLINE_VERIFIER_ENV,
+                    environment={
+                        **_OFFLINE_VERIFIER_ENV,
+                        **dict(self.verifier_environment),
+                    },
                     timeout_seconds=timeout,
                 ),
             )
@@ -825,7 +975,7 @@ class SandboxQFBenchVerifier:
             if ctrf is not None:
                 ctrf_path.write_bytes(ctrf)
             try:
-                score = parse_official_qfbench_score(
+                score = self.score_parser(
                     task_id=task.task_id,
                     domain=task.domain,
                     reward_path=reward_path,
@@ -857,7 +1007,7 @@ class SandboxQFBenchVerifier:
                     "schema_version": 1,
                     "task_id": task.task_id,
                     "sandbox_id": handle.native_id,
-                    "network_policy": "none",
+                    "network_policy": self.network_policy,
                     "input_bundle_sha256": bundle.sha256,
                     "artifact_records": [asdict(record) for record in records],
                     "artifact_manifest_sha256": hashlib.sha256(
@@ -873,6 +1023,21 @@ class SandboxQFBenchVerifier:
                     "diagnostic_tags": list(score.diagnostic_tags),
                 },
             )
+            if self.answer_free_evidence_builder is not None:
+                if ctrf is None:
+                    raise SandboxInfrastructureError(
+                        "verifier.evidence", "answer-free evidence needs checker output"
+                    )
+                try:
+                    answer_free = self.answer_free_evidence_builder(ctrf_path)
+                except Exception as exc:  # noqa: BLE001 - trusted sanitizer boundary.
+                    raise SandboxInfrastructureError(
+                        "verifier.evidence", f"{type(exc).__name__}: {exc}"
+                    ) from exc
+                _atomic_json(
+                    verifier_dir / "answer-free-evidence.json",
+                    answer_free,
+                )
             _atomic_json(verifier_dir / "official-score.json", asdict(score))
             mark_finished(lifecycle_path, at=self.clock())
             finished = True

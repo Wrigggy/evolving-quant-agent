@@ -34,10 +34,13 @@ from .evolution_feedback import (
 )
 from .evolve_runtime import diff_signature, dir_unified_diff, run_evolve_agent, snapshot_dir
 from .executors.execution_record import (
+    WorkerArtifactContractError,
     WorkerBehaviorTimeout,
     WorkerExecution,
+    load_persisted_worker_artifact_contract,
     load_persisted_worker_timeout,
     load_worker_execution,
+    persist_artifact_contract_recovery,
     persist_timeout_recovery,
     persist_worker_execution,
 )
@@ -650,6 +653,24 @@ class QFBenchSandboxEvaluator:
                     self._completed_score_path(run_dir, attempt), asdict(score)
                 )
                 return score
+            persisted_artifact_contract = load_persisted_worker_artifact_contract(
+                attempt, run_dir
+            )
+            if persisted_artifact_contract is not None:
+                persist_artifact_contract_recovery(
+                    attempt_dir, persisted_artifact_contract
+                )
+                score = OfficialTaskScore(
+                    task_id=task.task_id,
+                    domain=task.domain,
+                    reward=0.0,
+                    diagnostic_tags=("missing_artifact",),
+                    log_uri=persisted_artifact_contract.log_uri,
+                )
+                _atomic_json(
+                    self._completed_score_path(run_dir, attempt), asdict(score)
+                )
+                return score
             if resolved_attempt is None:
                 resolved_attempt = resolve_worker_attempt(
                     logical_attempt, run_dir
@@ -666,6 +687,18 @@ class QFBenchSandboxEvaluator:
                     run_dir=run_dir,
                     model_env=self.model_env,
                 )
+            except WorkerArtifactContractError as exc:
+                score = OfficialTaskScore(
+                    task_id=task.task_id,
+                    domain=task.domain,
+                    reward=0.0,
+                    diagnostic_tags=("missing_artifact",),
+                    log_uri=exc.log_uri,
+                )
+                _atomic_json(
+                    self._completed_score_path(run_dir, attempt), asdict(score)
+                )
+                return score
             except WorkerBehaviorTimeout as exc:
                 score = OfficialTaskScore(
                     task_id=task.task_id,

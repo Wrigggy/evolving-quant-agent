@@ -1,0 +1,94 @@
+type: tool
+name: decide_candidate
+description: Record an evidence-backed ACT or ABSTAIN decision. Failure-type contracts require a discriminating probe; QuantCodeEval v2 instead requires competing mechanism hypotheses, exact accessed history when available, one or two primary components, and any binding components needed for one coherent mechanism.
+input_schema:
+  type: object
+  properties:
+    discovery:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [ACT, ABSTAIN]
+        failure_class:
+          type: string
+          enum: [artifact_interface, data_temporal_integrity, quant_definition_estimation, portfolio_execution, resource_termination, isolated_task_specific, unknown]
+        failure_types:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            properties:
+              type_id: {type: string}
+              label: {type: string}
+              member_tasks:
+                type: array
+                minItems: 2
+                items: {type: string}
+              excluded_tasks:
+                type: array
+                items: {type: string}
+              matched_success_tasks:
+                type: array
+                items: {type: string}
+              evidence_refs:
+                type: array
+                minItems: 2
+                items: {type: string}
+            required: [type_id, label, member_tasks, evidence_refs]
+            additionalProperties: true
+        hypotheses_considered:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            properties:
+              hypothesis_id: {type: string}
+              failure_type_id: {type: string}
+              mechanism: {type: string}
+              failure_prediction: {type: string}
+              success_counterfactual: {type: string}
+              insufficient_contrast: {type: boolean}
+            required: [hypothesis_id, failure_type_id, mechanism, failure_prediction]
+            additionalProperties: true
+        selected_hypothesis_id: {type: [string, "null"]}
+        probe_ids_used:
+          type: array
+          minItems: 1
+          items: {type: string}
+        grounded_comparison_probe_ids:
+          type: array
+          items: {type: string}
+          description: Required for semantic_contract_v1 ACT; each ID must name a typed clause/artifact/trace probe that matches the selected hypothesis and contradicts an eliminated competitor.
+        hypotheses_eliminated:
+          type: array
+          items: {type: string}
+        evidence_refs:
+          type: array
+          minItems: 2
+          items: {type: string}
+        counterevidence: {type: string}
+        uncertainty: {type: string}
+        components:
+          type: array
+          items:
+            type: string
+            enum: [systemprompt, agent_config, tool_descriptions, tools, validator, skills, memory, middleware, routing]
+        primary_components:
+          type: array
+          items:
+            type: string
+            enum: [systemprompt, agent_config, tool_descriptions, tools, validator, skills, memory, middleware, routing]
+          description: QuantCodeEval v2 causal intervention locus; must be a subset of components. Other components may be declared only as bindings required by the same mechanism.
+        component_override_reason:
+          type: string
+          description: Required when QuantCodeEval v2 evidence justifies a primary component outside the failure-class routing prior.
+        prediction: {}
+        risk_tasks:
+          type: array
+          items: {type: string}
+        abstain_reason: {type: string}
+      required: [decision, hypotheses_considered, evidence_refs, counterevidence, uncertainty]
+      additionalProperties: true
+  required: [discovery]
+  additionalProperties: false

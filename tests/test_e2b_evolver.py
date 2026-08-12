@@ -242,6 +242,7 @@ def test_evolver_uses_secure_header_injected_network_and_candidate_only_output(t
         "/qea/remote_evolver.py",
         "/qea/runtime_bridge.py",
         "/qea/evolver_discovery.py",
+        "/qea/public_contract_evidence.py",
         "/tmp/qea-evolver.tar",
     }
     assert b"def task_python(" in sandbox.files.data["/qea/runtime_bridge.py"]
@@ -328,6 +329,15 @@ def test_remote_evolver_inserts_asset_root_and_archives_only_candidate(
     (evolver / "reference/NEXAU_GUIDE.md").write_text("framework guide\n")
 
     class FakeConfig:
+        def __init__(self):
+            self.retry_attempts = 5
+            self.sub_agents = {}
+            self.llm_config = SimpleNamespace(
+                max_retries=3,
+                timeout=180,
+                to_client_kwargs=lambda: {"max_retries": 3, "timeout": 180},
+            )
+
         @classmethod
         def from_yaml(cls, *, config_path):
             assert config_path == evolver / "agent.yaml"
@@ -337,11 +347,35 @@ def test_remote_evolver_inserts_asset_root_and_archives_only_candidate(
 
     class FakeAgent:
         def __init__(self, *, config):
+            assert config.retry_attempts == 1
+            assert config.llm_config.max_retries == 0
+            assert config.llm_config.timeout >= 360
             self.full_trace = []
+            self.openai_client = SimpleNamespace(
+                max_retries=config.llm_config.to_client_kwargs()["max_retries"]
+            )
 
         def run(self, *, message, context):
             assert "Improve validation" in message
             (candidate / "systemprompt.md").write_text("after\n")
+            (result / "terminal-reserve.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "phase": "explore",
+                        "activated": False,
+                        "model_guard": None,
+                        "events": [],
+                        "candidate": {
+                            "initial_sha256": "a" * 64,
+                            "current_sha256": "a" * 64,
+                            "changed": False,
+                        },
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
             return '{"summary":"changed"}'
 
     monkeypatch.setitem(
@@ -372,4 +406,7 @@ def test_remote_evolver_inserts_asset_root_and_archives_only_candidate(
     with tarfile.open(result / "candidate.tar") as archive:
         assert sorted(archive.getnames()) == ["agent.yaml", "systemprompt.md"]
     assert json.loads((result / "prediction.json").read_text())["summary"] == "changed"
-    assert json.loads((result / "summary.json").read_text())["model_usage"] is None
+    summary = json.loads((result / "summary.json").read_text())
+    assert summary["model_usage"] is None
+    assert summary["terminal_reserve"]["audit"]["activated"] is False
+    assert summary["terminal_reserve"]["bytes"] > 0

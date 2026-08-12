@@ -1,0 +1,807 @@
+{
+  "schema_version": 1,
+  "stage": "A6",
+  "status": "frozen_not_run",
+  "benchmark_commit": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+  "baseline": {
+    "run_id": "qfbench-rootless-base-85x5-official-deepseek-v4-flash-0731-all12x3-20260804",
+    "result_path": "results/bc-mirror/qfbench-rootless-base-85x5-official-deepseek-v4-flash-0731-all12x3-20260804/result.json",
+    "result_sha256": "db70607b56c5241fd00f2b288d9f460d42333d48b488d22c6cf25edc19cd86d1",
+    "seed_worker_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+    "independent_repetitions": 5
+  },
+  "frozen_runtime": {
+    "backend": "self_hosted_rootless_docker",
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "provider": "deepseek",
+    "provider_fallback": false,
+    "evolver_reasoning": "high",
+    "worker_setup": {
+      "max_context_tokens": 200000,
+      "max_iterations": 60,
+      "max_tokens_per_call": 32000,
+      "temperature": 0.2,
+      "tool_count": 1
+    }
+  },
+  "prelaunch_identity_freeze": {
+    "schema_version": 1,
+    "status": "required_not_materialized",
+    "required_before_any_a6_model_call": true,
+    "record_path": "../A6_PRELAUNCH_IDENTITY.json",
+    "record_location_policy": "record_path is resolved relative to the exact A6 source release root and must be a regular external sibling outside that source tree so the record can bind a6_source_release_sha256 without self-reference",
+    "protocol_manifest_digest_policy": "SHA-256 of the exact protocol-manifest bytes is stored in the separate materialized record to avoid a self-referential digest",
+    "materialized_launch_identity_policy": "SHA-256 of the canonical required launch fields is stored separately from protocol_manifest_sha256",
+    "source_release_identity_policy": "a6_source_release_sha256 is the canonical tree digest recomputed from a deterministic sorted member manifest against the exact source release root; hashing an unverified self-described manifest alone is insufficient",
+    "source_release_rejections": [
+      "unsafe, duplicate, unsorted, missing, undeclared, or symlinked members",
+      "AppleDouble ._* files and .DS_Store",
+      "secret, credential, cache, result, output, runtime, and generated evidence roots"
+    ],
+    "required_record_fields": [
+      "protocol_manifest_sha256",
+      "rootless_config_sha256",
+      "image_set_manifest_sha256",
+      "public_task_role_manifest_sha256",
+      "trusted_task_role_manifest_sha256",
+      "scheduler_epoch",
+      "scheduler_identity_sha256",
+      "provider_route_identity_sha256",
+      "a6_source_release_sha256",
+      "materialized_launch_identity_sha256"
+    ],
+    "fail_closed_rule": "no A6 seed, Evolver, candidate, or scored model call may start while the record or clean source-release manifest is absent, pending, malformed, digest-inconsistent, or different from the effective launch plan"
+  },
+  "discovery_design": {
+    "design": "three_arm_matched_staircase",
+    "shared_seed_runs": 1,
+    "first_round_evolver_samples_per_arm": 1,
+    "evaluate_every_admitted_act": true,
+    "maximum_candidate_evaluations": 3,
+    "terminal_decisions": ["ACT", "ABSTAIN"],
+    "max_components": 3,
+    "evolver_instruction": "Use the repeated train-only baseline outcomes and the fresh structured worker traces, finals, process summaries, and artifacts to discover and test one transferable harness mechanism. Verify the deterministic index against raw evidence. Do not specialize to task IDs. The coordinator prescribes no component, file, root cause, or implementation.",
+    "evaluator_feedback_tier": "answer_free_public_process",
+    "feedback_manifest_digest": null,
+    "arms": {
+      "A6-R": {
+        "label": "raw_indexed_failure_type",
+        "evidence_representation": "a5_raw_indexed_v1",
+        "public_contract_index": false,
+        "decision_protocol": "failure_type_v1",
+        "probe_policy": "constrained_evidence_profile_v1",
+        "success_counterfactual": "required_or_insufficient",
+        "semantic_comparison": "not_required"
+      },
+      "A6-E": {
+        "label": "semantic_evidence_failure_type",
+        "evidence_representation": "public_instruction_clause_index_v1",
+        "public_contract_index": true,
+        "decision_protocol": "failure_type_v1",
+        "probe_policy": "constrained_evidence_profile_v1",
+        "success_counterfactual": "required_or_insufficient",
+        "semantic_comparison": "available_not_required"
+      },
+      "A6-EC": {
+        "label": "semantic_evidence_semantic_contract",
+        "evidence_representation": "public_instruction_clause_index_v1",
+        "public_contract_index": true,
+        "decision_protocol": "semantic_contract_v1",
+        "probe_policy": "typed_contract_artifact_trace_v1",
+        "success_counterfactual": "required_or_insufficient",
+        "semantic_comparison": "required_for_act"
+      }
+    },
+    "matched_contrasts": {
+      "evidence_representation_increment": {
+        "comparison": "A6-E minus A6-R",
+        "held_fixed": "failure_type_v1 decision contract, constrained_evidence_profile_v1 probe policy, shared seed evidence, panel, model, provider, and runtime",
+        "changed": "separately indexed exact public instructions and clauses"
+      },
+      "semantic_contract_package_increment": {
+        "comparison": "A6-EC minus A6-E",
+        "held_fixed": "public_instruction_clause_index_v1 evidence, shared seed evidence, panel, model, provider, and runtime",
+        "changed": "semantic_contract_v1 plus typed_contract_artifact_trace_v1 and required ACT semantic comparison"
+      }
+    },
+    "semantic_evidence_layout": {
+      "protocol": "public_contract_clauses_v2",
+      "index": "contracts/index.json",
+      "instruction": "contracts/<task>/instruction.md",
+      "clauses": "contracts/<task>/clauses.json",
+      "source_identity": "contracts/index.json#source_identity",
+      "source_role_manifest": "the exact verified public role MANIFEST.json whose SHA-256 is already pinned by the ten-field prelaunch identity",
+      "source_instruction_members_digest": "canonical SHA-256 over each frozen task instruction source path and exact bytes; copied into the E/EC evidence contract and rederived from the live verified public role root before any model call"
+    },
+    "a6_ec_act_minimum_evidence": [
+      "one cited exact public contract clause",
+      "one exact worker-observable artifact or trace fact",
+      "one typed semantic comparison linking the clause, artifact field, and trace phase",
+      "one executed answer-free probe that eliminates a competing hypothesis",
+      "one component-specific observable prediction"
+    ],
+    "bundle_matching": [
+      "all three arms use the same 16-task fresh seed traces, finals, process summaries, and produced artifacts",
+      "A6-R and A6-E differ only by the added semantic evidence representation",
+      "A6-E and A6-EC receive byte-identical semantic evidence members; only the discovery-contract package differs",
+      "A6-E and A6-EC bind the same public role manifest SHA-256 and canonical source-instruction member digest; an internally self-consistent corpus from another checkout or role tree is rejected",
+      "arm-specific contract files are excluded when checking shared evidence-member equality"
+    ],
+    "allowed_evidence": [
+      "frozen evolution-train public instructions",
+      "frozen evolution-train public inputs and public metadata",
+      "worker-observable traces, final answers, process summaries, and produced artifacts",
+      "deterministic answer-free indexes and arm-authorized probe outputs"
+    ],
+    "forbidden_evidence": [
+      "validation task identity, inputs, traces, scores, or outcomes",
+      "test task identity, inputs, traces, scores, or outcomes",
+      "diagnostic task identity, inputs, traces, scores, or outcomes",
+      "official tests, official solutions, expected or reference values, raw verifier verdicts, and credentials"
+    ]
+  },
+  "feedback_exposure_plan": {
+    "status": "pre_registered_sequential_ablation_not_run",
+    "core_feedback_level": "L1_aggregate_outcome_answer_free",
+    "core_rule": "A6-R, A6-E, and A6-EC receive the same L1 evaluator-outcome exposure; feedback exposure is not changed inside the three-arm discovery staircase",
+    "levels": {
+      "L0": {
+        "label": "trajectory_only",
+        "allowed": [
+          "frozen public task material",
+          "worker-visible trace and final response",
+          "worker-produced artifacts and process or lifecycle status"
+        ],
+        "forbidden": "all official reward, test-count, verifier-derived, expected-value, and reference-answer information"
+      },
+      "L1": {
+        "label": "aggregate_outcome_answer_free",
+        "allowed_increment_over_L0": [
+          "official scalar reward",
+          "completion, timeout, or missingness status",
+          "aggregate passed and failed test counts when already authorized by the frozen train evidence contract"
+        ],
+        "forbidden": "test names, assertion text, expected or actual values, stack or source lines, raw stdout, raw verdict objects, verifier code, official solutions, and references"
+      },
+      "L2": {
+        "label": "deterministic_public_clause_localization",
+        "purpose": "minimum proposed feedback increment for the optional A6-F arm",
+        "allowed_increment_over_L1": [
+          "a predeclared public clause identifier",
+          "one categorical state from observed_missing, observed_inconsistent, or not_assessable",
+          "a public artifact path and field when that path and field are already named by the public contract",
+          "a coarse nonnumeric failure family from an allowlist frozen before evaluator execution"
+        ],
+        "forbidden": "test names or counts by test, assertion or exception text, expected or actual values, raw stdout or CTRF, stack traces, source locations, verifier implementation details, private rubric concepts, and any generated natural-language hint"
+      },
+      "L3": {
+        "label": "masked_verifier_fragments",
+        "examples": "test names or verifier fragments with numeric values masked",
+        "a6_policy": "high leakage risk; excluded from A6"
+      },
+      "L4": {
+        "label": "raw_oracle_feedback",
+        "examples": "raw verifier output, verifier code, hidden tests, expected or actual values, official solutions, gold answers, and private rubric verdicts",
+        "a6_policy": "forbidden"
+      }
+    },
+    "optional_arm": {
+      "arm_id": "A6-F",
+      "label": "semantic_contract_plus_minimal_sanitized_feedback",
+      "schedule": "sequential_after_the_R_E_EC_core_only",
+      "matched_reference": "A6-EC",
+      "held_fixed": "shared seed evidence, public clause representation, semantic_contract_v1, typed_contract_artifact_trace_v1, panel, model, provider, runtime, max_components, and admission rules",
+      "changed": "add only the deterministic L2 public-clause-localized feedback channel",
+      "first_round_evolver_samples": 1,
+      "evaluate_admitted_act_on_all_16_tasks": true,
+      "maximum_additional_candidate_evaluations": 1,
+      "never_pool_with_core_arms": true,
+      "trigger": [
+        "A6-EC validly ABSTAINs because grounded public clause-artifact-trace comparisons remain not_assessable or insufficiently contrastive",
+        "or A6-EC produces a false-ACT whose preregistered audit localizes the missing discriminator to feedback unavailable at L1 rather than to a malformed hypothesis or probe"
+      ],
+      "skip_conditions": [
+        "A6-EC already produces a supported ACT or calibrated ABSTAIN without an L1 feedback-sufficiency ceiling",
+        "the L2 sanitizer or its predeclared public-clause mapping fails any safety preflight",
+        "the trigger can be stated only after reading raw verifier material not covered by the trusted audit protocol"
+      ],
+      "interpretation": "exploratory single-variable feedback localization; one sequential sample cannot establish a feedback-effect claim"
+    },
+    "L2_safety_preflight": [
+      "freeze a deterministic allowlisted mapping from public clause identifiers to coarse failure families before any run",
+      "run synthetic canary tests proving expected values, test names, assertion text, stack lines, and unrecognized fields become not_assessable rather than pass through",
+      "run protected-corpus exact, n-gram, and semantic leakage scans inside the trusted verifier boundary and export only pass, fail, or not_assessable status",
+      "taint-label every verifier-derived field and reject any output outside the L2 schema",
+      "mount no verifier filesystem, official solution, hidden test, credential, or raw verdict surface into the worker or Evolver sandbox",
+      "scan candidate diffs for protected substrings and suspicious constants before admission",
+      "use evolution-train lineage only; validation, test, and diagnostic material remain unavailable",
+      "freeze the sanitizer digest, public mapping digest, and evidence-bundle digest before A6-F"
+    ]
+  },
+  "panel": {
+    "task_count": 16,
+    "role_counts": {
+      "repeat_failure_target": 6,
+      "strict_protection": 8,
+      "volatile_coverage_sentinel": 2
+    },
+    "domain_counts": {
+      "data_engineering": 3,
+      "derivatives": 4,
+      "execution_microstructure": 1,
+      "rates_fx_macro": 3,
+      "risk_credit": 2,
+      "systematic_strategy": 3
+    },
+    "task_ids": [
+      "swap-curve-bootstrap-ois",
+      "zero-coupon-bootstrapping",
+      "earnings-surprise-calculator",
+      "corporate-action-adjustment",
+      "13f-amendment-aware-crowding",
+      "localvol-barrier",
+      "historical-var-data-prep",
+      "credit-spread-decomposition",
+      "momentum-backtest",
+      "brinson-sector-attribution",
+      "sma-crossover-spy",
+      "bs-greeks-pde",
+      "merton-jump-diffusion",
+      "variance-swap-replication",
+      "crypto-funding-rate-basis-carry",
+      "fomc-tone-event-study"
+    ],
+    "targets": [
+      {
+        "task_id": "swap-curve-bootstrap-ois",
+        "domain": "rates_fx_macro",
+        "reward_kind": "binary",
+        "role": "repeat_failure_target",
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "tests_passed": [17, 17, 17, 17, 17],
+        "tests_failed": [2, 2, 2, 2, 2],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 19,
+        "min_pass_fraction": 0.8947368421052632,
+        "mean_pass_fraction": 0.8947368421052632
+      },
+      {
+        "task_id": "zero-coupon-bootstrapping",
+        "domain": "rates_fx_macro",
+        "reward_kind": "binary",
+        "role": "repeat_failure_target",
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "tests_passed": [1, 1, 1, 1, 1],
+        "tests_failed": [5, 5, 5, 5, 5],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 6,
+        "min_pass_fraction": 0.16666666666666666,
+        "mean_pass_fraction": 0.16666666666666666
+      },
+      {
+        "task_id": "earnings-surprise-calculator",
+        "domain": "data_engineering",
+        "reward_kind": "binary",
+        "role": "repeat_failure_target",
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "tests_passed": [4, 4, 4, 4, 4],
+        "tests_failed": [4, 4, 4, 4, 4],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 8,
+        "min_pass_fraction": 0.5,
+        "mean_pass_fraction": 0.5
+      },
+      {
+        "task_id": "corporate-action-adjustment",
+        "domain": "data_engineering",
+        "reward_kind": "binary",
+        "role": "repeat_failure_target",
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "tests_passed": [3, 3, 3, 3, 3],
+        "tests_failed": [4, 4, 4, 4, 4],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 7,
+        "min_pass_fraction": 0.42857142857142855,
+        "mean_pass_fraction": 0.42857142857142855
+      },
+      {
+        "task_id": "13f-amendment-aware-crowding",
+        "domain": "data_engineering",
+        "reward_kind": "binary",
+        "role": "repeat_failure_target",
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "tests_passed": [44, 0, 44, 41, 42],
+        "tests_failed": [7, 11, 7, 10, 9],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 11,
+        "min_pass_fraction": 0.0,
+        "mean_pass_fraction": 0.6705882352941177
+      },
+      {
+        "task_id": "localvol-barrier",
+        "domain": "derivatives",
+        "reward_kind": "partial",
+        "role": "repeat_failure_target",
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "tests_passed": [0, 0, 0, 0, 0],
+        "tests_failed": [7, 7, 7, 7, 7],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 7,
+        "min_pass_fraction": 0.0,
+        "mean_pass_fraction": 0.0
+      }
+    ],
+    "protections": [
+      {
+        "task_id": "historical-var-data-prep",
+        "domain": "risk_credit",
+        "reward_kind": "binary",
+        "role": "strict_protection",
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "tests_passed": [12, 12, 12, 12, 12],
+        "tests_failed": [0, 0, 0, 0, 0],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 12,
+        "min_pass_fraction": 1.0,
+        "mean_pass_fraction": 1.0
+      },
+      {
+        "task_id": "credit-spread-decomposition",
+        "domain": "risk_credit",
+        "reward_kind": "binary",
+        "role": "strict_protection",
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "tests_passed": [39, 39, 39, 39, 39],
+        "tests_failed": [0, 0, 0, 0, 0],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 39,
+        "min_pass_fraction": 1.0,
+        "mean_pass_fraction": 1.0
+      },
+      {
+        "task_id": "momentum-backtest",
+        "domain": "systematic_strategy",
+        "reward_kind": "binary",
+        "role": "strict_protection",
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "tests_passed": [26, 26, 26, 26, 26],
+        "tests_failed": [0, 0, 0, 0, 0],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 26,
+        "min_pass_fraction": 1.0,
+        "mean_pass_fraction": 1.0
+      },
+      {
+        "task_id": "brinson-sector-attribution",
+        "domain": "systematic_strategy",
+        "reward_kind": "binary",
+        "role": "strict_protection",
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "tests_passed": [42, 42, 42, 42, 42],
+        "tests_failed": [0, 0, 0, 0, 0],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 42,
+        "min_pass_fraction": 1.0,
+        "mean_pass_fraction": 1.0
+      },
+      {
+        "task_id": "sma-crossover-spy",
+        "domain": "systematic_strategy",
+        "reward_kind": "binary",
+        "role": "strict_protection",
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "tests_passed": [20, 20, 20, 20, 20],
+        "tests_failed": [0, 0, 0, 0, 0],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 20,
+        "min_pass_fraction": 1.0,
+        "mean_pass_fraction": 1.0
+      },
+      {
+        "task_id": "bs-greeks-pde",
+        "domain": "derivatives",
+        "reward_kind": "binary",
+        "role": "strict_protection",
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "tests_passed": [39, 39, 39, 39, 39],
+        "tests_failed": [0, 0, 0, 0, 0],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 39,
+        "min_pass_fraction": 1.0,
+        "mean_pass_fraction": 1.0
+      },
+      {
+        "task_id": "merton-jump-diffusion",
+        "domain": "derivatives",
+        "reward_kind": "binary",
+        "role": "strict_protection",
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "tests_passed": [28, 28, 28, 28, 28],
+        "tests_failed": [0, 0, 0, 0, 0],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 28,
+        "min_pass_fraction": 1.0,
+        "mean_pass_fraction": 1.0
+      },
+      {
+        "task_id": "variance-swap-replication",
+        "domain": "derivatives",
+        "reward_kind": "binary",
+        "role": "strict_protection",
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "tests_passed": [17, 17, 17, 17, 17],
+        "tests_failed": [0, 0, 0, 0, 0],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 17,
+        "min_pass_fraction": 1.0,
+        "mean_pass_fraction": 1.0
+      }
+    ],
+    "coverage_sentinels": [
+      {
+        "task_id": "crypto-funding-rate-basis-carry",
+        "domain": "execution_microstructure",
+        "reward_kind": "binary",
+        "role": "volatile_coverage_sentinel",
+        "selection_reason": "only execution_microstructure train task with normal verifier exit and non-empty official test counts in all five baseline repetitions",
+        "rewards": [1.0, 1.0, 1.0, 1.0, 0.0],
+        "tests_passed": [63, 63, 63, 63, 57],
+        "tests_failed": [0, 0, 0, 0, 6],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 63,
+        "min_pass_fraction": 0.9047619047619048,
+        "mean_pass_fraction": 0.980952380952381,
+        "strict_protection": false
+      },
+      {
+        "task_id": "fomc-tone-event-study",
+        "domain": "rates_fx_macro",
+        "reward_kind": "binary",
+        "role": "volatile_coverage_sentinel",
+        "selection_reason": "only fully observable rates_fx_macro train task with repeated baseline successes; supplies a same-domain success-side contrast for the two rates targets",
+        "rewards": [0.0, 1.0, 1.0, 0.0, 1.0],
+        "tests_passed": [19, 20, 20, 19, 20],
+        "tests_failed": [1, 0, 0, 1, 0],
+        "verifier_exit_codes": [0, 0, 0, 0, 0],
+        "min_test_count": 20,
+        "min_pass_fraction": 0.95,
+        "mean_pass_fraction": 0.98,
+        "strict_protection": false
+      }
+    ]
+  },
+  "selection": {
+    "policy": "select all six clean 0/5 evolution-train failures, all eight 5/5 evolution-train successes as strict protections, and exactly two explicitly volatile sentinels needed for six-domain coverage and a rates success-side contrast",
+    "tvt_manifest_path": "data/qfbench/MANIFEST_30_15_40_EVOLUTION.json",
+    "tvt_manifest_sha256": "fcd9a1c20f9d76d754e12ad8828b22a5179aa93a29434389100010d288f74a42",
+    "a5_manifest_path": "data/qfbench/MANIFEST_A5_FAILURE_TYPE_DISCOVERY.json",
+    "a5_manifest_sha256": "56aa6a51b61c14fad0557d154c4234900c15fefd3b168fab2f53f2ec369bb4f6",
+    "excluded_train_tasks": {
+      "baseline_variable_not_required_for_coverage": [
+        "evt-pot-var",
+        "credit-migration-matrix",
+        "bollinger-backtest-aapl",
+        "etf-cross-asset-lead-lag",
+        "cme-hdd-option-pricing",
+        "delta-hedging-pnl-simulation",
+        "cliquet-ratchet-pricing",
+        "spread-option-kirk-margrabe",
+        "realized-vol-estimators",
+        "var-es-estimation"
+      ],
+      "infrastructure_or_unobservable_baseline": [
+        "yield-curve-bond-immunization",
+        "prediction-markets-cross-venue-dislocation",
+        "residual-momentum",
+        "binance-btc-participation-tca"
+      ]
+    },
+    "coverage_limitations": [
+      "data_engineering has no successful task in the frozen evolution-train split",
+      "execution_microstructure has only one task with valid non-empty verifier evidence in all five repetitions",
+      "the two sentinels are baseline-variable and are not strict protections",
+      "all tasks are fixed train-panel members and are not independent draws from a task population"
+    ]
+  },
+  "historical_panel_reference": {
+    "repeat_task_mean": {
+      "values": [0.5625, 0.625, 0.625, 0.5625, 0.5625],
+      "mean": 0.5875,
+      "sample_sd": 0.03423265984407288
+    },
+    "repeat_six_domain_macro": {
+      "values": [0.625, 0.6805555555555557, 0.6805555555555557, 0.625, 0.5138888888888888],
+      "mean": 0.625,
+      "sample_sd": 0.06804138174397724
+    },
+    "interpretation": "historical base-worker repetitions describe panel volatility only; they are not fresh A6 seed measurements and are not pooled with A6 outcomes"
+  },
+  "analysis_plan": {
+    "primary_discovery_estimands": {
+      "false_act": {
+        "definition": "an arm chooses ACT and its preregistered primary component-specific observable prediction is falsified by the candidate audit or evaluation",
+        "report": "binary per arm plus count across arms; ABSTAIN is not coded as false-ACT"
+      },
+      "unsupported_semantic_leaps": {
+        "definition": "selected-mechanism claims that assert a public requirement, artifact fact, trace fact, or causal link without an exact authorized citation and resolvable relation",
+        "report": "count and audited-claim denominator per arm; structurally unavailable clause links in A6-R are marked unavailable rather than silently passed"
+      },
+      "grounded_clause_artifact_trace_comparisons": {
+        "definition": "a resolvable comparison containing an exact clause identifier, artifact path and field, trace phase or slice, and an explicit supported, contradicted, or insufficient relation",
+        "report": "valid count, attempted count, and coverage over selected hypotheses; A6-R is not expected to have the new clause representation"
+      },
+      "abstain_calibration": {
+        "definition": "ABSTAIN with writes locked, unresolved comparisons or insufficient contrast recorded, and no authorized evidence that satisfies that arm's ACT gate",
+        "report": "procedural calibration audit, not proof that the surviving causal explanation is true"
+      }
+    },
+    "matched_discovery_contrasts": {
+      "A6-E_vs_A6-R": "evidence-representation increment under the same failure_type_v1 contract",
+      "A6-EC_vs_A6-E": "semantic-contract and typed-probe package increment under byte-identical semantic evidence",
+      "first_round_interpretation": "one stochastic Evolver sample per arm is a localization canary and cannot support a causal arm-effect or significance claim"
+    },
+    "secondary_reward_estimand": {
+      "name": "paired_six_domain_macro_delta",
+      "formula": "mean_domain(mean_task(reward_candidate - reward_shared_fresh_seed))",
+      "domain_count": 6,
+      "unit": "fixed task, aggregated within domain and then across domains",
+      "scope": "computed separately over all 16 tasks for every ACT arm; includes volatile sentinels and is descriptive only; never select or pool the best arm",
+      "single_canary_interpretation": "secondary descriptive in-panel adaptation effect; not a stochastic-repetition estimate"
+    },
+    "stable_advancement_reward_estimand": {
+      "name": "paired_stable_five_domain_macro_delta",
+      "formula": "mean_domain(mean_task(reward_candidate - reward_shared_fresh_seed)) over the six targets and eight strict protections only",
+      "domain_count": 5,
+      "task_count": 14,
+      "excluded_roles": ["volatile_coverage_sentinel"],
+      "scope": "advancement gate only; sentinels remain a separate blast-radius report",
+      "interpretation": "engineering threshold for considering independent repetitions, not a significance claim"
+    },
+    "required_reports": [
+      "all four primary discovery audits for every arm, including explicit not-applicable and missing states",
+      "the A6-E versus A6-R and A6-EC versus A6-E matched contrasts without pooling arms",
+      "all 16 paired task-level official reward deltas",
+      "six paired all-panel domain means and the descriptive six-domain macro delta",
+      "five paired stable-panel domain means and the 14-task advancement macro delta",
+      "target, strict-protection, and volatile-sentinel results separately",
+      "official reward separately from test-pass fraction, completion status, process metrics, latency, tool errors, tokens, and cost"
+    ],
+    "candidate_advancement_thresholds": {
+      "false_act_allowed": false,
+      "unsupported_semantic_leap_in_selected_act_allowed": false,
+      "arm_specific_act_gate_must_hold": true,
+      "minimum_interpretable_stable_five_domain_macro_delta": 0.1,
+      "minimum_positive_target_tasks": 2,
+      "maximum_strict_protection_regressions": 0,
+      "component_specific_prediction_must_hold": true,
+      "volatile_sentinels_count_toward_protection_gate": false,
+      "volatile_sentinels_count_toward_stable_domain_gate": false,
+      "interpretation": "a threshold pass authorizes consideration of a frozen independent-repetition stage; reward alone cannot rescue an unsupported ACT and is not a significance claim"
+    },
+    "matched_contrast_replication_trigger": {
+      "rule": "repeat a complete matched arm pair only when the first round discriminates on a primary discovery endpoint in the predicted direction",
+      "eligible_signals": [
+        "one arm produces false-ACT and its matched arm avoids it through a protocol-calibrated ABSTAIN or a supported ACT",
+        "the increment removes at least one unsupported selected-mechanism semantic leap while preserving resolvable evidence",
+        "the increment produces at least one additional valid grounded clause-artifact-trace comparison used in the terminal decision"
+      ],
+      "reward_only_difference_is_not_a_trigger": true,
+      "repeat_both_arms_and_evaluate_every_act": true
+    },
+    "single_canary_uncertainty": {
+      "confirmatory_p_value": false,
+      "within_domain_task_bootstrap": "descriptive task-heterogeneity sensitivity only",
+      "exact_task_label_or_sign_randomization": "descriptive sensitivity only; task exchangeability and non-adaptive assignment do not hold strongly enough for a causal p-value",
+      "domain_cluster_bootstrap": "report only as unstable sensitivity because there are six fixed domains and execution_microstructure is a singleton",
+      "independent_stochastic_repetition_required": true
+    },
+    "multiple_testing": {
+      "first_round_discovery_endpoints": "audited mechanistic outcomes with no p-values because n=1 Evolver sample per arm",
+      "secondary_reward_primary_family": "one descriptive all-16 six-domain macro and one stable-14 five-domain advancement macro per ACT arm; report arms separately and do not choose the smallest p-value or largest gain",
+      "strict_protections": "familywise fail-closed safety gate; any official reward regression fails advancement",
+      "per_task_and_process_metrics": "descriptive in the canary; if tested in a later confirmatory run, apply Holm correction within each declared family",
+      "no_optional_stopping": "do not add tasks, repetitions, hypotheses, or outcomes after inspecting A6 results"
+    },
+    "follow_up_evolver_repetitions": {
+      "selected_contrast_only": true,
+      "minimum_samples_per_arm": 6,
+      "evidence_bundle_and_contracts_frozen": true,
+      "every_act_candidate_evaluated": true,
+      "unit_for_discovery_inference": "independent Evolver sample, not task",
+      "interpretation": "sample size is an engineering lower bound; a formal false-ACT-rate design requires a separate power calculation"
+    },
+    "follow_up_worker_repetitions": {
+      "candidate_state": "freeze candidate digest before any confirmatory repetition",
+      "discovery_seed_reusable_as_confirmatory_sample": false,
+      "minimum_independent_paired_blocks": 6,
+      "preferred_paired_blocks_for_formal_planning": 10,
+      "attempts_per_block": 32,
+      "unit_for_primary_inference": "paired repetition-block stable 14-task five-domain macro delta; the all-16 six-domain macro remains descriptive because its sixth domain is a volatile singleton sentinel",
+      "execution": "fresh seed and frozen-candidate draws for every task in every block, with preregistered counterbalanced order and unchanged route/runtime",
+      "exact_sign_flip_resolution_at_six_blocks": "2^6 assignments; minimum attainable two-sided p-value is 0.03125 only under the exchangeable-label sharp null",
+      "extension_rule": "six inconclusive blocks remain inconclusive; an unplanned extension to ten cannot be used as the same confirmatory test"
+    }
+  },
+  "mutation_ablation_plan": {
+    "status": "separate_second_stage_not_run_not_authorized",
+    "separation_rule": "do not vary mutation amplitude, proposal throughput, evidence representation, semantic contract, or evaluator feedback in the same first-round contrast",
+    "prerequisite": "freeze one discovery evidence, contract, and feedback regime after the core R/E/EC localization and any separately triggered A6-F run",
+    "current_core_envelope": {
+      "amplitude_id": "M0",
+      "maximum_component_roles": 3,
+      "instruction": "make the narrowest coherent improvement supported by evidence",
+      "throughput_id": "T1",
+      "candidate_proposals_per_arm": 1,
+      "a6_core_policy": "unchanged"
+    },
+    "measured_local_context": {
+      "old_10iter_run": "only four proposal iterations completed: three systemprompt-only non-empty diffs with 32, 40, and 12 inserted lines, followed by one empty diff; no candidate was kept",
+      "A1": "manual canary, two changed paths, 35 insertions and 3 deletions, one Markdown skill plus agent.yaml registration, no executable Python or new AST symbols",
+      "A2": "one Evolver proposal, three changed paths, 90 insertions, one Markdown skill plus agent.yaml registration and prompt pointer, no executable Python or new AST symbols",
+      "A3": "one Evolver proposal, three changed paths, 71 insertions, one Markdown skill plus agent.yaml registration and prompt pointer, no executable Python or new AST symbols",
+      "A4": "one Evolver proposal, systemprompt only, 68 insertions and 1 deletion, no executable Python or binding change",
+      "A5": "failure-only ACT changed systemprompt and one tool description with 24 insertions and 2 deletions; contrastive arm ABSTAINed with no diff; neither arm added executable Python or bindings",
+      "interpretation": "this is measured evidence that the prior search was narrow and low-throughput for general full-harness discovery, while A1-A5 remain valid mechanism-localization canaries"
+    },
+    "amplitude_levels": {
+      "M0": {
+        "maximum_component_roles": 3,
+        "policy": "current A6 envelope and narrowest coherent change"
+      },
+      "M1": {
+        "maximum_component_roles": 3,
+        "policy": "replace narrowest coherent change with smallest causally complete change; dependency and binding closure count as part of coherence"
+      },
+      "M2": {
+        "maximum_component_roles": 5,
+        "policy": "permit a coupled executable bundle such as tool implementation, tool description, agent binding, middleware, and prompt or skill routing; do not require code when the causal hypothesis is genuinely text-only",
+        "line_cap": "no arbitrary LOC target; record observed files, LOC, AST symbols, component roles, dependencies, and bindings"
+      },
+      "M3": {
+        "maximum_component_roles": "all admissible full-harness roles",
+        "policy": "full admissible mutation surface with the same firewall and admission gates",
+        "availability": "only after a preregistered M2 truncation signal and a new cost authorization"
+      }
+    },
+    "relaxation_triggers": {
+      "replace_narrowest_with_causally_complete": [
+        "the selected mechanism's static dependency graph requires a binding or implementation omitted by a text-only change",
+        "a preflight manipulation check shows that the proposal is prompt-only or empty despite a preregistered executable or routing prediction"
+      ],
+      "relax_max_components_from_3_to_5": [
+        "admission records component_closure_truncated=true for a selected mechanism with more than three necessary dependency or binding roles",
+        "at least two independent Evolver samples select the same greater-than-three-role causal closure",
+        "a repeated false-ACT audit localizes failure to an omitted binding or dependency rather than to an incorrect hypothesis"
+      ],
+      "do_not_relax_for": [
+        "reward failure alone",
+        "more prose or citations",
+        "a desire to imitate a larger external diff without a matching causal object",
+        "mutation breadth without an activation or component-specific prediction"
+      ]
+    },
+    "throughput_levels": {
+      "T1": {
+        "candidate_proposals": 1,
+        "role": "current single-proposal reference"
+      },
+      "T3": {
+        "candidate_proposals": 3,
+        "generation": "freeze all three independent proposals before any candidate score is observed; proposals share evidence but cannot inspect one another",
+        "operator_roles": [
+          "smallest causally complete local repair",
+          "coupled structural or executable change with explicit dependency and binding closure",
+          "recombination or translocation from the frozen train-lineage archive"
+        ]
+      },
+      "T6": {
+        "candidate_proposals": 6,
+        "availability": "only after T3 demonstrates non-duplicate proposal diversity and a nonzero preflight or sentinel admission yield, with a new cost authorization"
+      }
+    },
+    "operator_policy": {
+      "translocation": "allowed from frozen evolution-train candidate ancestry with source and backbone digests recorded",
+      "crossover": "allowed only when two frozen parents have non-overlapping positive target signatures and compatible strict-protection signatures",
+      "parallel_generation": "allowed, but every accepted provider request, candidate digest, and generation role counts toward the same budget",
+      "selection": "never score only the candidate that sounds most promising; report the entire frozen portfolio"
+    },
+    "static_preflight": {
+      "official_scores_consumed": 0,
+      "checks": [
+        "unique non-empty diff digest and duplicate-candidate detection",
+        "changed-file, insertion, deletion, executable-versus-text, component-role, dependency, binding, and AST-symbol inventory",
+        "JSON and YAML schema validation, Python parse and compile, import and NexAU binding resolution",
+        "candidate runtime smoke for every changed executable or binding",
+        "forbidden-path, credential, protected-substring, suspicious-constant, and evaluator-leak scans",
+        "declared mechanism, changed-role, actual-diff, activation-route, target prediction, and protection prediction alignment"
+      ]
+    },
+    "sentinel_stage": {
+      "task_count": 8,
+      "task_ids": [
+        "swap-curve-bootstrap-ois",
+        "zero-coupon-bootstrapping",
+        "earnings-surprise-calculator",
+        "corporate-action-adjustment",
+        "13f-amendment-aware-crowding",
+        "localvol-barrier",
+        "historical-var-data-prep",
+        "momentum-backtest"
+      ],
+      "purpose": "fixed triage over all six repeat-failure targets plus two strict protections; never a headline score or a substitute for the full panel",
+      "pass_gate": [
+        "no infrastructure-invalid result",
+        "no official reward regression on either strict protection",
+        "the preregistered component-specific observable process or activation prediction appears on at least one predicted target"
+      ],
+      "target_reward_gain_required": false,
+      "reuse_in_full_panel_estimate": false
+    },
+    "full_panel_stage": {
+      "task_count": 16,
+      "policy": "evaluate every preflight- and sentinel-passing candidate, up to the frozen portfolio cap; do not evaluate only the best sentinel candidate",
+      "analysis": "report every candidate separately plus portfolio proposal diversity, preflight yield, sentinel yield, full-panel advancement yield, and cost per admitted candidate",
+      "portfolio_candidates_are_independent_task_samples": false,
+      "best_of_n_p_value_allowed": false
+    },
+    "staged_sequence": [
+      "first hold throughput at T1 and compare whether M0 versus M2 creates a real amplitude manipulation; one sample is localization only",
+      "then freeze the causally complete amplitude envelope and compare T1 versus T3 as a separate search-yield experiment",
+      "consider crossover, M3, or T6 only after the corresponding predeclared trigger",
+      "repeat complete portfolios, not selected winners, before any search-yield inference"
+    ],
+    "planning_attempt_counts": {
+      "M0_vs_M2_if_both_candidates_reach_full_panel": "16 shared seed plus 16 sentinel plus 32 full-panel candidate scores equals 64 official scoring attempts",
+      "one_T3_portfolio_if_all_candidates_reach_full_panel": "16 shared seed plus 24 sentinel plus 48 full-panel candidate scores equals 88 official scoring attempts",
+      "interpretation": "sentinel scores are triage-only and are not pooled into the fresh full-panel estimate"
+    }
+  },
+  "stop_rules": [
+    "stop before evidence construction on any split, task, benchmark, image, worker, model, provider, fallback, route, or runtime digest drift",
+    "stop and quarantine on evaluator-firewall leakage, duplicate accepted model requests, missing cost or token records, invalid verifier execution, or unresolved lifecycle residue",
+    "skip A6-F unless its predeclared feedback-sufficiency trigger and every L2 safety preflight hold; never fall through to L3 or L4 feedback",
+    "ABSTAIN is terminal within its arm and keeps that arm's candidate writes locked",
+    "evaluate every admitted ACT candidate once on the frozen 16-task panel, up to three candidate evaluations; never choose only the most promising ACT",
+    "a false-ACT or unsupported selected-mechanism semantic leap stops that candidate lineage regardless of reward",
+    "stop without multi-round evolution if the arm-specific ACT gate, component-specific prediction, practical-effect threshold, or strict-protection gate fails",
+    "do not name a winning arm or make a representation or contract-effect claim from one Evolver sample per arm",
+    "do not mix the feedback or mutation ablations into the R/E/EC core and do not select only the best-looking portfolio candidate",
+    "freeze an advancing candidate before independent repetitions; do not tune it on repetition outcomes"
+  ],
+  "cost_plan": {
+    "basis": "linear extrapolation from measured A5 worker and Evolver runs for one shared 16-task seed, three Evolver arms, and the worst case in which all three arms ACT and each candidate is evaluated on 16 tasks",
+    "a5_worker_pair_cost_usd": 0.2818832856,
+    "a5_worker_pair_tokens": 5973146,
+    "shared_seed_official_scoring_attempts": 16,
+    "maximum_candidate_official_scoring_attempts": 48,
+    "maximum_total_official_scoring_attempts": 64,
+    "evolver_samples": 3,
+    "central_shared_seed_cost_usd": 0.2163,
+    "central_each_candidate_evaluation_cost_usd": 0.1937,
+    "central_three_evolver_cost_usd": 0.18,
+    "central_worst_case_first_round_cost_usd": 0.98,
+    "planning_cap_first_round_usd": 1.5,
+    "central_worst_case_provider_requests": 920,
+    "planning_cap_provider_requests": 1000,
+    "central_worst_case_tokens": 26000000,
+    "planning_cap_tokens": 35000000,
+    "abstaining_arms_reduce_candidate_attempts_and_cost": true,
+    "optional_A6_F_increment_if_triggered": {
+      "additional_evolver_samples": 1,
+      "maximum_additional_candidate_official_scoring_attempts": 16,
+      "maximum_sequential_total_official_scoring_attempts": 80,
+      "central_incremental_cost_usd": 0.2537,
+      "central_expanded_total_cost_usd": 1.2337,
+      "planning_cap_expanded_total_usd": 1.9,
+      "central_expanded_provider_requests": 1160,
+      "planning_cap_expanded_provider_requests": 1250,
+      "central_expanded_tokens": 32000000,
+      "planning_cap_expanded_tokens": 42000000,
+      "basis": "one additional approximately USD 0.06 Evolver sample plus one 16-task candidate evaluation at the A5-derived linear rate; skip or ABSTAIN reduces the realized total"
+    },
+    "mutation_ablation_costs": "not included in the A6 core or optional A6-F cap and require a separately frozen plan and authorization",
+    "central_six_block_follow_up_worker_cost_usd": 2.46,
+    "planning_cap_six_block_follow_up_usd": 3.2,
+    "cost_is_estimate_not_authorization_or_measurement": true
+  }
+}

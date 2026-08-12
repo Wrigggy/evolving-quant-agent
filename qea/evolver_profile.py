@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import shutil
+import stat
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -87,6 +88,26 @@ def _copy_source(source: Path, destination: Path) -> None:
     )
 
 
+def _prepare_materialized_copy(root: Path) -> Path:
+    """Normalize only the private run-root copy to owner-only writable modes."""
+
+    paths = (root, *root.rglob("*"))
+    for path in paths:
+        if path.is_symlink():
+            raise ValueError("materialized evolver profile contains a symlink")
+        if path.is_dir():
+            path.chmod(0o700)
+        elif path.is_file():
+            owner_executable = bool(path.stat().st_mode & stat.S_IXUSR)
+            path.chmod(0o700 if owner_executable else 0o600)
+        else:
+            raise ValueError("materialized evolver profile entry is not regular")
+    agent_path = root / "agent.yaml"
+    if not agent_path.is_file():
+        raise ValueError("source evolver has no agent.yaml")
+    return agent_path
+
+
 def _configure_reasoning(agent_path: Path, effort: str) -> None:
     text = agent_path.read_text(encoding="utf-8")
     if text.count("  model: ${env.LLM_MODEL}\n") != 1:
@@ -140,9 +161,7 @@ def materialize_evolver_profile(
     temporary = temporary_parent / "evolver"
     try:
         _copy_source(source_path, temporary)
-        agent_path = temporary / "agent.yaml"
-        if not agent_path.is_file():
-            raise ValueError("source evolver has no agent.yaml")
+        agent_path = _prepare_materialized_copy(temporary)
         _configure_reasoning(agent_path, reasoning_effort)
         profile_payload = {
             "schema_version": 1,
@@ -151,10 +170,12 @@ def materialize_evolver_profile(
             "reasoning_effort": reasoning_effort,
             "source_sha256": source_sha256,
         }
-        (temporary / _PROFILE_FILE).write_text(
+        profile_path = temporary / _PROFILE_FILE
+        profile_path.write_text(
             json.dumps(profile_payload, sort_keys=True, indent=2) + "\n",
             encoding="utf-8",
         )
+        profile_path.chmod(0o600)
         materialized_sha256 = _tree_digest(temporary)
         if destination_path.exists():
             if _tree_digest(destination_path) != materialized_sha256:

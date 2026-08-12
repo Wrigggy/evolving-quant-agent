@@ -30,6 +30,9 @@ from .e2b_protocol import E2BSandboxFactory, SDKSandboxFactory
 _REMOTE_RUNNER = Path(__file__).with_name("remote_evolver.py")
 _RUNTIME_BRIDGE = Path(__file__).parents[1] / "runtime_bridge.py"
 _DISCOVERY_METRICS = Path(__file__).parents[1] / "evolver_discovery.py"
+_PUBLIC_CONTRACT_EVIDENCE = (
+    Path(__file__).parents[1] / "public_contract_evidence.py"
+)
 
 
 class E2BEvolverError(RuntimeError):
@@ -302,6 +305,11 @@ class E2BFullHarnessProposer:
                     sandbox,
                     "/qea/evolver_discovery.py",
                     _DISCOVERY_METRICS.read_bytes(),
+                )
+                _write_sandbox_file(
+                    sandbox,
+                    "/qea/public_contract_evidence.py",
+                    _PUBLIC_CONTRACT_EVIDENCE.read_bytes(),
                 )
                 _write_sandbox_file(
                     sandbox, "/qea/diagnosis.txt", diagnosis_path.read_bytes()

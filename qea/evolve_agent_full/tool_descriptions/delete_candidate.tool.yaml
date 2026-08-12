@@ -1,0 +1,9 @@
+type: tool
+name: delete_candidate
+description: Delete one declared regular file below the candidate workspace; required root files, evidence, and framework references cannot be deleted.
+input_schema:
+  type: object
+  properties:
+    file_path: {type: string, description: "Safe path to one candidate file."}
+  required: [file_path]
+  additionalProperties: false

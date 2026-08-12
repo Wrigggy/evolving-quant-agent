@@ -1,0 +1,52 @@
+type: tool
+name: probe_contract_semantics
+description: Link one exact indexed public-contract clause to a typed observation of one same-task artifact field/shape/value type and one same-task worker trace phase. Expectations are pre-registered as machine-checkable predicates for competing hypotheses. The result grounds a semantic comparison but does not certify causal truth.
+input_schema:
+  type: object
+  properties:
+    probe_id:
+      type: string
+      pattern: "^[a-z][a-z0-9_-]{0,63}$"
+    question: {type: string}
+    hypothesis_expectations:
+      type: object
+      minProperties: 2
+      additionalProperties:
+        type: object
+        minProperties: 1
+        properties:
+          artifact_exists: {type: boolean}
+          artifact_value_type: {type: string}
+          artifact_shape: {type: object}
+          trace_phase_present: {type: boolean}
+        additionalProperties: false
+    task_id: {type: string}
+    clause_id:
+      type: string
+      description: Exact clause ID from contracts/<task_id>/clauses.json.
+    artifact_path:
+      type: string
+      description: Exact evidence path under tasks/<task_id>/artifacts/ and named by artifact_manifest.json.
+    artifact_selector:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [json_pointer, csv_column, csv_table, file_shape]
+        value:
+          type: string
+          description: RFC 6901 pointer, exact CSV column, $table, or $file.
+      required: [kind, value]
+      additionalProperties: false
+    trace_phase:
+      type: string
+      enum: [task_interpretation, input_inventory, artifact_construction, validation, output_inspection, completion]
+    semantic_relation:
+      type: string
+      enum: [supports, contradicts, insufficient]
+      description: Explicit relation of the observed artifact/trace facts to the cited public clause. An insufficient relation may support ABSTAIN but cannot ground ACT.
+    comparison_claim:
+      type: string
+      description: Bounded inference relating the clause, artifact observation, and trace phase; it remains falsifiable and is not certified by the tool.
+  required: [probe_id, question, hypothesis_expectations, task_id, clause_id, artifact_path, artifact_selector, trace_phase, semantic_relation, comparison_claim]
+  additionalProperties: false

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import math
 from dataclasses import asdict
@@ -534,6 +535,43 @@ def _audit_record(*, identity: str, cost: float, input_tokens: int) -> dict:
     }
 
 
+def _audit_v2_record(
+    *,
+    logical_identity: str,
+    retry_index: int,
+    rate_limited: bool,
+) -> dict:
+    from qea.model_proxy import model_proxy_wire_request_identity
+
+    record = _audit_record(
+        identity="f", cost=0.04, input_tokens=40
+    )
+    record.update(
+        {
+            "schema_version": 2,
+            "logical_request_identity_sha256": logical_identity,
+            "retry_index": retry_index,
+            "request_identity_sha256": model_proxy_wire_request_identity(
+                logical_identity, retry_index
+            ),
+        }
+    )
+    if rate_limited:
+        record.update(
+            {
+                "request_state": "not_accepted",
+                "upstream_status_code": 429,
+                "provider_request_id": None,
+                "input_tokens": None,
+                "output_tokens": None,
+                "total_tokens": None,
+                "provider_cost_usd": None,
+                "failure_class": "rate_limited",
+            }
+        )
+    return record
+
+
 def _cost_fixture(run_dir: Path) -> tuple[Path, Path]:
     from qea.evaluation import TaskAttempt
 
@@ -802,6 +840,104 @@ def test_fixed_checkpoint_cost_audit_reuses_canonical_validation(tmp_path) -> No
     assert audit["split"] == "baseline_primary"
 
 
+def test_fixed_cost_audit_counts_mixed_v1_success_and_v2_retry_group(tmp_path):
+    from qea.evaluation import TaskAttempt
+    from qea.qfbench_baseline import audit_fixed_checkpoint_proxy_costs
+
+    attempt = TaskAttempt.create(
+        run_id="epoch-canary",
+        benchmark_commit=COMMIT,
+        task_id="risk-task",
+        split="mechanism-pilot",
+        checkpoint="seed-evidence",
+        worker_digest="e" * 64,
+    )
+    attempt_dir = tmp_path / "attempts" / attempt.attempt_id
+    attempt_dir.mkdir(parents=True)
+    (attempt_dir / "attempt.json").write_text(json.dumps(asdict(attempt)))
+    score = OfficialTaskScore(
+        task_id="risk-task", domain="risk_credit", reward=0.5
+    )
+    (attempt_dir / "completed-score.json").write_text(json.dumps(asdict(score)))
+    logical = "b" * 64
+    records = (
+        _audit_record(identity="a", cost=0.01, input_tokens=10),
+        _audit_v2_record(
+            logical_identity=logical, retry_index=0, rate_limited=True
+        ),
+        _audit_v2_record(
+            logical_identity=logical, retry_index=1, rate_limited=False
+        ),
+    )
+    (attempt_dir / "proxy-audit.jsonl").write_text(
+        "".join(json.dumps(record) + "\n" for record in records)
+    )
+
+    audit = audit_fixed_checkpoint_proxy_costs(
+        tmp_path,
+        expected_attempts=1,
+        checkpoint="seed-evidence",
+        split="mechanism-pilot",
+    )
+
+    assert audit["request_count"] == 3
+    assert audit["completed_request_count"] == 2
+    assert audit["logical_request_count"] == 2
+    assert audit["rate_limited_retry_count"] == 1
+    assert audit["other_nonaccepted_request_count"] == 0
+    assert audit["input_tokens"] == 50
+    assert audit["total_tokens"] == 60
+    assert audit["provider_cost_usd"] == "0.05"
+    assert audit["cost_complete"] is True
+    assert audit["provider_cost_is_lower_bound"] is False
+
+
+def test_fixed_cost_audit_rejects_two_completed_rows_for_one_v2_logical_call(
+    tmp_path,
+):
+    from qea.evaluation import TaskAttempt
+    from qea.qfbench_baseline import (
+        BaselineConfigError,
+        audit_fixed_checkpoint_proxy_costs,
+    )
+
+    attempt = TaskAttempt.create(
+        run_id="epoch-canary",
+        benchmark_commit=COMMIT,
+        task_id="risk-task",
+        split="mechanism-pilot",
+        checkpoint="seed-evidence",
+        worker_digest="e" * 64,
+    )
+    attempt_dir = tmp_path / "attempts" / attempt.attempt_id
+    attempt_dir.mkdir(parents=True)
+    (attempt_dir / "attempt.json").write_text(json.dumps(asdict(attempt)))
+    score = OfficialTaskScore(
+        task_id="risk-task", domain="risk_credit", reward=0.5
+    )
+    (attempt_dir / "completed-score.json").write_text(json.dumps(asdict(score)))
+    logical = "b" * 64
+    records = (
+        _audit_v2_record(
+            logical_identity=logical, retry_index=0, rate_limited=False
+        ),
+        _audit_v2_record(
+            logical_identity=logical, retry_index=1, rate_limited=False
+        ),
+    )
+    (attempt_dir / "proxy-audit.jsonl").write_text(
+        "".join(json.dumps(record) + "\n" for record in records)
+    )
+
+    with pytest.raises(BaselineConfigError, match="invalid completed retry group"):
+        audit_fixed_checkpoint_proxy_costs(
+            tmp_path,
+            expected_attempts=1,
+            checkpoint="seed-evidence",
+            split="mechanism-pilot",
+        )
+
+
 def test_cost_audit_allows_same_request_identity_in_distinct_repetitions(
     tmp_path,
 ) -> None:
@@ -928,6 +1064,125 @@ def test_cost_audit_reports_timeout_ledger_as_explicit_lower_bound(tmp_path) -> 
     slow = audit["by_repetition"]["1"]["primary"]["tasks"]["slow-task"]
     assert slow["attempt_count"] == 1
     assert slow["request_count"] == 0
+
+
+def test_cost_audit_preserves_validated_unsealed_timeout_prefix_as_lower_bound(
+    tmp_path,
+) -> None:
+    from qea.qfbench_baseline import audit_baseline_proxy_costs
+
+    _cost_fixture(tmp_path)
+    timeout_dir = _add_timeout_cost_attempt(tmp_path)
+    records = (
+        _audit_record(identity="d", cost=0.04, input_tokens=40),
+        _audit_record(identity="e", cost=0.05, input_tokens=50),
+    )
+    payload = ("\n".join(json.dumps(record) for record in records) + "\n").encode()
+    unsealed = timeout_dir / "proxy-audit.unsealed.jsonl"
+    unsealed.write_bytes(payload)
+    (timeout_dir / "proxy-audit.quarantined.json").write_text(json.dumps({
+        "schema_version": 2,
+        "request_state": "quarantined",
+        "reason": "audit_download_or_validation_failed",
+        "accounting_complete": False,
+        "unsealed_audit_sha256": hashlib.sha256(payload).hexdigest(),
+        "unsealed_record_count": 2,
+    }))
+
+    audit = audit_baseline_proxy_costs(tmp_path, expected_attempts=3)
+
+    assert audit["attempt_count"] == 3
+    assert audit["request_count"] == 5
+    assert audit["completed_request_count"] == 5
+    assert audit["input_tokens"] == 150
+    assert audit["output_tokens"] == 25
+    assert audit["total_tokens"] == 175
+    assert audit["provider_cost_usd"] == "0.15"
+    assert audit["cost_complete"] is False
+    assert audit["provider_cost_is_lower_bound"] is True
+    assert audit["unreconciled_attempt_count"] == 1
+    slow = audit["by_repetition"]["1"]["primary"]["tasks"]["slow-task"]
+    assert slow["request_count"] == 2
+    assert slow["provider_cost_usd"] == "0.09"
+
+
+def test_cost_audit_keeps_empty_unsealed_timeout_as_unreconciled_lower_bound(
+    tmp_path,
+) -> None:
+    from qea.qfbench_baseline import audit_baseline_proxy_costs
+
+    _cost_fixture(tmp_path)
+    timeout_dir = _add_timeout_cost_attempt(tmp_path)
+    payload = b""
+    (timeout_dir / "proxy-audit.unsealed.jsonl").write_bytes(payload)
+    (timeout_dir / "proxy-audit.quarantined.json").write_text(json.dumps({
+        "schema_version": 2,
+        "request_state": "quarantined",
+        "reason": "audit_download_or_validation_failed",
+        "accounting_complete": False,
+        "unsealed_audit_sha256": hashlib.sha256(payload).hexdigest(),
+        "unsealed_record_count": 0,
+    }))
+
+    audit = audit_baseline_proxy_costs(tmp_path, expected_attempts=3)
+
+    assert audit["attempt_count"] == 3
+    assert audit["request_count"] == 3
+    assert audit["cost_complete"] is False
+    assert audit["provider_cost_is_lower_bound"] is True
+    assert audit["unreconciled_attempt_count"] == 1
+    assert audit["unreconciled_attempts"][0]["attempt_id"] == timeout_dir.name
+    slow = audit["by_repetition"]["1"]["primary"]["tasks"]["slow-task"]
+    assert slow["attempt_count"] == 1
+    assert slow["request_count"] == 0
+
+
+def test_cost_audit_rejects_nonempty_unsealed_ledger_bound_to_zero_count(
+    tmp_path,
+) -> None:
+    from qea.qfbench_baseline import BaselineConfigError, audit_baseline_proxy_costs
+
+    _cost_fixture(tmp_path)
+    timeout_dir = _add_timeout_cost_attempt(tmp_path)
+    payload = (
+        json.dumps(_audit_record(identity="d", cost=0.04, input_tokens=40))
+        + "\n"
+    ).encode()
+    (timeout_dir / "proxy-audit.unsealed.jsonl").write_bytes(payload)
+    (timeout_dir / "proxy-audit.quarantined.json").write_text(json.dumps({
+        "schema_version": 2,
+        "request_state": "quarantined",
+        "reason": "audit_download_or_validation_failed",
+        "accounting_complete": False,
+        "unsealed_audit_sha256": hashlib.sha256(payload).hexdigest(),
+        "unsealed_record_count": 0,
+    }))
+
+    with pytest.raises(BaselineConfigError, match="zero-count.*nonempty"):
+        audit_baseline_proxy_costs(tmp_path, expected_attempts=3)
+
+
+def test_cost_audit_rejects_unsealed_timeout_prefix_digest_drift(tmp_path) -> None:
+    from qea.qfbench_baseline import BaselineConfigError, audit_baseline_proxy_costs
+
+    _cost_fixture(tmp_path)
+    timeout_dir = _add_timeout_cost_attempt(tmp_path)
+    payload = (
+        json.dumps(_audit_record(identity="d", cost=0.04, input_tokens=40))
+        + "\n"
+    ).encode()
+    (timeout_dir / "proxy-audit.unsealed.jsonl").write_bytes(payload)
+    (timeout_dir / "proxy-audit.quarantined.json").write_text(json.dumps({
+        "schema_version": 2,
+        "request_state": "quarantined",
+        "reason": "audit_download_or_validation_failed",
+        "accounting_complete": False,
+        "unsealed_audit_sha256": "0" * 64,
+        "unsealed_record_count": 1,
+    }))
+
+    with pytest.raises(BaselineConfigError, match="digest differs"):
+        audit_baseline_proxy_costs(tmp_path, expected_attempts=3)
 
 
 @pytest.mark.parametrize(

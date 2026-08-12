@@ -10,6 +10,14 @@ from .qfbench import (
     load_qfbench_snapshot,
     materialize_qfbench_snapshot,
 )
+from .quantcodeeval import (
+    QuantCodeEvalConfigError,
+    QuantCodeEvalSnapshot,
+    QuantCodeEvalSplit,
+    QuantCodeEvalTask,
+    load_quantcodeeval_snapshot,
+    materialize_quantcodeeval_role_snapshot,
+)
 
 __all__ = [
     "QFBenchConfigError",
@@ -20,4 +28,10 @@ __all__ = [
     "load_qfbench_evolution_snapshot",
     "load_qfbench_snapshot",
     "materialize_qfbench_snapshot",
+    "QuantCodeEvalConfigError",
+    "QuantCodeEvalSnapshot",
+    "QuantCodeEvalSplit",
+    "QuantCodeEvalTask",
+    "load_quantcodeeval_snapshot",
+    "materialize_quantcodeeval_role_snapshot",
 ]

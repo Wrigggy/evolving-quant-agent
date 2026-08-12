@@ -445,6 +445,7 @@ def test_evolver_uses_atomic_combined_lease_proxy_only_spec_and_structured_argv(
     assert set(backend.uploads) == {
         "/qea/evolver-input.tar",
         "/qea/evolver_discovery.py",
+        "/qea/public_contract_evidence.py",
         "/qea/remote_evolver.py",
         "/qea/runtime_bridge.py",
         "/qea/diagnosis.txt",
@@ -482,6 +483,45 @@ def test_evolver_validates_candidate_evidence_lock_lifecycle_and_result_order(tm
     assert manifest["network_id"] == "network-1"
     assert manifest["candidate_digest"] == result.candidate_digest
     assert events.index("proxy:close") < events.index("lease:released")
+
+
+def test_remote_evolver_component_smoke_log_is_ordered_and_bounded(tmp_path):
+    from qea.executors.remote_evolver import _component_tests
+
+    rows = [
+        {
+            "schema_version": 1,
+            "test_index": 1,
+            "component": "tools",
+            "operation": "call",
+            "target": "tools.estimator:estimate",
+            "status": "failed",
+            "exit_code": 1,
+        },
+        {
+            "schema_version": 1,
+            "test_index": 2,
+            "component": "tools",
+            "operation": "call",
+            "target": "tools.estimator:estimate",
+            "status": "passed",
+            "exit_code": 0,
+        },
+    ]
+    (tmp_path / "component-tests.jsonl").write_text(
+        "\n".join(json.dumps(value) for value in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    assert _component_tests(tmp_path) == rows
+
+    rows[1]["test_index"] = 3
+    (tmp_path / "component-tests.jsonl").write_text(
+        "\n".join(json.dumps(value) for value in rows) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="order"):
+        _component_tests(tmp_path)
 
 
 def test_completed_evolver_resume_binds_all_content_identity_fields(tmp_path):

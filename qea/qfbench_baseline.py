@@ -35,6 +35,7 @@ from .qfbench_scheduler_epochs import (
     sampling_identity,
     validate_scheduler_epochs,
 )
+from .model_proxy import model_proxy_wire_request_identity
 from .worker_identity import WorkerIdentityError, hash_worker_directory
 
 
@@ -60,6 +61,10 @@ _PROXY_AUDIT_KEYS = frozenset({
     "provider_cost_usd",
     "failure_class",
 })
+_PROXY_AUDIT_V2_KEYS = _PROXY_AUDIT_KEYS | frozenset(
+    {"logical_request_identity_sha256", "retry_index"}
+)
+_RATE_LIMITED = object()
 _T_CRITICAL_95 = {
     2: 12.706204736432095,
     3: 4.302652729696142,
@@ -409,11 +414,28 @@ def _empty_cost_group() -> dict:
         "output_tokens": 0,
         "total_tokens": 0,
         "provider_cost_usd": Decimal("0"),
+        "_v2_seen": False,
+        "_logical_request_identities": set(),
+        "_rate_limited_retry_count": 0,
+        "_other_nonaccepted_request_count": 0,
     }
 
 
-def _add_cost(group: dict, record: Mapping, cost: Decimal | None) -> None:
+def _add_cost(group: dict, record: Mapping, cost: Decimal | object | None) -> None:
     group["request_count"] += 1
+    group["_logical_request_identities"].add(
+        record[
+            "logical_request_identity_sha256"
+            if record.get("schema_version") == 2
+            else "request_identity_sha256"
+        ]
+    )
+    if record.get("schema_version") == 2:
+        group["_v2_seen"] = True
+        if cost is _RATE_LIMITED:
+            group["_rate_limited_retry_count"] += 1
+        elif record["request_state"] == "not_accepted":
+            group["_other_nonaccepted_request_count"] += 1
     if record["request_state"] == "completed":
         group["completed_request_count"] += 1
         if cost is None:
@@ -428,7 +450,22 @@ def _cost_json(group: dict, *, tasks: dict | None = None) -> dict:
     payload = {
         key: (str(value) if key == "provider_cost_usd" else value)
         for key, value in group.items()
+        if not key.startswith("_")
     }
+    if group.get("_v2_seen"):
+        payload.update(
+            {
+                "logical_request_count": len(
+                    group["_logical_request_identities"]
+                ),
+                "rate_limited_retry_count": group[
+                    "_rate_limited_retry_count"
+                ],
+                "other_nonaccepted_request_count": group[
+                    "_other_nonaccepted_request_count"
+                ],
+            }
+        )
     if tasks is not None:
         payload["tasks"] = {
             task_id: _cost_json(task_group)
@@ -458,12 +495,29 @@ def _read_audit_records(path: Path) -> tuple[dict, ...]:
 
 def _validated_completed_cost(
     record: Mapping, *, source: Path
-) -> Decimal | None:
-    if set(record) != _PROXY_AUDIT_KEYS or record.get("schema_version") != 1:
+) -> Decimal | object | None:
+    schema_version = record.get("schema_version")
+    expected_keys = (
+        _PROXY_AUDIT_KEYS if schema_version == 1 else _PROXY_AUDIT_V2_KEYS
+    )
+    if set(record) != expected_keys or schema_version not in {1, 2}:
         raise BaselineConfigError(f"cost audit invalid record schema: {source}")
     identity = record.get("request_identity_sha256")
     if not isinstance(identity, str) or not _SHA256_RE.fullmatch(identity):
         raise BaselineConfigError(f"cost audit invalid request identity: {source}")
+    if schema_version == 2:
+        logical = record.get("logical_request_identity_sha256")
+        retry_index = record.get("retry_index")
+        if (
+            not isinstance(logical, str)
+            or not _SHA256_RE.fullmatch(logical)
+            or type(retry_index) is not int
+            or not 0 <= retry_index < 3
+            or identity != model_proxy_wire_request_identity(logical, retry_index)
+        ):
+            raise BaselineConfigError(
+                f"cost audit invalid retry identity: {source}"
+            )
     state = record.get("request_state")
     status = record.get("upstream_status_code")
     if status == 200 and state != "completed":
@@ -472,6 +526,25 @@ def _validated_completed_cost(
         )
     if state == "quarantined":
         raise BaselineConfigError(f"cost audit has ambiguous accepted request: {source}")
+    if (
+        schema_version == 2
+        and state == "not_accepted"
+        and record.get("failure_class") == "rate_limited"
+    ):
+        if status != 429 or any(
+            record.get(name) is not None
+            for name in (
+                "provider_request_id",
+                "input_tokens",
+                "output_tokens",
+                "total_tokens",
+                "provider_cost_usd",
+            )
+        ):
+            raise BaselineConfigError(
+                f"cost audit invalid rate-limit accounting: {source}"
+            )
+        return _RATE_LIMITED
     if state == "not_accepted":
         if status is not None or any(
             record.get(name) is not None
@@ -525,6 +598,52 @@ def _validated_completed_cost(
     return cost
 
 
+def _validate_v2_retry_groups(
+    records: tuple[dict, ...], *, source: Path
+) -> None:
+    groups: dict[str, list[Mapping]] = {}
+    for record in records:
+        if record.get("schema_version") != 2:
+            continue
+        groups.setdefault(
+            str(record.get("logical_request_identity_sha256")), []
+        ).append(record)
+    for group in groups.values():
+        ordered = sorted(group, key=lambda item: int(item.get("retry_index", -1)))
+        if [item.get("retry_index") for item in ordered] != list(range(len(ordered))):
+            raise BaselineConfigError(
+                f"cost audit retry indexes are not contiguous: {source}"
+            )
+        rate_limited = [
+            item
+            for item in ordered
+            if item.get("request_state") == "not_accepted"
+            and item.get("failure_class") == "rate_limited"
+        ]
+        completed = [
+            item for item in ordered if item.get("request_state") == "completed"
+        ]
+        if rate_limited and (
+            ordered[:-1] != rate_limited
+            or ordered[-1].get("request_state") != "completed"
+            or ordered[-1].get("failure_class") is not None
+            or ordered[-1].get("upstream_status_code") != 200
+        ):
+            raise BaselineConfigError(
+                f"cost audit incomplete rate-limit retry group: {source}"
+            )
+        if not rate_limited and completed and not (
+            len(ordered) == 1
+            and len(completed) == 1
+            and completed[0].get("retry_index") == 0
+            and completed[0].get("failure_class") is None
+            and completed[0].get("upstream_status_code") == 200
+        ):
+            raise BaselineConfigError(
+                f"cost audit invalid completed retry group: {source}"
+            )
+
+
 def validate_timeout_quarantine(
     score: Mapping,
     marker: Mapping,
@@ -556,12 +675,32 @@ def validate_timeout_quarantine(
         raise BaselineConfigError(
             f"cost audit missing ledger is not bound to a timeout score: {source}"
         )
-    expected = {
+    legacy = {
         "schema_version": 1,
         "request_state": "quarantined",
         "reason": "audit_download_or_validation_failed",
     }
-    if marker != expected:
+    enhanced_keys = {
+        "schema_version",
+        "request_state",
+        "reason",
+        "accounting_complete",
+        "unsealed_audit_sha256",
+        "unsealed_record_count",
+    }
+    enhanced = (
+        set(marker) == enhanced_keys
+        and marker.get("schema_version") == 2
+        and marker.get("request_state") == "quarantined"
+        and marker.get("reason") == "audit_download_or_validation_failed"
+        and marker.get("accounting_complete") is False
+        and isinstance(marker.get("unsealed_audit_sha256"), str)
+        and _SHA256_RE.fullmatch(str(marker["unsealed_audit_sha256"]))
+        is not None
+        and type(marker.get("unsealed_record_count")) is int
+        and 0 <= int(marker["unsealed_record_count"]) <= 10_000
+    )
+    if marker != legacy and not enhanced:
         raise BaselineConfigError(
             f"cost audit unsupported quarantine marker: {source}"
         )
@@ -573,7 +712,7 @@ def _validated_timeout_quarantine(
     marker_path: Path,
     *,
     source: Path,
-) -> str:
+) -> tuple[str, tuple[dict, ...] | None]:
     try:
         marker = json.loads(marker_path.read_text())
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -584,7 +723,44 @@ def _validated_timeout_quarantine(
         raise BaselineConfigError(
             f"cost audit missing or malformed quarantine marker: {source}"
         )
-    return validate_timeout_quarantine(score, marker, source=source)
+    reason = validate_timeout_quarantine(score, marker, source=source)
+    unsealed_path = marker_path.with_name("proxy-audit.unsealed.jsonl")
+    if marker.get("schema_version") == 1:
+        if unsealed_path.exists() or unsealed_path.is_symlink():
+            raise BaselineConfigError(
+                f"cost audit legacy quarantine has an unbound ledger: {source}"
+            )
+        return reason, None
+    if unsealed_path.is_symlink() or not unsealed_path.is_file():
+        raise BaselineConfigError(
+            f"cost audit unsealed ledger is unavailable: {source}"
+        )
+    try:
+        payload = unsealed_path.read_bytes()
+    except OSError as exc:
+        raise BaselineConfigError(
+            f"cost audit unsealed ledger is unavailable: {source}"
+        ) from exc
+    if hashlib.sha256(payload).hexdigest() != marker.get(
+        "unsealed_audit_sha256"
+    ):
+        raise BaselineConfigError(
+            f"cost audit unsealed ledger digest differs: {source}"
+        )
+    expected_records = int(marker["unsealed_record_count"])
+    if expected_records == 0:
+        if payload != b"":
+            raise BaselineConfigError(
+                f"cost audit zero-count unsealed ledger is nonempty: {source}"
+            )
+        records = ()
+    else:
+        records = _read_audit_records(unsealed_path)
+    if len(records) != expected_records:
+        raise BaselineConfigError(
+            f"cost audit unsealed ledger count differs: {source}"
+        )
+    return reason, records
 
 
 def audit_baseline_proxy_costs(
@@ -592,14 +768,29 @@ def audit_baseline_proxy_costs(
     *,
     expected_attempts: int,
     _fixed_checkpoint: str | None = None,
+    _fixed_checkpoints: tuple[str, ...] | None = None,
     _fixed_split: str | None = None,
 ) -> dict:
     """Strictly reconcile safe proxy ledgers against scored baseline attempts."""
 
     if isinstance(expected_attempts, bool) or expected_attempts < 1:
         raise BaselineConfigError("cost audit expected_attempts must be positive")
-    if (_fixed_checkpoint is None) != (_fixed_split is None):
+    if _fixed_checkpoint is not None and _fixed_checkpoints is not None:
+        raise BaselineConfigError("cost audit fixed identity is ambiguous")
+    fixed_checkpoints = (
+        (_fixed_checkpoint,) if _fixed_checkpoint is not None else _fixed_checkpoints
+    )
+    if (fixed_checkpoints is None) != (_fixed_split is None):
         raise BaselineConfigError("cost audit fixed identity is incomplete")
+    if fixed_checkpoints is not None and (
+        not fixed_checkpoints
+        or len(fixed_checkpoints) != len(set(fixed_checkpoints))
+        or any(
+            not isinstance(checkpoint, str) or not checkpoint.strip()
+            for checkpoint in fixed_checkpoints
+        )
+    ):
+        raise BaselineConfigError("cost audit fixed checkpoints are invalid")
     root = Path(run_dir).resolve()
     attempt_paths = tuple(sorted((root / "attempts").glob("*/attempt.json")))
     attempts: dict[str, tuple[Path, dict, TaskAttempt]] = {}
@@ -715,16 +906,20 @@ def audit_baseline_proxy_costs(
             or (not is_superseded and score.get("task_id") != task_id)
         ):
             raise BaselineConfigError(f"cost audit score identity mismatch: {attempt_dir}")
-        if _fixed_checkpoint is not None:
+        if fixed_checkpoints is not None:
             if (
-                logical_attempt.checkpoint != _fixed_checkpoint
+                logical_attempt.checkpoint not in fixed_checkpoints
                 or logical_attempt.split != _fixed_split
             ):
                 raise BaselineConfigError(
                     f"cost audit fixed checkpoint/split mismatch: {attempt_dir}"
                 )
             repetition = "fixed"
-            panel = "fixed"
+            panel = (
+                "fixed"
+                if len(fixed_checkpoints) == 1
+                else logical_attempt.checkpoint
+            )
         else:
             match = _BASELINE_CHECKPOINT_RE.fullmatch(
                 logical_attempt.checkpoint
@@ -751,16 +946,22 @@ def audit_baseline_proxy_costs(
             task_group["attempt_count"] += 1
         audit_path = attempt_dir / "proxy-audit.jsonl"
         quarantine_path = attempt_dir / "proxy-audit.quarantined.json"
+        unsealed_path = attempt_dir / "proxy-audit.unsealed.jsonl"
         if audit_path.is_file() and quarantine_path.exists():
             raise BaselineConfigError(
                 f"cost audit has both canonical and quarantined ledgers: {attempt_dir}"
             )
+        if audit_path.is_file() and unsealed_path.exists():
+            raise BaselineConfigError(
+                f"cost audit has both canonical and unsealed ledgers: {attempt_dir}"
+            )
+        audit_records: tuple[dict, ...]
         if not audit_path.is_file():
             if is_superseded:
                 raise BaselineConfigError(
                     f"cost audit superseded attempt is missing its ledger: {attempt_dir}"
                 )
-            reason = _validated_timeout_quarantine(
+            reason, unsealed_records = _validated_timeout_quarantine(
                 score,
                 quarantine_path,
                 source=attempt_dir,
@@ -774,11 +975,15 @@ def audit_baseline_proxy_costs(
             if repetition != "fixed":
                 unreconciled_attempt.update(
                     {"panel": panel, "repetition": int(repetition)}
-                )
+            )
             unreconciled_attempts.append(unreconciled_attempt)
-            continue
+            if unsealed_records is None:
+                continue
+            audit_records = unsealed_records
+        else:
+            audit_records = _read_audit_records(audit_path)
+        _validate_v2_retry_groups(audit_records, source=attempt_dir)
         seen_request_identities: set[str] = set()
-        audit_records = _read_audit_records(audit_path)
         for record_index, record in enumerate(audit_records):
             if is_superseded and record.get("request_state") == "quarantined":
                 manifest = superseded[attempt_id]
@@ -884,6 +1089,39 @@ def audit_fixed_checkpoint_proxy_costs(
     )
     payload.pop("by_repetition", None)
     payload["checkpoint"] = checkpoint
+    payload["split"] = split
+    return payload
+
+
+def audit_fixed_checkpoints_proxy_costs(
+    run_dir: str | Path,
+    *,
+    expected_attempts: int,
+    checkpoints: Iterable[str],
+    split: str,
+) -> dict:
+    """Run one canonical cost audit across exact component checkpoints."""
+
+    normalized = tuple(checkpoints)
+    if (
+        not normalized
+        or len(normalized) != len(set(normalized))
+        or any(
+            not isinstance(checkpoint, str) or not checkpoint.strip()
+            for checkpoint in normalized
+        )
+    ):
+        raise BaselineConfigError("cost audit fixed checkpoints are invalid")
+    if not isinstance(split, str) or not split.strip():
+        raise BaselineConfigError("cost audit fixed split must be non-empty")
+    payload = audit_baseline_proxy_costs(
+        run_dir,
+        expected_attempts=expected_attempts,
+        _fixed_checkpoints=normalized,
+        _fixed_split=split,
+    )
+    payload.pop("by_repetition", None)
+    payload["checkpoints"] = list(normalized)
     payload["split"] = split
     return payload
 

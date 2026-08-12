@@ -1,0 +1,222 @@
+{
+  "baseline": {
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "provider": "deepseek",
+    "repetition_count": 5,
+    "result_sha256": "db70607b56c5241fd00f2b288d9f460d42333d48b488d22c6cf25edc19cd86d1",
+    "run_id": "qfbench-rootless-base-85x5-official-deepseek-v4-flash-0731-all12x3-20260804",
+    "seed_worker_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c"
+  },
+  "benchmark_commit": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+  "evaluation_contract": {
+    "candidate_repetitions": 1,
+    "iteration_count": 1,
+    "primary_object": "observable Evolver discovery and intervention behavior",
+    "score_role": "secondary directional falsification signal",
+    "seed_trace_repetitions": 1,
+    "task_count": 5
+  },
+  "panel": {
+    "protections": [
+      {
+        "domain": "systematic_strategy",
+        "mean_pass_fraction": 1.0,
+        "min_pass_fraction": 1.0,
+        "min_test_count": 42,
+        "rewards": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "role": "protection",
+        "task_id": "brinson-sector-attribution",
+        "tests_failed": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "tests_passed": [
+          42,
+          42,
+          42,
+          42,
+          42
+        ],
+        "verifier_exit_codes": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "domain": "derivatives",
+        "mean_pass_fraction": 1.0,
+        "min_pass_fraction": 1.0,
+        "min_test_count": 39,
+        "rewards": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "role": "protection",
+        "task_id": "bs-greeks-pde",
+        "tests_failed": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "tests_passed": [
+          39,
+          39,
+          39,
+          39,
+          39
+        ],
+        "verifier_exit_codes": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "targets": [
+      {
+        "domain": "rates_fx_macro",
+        "mean_pass_fraction": 0.8947368421052632,
+        "min_pass_fraction": 0.8947368421052632,
+        "min_test_count": 19,
+        "rewards": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "role": "target",
+        "task_id": "swap-curve-bootstrap-ois",
+        "tests_failed": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "tests_passed": [
+          17,
+          17,
+          17,
+          17,
+          17
+        ],
+        "verifier_exit_codes": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "domain": "data_engineering",
+        "mean_pass_fraction": 0.5,
+        "min_pass_fraction": 0.5,
+        "min_test_count": 8,
+        "rewards": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "role": "target",
+        "task_id": "earnings-surprise-calculator",
+        "tests_failed": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "tests_passed": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "verifier_exit_codes": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "domain": "data_engineering",
+        "mean_pass_fraction": 0.42857142857142855,
+        "min_pass_fraction": 0.42857142857142855,
+        "min_test_count": 7,
+        "rewards": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "role": "target",
+        "task_id": "corporate-action-adjustment",
+        "tests_failed": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "tests_passed": [
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "verifier_exit_codes": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "task_ids": [
+      "swap-curve-bootstrap-ois",
+      "earnings-surprise-calculator",
+      "corporate-action-adjustment",
+      "brinson-sector-attribution",
+      "bs-greeks-pde"
+    ]
+  },
+  "purpose": "A4 single-proposal Evolver behavior canary",
+  "schema_version": 1,
+  "selection": {
+    "eligible_split": "evolution.train",
+    "held_out_evidence": false,
+    "policy": "targets are 0/5 with normal verifier and non-empty test counts, ranked by minimum then mean pass fraction; protections are 5/5, selected by distinct non-target domain then minimum test count",
+    "target_count": 3,
+    "tvt_manifest_sha256": "fcd9a1c20f9d76d754e12ad8828b22a5179aa93a29434389100010d288f74a42"
+  },
+  "stage": "A4"
+}

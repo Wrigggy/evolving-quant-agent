@@ -24,6 +24,15 @@ class WorkerBehaviorTimeout(WorkerExecutionError):
         self.proxy_audit_failures: tuple[str, ...] = ()
 
 
+class WorkerArtifactContractError(WorkerExecutionError):
+    """A completed worker did not produce the benchmark's required artifacts."""
+
+    def __init__(self, message: str, *, log_uri: str | None = None) -> None:
+        super().__init__(message)
+        self.log_uri = log_uri
+        self.proxy_audit_failures: tuple[str, ...] = ()
+
+
 @dataclass(frozen=True)
 class PersistedWorkerTimeout:
     """Coordinator-authored evidence for one official worker timeout."""
@@ -33,6 +42,15 @@ class PersistedWorkerTimeout:
     command_sha256: str
     quarantine_sha256: str
     quarantine_reason: str
+
+
+@dataclass(frozen=True)
+class PersistedWorkerArtifactContract:
+    """Coordinator-authored evidence for one completed invalid artifact set."""
+
+    attempt_id: str
+    log_uri: str
+    contract_sha256: str
 
 
 @dataclass(frozen=True)
@@ -168,6 +186,112 @@ def persist_timeout_recovery(
             ) from exc
         if existing != payload:
             raise WorkerExecutionError("persisted timeout recovery record drifted")
+        return path
+    _write_json(path, payload)
+    return path
+
+
+def load_persisted_worker_artifact_contract(
+    attempt: TaskAttempt,
+    run_dir: str | Path,
+) -> PersistedWorkerArtifactContract | None:
+    """Restore an already observed output-contract zero without model resampling."""
+
+    attempt_dir = Path(run_dir).resolve() / "attempts" / attempt.attempt_id
+    contract_path = attempt_dir / "worker-artifact-contract.json"
+    if not contract_path.is_file():
+        return None
+    contract, contract_bytes = _read_bounded_json(
+        contract_path, label="artifact contract"
+    )
+    if set(contract) != {
+        "schema_version",
+        "outcome",
+        "expected_paths",
+        "found_paths",
+        "artifact_records",
+        "trace_uri",
+        "final_text_uri",
+    }:
+        raise WorkerExecutionError("persisted artifact contract schema is invalid")
+    expected = contract["expected_paths"]
+    found = contract["found_paths"]
+    records = contract["artifact_records"]
+    if (
+        contract["schema_version"] != 1
+        or contract["outcome"] != "official_worker_artifact_contract_zero"
+        or not isinstance(expected, list)
+        or not expected
+        or any(not isinstance(item, str) or not item for item in expected)
+        or not isinstance(found, list)
+        or any(not isinstance(item, str) or not item for item in found)
+        or not isinstance(records, list)
+        or found == expected
+    ):
+        raise WorkerExecutionError("persisted artifact contract state is invalid")
+    if any(
+        not isinstance(item, dict)
+        or set(item) != {"path", "sha256", "size_bytes"}
+        or not isinstance(item["path"], str)
+        or not isinstance(item["sha256"], str)
+        or not isinstance(item["size_bytes"], int)
+        for item in records
+    ) or sorted(item["path"] for item in records) != sorted(found):
+        raise WorkerExecutionError("persisted artifact records differ from found paths")
+    for field in ("trace_uri", "final_text_uri"):
+        value = contract[field]
+        if not isinstance(value, str):
+            raise WorkerExecutionError("persisted artifact evidence URI is invalid")
+        path = Path(value).resolve()
+        try:
+            path.relative_to(attempt_dir)
+        except ValueError as exc:
+            raise WorkerExecutionError(
+                "persisted artifact evidence escaped the attempt directory"
+            ) from exc
+        if not path.is_file() or path.is_symlink():
+            raise WorkerExecutionError("persisted artifact evidence file is missing")
+    command_path = attempt_dir / "worker-command.json"
+    if not command_path.is_file() or (attempt_dir / "worker-execution.json").exists():
+        raise WorkerExecutionError("persisted artifact contract lifecycle is invalid")
+    command, _ = _read_bounded_json(command_path, label="artifact command")
+    if (
+        set(command) != {"exit_code", "stdout", "stderr", "timed_out"}
+        or command["timed_out"] is not False
+        or not isinstance(command["exit_code"], int)
+    ):
+        raise WorkerExecutionError("persisted artifact command state is invalid")
+    return PersistedWorkerArtifactContract(
+        attempt_id=attempt.attempt_id,
+        log_uri=str(command_path.resolve()),
+        contract_sha256=hashlib.sha256(contract_bytes).hexdigest(),
+    )
+
+
+def persist_artifact_contract_recovery(
+    attempt_dir: Path,
+    evidence: PersistedWorkerArtifactContract,
+) -> Path:
+    """Bind an artifact-contract resume decision to its exact source record."""
+
+    path = attempt_dir / "artifact-contract-recovery.json"
+    payload = {
+        "schema_version": 1,
+        "attempt_id": evidence.attempt_id,
+        "outcome": "official_worker_artifact_contract_zero",
+        "contract_sha256": evidence.contract_sha256,
+    }
+    if path.is_file():
+        try:
+            existing = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise WorkerExecutionError(
+                "persisted artifact-contract recovery record is invalid"
+            ) from exc
+        if existing != payload:
+            raise WorkerExecutionError(
+                "persisted artifact-contract recovery record drifted"
+            )
         return path
     _write_json(path, payload)
     return path

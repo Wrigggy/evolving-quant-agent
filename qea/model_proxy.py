@@ -12,7 +12,8 @@ import stat
 import tempfile
 import threading
 import time
-from dataclasses import dataclass
+from email.utils import parsedate_to_datetime
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
@@ -64,10 +65,16 @@ _AUDIT_KEYS = frozenset(
         "failure_class",
     }
 )
+_AUDIT_V2_KEYS = _AUDIT_KEYS | frozenset(
+    {"logical_request_identity_sha256", "retry_index"}
+)
 _PROVIDER_REQUEST_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,511}\Z")
 _MAX_DENIED_REQUEST_IDENTITIES = 10_000
 _MAX_PRE_ACCEPT_CONNECT_ATTEMPTS = 5
 _PRE_ACCEPT_CONNECT_BACKOFF_SECONDS = 0.25
+_MAX_RATE_LIMIT_ATTEMPTS = 3
+_RATE_LIMIT_RETRY_BUDGET_SECONDS = 60.0
+_RATE_LIMIT_BACKOFF_SECONDS = 1.0
 
 
 class ModelProxyError(RuntimeError):
@@ -79,6 +86,10 @@ class _AuditAppendFailed(ModelProxyError):
 
 
 class _AuditStreamIncomplete(ModelProxyError):
+    pass
+
+
+class _RateLimitRetryDeadlineExpired(TimeoutError):
     pass
 
 
@@ -269,7 +280,9 @@ def _append_audit(
     *,
     lock: threading.Lock,
 ) -> None:
-    if set(record) != _AUDIT_KEYS or record.get("schema_version") != 1:
+    schema_version = record.get("schema_version")
+    expected_keys = _AUDIT_KEYS if schema_version == 1 else _AUDIT_V2_KEYS
+    if set(record) != expected_keys or schema_version not in {1, 2}:
         raise ModelProxyError("audit record has an unsafe schema")
     if record.get("request_state") not in _AUDIT_STATES:
         raise ModelProxyError("audit record has an unsafe request state")
@@ -339,6 +352,9 @@ class ModelProxyConfig:
     connect_timeout_seconds: float = 10.0
     read_timeout_seconds: float = 300.0
     pre_accept_connect_attempts: int = 3
+    rate_limit_max_attempts: int = _MAX_RATE_LIMIT_ATTEMPTS
+    rate_limit_retry_budget_seconds: float = _RATE_LIMIT_RETRY_BUDGET_SECONDS
+    rate_limit_backoff_seconds: float = _RATE_LIMIT_BACKOFF_SECONDS
     required_provider: str | None = None
 
     def __post_init__(self) -> None:
@@ -385,6 +401,12 @@ class ModelProxyConfig:
             raise ModelProxyError(
                 "pre_accept_connect_attempts must be an integer in [1, 5]"
             )
+        if self.rate_limit_max_attempts != _MAX_RATE_LIMIT_ATTEMPTS:
+            raise ModelProxyError("rate_limit_max_attempts must equal 3")
+        if self.rate_limit_retry_budget_seconds != _RATE_LIMIT_RETRY_BUDGET_SECONDS:
+            raise ModelProxyError("rate_limit_retry_budget_seconds must equal 60.0")
+        if self.rate_limit_backoff_seconds != _RATE_LIMIT_BACKOFF_SECONDS:
+            raise ModelProxyError("rate_limit_backoff_seconds must equal 1.0")
 
 
 @dataclass(frozen=True)
@@ -490,6 +512,9 @@ class ModelProxySandboxPlan:
     denied_request_identities_sha256: tuple[str, ...] = ()
     required_provider: str | None = None
     pre_accept_connect_attempts: int = 3
+    rate_limit_max_attempts: int = _MAX_RATE_LIMIT_ATTEMPTS
+    rate_limit_retry_budget_seconds: float = _RATE_LIMIT_RETRY_BUDGET_SECONDS
+    rate_limit_backoff_seconds: float = _RATE_LIMIT_BACKOFF_SECONDS
 
     def config_payload(self) -> dict[str, object]:
         """Return the public config uploaded before the token appears."""
@@ -504,6 +529,9 @@ class ModelProxySandboxPlan:
             "connect_timeout_seconds": 10.0,
             "read_timeout_seconds": 300.0,
             "pre_accept_connect_attempts": self.pre_accept_connect_attempts,
+            "rate_limit_max_attempts": self.rate_limit_max_attempts,
+            "rate_limit_retry_budget_seconds": self.rate_limit_retry_budget_seconds,
+            "rate_limit_backoff_seconds": self.rate_limit_backoff_seconds,
         }
         if self.allowed_model is not None:
             payload["allowed_model"] = self.allowed_model
@@ -545,6 +573,9 @@ class ModelProxySandboxPlan:
                 self.denied_request_identities_sha256
             ),
             "pre_accept_connect_attempts": self.pre_accept_connect_attempts,
+            "rate_limit_max_attempts": self.rate_limit_max_attempts,
+            "rate_limit_retry_budget_seconds": self.rate_limit_retry_budget_seconds,
+            "rate_limit_backoff_seconds": self.rate_limit_backoff_seconds,
         }
         if self.required_provider is not None:
             payload["required_provider"] = self.required_provider
@@ -622,6 +653,9 @@ def build_model_proxy_sandbox_plan(
     denied_request_identities_sha256: Sequence[str] = (),
     writable_tmpfs_mb: Mapping[str, int] | None = None,
     pre_accept_connect_attempts: int = 3,
+    rate_limit_max_attempts: int = _MAX_RATE_LIMIT_ATTEMPTS,
+    rate_limit_retry_budget_seconds: float = _RATE_LIMIT_RETRY_BUDGET_SECONDS,
+    rate_limit_backoff_seconds: float = _RATE_LIMIT_BACKOFF_SECONDS,
 ) -> ModelProxySandboxPlan:
     """Build a proxy plan that has no API-key argument, env value, or label."""
 
@@ -662,6 +696,12 @@ def build_model_proxy_sandbox_plan(
         raise ModelProxyError(
             "denied request identities require the complete scoped proxy policy"
         )
+    if rate_limit_max_attempts != _MAX_RATE_LIMIT_ATTEMPTS:
+        raise ModelProxyError("rate_limit_max_attempts must equal 3")
+    if rate_limit_retry_budget_seconds != _RATE_LIMIT_RETRY_BUDGET_SECONDS:
+        raise ModelProxyError("rate_limit_retry_budget_seconds must equal 60.0")
+    if rate_limit_backoff_seconds != _RATE_LIMIT_BACKOFF_SECONDS:
+        raise ModelProxyError("rate_limit_backoff_seconds must equal 1.0")
     spec = SandboxSpec(
         role="proxy",
         run_id=run_id,
@@ -711,6 +751,9 @@ def build_model_proxy_sandbox_plan(
         denied_request_identities_sha256=denied_identities,
         required_provider=required_provider,
         pre_accept_connect_attempts=pre_accept_connect_attempts,
+        rate_limit_max_attempts=rate_limit_max_attempts,
+        rate_limit_retry_budget_seconds=rate_limit_retry_budget_seconds,
+        rate_limit_backoff_seconds=rate_limit_backoff_seconds,
     )
 
 
@@ -807,6 +850,22 @@ class _ProxyPolicy:
     connect_timeout_seconds: float
     read_timeout_seconds: float
     pre_accept_connect_attempts: int = 3
+    rate_limit_max_attempts: int = _MAX_RATE_LIMIT_ATTEMPTS
+    rate_limit_retry_budget_seconds: float = _RATE_LIMIT_RETRY_BUDGET_SECONDS
+    rate_limit_backoff_seconds: float = _RATE_LIMIT_BACKOFF_SECONDS
+
+
+@dataclass(frozen=True)
+class _BufferedUpstreamResponse:
+    status: int
+    headers: tuple[tuple[str, str], ...]
+    body: bytes
+    provider_request_id: str | None
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+    provider_cost_usd: int | float | None
+    retry_after_values: tuple[str, ...]
 
 
 def _connection_tokens(headers) -> set[str]:
@@ -843,6 +902,51 @@ def _filtered_response_headers(headers) -> tuple[tuple[str, str], ...]:
 
 def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def model_proxy_wire_request_identity(
+    logical_request_identity_sha256: str, retry_index: int
+) -> str:
+    """Derive one wire-attempt identity from a stable logical call identity."""
+
+    if (
+        not isinstance(logical_request_identity_sha256, str)
+        or _SHA256.fullmatch(logical_request_identity_sha256) is None
+        or type(retry_index) is not int
+        or not 0 <= retry_index < _MAX_RATE_LIMIT_ATTEMPTS
+    ):
+        raise ModelProxyError("proxy wire request identity input is invalid")
+    return hashlib.sha256(
+        json.dumps(
+            {
+                "logical_request_identity_sha256": logical_request_identity_sha256,
+                "retry_index": retry_index,
+                "schema_version": 2,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+
+
+def _retry_after_seconds(value: str, *, now: datetime) -> float:
+    """Parse one present Retry-After strictly; absence is handled by the caller."""
+
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise ModelProxyError("Retry-After is malformed")
+    if value.isascii() and value.isdigit():
+        delay = float(int(value))
+    else:
+        try:
+            parsed = parsedate_to_datetime(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ModelProxyError("Retry-After is malformed") from exc
+        if parsed.tzinfo is None:
+            raise ModelProxyError("Retry-After date lacks a timezone")
+        delay = (parsed.astimezone(timezone.utc) - now).total_seconds()
+    if delay < 0:
+        raise ModelProxyError("Retry-After is negative")
+    return delay
 
 
 def _bounded_nonnegative_integer(value: object) -> int | None:
@@ -951,6 +1055,7 @@ class _ModelProxyServer(ThreadingHTTPServer):
         self.normal_handler_count = 0
         self.audit_append_failures = 0
         self.audit_record_count = 0
+        self.terminal_handler_count = 0
         self.finalizing = False
         self.finalize_failure: ModelProxyError | None = None
         self.audit_seal: dict[str, object] | None = None
@@ -965,11 +1070,13 @@ class _ModelProxyServer(ThreadingHTTPServer):
             self.normal_handler_count += 1
             return True
 
-    def finish_normal_handler(self) -> None:
+    def finish_normal_handler(self, *, terminal_audit_written: bool) -> None:
         with self.handler_condition:
             self.active_normal_handlers -= 1
             if self.active_normal_handlers < 0:
                 raise ModelProxyError("proxy handler accounting underflow")
+            if terminal_audit_written:
+                self.terminal_handler_count += 1
             self.handler_condition.notify_all()
 
     def append_audit(self, record: Mapping[str, object]) -> None:
@@ -1008,7 +1115,7 @@ class _ModelProxyServer(ThreadingHTTPServer):
                 self.finalize_failure = failure
                 self.handler_condition.notify_all()
                 raise failure
-            if self.audit_record_count != self.normal_handler_count:
+            if self.terminal_handler_count != self.normal_handler_count:
                 failure = _AuditStreamIncomplete(
                     "one or more normal handlers lack a terminal audit record"
                 )
@@ -1042,6 +1149,9 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         return
+
+    def _retry_monotonic(self) -> float:
+        return time.monotonic()
 
     def _reject(self, status: int, code: str) -> None:
         payload = json.dumps(
@@ -1188,6 +1298,7 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
         self,
         *,
         request_identity_sha256: str,
+        retry_index: int = 0,
         model: str | None,
         started_at: str,
         started_monotonic: float,
@@ -1199,13 +1310,24 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
         total_tokens: int | None = None,
         provider_cost_usd: int | float | None = None,
         failure_class: str | None = None,
+        terminal_for_handler: bool = True,
+        audit_schema_version: int | None = None,
     ) -> None:
         policy: _ProxyPolicy = self.server.policy
         elapsed = max(0.0, time.monotonic() - started_monotonic)
-        self.server.append_audit(
-            {
-                "schema_version": 1,
-                "request_identity_sha256": request_identity_sha256,
+        if audit_schema_version is None:
+            audit_schema_version = 2
+        if audit_schema_version not in {1, 2}:
+            raise ModelProxyError("proxy audit schema version is invalid")
+        record = {
+                "schema_version": audit_schema_version,
+                "request_identity_sha256": (
+                    model_proxy_wire_request_identity(
+                        request_identity_sha256, retry_index
+                    )
+                    if audit_schema_version == 2
+                    else request_identity_sha256
+                ),
                 "model": model,
                 "started_at": started_at,
                 "finished_at": _utc_timestamp(),
@@ -1219,7 +1341,351 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                 "provider_cost_usd": provider_cost_usd,
                 "failure_class": failure_class,
             }
+        if audit_schema_version == 2:
+            record.update(
+                {
+                    "logical_request_identity_sha256": request_identity_sha256,
+                    "retry_index": retry_index,
+                }
+            )
+        self.server.append_audit(record)
+        if terminal_for_handler:
+            self._terminal_audit_written = True
+
+    def _read_upstream_attempt(
+        self,
+        *,
+        policy: _ProxyPolicy,
+        target: str,
+        outbound_body: bytes,
+        headers: Mapping[str, str],
+        logical_request_identity_sha256: str,
+        retry_index: int,
+        started_at: str,
+        started_monotonic: float,
+        retry_deadline: float | None = None,
+    ) -> _BufferedUpstreamResponse | None:
+        """Read one independent upstream wire response before exposing any bytes."""
+
+        connection = None
+        request_transmission_started = False
+        response_status: int | None = None
+        provider_request_id: str | None = None
+        audit_written = False
+        spool = tempfile.SpooledTemporaryFile(
+            max_size=min(policy.max_response_bytes, 1024 * 1024), mode="w+b"
         )
+        try:
+            attempt_policy = policy
+            if retry_deadline is not None:
+                remaining = retry_deadline - self._retry_monotonic()
+                if remaining <= 0:
+                    self._terminal_audit_written = True
+                    self._reject(429, "rate_limit_retry_exhausted")
+                    return None
+                attempt_policy = replace(
+                    policy,
+                    connect_timeout_seconds=min(
+                        policy.connect_timeout_seconds, remaining
+                    ),
+                    read_timeout_seconds=min(policy.read_timeout_seconds, remaining),
+                )
+            connection = self._connect_upstream(attempt_policy)
+            request_transmission_started = True
+            connection.request(
+                self.command,
+                target,
+                body=outbound_body,
+                headers=headers,
+            )
+            if connection.sock is not None:
+                read_timeout = attempt_policy.read_timeout_seconds
+                if retry_deadline is not None:
+                    remaining = retry_deadline - self._retry_monotonic()
+                    if remaining <= 0:
+                        raise _RateLimitRetryDeadlineExpired(
+                            "rate-limit retry deadline expired"
+                        )
+                    read_timeout = min(read_timeout, remaining)
+                connection.sock.settimeout(read_timeout)
+            response = connection.getresponse()
+            response_status = response.status
+            provider_request_id = _provider_request_id(
+                response.headers, forbidden=policy.token
+            )
+            token_bytes = policy.token.encode("ascii")
+            if any(
+                token_bytes in name.encode("utf-8", errors="replace")
+                or token_bytes in value.encode("utf-8", errors="replace")
+                for name, value in response.headers.items()
+            ):
+                self._audit(
+                    request_identity_sha256=logical_request_identity_sha256,
+                    retry_index=retry_index,
+                    model=policy.allowed_model,
+                    started_at=started_at,
+                    started_monotonic=started_monotonic,
+                    request_state="quarantined",
+                    upstream_status_code=response.status,
+                    provider_request_id=provider_request_id,
+                    failure_class="unsafe_upstream_response",
+                )
+                audit_written = True
+                self._reject(502, "credential_echo")
+                return None
+            declared = None
+            raw_length = response.getheader("Content-Length")
+            if raw_length is not None:
+                try:
+                    declared = int(raw_length)
+                except ValueError:
+                    self._audit(
+                        request_identity_sha256=logical_request_identity_sha256,
+                        retry_index=retry_index,
+                        model=policy.allowed_model,
+                        started_at=started_at,
+                        started_monotonic=started_monotonic,
+                        request_state="quarantined",
+                        upstream_status_code=response.status,
+                        provider_request_id=provider_request_id,
+                        failure_class="invalid_upstream_response",
+                    )
+                    audit_written = True
+                    self._reject(502, "invalid_upstream_length")
+                    return None
+                if declared < 0 or declared > policy.max_response_bytes:
+                    self._audit(
+                        request_identity_sha256=logical_request_identity_sha256,
+                        retry_index=retry_index,
+                        model=policy.allowed_model,
+                        started_at=started_at,
+                        started_monotonic=started_monotonic,
+                        request_state="quarantined",
+                        upstream_status_code=response.status,
+                        provider_request_id=provider_request_id,
+                        failure_class="upstream_response_limit",
+                    )
+                    audit_written = True
+                    self._reject(502, "response_limit")
+                    return None
+            total = 0
+            overlap = b""
+            while True:
+                chunk = response.read(_BUFFER_SIZE)
+                if not chunk:
+                    break
+                combined = overlap + chunk
+                if token_bytes in combined:
+                    self._audit(
+                        request_identity_sha256=logical_request_identity_sha256,
+                        retry_index=retry_index,
+                        model=policy.allowed_model,
+                        started_at=started_at,
+                        started_monotonic=started_monotonic,
+                        request_state="quarantined",
+                        upstream_status_code=response.status,
+                        provider_request_id=provider_request_id,
+                        failure_class="unsafe_upstream_response",
+                    )
+                    audit_written = True
+                    self._reject(502, "credential_echo")
+                    return None
+                overlap = (
+                    combined[-(len(token_bytes) - 1) :]
+                    if len(token_bytes) > 1
+                    else b""
+                )
+                total += len(chunk)
+                if total > policy.max_response_bytes:
+                    self._audit(
+                        request_identity_sha256=logical_request_identity_sha256,
+                        retry_index=retry_index,
+                        model=policy.allowed_model,
+                        started_at=started_at,
+                        started_monotonic=started_monotonic,
+                        request_state="quarantined",
+                        upstream_status_code=response.status,
+                        provider_request_id=provider_request_id,
+                        failure_class="upstream_response_limit",
+                    )
+                    audit_written = True
+                    self._reject(502, "response_limit")
+                    return None
+                spool.write(chunk)
+            if declared is not None and total != declared:
+                self._audit(
+                    request_identity_sha256=logical_request_identity_sha256,
+                    retry_index=retry_index,
+                    model=policy.allowed_model,
+                    started_at=started_at,
+                    started_monotonic=started_monotonic,
+                    request_state="quarantined",
+                    upstream_status_code=response.status,
+                    provider_request_id=provider_request_id,
+                    failure_class="post_accept_transport",
+                )
+                audit_written = True
+                self._reject(502, "incomplete_upstream_response")
+                return None
+            spool.seek(0)
+            response_payload = spool.read()
+            usage = _response_usage(response_payload)
+            if (
+                retry_deadline is not None
+                and self._retry_monotonic() >= retry_deadline
+            ):
+                self._audit(
+                    request_identity_sha256=logical_request_identity_sha256,
+                    retry_index=retry_index,
+                    model=policy.allowed_model,
+                    started_at=started_at,
+                    started_monotonic=started_monotonic,
+                    request_state="quarantined",
+                    upstream_status_code=response.status,
+                    provider_request_id=provider_request_id,
+                    input_tokens=usage[0],
+                    output_tokens=usage[1],
+                    total_tokens=usage[2],
+                    provider_cost_usd=usage[3],
+                    failure_class="post_accept_transport",
+                )
+                audit_written = True
+                self._reject(502, "rate_limit_retry_deadline_expired")
+                return None
+            return _BufferedUpstreamResponse(
+                status=response.status,
+                headers=_filtered_response_headers(response.headers),
+                body=response_payload,
+                provider_request_id=provider_request_id,
+                input_tokens=usage[0],
+                output_tokens=usage[1],
+                total_tokens=usage[2],
+                provider_cost_usd=usage[3],
+                retry_after_values=tuple(response.headers.get_all("Retry-After", [])),
+            )
+        except (OSError, TimeoutError, http.client.HTTPException) as exc:
+            deadline_expired = isinstance(
+                exc, _RateLimitRetryDeadlineExpired
+            ) or (
+                retry_deadline is not None
+                and self._retry_monotonic() >= retry_deadline
+            )
+            if not audit_written:
+                self._audit(
+                    request_identity_sha256=logical_request_identity_sha256,
+                    retry_index=retry_index,
+                    model=policy.allowed_model,
+                    started_at=started_at,
+                    started_monotonic=started_monotonic,
+                    request_state=(
+                        "quarantined"
+                        if request_transmission_started
+                        else "not_accepted"
+                    ),
+                    upstream_status_code=response_status,
+                    provider_request_id=provider_request_id,
+                    failure_class=(
+                        "post_accept_transport"
+                        if request_transmission_started
+                        else "pre_accept_transport"
+                    ),
+                )
+            if not self.wfile.closed:
+                try:
+                    self._reject(
+                        502,
+                        (
+                            "rate_limit_retry_deadline_expired"
+                            if deadline_expired
+                            else "upstream_failure"
+                        ),
+                    )
+                except OSError:
+                    pass
+            return None
+        finally:
+            spool.close()
+            if connection is not None:
+                connection.close()
+
+    def _rate_limit_delay(
+        self,
+        *,
+        response: _BufferedUpstreamResponse,
+        retry_index: int,
+        policy: _ProxyPolicy,
+    ) -> float:
+        if len(response.retry_after_values) > 1:
+            raise ModelProxyError("multiple Retry-After headers are ambiguous")
+        if response.retry_after_values:
+            return _retry_after_seconds(
+                response.retry_after_values[0], now=datetime.now(timezone.utc)
+            )
+        return policy.rate_limit_backoff_seconds * (2**retry_index)
+
+    def _deliver_buffered_response(
+        self,
+        *,
+        response: _BufferedUpstreamResponse,
+        logical_request_identity_sha256: str,
+        retry_index: int,
+        policy: _ProxyPolicy,
+        started_at: str,
+        started_monotonic: float,
+        rate_limit_retry_group: bool,
+    ) -> None:
+        delivery_started = False
+        audit_written = False
+        try:
+            delivery_started = True
+            self.send_response(response.status)
+            for name, value in response.headers:
+                self.send_header(name, value)
+            self.send_header("Content-Length", str(len(response.body)))
+            self.end_headers()
+            self.wfile.write(response.body)
+            self.wfile.flush()
+            self._audit(
+                request_identity_sha256=logical_request_identity_sha256,
+                retry_index=retry_index,
+                model=policy.allowed_model,
+                started_at=started_at,
+                started_monotonic=started_monotonic,
+                request_state="completed",
+                upstream_status_code=response.status,
+                provider_request_id=response.provider_request_id,
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                total_tokens=response.total_tokens,
+                provider_cost_usd=response.provider_cost_usd,
+                failure_class=(
+                    "provider_http_error" if response.status >= 400 else None
+                ),
+                audit_schema_version=2,
+            )
+            audit_written = True
+        except OSError:
+            if not audit_written:
+                self._audit(
+                    request_identity_sha256=logical_request_identity_sha256,
+                    retry_index=retry_index,
+                    model=policy.allowed_model,
+                    started_at=started_at,
+                    started_monotonic=started_monotonic,
+                    request_state="quarantined",
+                    upstream_status_code=response.status,
+                    provider_request_id=response.provider_request_id,
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                    total_tokens=response.total_tokens,
+                    provider_cost_usd=response.provider_cost_usd,
+                    failure_class=(
+                        "downstream_delivery"
+                        if delivery_started
+                        else "post_accept_transport"
+                    ),
+                    audit_schema_version=2,
+                )
 
     def _proxy_counted(self) -> None:
         policy: _ProxyPolicy = self.server.policy
@@ -1345,237 +1811,103 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
         headers = _filtered_request_headers(
             self.headers, policy, len(outbound_body)
         )
-        connection = None
-        spool = tempfile.SpooledTemporaryFile(
-            max_size=min(policy.max_response_bytes, 1024 * 1024), mode="w+b"
-        )
-        response = None
-        total = 0
-        request_transmission_started = False
-        response_read_completed = False
-        downstream_delivery_started = False
-        audit_written = False
-        upstream_status_code = None
-        safe_provider_request_id = None
-        input_tokens = None
-        output_tokens = None
-        total_tokens = None
-        provider_cost = None
-        try:
-            connection = self._connect_upstream(policy)
-            request_transmission_started = True
-            connection.request(
-                self.command,
-                target,
-                body=outbound_body,
+        retry_deadline: float | None = None
+        for retry_index in range(policy.rate_limit_max_attempts):
+            response = self._read_upstream_attempt(
+                policy=policy,
+                target=target,
+                outbound_body=outbound_body,
                 headers=headers,
+                logical_request_identity_sha256=request_identity,
+                retry_index=retry_index,
+                started_at=started_at,
+                started_monotonic=started_monotonic,
+                retry_deadline=retry_deadline,
             )
-            if connection.sock is not None:
-                connection.sock.settimeout(policy.read_timeout_seconds)
-            response = connection.getresponse()
-            upstream_status_code = response.status
-            safe_provider_request_id = _provider_request_id(
-                response.headers, forbidden=policy.token
-            )
-            token_bytes = policy.token.encode("ascii")
+            if response is None:
+                return
+            if response.status != 429:
+                self._deliver_buffered_response(
+                    response=response,
+                    logical_request_identity_sha256=request_identity,
+                    retry_index=retry_index,
+                    policy=policy,
+                    started_at=started_at,
+                    started_monotonic=started_monotonic,
+                    rate_limit_retry_group=retry_index > 0,
+                )
+                return
             if any(
-                token_bytes in name.encode("utf-8", errors="replace")
-                or token_bytes in value.encode("utf-8", errors="replace")
-                for name, value in response.headers.items()
+                value is not None
+                for value in (
+                    response.provider_request_id,
+                    response.input_tokens,
+                    response.output_tokens,
+                    response.total_tokens,
+                    response.provider_cost_usd,
+                )
             ):
                 self._audit(
                     request_identity_sha256=request_identity,
+                    retry_index=retry_index,
                     model=policy.allowed_model,
                     started_at=started_at,
                     started_monotonic=started_monotonic,
                     request_state="quarantined",
-                    upstream_status_code=response.status,
-                    provider_request_id=_provider_request_id(
-                        response.headers, forbidden=policy.token
-                    ),
-                    failure_class="unsafe_upstream_response",
+                    upstream_status_code=429,
+                    provider_request_id=response.provider_request_id,
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                    total_tokens=response.total_tokens,
+                    provider_cost_usd=response.provider_cost_usd,
+                    failure_class="invalid_upstream_response",
+                    audit_schema_version=2,
                 )
-                audit_written = True
-                self._reject(502, "credential_echo")
+                self._reject(502, "ambiguous_rate_limit_response")
                 return
-            declared = None
-            raw_length = response.getheader("Content-Length")
-            if raw_length is not None:
-                try:
-                    declared = int(raw_length)
-                except ValueError:
-                    self._audit(
-                        request_identity_sha256=request_identity,
-                        model=policy.allowed_model,
-                        started_at=started_at,
-                        started_monotonic=started_monotonic,
-                        request_state="quarantined",
-                        upstream_status_code=response.status,
-                        provider_request_id=_provider_request_id(
-                            response.headers, forbidden=policy.token
-                        ),
-                        failure_class="invalid_upstream_response",
-                    )
-                    audit_written = True
-                    self._reject(502, "invalid_upstream_length")
-                    return
-                if declared < 0 or declared > policy.max_response_bytes:
-                    self._audit(
-                        request_identity_sha256=request_identity,
-                        model=policy.allowed_model,
-                        started_at=started_at,
-                        started_monotonic=started_monotonic,
-                        request_state="quarantined",
-                        upstream_status_code=response.status,
-                        provider_request_id=_provider_request_id(
-                            response.headers, forbidden=policy.token
-                        ),
-                        failure_class="upstream_response_limit",
-                    )
-                    audit_written = True
-                    self._reject(502, "response_limit")
-                    return
-            overlap = b""
-            while True:
-                chunk = response.read(_BUFFER_SIZE)
-                if not chunk:
-                    break
-                combined = overlap + chunk
-                if token_bytes in combined:
-                    self._audit(
-                        request_identity_sha256=request_identity,
-                        model=policy.allowed_model,
-                        started_at=started_at,
-                        started_monotonic=started_monotonic,
-                        request_state="quarantined",
-                        upstream_status_code=response.status,
-                        provider_request_id=_provider_request_id(
-                            response.headers, forbidden=policy.token
-                        ),
-                        failure_class="unsafe_upstream_response",
-                    )
-                    audit_written = True
-                    self._reject(502, "credential_echo")
-                    return
-                overlap = (
-                    combined[-(len(token_bytes) - 1) :]
-                    if len(token_bytes) > 1
-                    else b""
+            if retry_deadline is None:
+                retry_deadline = (
+                    self._retry_monotonic()
+                    + policy.rate_limit_retry_budget_seconds
                 )
-                total += len(chunk)
-                if total > policy.max_response_bytes:
-                    self._audit(
-                        request_identity_sha256=request_identity,
-                        model=policy.allowed_model,
-                        started_at=started_at,
-                        started_monotonic=started_monotonic,
-                        request_state="quarantined",
-                        upstream_status_code=response.status,
-                        provider_request_id=_provider_request_id(
-                            response.headers, forbidden=policy.token
-                        ),
-                        failure_class="upstream_response_limit",
-                    )
-                    audit_written = True
-                    self._reject(502, "response_limit")
-                    return
-                spool.write(chunk)
-            if declared is not None and total != declared:
-                self._audit(
-                    request_identity_sha256=request_identity,
-                    model=policy.allowed_model,
-                    started_at=started_at,
-                    started_monotonic=started_monotonic,
-                    request_state="quarantined",
-                    upstream_status_code=response.status,
-                    provider_request_id=_provider_request_id(
-                        response.headers, forbidden=policy.token
-                    ),
-                    failure_class="post_accept_transport",
+            last_attempt = retry_index + 1 >= policy.rate_limit_max_attempts
+            try:
+                delay = self._rate_limit_delay(
+                    response=response,
+                    retry_index=retry_index,
+                    policy=policy,
                 )
-                audit_written = True
-                self._reject(502, "incomplete_upstream_response")
-                return
-            spool.seek(0)
-            response_payload = spool.read()
-            spool.seek(0)
-            input_tokens, output_tokens, total_tokens, provider_cost = (
-                _response_usage(response_payload)
-            )
-            response_read_completed = True
-            downstream_delivery_started = True
-            self.send_response(response.status)
-            for name, value in _filtered_response_headers(response.headers):
-                self.send_header(name, value)
-            self.send_header("Content-Length", str(total))
-            self.end_headers()
-            while True:
-                chunk = spool.read(_BUFFER_SIZE)
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
-            self.wfile.flush()
+            except ModelProxyError:
+                last_attempt = True
+                delay = 0.0
+            remaining_before = retry_deadline - self._retry_monotonic()
+            if delay > remaining_before:
+                last_attempt = True
             self._audit(
                 request_identity_sha256=request_identity,
+                retry_index=retry_index,
                 model=policy.allowed_model,
                 started_at=started_at,
                 started_monotonic=started_monotonic,
-                request_state="completed",
-                upstream_status_code=upstream_status_code,
-                provider_request_id=safe_provider_request_id,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                total_tokens=total_tokens,
-                provider_cost_usd=provider_cost,
-                failure_class=(
-                    "provider_http_error" if response.status >= 400 else None
-                ),
+                request_state="not_accepted",
+                upstream_status_code=429,
+                failure_class="rate_limited",
+                terminal_for_handler=last_attempt,
+                audit_schema_version=2,
             )
-            audit_written = True
-        except (OSError, TimeoutError, http.client.HTTPException):
-            if not audit_written:
-                if response_read_completed and downstream_delivery_started:
-                    self._audit(
-                        request_identity_sha256=request_identity,
-                        model=policy.allowed_model,
-                        started_at=started_at,
-                        started_monotonic=started_monotonic,
-                        request_state="quarantined",
-                        upstream_status_code=upstream_status_code,
-                        provider_request_id=safe_provider_request_id,
-                        input_tokens=input_tokens,
-                        output_tokens=output_tokens,
-                        total_tokens=total_tokens,
-                        provider_cost_usd=provider_cost,
-                        failure_class="downstream_delivery",
-                    )
-                else:
-                    self._audit(
-                        request_identity_sha256=request_identity,
-                        model=policy.allowed_model,
-                        started_at=started_at,
-                        started_monotonic=started_monotonic,
-                        request_state=(
-                            "quarantined"
-                            if request_transmission_started
-                            else "not_accepted"
-                        ),
-                        failure_class=(
-                            "post_accept_transport"
-                            if request_transmission_started
-                            else "pre_accept_transport"
-                        ),
-                    )
-            if not downstream_delivery_started and not self.wfile.closed:
-                try:
-                    self._reject(502, "upstream_failure")
-                except OSError:
-                    pass
-        finally:
-            spool.close()
-            if connection is not None:
-                connection.close()
-
+            if last_attempt:
+                self._reject(429, "rate_limit_retry_exhausted")
+                return
+            if remaining_before <= 0:
+                self._terminal_audit_written = True
+                self._reject(429, "rate_limit_retry_exhausted")
+                return
+            time.sleep(delay)
+            if retry_deadline - self._retry_monotonic() <= 0:
+                self._terminal_audit_written = True
+                self._reject(429, "rate_limit_retry_exhausted")
+                return
+        raise AssertionError("bounded rate-limit retry loop did not terminate")
     def _proxy(self) -> None:
         if self.path == _FINALIZE_PATH:
             self._finalize()
@@ -1583,10 +1915,13 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
         if not self.server.begin_normal_handler():
             self._reject(409, "proxy_finalized")
             return
+        self._terminal_audit_written = False
         try:
             self._proxy_counted()
         finally:
-            self.server.finish_normal_handler()
+            self.server.finish_normal_handler(
+                terminal_audit_written=self._terminal_audit_written
+            )
 
     do_GET = _proxy
     do_POST = _proxy
@@ -1595,10 +1930,13 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
         if not self.server.begin_normal_handler():
             self._reject(409, "proxy_finalized")
             return
+        self._terminal_audit_written = False
         try:
             self._reject(405, "method_not_allowed")
         finally:
-            self.server.finish_normal_handler()
+            self.server.finish_normal_handler(
+                terminal_audit_written=self._terminal_audit_written
+            )
 
     do_DELETE = do_CONNECT
     do_HEAD = do_CONNECT
@@ -1628,5 +1966,8 @@ def create_proxy_server(config: ModelProxyConfig) -> ThreadingHTTPServer:
         connect_timeout_seconds=float(config.connect_timeout_seconds),
         read_timeout_seconds=float(config.read_timeout_seconds),
         pre_accept_connect_attempts=config.pre_accept_connect_attempts,
+        rate_limit_max_attempts=config.rate_limit_max_attempts,
+        rate_limit_retry_budget_seconds=config.rate_limit_retry_budget_seconds,
+        rate_limit_backoff_seconds=config.rate_limit_backoff_seconds,
     )
     return _ModelProxyServer((config.listen_host, config.listen_port), policy)

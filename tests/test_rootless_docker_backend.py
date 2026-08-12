@@ -273,6 +273,101 @@ def test_create_emits_bounded_read_only_container_argv() -> None:
     assert handle == _handle(spec)
 
 
+def test_create_name_is_run_scoped_stable_and_docker_safe() -> None:
+    replies = [
+        CompletedCommand(0, f"container-exact-{index}\n".encode(), b"")
+        for index in range(1, 8)
+    ]
+    runner = RecordingRunner(*replies)
+    backend = _backend(runner)
+    shared = {
+        "role": "proxy",
+        "attempt_id": "evolver-iteration-1",
+        "task_id": "full-harness-evolver",
+        "network_policy": "proxy-outbound",
+        "environment": {"QEA_ROLE": "proxy"},
+    }
+    specs = (
+        _spec(run_id="arm-r", **shared),
+        _spec(run_id="arm-e", **shared),
+        _spec(run_id="arm-ec", **shared),
+        _spec(run_id="arm-r", **shared),
+        _spec(run_id="arm-r", memory_mb=8192, **shared),
+        _spec(
+            run_id="arm-r",
+            role="evolver",
+            attempt_id="evolver-iteration-1",
+            task_id="full-harness-evolver",
+            network_policy="worker-proxy-only",
+            environment={"QEA_ROLE": "evolver"},
+        ),
+        _spec(
+            run_id="r" * 128,
+            attempt_id="a" * 128,
+            role="proxy",
+            task_id="full-harness-evolver",
+            network_policy="proxy-outbound",
+            environment={"QEA_ROLE": "proxy"},
+        ),
+    )
+
+    for spec in specs:
+        backend.create(spec)
+
+    names = [_option_pair(call.argv, "--name")[1] for call in runner.calls]
+    assert len(set(names[:3])) == 3
+    assert names[0] == names[3]
+    assert names[0] == names[4]
+    assert names[0] != names[5]
+    assert all(
+        re.fullmatch(r"qea-(?:proxy|evolver)-[0-9a-f]{64}", name)
+        for name in names
+    )
+    assert all(len(name) <= 255 for name in names)
+    for call, spec in zip(runner.calls, specs):
+        for label, value in _labels(spec).items():
+            assert ("--label", f"{label}={value}") in _option_pairs(
+                call.argv, "--label"
+            )
+
+
+def test_three_arm_same_attempt_creates_do_not_collide_but_same_identity_does() -> None:
+    class NameRejectingRunner:
+        def __init__(self) -> None:
+            self.names: set[str] = set()
+
+        def run(self, argv, *, input_bytes=None, timeout_seconds=None):
+            name = argv[argv.index("--name") + 1]
+            if name in self.names:
+                return CompletedCommand(1, b"", b"Conflict: duplicate container name")
+            self.names.add(name)
+            native_id = f"container-exact-{len(self.names)}\n".encode()
+            return CompletedCommand(0, native_id, b"")
+
+    runner = NameRejectingRunner()
+    backend = _backend(runner)
+    shared = {
+        "role": "proxy",
+        "attempt_id": "evolver-iteration-1",
+        "task_id": "full-harness-evolver",
+        "network_policy": "proxy-outbound",
+        "environment": {"QEA_ROLE": "proxy"},
+    }
+
+    for arm in ("r", "e", "ec"):
+        backend.create(_spec(run_id=f"qfbench-a6-discovery-{arm}", **shared))
+
+    assert len(runner.names) == 3
+    with pytest.raises(RootlessDockerError, match="container create"):
+        backend.create(
+            _spec(
+                run_id="qfbench-a6-discovery-r",
+                memory_mb=8192,
+                **shared,
+            )
+        )
+
+
 def test_create_marks_only_declared_tmpfs_paths_executable() -> None:
     runner = RecordingRunner(CompletedCommand(0, b"container-exact-1\n", b""))
     backend = _backend(runner)

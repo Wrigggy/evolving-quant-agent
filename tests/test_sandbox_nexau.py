@@ -379,6 +379,110 @@ def test_worker_uses_explicit_attempt_network_scope_when_supplied(tmp_path):
     assert backend.specs[0].network_scope == attempt.attempt_id
 
 
+def test_worker_artifact_contract_failure_preserves_trace_and_manifest(tmp_path):
+    from qea.executors.sandbox_nexau import (
+        SandboxNexAUExecutor,
+        SandboxWorkerArtifactContractError,
+    )
+
+    class WrongOutputBackend(FakeBackend):
+        def read_bytes(self, handle, path):
+            if path == "/qea/output.tar":
+                return _tar_bytes({"trade_log.json": "{}\n"})
+            return super().read_bytes(handle, path)
+
+    backend = WrongOutputBackend()
+    public_root, _ = _roots(tmp_path)
+    lifecycle_root = tmp_path / "lifecycles"
+    backend.lifecycle_root = lifecycle_root
+    executor = SandboxNexAUExecutor(
+        backend=backend,
+        lifecycle_root=lifecycle_root,
+        worker_image_ref="sha256:" + "a" * 64,
+        public_task_root=public_root,
+        resource_contract=_resources(),
+        worker_network_name="qea-run-001-internal",
+        proxy_base_url="http://qea-model-proxy:8080/v1",
+        model_name="fixture-model",
+        expected_output_paths=("strategy.py",),
+    )
+    run_dir = tmp_path / "run"
+
+    with pytest.raises(
+        SandboxWorkerArtifactContractError, match="output membership"
+    ) as raised:
+        executor.execute(
+            attempt=_attempt(),
+            task=_task(),
+            worker_dir=_worker(tmp_path),
+            run_dir=run_dir,
+            model_env={},
+        )
+
+    attempt_dir = run_dir / "attempts" / _attempt().attempt_id
+    assert Path(raised.value.log_uri) == attempt_dir / "raw-trace.jsonl"
+    assert (attempt_dir / "raw-trace.jsonl").is_file()
+    assert (attempt_dir / "final.txt").is_file()
+    contract = json.loads(
+        (attempt_dir / "worker-artifact-contract.json").read_text()
+    )
+    assert contract["expected_paths"] == ["strategy.py"]
+    assert contract["found_paths"] == ["trade_log.json"]
+    assert contract["outcome"] == "official_worker_artifact_contract_zero"
+
+
+def test_worker_preserves_but_does_not_submit_declared_auxiliary_output(tmp_path):
+    from qea.executors.sandbox_nexau import SandboxNexAUExecutor
+
+    strategy = b"def main():\n    return 1\n"
+
+    class AuxiliaryOutputBackend(FakeBackend):
+        def read_bytes(self, handle, path):
+            if path == "/qea/output.tar":
+                return _tar_bytes(
+                    {"strategy.py": strategy, "trade_log.json": "{}\n"}
+                )
+            return super().read_bytes(handle, path)
+
+    backend = AuxiliaryOutputBackend()
+    public_root, _ = _roots(tmp_path)
+    lifecycle_root = tmp_path / "lifecycles"
+    backend.lifecycle_root = lifecycle_root
+    executor = SandboxNexAUExecutor(
+        backend=backend,
+        lifecycle_root=lifecycle_root,
+        worker_image_ref="sha256:" + "a" * 64,
+        public_task_root=public_root,
+        resource_contract=_resources(),
+        worker_network_name="qea-run-001-internal",
+        proxy_base_url="http://qea-model-proxy:8080/v1",
+        model_name="fixture-model",
+        max_output_files=2,
+        expected_output_paths=("strategy.py",),
+        auxiliary_output_paths=("trade_log.json",),
+    )
+    run_dir = tmp_path / "run"
+
+    execution = executor.execute(
+        attempt=_attempt(),
+        task=_task(),
+        worker_dir=_worker(tmp_path),
+        run_dir=run_dir,
+        model_env={},
+    )
+
+    assert tuple(record.path for record in execution.artifacts) == ("strategy.py",)
+    assert (Path(execution.artifact_dir) / "strategy.py").read_bytes() == strategy
+    attempt_dir = run_dir / "attempts" / _attempt().attempt_id
+    assert (
+        attempt_dir / "worker-auxiliary-artifacts" / "trade_log.json"
+    ).read_text() == "{}\n"
+    auxiliary = json.loads(
+        (attempt_dir / "worker-auxiliary-artifacts.json").read_text()
+    )
+    assert auxiliary["artifact_records"][0]["path"] == "trade_log.json"
+
+
 def test_worker_refuses_real_model_credentials(tmp_path):
     from qea.executors.sandbox_nexau import SandboxInfrastructureError
 

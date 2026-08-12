@@ -73,6 +73,58 @@ def _audit_bytes(request_state: str) -> bytes:
     return (json.dumps(_audit_record(request_state), sort_keys=True) + "\n").encode()
 
 
+def _rate_limited_v2_audit_bytes(count: int = 3) -> bytes:
+    from qea.model_proxy import model_proxy_wire_request_identity
+
+    logical = "b" * 64
+    records = []
+    for retry_index in range(count):
+        record = _audit_record("not_accepted")
+        record.update(
+            {
+                "schema_version": 2,
+                "request_identity_sha256": model_proxy_wire_request_identity(
+                    logical, retry_index
+                ),
+                "logical_request_identity_sha256": logical,
+                "retry_index": retry_index,
+                "model": "openai/gpt-5",
+                "upstream_status_code": 429,
+                "failure_class": "rate_limited",
+            }
+        )
+        records.append(record)
+    return b"".join(
+        (json.dumps(record, sort_keys=True) + "\n").encode()
+        for record in records
+    )
+
+
+def _duplicate_completed_v2_audit_bytes() -> bytes:
+    from qea.model_proxy import model_proxy_wire_request_identity
+
+    logical = "c" * 64
+    records = []
+    for retry_index in (0, 1):
+        record = _audit_record("completed")
+        record.update(
+            {
+                "schema_version": 2,
+                "request_identity_sha256": model_proxy_wire_request_identity(
+                    logical, retry_index
+                ),
+                "logical_request_identity_sha256": logical,
+                "retry_index": retry_index,
+                "provider_request_id": f"provider-completed-{retry_index}",
+            }
+        )
+        records.append(record)
+    return b"".join(
+        (json.dumps(record, sort_keys=True) + "\n").encode()
+        for record in records
+    )
+
+
 def _audit_seal(payload: bytes) -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -268,12 +320,18 @@ def _manager(
     )
 
 
-def _open(manager, run_dir: Path, attempt_id: str = "attempt-001"):
+def _open(
+    manager,
+    run_dir: Path,
+    attempt_id: str = "attempt-001",
+    *,
+    caller_role: str = "worker",
+):
     return manager.open(
         run_id="run-001",
         attempt_id=attempt_id,
         task_id="historical-var-data-prep",
-        caller_role="worker",
+        caller_role=caller_role,
         run_dir=run_dir,
     )
 
@@ -528,13 +586,96 @@ def test_worker_timeout_survives_proxy_finalize_failure_after_exact_cleanup(
         / "proxy-audit.quarantined.json"
     )
     assert quarantine.is_file()
+    unsealed = quarantine.with_name("proxy-audit.unsealed.jsonl")
+    assert unsealed.read_bytes() == backend.audit_payload
     assert json.loads(quarantine.read_text()) == {
+        "accounting_complete": False,
         "reason": "audit_download_or_validation_failed",
         "request_state": "quarantined",
-        "schema_version": 1,
+        "schema_version": 2,
+        "unsealed_audit_sha256": hashlib.sha256(
+            backend.audit_payload
+        ).hexdigest(),
+        "unsealed_record_count": 1,
     }
+    finalize = next(
+        event
+        for event in backend.events
+        if event[0] == "run"
+        and any("/__qea_private/finalize" in value for value in event[2])
+    )
+    assert finalize[4] == 360
     assert backend.events[-2] == ("kill", "proxy-native-1")
     assert backend.events[-1][0] == "network-remove"
+
+
+def test_worker_timeout_finalize_failure_preserves_empty_unsealed_ledger_and_blocks_resume(
+    tmp_path,
+):
+    from qea.executors.execution_record import WorkerBehaviorTimeout
+
+    run_dir = tmp_path / "run"
+    backend = RecordingBackend(
+        run_dir,
+        audit_payload=b"",
+        finalize_result=SandboxCommandResult(124, "", "", True),
+    )
+    manager = _manager(tmp_path, backend)
+    timeout = WorkerBehaviorTimeout("official timeout before any accepted request")
+
+    with pytest.raises(WorkerBehaviorTimeout) as raised:
+        with _open(manager, run_dir):
+            raise timeout
+
+    assert raised.value is timeout
+    quarantine = (
+        run_dir
+        / "attempts"
+        / "attempt-001"
+        / "proxy-audit.quarantined.json"
+    )
+    unsealed = quarantine.with_name("proxy-audit.unsealed.jsonl")
+    assert unsealed.is_file()
+    assert unsealed.stat().st_size == 0
+    assert unsealed.read_bytes() == b""
+    assert json.loads(quarantine.read_text()) == {
+        "accounting_complete": False,
+        "reason": "audit_download_or_validation_failed",
+        "request_state": "quarantined",
+        "schema_version": 2,
+        "unsealed_audit_sha256": hashlib.sha256(b"").hexdigest(),
+        "unsealed_record_count": 0,
+    }
+
+    second_backend = RecordingBackend(run_dir)
+    second_manager = _manager(tmp_path, second_backend)
+    with pytest.raises(Exception, match="quarantined request identity"):
+        with _open(second_manager, run_dir):
+            pytest.fail("an unsealed zero-record attempt must not resume")
+    assert second_backend.events == []
+
+
+def test_successful_finalize_uses_bound_above_upstream_read_and_stays_canonical(
+    tmp_path,
+):
+    run_dir = tmp_path / "run"
+    payload = _audit_bytes("completed")
+    backend = RecordingBackend(run_dir, audit_payload=payload)
+    manager = _manager(tmp_path, backend)
+
+    with _open(manager, run_dir) as session:
+        pass
+
+    finalize = next(
+        event
+        for event in backend.events
+        if event[0] == "run"
+        and any("/__qea_private/finalize" in value for value in event[2])
+    )
+    assert finalize[4] == 360
+    assert session.audit_uri.read_bytes() == payload
+    assert not session.audit_uri.with_name("proxy-audit.unsealed.jsonl").exists()
+    assert not session.audit_uri.with_suffix(".quarantined.json").exists()
 
 
 def test_worker_timeout_does_not_hide_exact_proxy_cleanup_failure(tmp_path):
@@ -605,6 +746,24 @@ def test_proxy_manager_rejects_unbounded_pre_accept_connect_attempts(
             allowed_path_prefix="/v1",
             allowed_model="openai/gpt-5",
             pre_accept_connect_attempts=attempts,
+        )
+
+
+@pytest.mark.parametrize("finalize_timeout", [True, 0, 299])
+def test_proxy_manager_rejects_finalize_bound_below_upstream_read_timeout(
+    tmp_path, finalize_timeout
+):
+    from qea.executors.sandbox_proxy import SandboxProxyConfig, SandboxProxyError
+
+    with pytest.raises(SandboxProxyError, match="cover the upstream read timeout"):
+        SandboxProxyConfig(
+            image_ref="sha256:" + "c" * 64,
+            resource_contract=_resources(),
+            token_file=_token_file(tmp_path),
+            upstream_base_url="https://openrouter.ai/api/v1",
+            allowed_path_prefix="/v1",
+            allowed_model="openai/gpt-5",
+            finalize_timeout_seconds=finalize_timeout,
         )
 
 
@@ -689,6 +848,46 @@ def test_empty_downloaded_audit_quarantines_attempt_and_never_reopens(tmp_path):
         with _open(manager, run_dir):
             pytest.fail("an audit-loss attempt must not reopen")
     assert second_backend.events == []
+
+
+def test_exhausted_rate_limit_group_persists_sealed_ledger_then_fails_session(
+    tmp_path,
+):
+    run_dir = tmp_path / "run"
+    payload = _rate_limited_v2_audit_bytes()
+    backend = RecordingBackend(run_dir, audit_payload=payload)
+    manager = _manager(tmp_path, backend)
+
+    with pytest.raises(Exception, match="incomplete rate-limit retry group"):
+        with _open(manager, run_dir):
+            pass
+
+    attempt_dir = run_dir / "attempts" / "attempt-001"
+    audit = attempt_dir / "proxy-audit.jsonl"
+    assert audit.is_file()
+    assert audit.read_bytes() == payload
+    assert audit.stat().st_mode & 0o777 == 0o600
+    assert not (attempt_dir / "proxy-audit.unsealed.jsonl").exists()
+    assert not (attempt_dir / "proxy-audit.quarantined.json").exists()
+    assert backend.events[-2] == ("kill", "proxy-native-1")
+    assert backend.events[-1][0] == "network-remove"
+
+
+def test_duplicate_completed_v2_group_is_rejected_after_sealed_persistence(
+    tmp_path,
+):
+    run_dir = tmp_path / "run"
+    payload = _duplicate_completed_v2_audit_bytes()
+    backend = RecordingBackend(run_dir, audit_payload=payload)
+    manager = _manager(tmp_path, backend)
+
+    with pytest.raises(Exception, match="incomplete rate-limit retry group"):
+        with _open(manager, run_dir):
+            pass
+
+    attempt_dir = run_dir / "attempts" / "attempt-001"
+    assert (attempt_dir / "proxy-audit.jsonl").read_bytes() == payload
+    assert not (attempt_dir / "proxy-audit.quarantined.json").exists()
 
 
 def test_finalize_failure_quarantines_nonempty_not_accepted_audit_prefix(tmp_path):
@@ -1179,6 +1378,13 @@ def test_downloaded_audit_rejects_contradictory_state_failure_semantics(
         ),
         pytest.param(
             "quarantined",
+            "downstream_delivery",
+            200,
+            "openai/gpt-5",
+            id="downstream-delivery-is-worker-fatal",
+        ),
+        pytest.param(
+            "quarantined",
             "unsafe_upstream_response",
             200,
             "openai/gpt-5",
@@ -1229,12 +1435,19 @@ def test_downloaded_audit_accepts_every_produced_semantic_tuple(
 
     ambiguous = failure_class in {
         "post_accept_transport",
+        "downstream_delivery",
         "unsafe_upstream_response",
         "invalid_upstream_response",
         "upstream_response_limit",
     }
-    if ambiguous:
-        with pytest.raises(Exception, match="ambiguous accepted"):
+    session_fatal = ambiguous or failure_class == "provider_http_error"
+    if session_fatal:
+        expected_error = (
+            "completed provider HTTP error"
+            if failure_class == "provider_http_error"
+            else "ambiguous accepted"
+        )
+        with pytest.raises(Exception, match=expected_error):
             with _open(manager, run_dir) as session:
                 pass
     else:
@@ -1249,3 +1462,34 @@ def test_downloaded_audit_accepts_every_produced_semantic_tuple(
         persisted["failure_class"],
         persisted["upstream_status_code"],
     ) == (request_state, failure_class, upstream_status_code)
+    if failure_class == "downstream_delivery":
+        registry = json.loads(
+            (run_dir / "proxy-request-registry.json").read_text()
+        )
+        assert registry["request_identities_sha256"] == ["a" * 64]
+
+
+def test_evolver_accepts_caller_confirmed_downstream_delivery(tmp_path):
+    run_dir = tmp_path / "run"
+    record = _audit_record("quarantined")
+    record.update(
+        {
+            "failure_class": "downstream_delivery",
+            "upstream_status_code": 200,
+            "model": "openai/gpt-5",
+        }
+    )
+    payload = (json.dumps(record, sort_keys=True) + "\n").encode()
+    backend = RecordingBackend(run_dir, audit_payload=payload)
+    manager = _manager(tmp_path, backend)
+
+    with _open(manager, run_dir, caller_role="evolver") as session:
+        pass
+
+    [persisted] = [
+        json.loads(line) for line in session.audit_uri.read_text().splitlines()
+    ]
+    assert persisted["request_state"] == "quarantined"
+    assert persisted["failure_class"] == "downstream_delivery"
+    registry = json.loads((run_dir / "proxy-request-registry.json").read_text())
+    assert registry["request_identities_sha256"] == ["a" * 64]

@@ -1,0 +1,194 @@
+{
+  "baseline": {
+    "result_sha256": "db70607b56c5241fd00f2b288d9f460d42333d48b488d22c6cf25edc19cd86d1",
+    "run_id": "qfbench-rootless-base-85x5-official-deepseek-v4-flash-0731-all12x3-20260804",
+    "seed_worker_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c"
+  },
+  "benchmark_commit": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+  "experiment": {
+    "contracts": {
+      "contrastive": {
+        "decision_protocol": "failure_type_v1",
+        "instruction": "Induce one or more recurring failure types across distinct failed tasks and compare them with successful contrast tasks. For each causal hypothesis, state a minimal observable success counterfactual or mark insufficient_contrast. Use constrained probes to eliminate hypotheses, then choose ACT or ABSTAIN. Do not invent a success story and do not force unrelated failures into one type.",
+        "max_components": 3,
+        "probe_policy": "constrained_evidence_profile_v1",
+        "success_counterfactual": "required_or_insufficient"
+      },
+      "failure_only": {
+        "decision_protocol": "failure_type_v1",
+        "instruction": "Induce one or more recurring failure types across distinct failed tasks, generate competing causal failure hypotheses, use constrained probes to eliminate hypotheses, then choose ACT or ABSTAIN. Success counterfactuals are optional in this arm. Do not force unrelated failures into one type.",
+        "max_components": 3,
+        "probe_policy": "constrained_evidence_profile_v1",
+        "success_counterfactual": "optional"
+      }
+    },
+    "evolver_reasoning": "high",
+    "main_model": "deepseek/deepseek-v4-flash-0731",
+    "provider": "deepseek",
+    "worker_setup": {
+      "max_context_tokens": 200000,
+      "max_iterations": 60,
+      "max_tokens_per_call": 32000,
+      "temperature": 0.2
+    }
+  },
+  "panel": {
+    "protections": [
+      {
+        "domain": "systematic_strategy",
+        "mean_pass_fraction": 1.0,
+        "min_pass_fraction": 1.0,
+        "min_test_count": 42,
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "role": "protection",
+        "task_id": "brinson-sector-attribution",
+        "tests_failed": [0, 0, 0, 0, 0],
+        "tests_passed": [42, 42, 42, 42, 42],
+        "verifier_exit_codes": [0, 0, 0, 0, 0]
+      },
+      {
+        "domain": "risk_credit",
+        "mean_pass_fraction": 1.0,
+        "min_pass_fraction": 1.0,
+        "min_test_count": 39,
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "role": "protection",
+        "task_id": "credit-spread-decomposition",
+        "tests_failed": [0, 0, 0, 0, 0],
+        "tests_passed": [39, 39, 39, 39, 39],
+        "verifier_exit_codes": [0, 0, 0, 0, 0]
+      },
+      {
+        "domain": "derivatives",
+        "mean_pass_fraction": 1.0,
+        "min_pass_fraction": 1.0,
+        "min_test_count": 39,
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "role": "protection",
+        "task_id": "bs-greeks-pde",
+        "tests_failed": [0, 0, 0, 0, 0],
+        "tests_passed": [39, 39, 39, 39, 39],
+        "verifier_exit_codes": [0, 0, 0, 0, 0]
+      },
+      {
+        "domain": "derivatives",
+        "mean_pass_fraction": 1.0,
+        "min_pass_fraction": 1.0,
+        "min_test_count": 28,
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "role": "protection",
+        "task_id": "merton-jump-diffusion",
+        "tests_failed": [0, 0, 0, 0, 0],
+        "tests_passed": [28, 28, 28, 28, 28],
+        "verifier_exit_codes": [0, 0, 0, 0, 0]
+      },
+      {
+        "domain": "systematic_strategy",
+        "mean_pass_fraction": 1.0,
+        "min_pass_fraction": 1.0,
+        "min_test_count": 26,
+        "rewards": [1.0, 1.0, 1.0, 1.0, 1.0],
+        "role": "protection",
+        "task_id": "momentum-backtest",
+        "tests_failed": [0, 0, 0, 0, 0],
+        "tests_passed": [26, 26, 26, 26, 26],
+        "verifier_exit_codes": [0, 0, 0, 0, 0]
+      }
+    ],
+    "targets": [
+      {
+        "domain": "rates_fx_macro",
+        "mean_pass_fraction": 0.8947368421052632,
+        "min_pass_fraction": 0.8947368421052632,
+        "min_test_count": 19,
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "role": "target",
+        "task_id": "swap-curve-bootstrap-ois",
+        "tests_failed": [2, 2, 2, 2, 2],
+        "tests_passed": [17, 17, 17, 17, 17],
+        "verifier_exit_codes": [0, 0, 0, 0, 0]
+      },
+      {
+        "domain": "data_engineering",
+        "mean_pass_fraction": 0.5,
+        "min_pass_fraction": 0.5,
+        "min_test_count": 8,
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "role": "target",
+        "task_id": "earnings-surprise-calculator",
+        "tests_failed": [4, 4, 4, 4, 4],
+        "tests_passed": [4, 4, 4, 4, 4],
+        "verifier_exit_codes": [0, 0, 0, 0, 0]
+      },
+      {
+        "domain": "data_engineering",
+        "mean_pass_fraction": 0.42857142857142855,
+        "min_pass_fraction": 0.42857142857142855,
+        "min_test_count": 7,
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "role": "target",
+        "task_id": "corporate-action-adjustment",
+        "tests_failed": [4, 4, 4, 4, 4],
+        "tests_passed": [3, 3, 3, 3, 3],
+        "verifier_exit_codes": [0, 0, 0, 0, 0]
+      },
+      {
+        "domain": "rates_fx_macro",
+        "mean_pass_fraction": 0.16666666666666666,
+        "min_pass_fraction": 0.16666666666666666,
+        "min_test_count": 6,
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "role": "target",
+        "task_id": "zero-coupon-bootstrapping",
+        "tests_failed": [5, 5, 5, 5, 5],
+        "tests_passed": [1, 1, 1, 1, 1],
+        "verifier_exit_codes": [0, 0, 0, 0, 0]
+      },
+      {
+        "domain": "data_engineering",
+        "mean_pass_fraction": 0.6705882352941177,
+        "min_pass_fraction": 0.0,
+        "min_test_count": 11,
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "role": "target",
+        "task_id": "13f-amendment-aware-crowding",
+        "tests_failed": [7, 11, 7, 10, 9],
+        "tests_passed": [44, 0, 44, 41, 42],
+        "verifier_exit_codes": [0, 0, 0, 0, 0]
+      },
+      {
+        "domain": "derivatives",
+        "mean_pass_fraction": 0.0,
+        "min_pass_fraction": 0.0,
+        "min_test_count": 7,
+        "rewards": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "role": "target",
+        "task_id": "localvol-barrier",
+        "tests_failed": [7, 7, 7, 7, 7],
+        "tests_passed": [0, 0, 0, 0, 0],
+        "verifier_exit_codes": [0, 0, 0, 0, 0]
+      }
+    ],
+    "task_ids": [
+      "swap-curve-bootstrap-ois",
+      "earnings-surprise-calculator",
+      "corporate-action-adjustment",
+      "zero-coupon-bootstrapping",
+      "13f-amendment-aware-crowding",
+      "localvol-barrier",
+      "brinson-sector-attribution",
+      "credit-spread-decomposition",
+      "bs-greeks-pde",
+      "merton-jump-diffusion",
+      "momentum-backtest"
+    ]
+  },
+  "schema_version": 1,
+  "selection": {
+    "policy": "all repeatable 0/5 train failures with normal verifier and non-empty counts; five stable 5/5 contrasts/protections",
+    "protection_count": 5,
+    "target_count": 6,
+    "tvt_manifest_sha256": "fcd9a1c20f9d76d754e12ad8828b22a5179aa93a29434389100010d288f74a42"
+  },
+  "stage": "A5"
+}
