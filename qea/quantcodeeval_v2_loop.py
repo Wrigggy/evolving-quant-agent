@@ -68,7 +68,13 @@ EvidenceBuilder = Callable[
     [QuantCodeEvalSearchState, int, Path | None], EvidenceRecord
 ]
 ActivationRunner = Callable[
-    [Path, Mapping[str, object], int], Mapping[str, object]
+    [
+        Path,
+        Mapping[str, object],
+        tuple[Mapping[str, object], ...],
+        int,
+    ],
+    Mapping[str, object],
 ]
 CandidateEvaluator = Callable[
     [Path, Path, Mapping[str, object], tuple[Mapping[str, object], ...], Mapping[str, object], int],
@@ -124,7 +130,10 @@ def _proposal_usage(proposal: EvolverProposal) -> tuple[int, float | None]:
 
 
 def _proposal_component_tests(
-    proposal: EvolverProposal, *, primary_components: tuple[str, ...]
+    proposal: EvolverProposal,
+    *,
+    primary_components: tuple[str, ...],
+    candidate_digest: str,
 ) -> tuple[Mapping[str, object], ...]:
     summary = _json_object(Path(proposal.summary_uri), label="Evolver summary")
     raw = summary.get("component_tests", [])
@@ -158,11 +167,16 @@ def _proposal_component_tests(
         component
         for component in primary_components
         if component in executable
-        and latest.get(component, {}).get("status") != "passed"
+        and (
+            latest.get(component, {}).get("status") != "passed"
+            or latest.get(component, {}).get("candidate_digest")
+            != candidate_digest
+        )
     )
     if missing:
         raise QuantCodeEvalV2LoopError(
-            "primary components lack a final passed smoke: " + ", ".join(missing)
+            "primary components lack a final digest-bound passed smoke: "
+            + ", ".join(missing)
         )
     return records
 
@@ -343,7 +357,9 @@ def run_quantcodeeval_v2_loop(
                 "ACT candidate failed independent admission or component attribution"
             )
         evolver_tests = _proposal_component_tests(
-            proposal, primary_components=primary
+            proposal,
+            primary_components=primary,
+            candidate_digest=actual_digest,
         )
         component_tests: tuple[Mapping[str, object], ...] = (
             *evolver_tests,
@@ -354,7 +370,9 @@ def run_quantcodeeval_v2_loop(
                 "checks": list(admission.checks),
             },
         )
-        activation = dict(activation_runner(candidate, decision, iteration))
+        activation = dict(
+            activation_runner(candidate, decision, component_tests, iteration)
+        )
         if activation.get("status") not in {"passed", "failed"}:
             raise QuantCodeEvalV2LoopError("activation must return passed or failed")
         if activation["status"] == "passed":

@@ -185,7 +185,7 @@ def candidate_evaluation_ref(candidate_run_dir: str | Path) -> EvaluationRef:
     )
 
 
-def _neutral_attempt_inputs(
+def materialize_h0_attempt_sources(
     *, master_root: Path, h0_root: Path, evaluation: EvaluationRef
 ) -> tuple[QuantEvidenceAttemptSource, ...]:
     result = _json(h0_root / "H0-RESULT.json")
@@ -266,7 +266,7 @@ def prepare_initial_pgbs(
     evidence = build_quantcodeeval_evidence(
         destination=root / "evidence" / "iteration-01",
         public_task_roots=public_task_roots,
-        attempts=_neutral_attempt_inputs(
+        attempts=materialize_h0_attempt_sources(
             master_root=root, h0_root=h0_root, evaluation=evaluation
         ),
         current_evaluation_id=evaluation.evaluation_id,
@@ -638,7 +638,7 @@ def record_iteration_two_and_prepare_third(
     h0_evaluation = h0_evaluation_ref(h0_root)
     candidate_one = candidate_evaluation_ref(candidate_one_root)
     sources = (
-        *_neutral_attempt_inputs(
+        *materialize_h0_attempt_sources(
             master_root=root, h0_root=h0_root, evaluation=h0_evaluation
         ),
         *_candidate_attempt_inputs(
@@ -814,7 +814,7 @@ def record_iteration_three_and_prepare_fourth(
         destination=root / "evidence" / "iteration-04",
         public_task_roots=public_task_roots,
         attempts=(
-            *_neutral_attempt_inputs(
+            *materialize_h0_attempt_sources(
                 master_root=root, h0_root=h0_root, evaluation=h0_evaluation
             ),
             *_candidate_attempt_inputs(
@@ -984,7 +984,7 @@ def record_iteration_four_and_prepare_fifth(
         destination=root / "evidence" / "iteration-05",
         public_task_roots=public_task_roots,
         attempts=(
-            *_neutral_attempt_inputs(
+            *materialize_h0_attempt_sources(
                 master_root=root, h0_root=h0_root, evaluation=h0_evaluation
             ),
             *_candidate_attempt_inputs(
@@ -1162,7 +1162,7 @@ def record_iteration_four_and_finalize_success(
         destination=root / "evidence" / "iteration-05",
         public_task_roots=public_task_roots,
         attempts=(
-            *_neutral_attempt_inputs(
+            *materialize_h0_attempt_sources(
                 master_root=root, h0_root=h0_root, evaluation=h0_evaluation
             ),
             *_candidate_attempt_inputs(
@@ -1356,6 +1356,7 @@ __all__ = [
     "QuantCodeEvalExperimentError",
     "candidate_evaluation_ref",
     "h0_evaluation_ref",
+    "materialize_h0_attempt_sources",
     "prepare_initial_pgbs",
     "record_iteration_one_and_prepare_second",
     "record_iteration_two_and_prepare_third",

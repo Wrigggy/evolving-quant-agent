@@ -2381,13 +2381,46 @@ def _record_component_test(result: Mapping[str, Any]) -> dict[str, Any]:
     index = 1
     if path.is_file():
         index += len(path.read_text(encoding="utf-8").splitlines())
-    record = {"schema_version": 1, "test_index": index, **normalized}
+    record = {
+        "schema_version": 1,
+        "test_index": index,
+        "candidate_digest": _candidate_tree_digest(),
+        **normalized,
+    }
     payload = json.dumps(record, sort_keys=True, ensure_ascii=False)
     if len(payload.encode("utf-8")) > _MAX_PROCESS_OUTPUT_BYTES * 2:
         raise GuardedWorkspaceError("component test record exceeds bounded size")
     with path.open("a", encoding="utf-8") as handle:
         handle.write(payload + "\n")
     return record
+
+
+def _candidate_tree_digest() -> str:
+    """Match the coordinator's worker identity for a component-test snapshot."""
+
+    root = _root("candidate")
+    digest = hashlib.sha256()
+    members = tuple(root.rglob("*"))
+    if any(path.is_symlink() for path in members):
+        raise GuardedWorkspaceError("candidate component smoke forbids symlinks")
+    files = sorted(
+        (
+            path
+            for path in members
+            if path.is_file()
+            and ".git" not in path.parts
+            and "__pycache__" not in path.parts
+        ),
+        key=lambda path: path.relative_to(root).as_posix(),
+    )
+    for path in files:
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        payload = path.read_bytes()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+    return digest.hexdigest()
 
 
 def smoke_candidate_component(

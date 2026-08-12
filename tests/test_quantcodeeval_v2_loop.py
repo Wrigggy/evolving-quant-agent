@@ -140,10 +140,12 @@ class FakeProposer:
         }
         component_tests = []
         if iteration == 2:
+            candidate_digest = hash_worker_directory(candidate)
             component_tests = [
                 {
                     "schema_version": 1,
                     "test_index": 1,
+                    "candidate_digest": candidate_digest,
                     "component": "tools",
                     "operation": "call",
                     "target": "tools.robust_estimator:robust_estimator",
@@ -214,11 +216,12 @@ def test_no_model_loop_reuses_rejected_round_and_promotes_full_component(tmp_pat
         )
         return _record(root)
 
-    def activation(candidate, decision, iteration):
+    def activation(candidate, decision, tests, iteration):
         return {
             "status": "passed",
             "iteration": iteration,
             "activated_primary_components": decision["primary_components"],
+            "component_test_count": len(tests),
         }
 
     def evaluate(parent, candidate, decision, tests, activation, iteration):
@@ -269,3 +272,70 @@ def test_no_model_loop_reuses_rejected_round_and_promotes_full_component(tmp_pat
     second = json.loads((run / "rounds/iteration-0002.json").read_text())
     assert second["decision"]["primary_components"] == ["tools"]
     assert second["component_tests"][0]["status"] == "passed"
+
+
+def test_loop_rejects_component_smoke_from_stale_candidate_digest(tmp_path):
+    source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
+    seed = tmp_path / "seed"
+    shutil.copytree(source, seed)
+    evolver = tmp_path / "evolver"
+    evolver.mkdir()
+    (evolver / "agent.yaml").write_text("name: fake\n", encoding="utf-8")
+    run = tmp_path / "run"
+
+    class StaleSmokeProposer(FakeProposer):
+        def propose(self, **kwargs):
+            proposal = super().propose(**kwargs)
+            if kwargs["iteration"] != 2:
+                return proposal
+            summary = json.loads(proposal.summary_uri.read_text(encoding="utf-8"))
+            summary["component_tests"][0]["candidate_digest"] = "0" * 64
+            proposal.summary_uri.write_text(json.dumps(summary), encoding="utf-8")
+            return proposal
+
+    state = initialize_quantcodeeval_search(
+        run_id="qce-v2-stale-smoke",
+        h0_digest=hash_worker_directory(seed),
+        h0_official_rewards={"T16": 1.0, "T24": 0.0},
+        limits=QuantSearchLimits(max_rounds=8),
+    )
+
+    def evidence_builder(current, iteration, history_root):
+        root = run / "evidence" / f"round-{iteration}"
+        root.mkdir(parents=True)
+        (root / "access_log.jsonl").write_text("", encoding="utf-8")
+        (root / "contract.json").write_text("{}", encoding="utf-8")
+        (root / "history").mkdir()
+        if history_root is not None:
+            materialize_quantcodeeval_history_evidence(
+                history_root=history_root,
+                destination=root / "history/archive",
+            )
+        (root / "history/SUMMARY.json").write_text("{}", encoding="utf-8")
+        return _record(root)
+
+    def evaluate(parent, candidate, decision, tests, activation, iteration):
+        return QuantCandidateEvaluation(
+            official_rewards={"T16": 1.0, "T24": 0.0},
+            answer_free_evaluation={"iteration": iteration},
+            official_evaluated=True,
+            new_information=False,
+            reason="no change",
+        )
+
+    import pytest
+
+    with pytest.raises(ValueError, match="digest-bound passed smoke"):
+        run_quantcodeeval_v2_loop(
+            state=state,
+            run_dir=run,
+            seed_worker_dir=seed,
+            evolver_dir=evolver,
+            proposer=StaleSmokeProposer(),
+            evidence_builder=evidence_builder,
+            activation_runner=lambda candidate, decision, tests, iteration: {
+                "status": "passed"
+            },
+            candidate_evaluator=evaluate,
+            diagnosis_builder=lambda current, iteration: f"round {iteration}",
+        )

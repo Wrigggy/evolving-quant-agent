@@ -1,0 +1,89 @@
+{
+  "activation": {
+    "activated_primary_components": [
+      "systemprompt"
+    ],
+    "component_test_count": 1,
+    "iteration": 1,
+    "status": "passed"
+  },
+  "candidate_digest": "4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d",
+  "component_tests": [
+    {
+      "candidate_digest": "4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d",
+      "checks": [
+        "file_manifest",
+        "protected_config",
+        "python_compile",
+        "declared_imports",
+        "subprocess_timeouts",
+        "local_bindings",
+        "local_skills",
+        "local_middlewares",
+        "component_reachability"
+      ],
+      "kind": "independent_full_harness_admission",
+      "status": "passed"
+    }
+  ],
+  "decision": {
+    "components": [
+      "systemprompt"
+    ],
+    "counterevidence": "the worker already produces strategy.py",
+    "decision": "ACT",
+    "evidence_refs": [
+      "contract.json",
+      "history/SUMMARY.json"
+    ],
+    "failure_class": "quant_definition_estimation",
+    "hypotheses_considered": [
+      {
+        "hypothesis_id": "h_prompt",
+        "mechanism": "generic prompt guidance is missing",
+        "prediction": "the task reward improves"
+      },
+      {
+        "hypothesis_id": "h_tool",
+        "mechanism": "a deterministic operation is missing",
+        "prediction": "a tool must activate"
+      }
+    ],
+    "prediction": {
+      "T24": "improve"
+    },
+    "primary_components": [
+      "systemprompt"
+    ],
+    "risk_tasks": [
+      "T16"
+    ],
+    "selected_hypothesis_id": "h_prompt",
+    "uncertainty": "property-family feedback remains answer-free"
+  },
+  "evaluation": {
+    "answer_free_evaluation": {
+      "T16": "pass",
+      "T24": "incomplete"
+    },
+    "cost_usd": 0.0,
+    "model_requests": 2,
+    "new_information": false,
+    "official_evaluated": true,
+    "official_rewards": {
+      "T16": 1.0,
+      "T24": 0.0
+    },
+    "reason": "prompt-only mutation produced no property-family change"
+  },
+  "evidence_sha256": "5baf5541ac18421b69dae2de9384d1ed88450a197ad2c69721e27856815d4e04",
+  "history_entry_id": "194744d9d20c8a95108505cc44b52ef9066fe68a6c9378403eaea41dee9a5b22",
+  "iteration": 1,
+  "prediction": {
+    "decision": "ACT",
+    "round": 1
+  },
+  "protocol": "quant_property_v2_full_harness",
+  "schema_version": 2,
+  "selection": "rejected"
+}

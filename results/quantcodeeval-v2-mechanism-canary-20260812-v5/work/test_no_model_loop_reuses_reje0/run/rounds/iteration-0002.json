@@ -1,0 +1,101 @@
+{
+  "activation": {
+    "activated_primary_components": [
+      "tools"
+    ],
+    "component_test_count": 2,
+    "iteration": 2,
+    "status": "passed"
+  },
+  "candidate_digest": "dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c",
+  "component_tests": [
+    {
+      "candidate_digest": "dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c",
+      "component": "tools",
+      "exit_code": 0,
+      "operation": "call",
+      "schema_version": 1,
+      "status": "passed",
+      "target": "tools.robust_estimator:robust_estimator",
+      "test_index": 1
+    },
+    {
+      "candidate_digest": "dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c",
+      "checks": [
+        "file_manifest",
+        "protected_config",
+        "python_compile",
+        "declared_imports",
+        "subprocess_timeouts",
+        "local_bindings",
+        "local_skills",
+        "local_middlewares",
+        "component_reachability"
+      ],
+      "kind": "independent_full_harness_admission",
+      "status": "passed"
+    }
+  ],
+  "decision": {
+    "components": [
+      "agent_config",
+      "tool_descriptions",
+      "tools"
+    ],
+    "counterevidence": "the worker already produces strategy.py",
+    "decision": "ACT",
+    "evidence_refs": [
+      "contract.json",
+      "history/SUMMARY.json"
+    ],
+    "failure_class": "quant_definition_estimation",
+    "hypotheses_considered": [
+      {
+        "hypothesis_id": "h_tool",
+        "mechanism": "a deterministic estimator operation is missing",
+        "prediction": "the tool activates and T24 improves"
+      },
+      {
+        "hypothesis_id": "h_prompt",
+        "mechanism": "generic prompt guidance is missing",
+        "prediction": "repeat the rejected prompt-only effect"
+      }
+    ],
+    "prediction": {
+      "T24": "improve"
+    },
+    "primary_components": [
+      "tools"
+    ],
+    "risk_tasks": [
+      "T16"
+    ],
+    "selected_hypothesis_id": "h_tool",
+    "uncertainty": "property-family feedback remains answer-free"
+  },
+  "evaluation": {
+    "answer_free_evaluation": {
+      "T16": "pass",
+      "T24": "pass"
+    },
+    "cost_usd": 0.0,
+    "model_requests": 2,
+    "new_information": true,
+    "official_evaluated": true,
+    "official_rewards": {
+      "T16": 1.0,
+      "T24": 1.0
+    },
+    "reason": "deterministic estimator improved the fixed task panel"
+  },
+  "evidence_sha256": "84f615378d532d649e8d2994546484ea915a1c2e80117566cd38668b77bd33ee",
+  "history_entry_id": "99be5a29b01c9395d731f3f228380c1b9ae1977c4c7868b2c577c7660b90e674",
+  "iteration": 2,
+  "prediction": {
+    "decision": "ACT",
+    "round": 2
+  },
+  "protocol": "quant_property_v2_full_harness",
+  "schema_version": 2,
+  "selection": "official_promoted"
+}

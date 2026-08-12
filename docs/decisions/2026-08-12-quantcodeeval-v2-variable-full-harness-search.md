@@ -3,7 +3,8 @@
 > Date: 2026-08-12
 >
 > Status: implemented and measured with a deterministic no-model mechanism
-> canary; live Evolver and QuantCodeEval scoring not yet run through v2
+> canary; real one-round Evolver activation runner implemented; live activation
+> and QuantCodeEval candidate scoring not yet run through v2
 
 ## Decision
 
@@ -85,35 +86,36 @@ claim. It measured this state transition:
    that the mechanism is not fixed to five iterations.
 
 The persisted final artifact is
-`results/quantcodeeval-v2-mechanism-canary-20260812-v4/`:
+`results/quantcodeeval-v2-mechanism-canary-20260812-v5/`:
 
 - `PLAN.json` SHA-256:
-  `10a4ec355d089bcbfa1702814fb9d4fd10dd723ca30063d47395c1ef27ec5237`;
+  `9dfbd6f691de739f80c3de446b1f9d92b1860e08f8390c785f0f56c6e80095e7`;
 - `RESULT.json` SHA-256:
-  `c0a123eac83b1a88d42bf96a518b98b3a6c087ab8793f8ac885bae0d2d6fbf8a`;
+  `2e6ef538917d7408479d0413b6787cb89d74ff755994179750a1c95de39d563b`;
 - `SEARCH-STATE.json` SHA-256:
-  `09092c9a71bcc69406493c901bee34a4e8180cf3c04f953303b5a7cd2331e112`;
+  `bab4679f7b7017a36be42ab61120f63a5a29df9f38399c40db4cd593c64d6193`;
 - 58 regular files, no symlinks, pytest `1 passed`.
 
-Three earlier local runner artifacts are retained as superseded engineering
+Four earlier local runner artifacts are retained as superseded engineering
 negatives. Their test passed, but pytest's runner-created `*current` symlink
 made exact artifact-root discovery ambiguous in the first; later versions were
 superseded while adding exact component-smoke evidence and resumable search
-state validation. v4 removes only generated links before manifesting the
-result and retains ordered component-smoke records.
+state validation. v4 removed only generated links before manifesting the
+result. v5 additionally binds each component smoke to the exact full candidate
+digest, so editing after a successful test invalidates activation until the
+component is tested again.
 
 ## Live-run boundary
 
-The mechanism layer is ready for an actual sandbox Evolver. A live v2 benchmark
-run is still gated on completing and testing the QuantCodeEval rootless runtime
-adapter. Current checked source still has QFBench-specific task-ID, image-plan,
-router/parser, and image-set assumptions that prevent treating a live run as a
-clean v2 result. The isolated two-container checker/strategy implementation and
-canary image plan exist, but they are not yet wired through the generic
-rootless factory and covered by end-to-end router tests.
+The mechanism layer now has a bespoke real activation runner. It reuses the
+published H0 and measured generic Evolver/proxy images, but deliberately does
+not invoke the worker or verifier. One real round can therefore test whether
+the Evolver chooses, binds, and activates an executable component without first
+completing the still-QFBench-specific generic rootless factory.
 
-The next implementation step is therefore runtime integration, followed by one
-small live activation canary. Do not spend a multi-round model budget until the
-factory demonstrably selects the QuantCodeEval parser, exact `strategy.py`
-artifact contract, answer-free evidence sanitizer, uppercase task IDs, and the
-isolated checker/strategy verifier.
+A benchmark-scored v2 candidate remains gated on the existing isolated
+QuantCodeEval worker/verifier path, or on completing the generic adapter work:
+uppercase task IDs, QuantCodeEval parser injection, exact `strategy.py`
+contract, answer-free evidence sanitizer, and checker/strategy isolation. Do
+not spend a multi-round score budget until the one-round activation result is
+usable and the scoring path is identity-bound.

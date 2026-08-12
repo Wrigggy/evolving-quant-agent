@@ -1,0 +1,409 @@
+"""One-round live activation canary for QuantCodeEval full-harness search v2.
+
+This module intentionally stops before candidate benchmark evaluation.  It
+reuses the exact measured H0, gives the real Evolver one isolated round to
+edit and smoke the complete worker harness, and retains the result for a human
+or later controller to decide whether a full T16/T24 candidate panel is worth
+running.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from dataclasses import asdict
+from pathlib import Path
+from typing import Mapping
+
+from .backends.rootless_docker import RootlessDockerBackend
+from .executors.sandbox_evolver import (
+    SandboxEvolverConfig,
+    SandboxFullHarnessProposer,
+)
+from .executors.sandbox_proxy import SandboxProxyConfig, SandboxProxyManager
+from .loop_benchmark import hash_worker_directory
+from .quantcodeeval_experiment import (
+    h0_evaluation_ref,
+    materialize_h0_attempt_sources,
+)
+from .quantcodeeval_release import validate_quantcodeeval_release
+from .quantcodeeval_search import (
+    QuantSearchLimits,
+    initialize_quantcodeeval_search,
+    quantcodeeval_search_payload,
+)
+from .quantcodeeval_v2_evidence import build_quantcodeeval_v2_evidence
+from .quantcodeeval_v2_loop import (
+    QuantCandidateEvaluation,
+    run_quantcodeeval_v2_loop,
+)
+from .resource_lease import HostResourceLeasePool
+from .rootless_full_harness import (
+    _default_health_probe,
+    load_rootless_full_harness_config,
+)
+
+
+MODEL = "deepseek/deepseek-v4-flash-0731"
+PROVIDER = "deepseek"
+PROTOCOL = "quant_property_v2_live_activation_canary"
+EXECUTABLE_COMPONENTS = frozenset(
+    {"agent_config", "tools", "validator", "skills", "memory", "middleware", "routing"}
+)
+
+
+class QuantCodeEvalV2LiveError(RuntimeError):
+    """A live activation canary identity or result is incomplete."""
+
+
+def _canonical_sha256(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _atomic_json(path: Path, value: object, *, replace: bool = False) -> None:
+    payload = json.dumps(value, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() or path.is_symlink():
+        if path.is_symlink() or not path.is_file():
+            raise QuantCodeEvalV2LiveError(f"unsafe persisted record: {path}")
+        if not replace:
+            if path.read_text(encoding="utf-8") != payload:
+                raise QuantCodeEvalV2LiveError(f"persisted record differs: {path}")
+            return
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(payload, encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, path)
+
+
+def _source_identity() -> dict[str, str]:
+    package = Path(__file__).resolve().parent
+    paths = (
+        "executors/remote_evolver.py",
+        "executors/sandbox_evolver.py",
+        "evolve_agent_full/agent.yaml",
+        "evolve_agent_full/systemprompt.md",
+        "evolve_agent_full/tools/guarded_workspace.py",
+        "quantcodeeval_history.py",
+        "quantcodeeval_search.py",
+        "quantcodeeval_v2_evidence.py",
+        "quantcodeeval_v2_live.py",
+        "quantcodeeval_v2_loop.py",
+    )
+    return {relative: _sha256(package / relative) for relative in paths}
+
+
+def _proxy_audit(run_root: Path) -> dict[str, object]:
+    path = run_root / "attempts/evolver-iteration-1/proxy-audit.jsonl"
+    if not path.is_file():
+        return {
+            "request_count": 0,
+            "completed_request_count": 0,
+            "cost_complete": False,
+            "provider_cost_usd": None,
+            "provider_request_ids": [],
+            "reason": "proxy audit is absent",
+        }
+    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    completed = [
+        row
+        for row in rows
+        if row.get("request_state") == "completed"
+        and row.get("failure_class") is None
+        and row.get("upstream_status_code") == 200
+    ]
+    costs = [row.get("provider_cost_usd") for row in completed]
+    numeric_costs = [
+        float(value)
+        for value in costs
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    ]
+    request_ids = [
+        str(row["provider_request_id"])
+        for row in completed
+        if isinstance(row.get("provider_request_id"), str)
+    ]
+    return {
+        "request_count": len(rows),
+        "completed_request_count": len(completed),
+        "all_requests_completed": len(rows) == len(completed) and bool(rows),
+        "cost_complete": len(numeric_costs) == len(completed) and bool(completed),
+        "provider_cost_usd": (
+            sum(numeric_costs) if len(numeric_costs) == len(completed) else None
+        ),
+        "input_tokens": sum(int(row.get("input_tokens") or 0) for row in completed),
+        "output_tokens": sum(int(row.get("output_tokens") or 0) for row in completed),
+        "total_tokens": sum(int(row.get("total_tokens") or 0) for row in completed),
+        "provider_request_ids": request_ids,
+        "provider_request_ids_unique": len(request_ids) == len(set(request_ids)),
+    }
+
+
+def _activation_from_component_tests(
+    candidate: Path,
+    decision: Mapping[str, object],
+    component_tests: tuple[Mapping[str, object], ...],
+    iteration: int,
+) -> dict[str, object]:
+    digest = hash_worker_directory(candidate)
+    primary = tuple(str(value) for value in decision.get("primary_components", ()))
+    executable = tuple(value for value in primary if value in EXECUTABLE_COMPONENTS)
+    latest: dict[str, Mapping[str, object]] = {}
+    for record in component_tests:
+        component = record.get("component")
+        if isinstance(component, str):
+            latest[component] = record
+    activated = tuple(
+        component
+        for component in executable
+        if latest.get(component, {}).get("status") == "passed"
+        and latest.get(component, {}).get("candidate_digest") == digest
+    )
+    passed = bool(executable) and activated == executable
+    return {
+        "schema_version": 1,
+        "status": "passed" if passed else "failed",
+        "iteration": iteration,
+        "candidate_digest": digest,
+        "primary_components": list(primary),
+        "executable_primary_components": list(executable),
+        "activated_primary_components": list(activated),
+        "basis": (
+            "trusted Evolver sandbox component smoke bound to final candidate digest"
+        ),
+        "official_worker_evaluation_run": False,
+    }
+
+
+def run_quantcodeeval_v2_activation_canary(
+    *,
+    config_path: str | Path,
+    release_dir: str | Path,
+    run_dir: str | Path,
+    evolver_image_ref: str,
+    proxy_image_ref: str,
+    preflight_only: bool = False,
+) -> dict[str, object]:
+    """Run or preflight one real Evolver round without resampling H0."""
+
+    root = Path(run_dir).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    release = Path(release_dir).expanduser().resolve()
+    release_identity = validate_quantcodeeval_release(release)
+    config_file = Path(config_path).expanduser().resolve()
+    config = load_rootless_full_harness_config(config_file)
+    if config.allowed_model != MODEL or config.required_provider != PROVIDER:
+        raise QuantCodeEvalV2LiveError("live config has the wrong model route")
+
+    h0_root = release / "h0"
+    seed = h0_root / "workers/H0"
+    public = release / "public"
+    h0 = h0_evaluation_ref(h0_root)
+    seed_digest = hash_worker_directory(seed)
+    if seed_digest != h0.worker_digest:
+        raise QuantCodeEvalV2LiveError("released H0 worker digest differs")
+    rewards = {
+        task_id: float(result.official_reward)
+        for task_id, result in h0.task_results.items()
+    }
+
+    backend = RootlessDockerBackend(
+        docker_host=config.docker_host,
+        expected_uid=config.expected_uid,
+    )
+    docker_preflight = backend.preflight(
+        expected_server_version="29.4.1",
+        expected_security_options=(
+            "name=seccomp,profile=builtin",
+            "name=rootless",
+            "name=cgroupns",
+        ),
+        image_ids=(evolver_image_ref, proxy_image_ref),
+    )
+    plan_material = {
+        "schema_version": 1,
+        "protocol": PROTOCOL,
+        "run_id": root.name,
+        "claim_scope": (
+            "one real Evolver edit-and-smoke round; no candidate benchmark score"
+        ),
+        "h0_evaluation_id": h0.evaluation_id,
+        "h0_worker_digest": seed_digest,
+        "h0_official_rewards": rewards,
+        "h0_resampled": False,
+        "release_identity": release_identity,
+        "config_sha256": _sha256(config_file),
+        "model": MODEL,
+        "required_provider": PROVIDER,
+        "allow_fallbacks": False,
+        "evolver_image_ref": evolver_image_ref,
+        "proxy_image_ref": proxy_image_ref,
+        "docker_preflight_identity_sha256": docker_preflight.identity_sha256,
+        "source_sha256": _source_identity(),
+        "search_limits": asdict(
+            QuantSearchLimits(
+                max_rounds=1,
+                max_no_information_rounds=1,
+                max_consecutive_abstain=1,
+                max_model_requests=64,
+                max_cost_usd=1.0,
+            )
+        ),
+    }
+    plan = {
+        **plan_material,
+        "plan_identity_sha256": _canonical_sha256(plan_material),
+        "status": "preflight_complete",
+        "model_request_count": 0,
+    }
+    _atomic_json(root / "LIVE-PREFLIGHT.json", plan)
+    if preflight_only:
+        return plan
+
+    proxy_manager = SandboxProxyManager(
+        backend=backend,
+        config=SandboxProxyConfig(
+            image_ref=proxy_image_ref,
+            resource_contract=config.proxy_resources,
+            token_file=config.token_file,
+            upstream_base_url=config.upstream_base_url,
+            allowed_path_prefix=config.allowed_path_prefix,
+            allowed_model=MODEL,
+            required_provider=PROVIDER,
+            timeout_seconds=120,
+            finalize_timeout_seconds=360,
+            expect_request=True,
+        ),
+    )
+    pool = HostResourceLeasePool(
+        config.capacity,
+        config.headroom,
+        _default_health_probe(root),
+    )
+    proposer = SandboxFullHarnessProposer(
+        config=SandboxEvolverConfig(
+            image_ref=evolver_image_ref,
+            resource_contract=config.evolver_resources,
+            command_timeout_seconds=1800,
+            lease_timeout_seconds=float(config.lease_timeout_seconds),
+        ),
+        backend=backend,
+        lifecycle_root=root / "lifecycles",
+        proxy_manager=proxy_manager,
+        resource_pool=pool,
+        model_name=MODEL,
+    )
+    attempts = materialize_h0_attempt_sources(
+        master_root=root,
+        h0_root=h0_root,
+        evaluation=h0,
+    )
+    public_roots = {
+        task_id: public / "tasks" / task_id for task_id in h0.task_results
+    }
+
+    def evidence_builder(state, iteration, history_root):
+        return build_quantcodeeval_v2_evidence(
+            destination=root / "evidence" / f"iteration-{iteration:04d}",
+            public_task_roots=public_roots,
+            attempts=attempts,
+            current_evaluation_id=h0.evaluation_id,
+            history_root=history_root,
+            iteration_summaries=(
+                {
+                    "iteration": item.iteration,
+                    "selection": item.selection.value,
+                    "reason": item.reason,
+                }
+                for item in state.rounds
+            ),
+        )
+
+    def activation_only_evaluator(
+        parent, candidate, decision, tests, activation, iteration
+    ):
+        return QuantCandidateEvaluation(
+            official_rewards=rewards,
+            answer_free_evaluation={
+                "schema_version": 1,
+                "activation": dict(activation),
+                "official_candidate_panel_run": False,
+                "h0_evaluation_id": h0.evaluation_id,
+            },
+            official_evaluated=False,
+            new_information=True,
+            reason="activation canary retained candidate without running T16/T24",
+        )
+
+    state = initialize_quantcodeeval_search(
+        run_id=root.name,
+        h0_digest=seed_digest,
+        h0_official_rewards=rewards,
+        limits=QuantSearchLimits(**plan_material["search_limits"]),
+    )
+    final = run_quantcodeeval_v2_loop(
+        state=state,
+        run_dir=root,
+        seed_worker_dir=seed,
+        evolver_dir=Path(__file__).resolve().parent / "evolve_agent_full",
+        proposer=proposer,
+        evidence_builder=evidence_builder,
+        activation_runner=_activation_from_component_tests,
+        candidate_evaluator=activation_only_evaluator,
+        diagnosis_builder=lambda current, iteration: (
+            "T16 is protected at reward 1; T24 remains incomplete. Earlier five-round "
+            "prompt-only mutations produced no gain or regressions. Use the exact "
+            "answer-free evidence to choose between at least two mechanisms. If ACT, "
+            "prefer a testable executable harness component, edit it coherently with "
+            "its bindings, and rerun its component smoke after the final edit."
+        ),
+    )
+    round_payload = json.loads(
+        (root / "rounds/iteration-0001.json").read_text(encoding="utf-8")
+    )
+    decision = round_payload["decision"]
+    activation = round_payload["activation"]
+    proxy_audit = _proxy_audit(root)
+    if decision.get("decision") == "ABSTAIN":
+        status = "CALIBRATED_ABSTAIN"
+    elif activation.get("status") == "passed":
+        status = "PASS"
+    else:
+        status = "FAIL"
+    result_material = {
+        "schema_version": 1,
+        "protocol": PROTOCOL,
+        "status": status,
+        "plan_identity_sha256": plan["plan_identity_sha256"],
+        "h0_evaluation_id": h0.evaluation_id,
+        "h0_resampled": False,
+        "candidate_benchmark_evaluated": False,
+        "benchmark_score_claimed": False,
+        "decision": decision,
+        "candidate_digest": round_payload.get("candidate_digest"),
+        "history_entry_id": round_payload.get("history_entry_id"),
+        "selection": round_payload.get("selection"),
+        "activation": activation,
+        "component_tests": round_payload.get("component_tests"),
+        "search_state": quantcodeeval_search_payload(final),
+        "proxy_audit": proxy_audit,
+    }
+    result = {
+        **result_material,
+        "result_identity_sha256": _canonical_sha256(result_material),
+    }
+    _atomic_json(root / "LIVE-RESULT.json", result)
+    return result
+
+
+__all__ = [
+    "QuantCodeEvalV2LiveError",
+    "run_quantcodeeval_v2_activation_canary",
+]

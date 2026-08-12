@@ -1,0 +1,302 @@
+{
+  "asserted_observations": [
+    "round 1 prompt-only candidate was rejected after no property-family change",
+    "round 2 read the exact rejected round-1 patch",
+    "round 2 changed tools, tool_descriptions, and agent_config coherently",
+    "independent full-harness admission passed before promotion",
+    "search stopped on target_reached after 2 rounds, not a fixed 5 rounds"
+  ],
+  "benchmark_score_claimed": false,
+  "files": [
+    {
+      "path": "PLAN.json",
+      "sha256": "9dfbd6f691de739f80c3de446b1f9d92b1860e08f8390c785f0f56c6e80095e7",
+      "size_bytes": 862
+    },
+    {
+      "path": "junit.xml",
+      "sha256": "cafeca8a5bfa783e9402c258dec3d260b1953dbadc1d54fd14b94fd39307948c",
+      "size_bytes": 410
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/evolver/agent.yaml",
+      "sha256": "63381ca7e9780056f695f786bc9c277d79a96e552fe41edd217b8eab8f0f1dda",
+      "size_bytes": 11
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/SEARCH-STATE.json",
+      "sha256": "bab4679f7b7017a36be42ab61120f63a5a29df9f38399c40db4cd593c64d6193",
+      "size_bytes": 3277
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-1/access_log.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-1/contract.json",
+      "sha256": "4b2ec2141219546d951f879d5653de5f69e6ef2aa009e7f617a0794a76906649",
+      "size_bytes": 42
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-1/history/SUMMARY.json",
+      "sha256": "36c9f53af3ac1e0d3b6a93c8872e0b11c6e860e1227707f60e18be5622beb324",
+      "size_bytes": 18
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/access_log.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/contract.json",
+      "sha256": "4b2ec2141219546d951f879d5653de5f69e6ef2aa009e7f617a0794a76906649",
+      "size_bytes": 42
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/history/SUMMARY.json",
+      "sha256": "0a99d42816c0924e48bcf090e2e4633ff184cafcae52feba6651a3f705fd57bf",
+      "size_bytes": 18
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/history/archive/INDEX.json",
+      "sha256": "a1e08e10f9ee6210b371c310b7ef78d42dd09e9812508c85da8fa026cfb257c5",
+      "size_bytes": 100
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/history/archive/diffs/ede959166c2f8ffb05f92cd1cbf54c646871b4528637239737d1ab073a3ef09f.patch",
+      "sha256": "ede959166c2f8ffb05f92cd1cbf54c646871b4528637239737d1ab073a3ef09f",
+      "size_bytes": 224
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/history/archive/entries/194744d9d20c8a95108505cc44b52ef9066fe68a6c9378403eaea41dee9a5b22.json",
+      "sha256": "8df2dc8a3324e58f4a8f8d979da89cfe9cbae06faf1c5b8da6059d0a9c0690a4",
+      "size_bytes": 2781
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/history/archive/objects/4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d/agent.yaml",
+      "sha256": "4b98d0a01fa04604d1bcd709ee1122b4c678d4d74daddc470ba98d606a9981a4",
+      "size_bytes": 862
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/history/archive/objects/4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d/systemprompt.md",
+      "sha256": "14f3fbe67364418b1b41c328c0f78b391687fb4b3c95c912ee985d3ff0b5ce8b",
+      "size_bytes": 164
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/history/archive/objects/4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d/tool_descriptions/run_shell_command.tool.yaml",
+      "sha256": "696870d4656446b0ed48ca3d39b29e560048f3f2ddc81ab1c0f52c5d5c714754",
+      "size_bytes": 616
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/history/archive/objects/4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c/agent.yaml",
+      "sha256": "4b98d0a01fa04604d1bcd709ee1122b4c678d4d74daddc470ba98d606a9981a4",
+      "size_bytes": 862
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/history/archive/objects/4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c/systemprompt.md",
+      "sha256": "d08f1e38a9d8cc16ad09be1ae10a26d161957c46209c2dc844c9a9c948efe1b6",
+      "size_bytes": 127
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/history/archive/objects/4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c/tool_descriptions/run_shell_command.tool.yaml",
+      "sha256": "696870d4656446b0ed48ca3d39b29e560048f3f2ddc81ab1c0f52c5d5c714754",
+      "size_bytes": 616
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/evidence/round-2/history/archive/tests/4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d.json",
+      "sha256": "70f5394dfad66f12820c036e06514b3485c58fb70bee0de0f9c964609eed3a7c",
+      "size_bytes": 448
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-1/candidate/agent.yaml",
+      "sha256": "4b98d0a01fa04604d1bcd709ee1122b4c678d4d74daddc470ba98d606a9981a4",
+      "size_bytes": 862
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-1/candidate/systemprompt.md",
+      "sha256": "14f3fbe67364418b1b41c328c0f78b391687fb4b3c95c912ee985d3ff0b5ce8b",
+      "size_bytes": 164
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-1/candidate/tool_descriptions/run_shell_command.tool.yaml",
+      "sha256": "696870d4656446b0ed48ca3d39b29e560048f3f2ddc81ab1c0f52c5d5c714754",
+      "size_bytes": 616
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-1/prediction.json",
+      "sha256": "312b3ee69620b41888ee1e59242bfb7d89e76f048804ed512bf7ffe62e153034",
+      "size_bytes": 31
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-1/summary.json",
+      "sha256": "b01f95e728de2ae0b2efcd156727d0cb9f07bf1fdfd6d9607648098f8d5c6c77",
+      "size_bytes": 865
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-2/candidate/agent.yaml",
+      "sha256": "2b33645793bf24b473de2233728a3e8005571b70375f56adf275e7d5499761ad",
+      "size_bytes": 1005
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-2/candidate/systemprompt.md",
+      "sha256": "d08f1e38a9d8cc16ad09be1ae10a26d161957c46209c2dc844c9a9c948efe1b6",
+      "size_bytes": 127
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-2/candidate/tool_descriptions/robust_estimator.tool.yaml",
+      "sha256": "49a2c069f78fd2dbac395a414742e1c5fa57a5f87af1dd20db428ed225fe1423",
+      "size_bytes": 244
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-2/candidate/tool_descriptions/run_shell_command.tool.yaml",
+      "sha256": "696870d4656446b0ed48ca3d39b29e560048f3f2ddc81ab1c0f52c5d5c714754",
+      "size_bytes": 616
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-2/candidate/tools/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-2/candidate/tools/robust_estimator.py",
+      "sha256": "f624cc9cd3a4f12966ef48a490b69f4005555a6295e2b87cc3ff5e03d715965e",
+      "size_bytes": 129
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-2/prediction.json",
+      "sha256": "c225536448e01195efde626a3351018e8e09a16052ec7fb365cb5c87df31f979",
+      "size_bytes": 31
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/fake-proposals/round-2/summary.json",
+      "sha256": "f132db3278ba8a2b67e582045b428f623effac9db8813d6616c4281a080a8009",
+      "size_bytes": 1183
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/INDEX.json",
+      "sha256": "79a604b51696932629d55da71f7c065d2c0a38c6efc655f1b2340cf2075277de",
+      "size_bytes": 167
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/diffs/878382b796eb5a721e50d24b135278f868ea8eb37639a3606feb3fc46e56b79a.patch",
+      "sha256": "878382b796eb5a721e50d24b135278f868ea8eb37639a3606feb3fc46e56b79a",
+      "size_bytes": 1014
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/diffs/ede959166c2f8ffb05f92cd1cbf54c646871b4528637239737d1ab073a3ef09f.patch",
+      "sha256": "ede959166c2f8ffb05f92cd1cbf54c646871b4528637239737d1ab073a3ef09f",
+      "size_bytes": 224
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/entries/194744d9d20c8a95108505cc44b52ef9066fe68a6c9378403eaea41dee9a5b22.json",
+      "sha256": "8df2dc8a3324e58f4a8f8d979da89cfe9cbae06faf1c5b8da6059d0a9c0690a4",
+      "size_bytes": 2781
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/entries/99be5a29b01c9395d731f3f228380c1b9ae1977c4c7868b2c577c7660b90e674.json",
+      "sha256": "a931cc6b84815b529aaf4d57cea131f81788d9b2469bd35841891f1d64a7a2be",
+      "size_bytes": 3890
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d/agent.yaml",
+      "sha256": "4b98d0a01fa04604d1bcd709ee1122b4c678d4d74daddc470ba98d606a9981a4",
+      "size_bytes": 862
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d/systemprompt.md",
+      "sha256": "14f3fbe67364418b1b41c328c0f78b391687fb4b3c95c912ee985d3ff0b5ce8b",
+      "size_bytes": 164
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d/tool_descriptions/run_shell_command.tool.yaml",
+      "sha256": "696870d4656446b0ed48ca3d39b29e560048f3f2ddc81ab1c0f52c5d5c714754",
+      "size_bytes": 616
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c/agent.yaml",
+      "sha256": "4b98d0a01fa04604d1bcd709ee1122b4c678d4d74daddc470ba98d606a9981a4",
+      "size_bytes": 862
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c/systemprompt.md",
+      "sha256": "d08f1e38a9d8cc16ad09be1ae10a26d161957c46209c2dc844c9a9c948efe1b6",
+      "size_bytes": 127
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c/tool_descriptions/run_shell_command.tool.yaml",
+      "sha256": "696870d4656446b0ed48ca3d39b29e560048f3f2ddc81ab1c0f52c5d5c714754",
+      "size_bytes": 616
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c/agent.yaml",
+      "sha256": "2b33645793bf24b473de2233728a3e8005571b70375f56adf275e7d5499761ad",
+      "size_bytes": 1005
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c/systemprompt.md",
+      "sha256": "d08f1e38a9d8cc16ad09be1ae10a26d161957c46209c2dc844c9a9c948efe1b6",
+      "size_bytes": 127
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c/tool_descriptions/robust_estimator.tool.yaml",
+      "sha256": "49a2c069f78fd2dbac395a414742e1c5fa57a5f87af1dd20db428ed225fe1423",
+      "size_bytes": 244
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c/tool_descriptions/run_shell_command.tool.yaml",
+      "sha256": "696870d4656446b0ed48ca3d39b29e560048f3f2ddc81ab1c0f52c5d5c714754",
+      "size_bytes": 616
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c/tools/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/objects/dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c/tools/robust_estimator.py",
+      "sha256": "f624cc9cd3a4f12966ef48a490b69f4005555a6295e2b87cc3ff5e03d715965e",
+      "size_bytes": 129
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/tests/4744227fc122eb746baade968d2b78bb6955057064e7c3ac8017bf494c84923d.json",
+      "sha256": "70f5394dfad66f12820c036e06514b3485c58fb70bee0de0f9c964609eed3a7c",
+      "size_bytes": 448
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/history/tests/dc5e88be6a9307f2a13df3cf97213efc7efea1bf699e5aed98e29e40a843c31c.json",
+      "sha256": "1ee8bde79111a71ac21a4087daf60fc263e1e5e5f6a8d5049c079d8803215400",
+      "size_bytes": 692
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/rounds/iteration-0001.json",
+      "sha256": "3cd0c792ba0c19ecf71807e330f60953a1f1f5f377ed4eaf40ec3d9180d85041",
+      "size_bytes": 2359
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/run/rounds/iteration-0002.json",
+      "sha256": "c32ac980b102767ae710a9a779ad0810e6eb05528415ad3fbfbf39fff38a21b7",
+      "size_bytes": 2742
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/seed/agent.yaml",
+      "sha256": "4b98d0a01fa04604d1bcd709ee1122b4c678d4d74daddc470ba98d606a9981a4",
+      "size_bytes": 862
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/seed/systemprompt.md",
+      "sha256": "d08f1e38a9d8cc16ad09be1ae10a26d161957c46209c2dc844c9a9c948efe1b6",
+      "size_bytes": 127
+    },
+    {
+      "path": "work/test_no_model_loop_reuses_reje0/seed/tool_descriptions/run_shell_command.tool.yaml",
+      "sha256": "696870d4656446b0ed48ca3d39b29e560048f3f2ddc81ab1c0f52c5d5c714754",
+      "size_bytes": 616
+    }
+  ],
+  "protocol": "quant_property_v2_no_model_mechanism_canary",
+  "pytest_exit_code": 0,
+  "run_dir": "work/test_no_model_loop_reuses_reje0/run",
+  "schema_version": 1,
+  "status": "PASS"
+}

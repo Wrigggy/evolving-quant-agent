@@ -1,0 +1,11 @@
+type: tool
+name: robust_estimator
+description: Compute a deterministic arithmetic estimate.
+input_schema:
+  type: object
+  properties:
+    values:
+      type: array
+      items: {type: number}
+  required: [values]
+  additionalProperties: false

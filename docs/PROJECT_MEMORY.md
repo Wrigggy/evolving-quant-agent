@@ -1329,14 +1329,17 @@ second-round `tools + tool_descriptions + agent_config` mutation that read the
 rejected patch, passed independent admission, and stopped on its fixture target
 after two rounds. This is mechanism evidence only: fixture reward vectors and
 request counts are not QuantCodeEval measurements. Final artifact
-`results/quantcodeeval-v2-mechanism-canary-20260812-v4/RESULT.json` has SHA-256
-`c0a123eac83b1a88d42bf96a518b98b3a6c087ab8793f8ac885bae0d2d6fbf8a`.
-The focused implementation suite passed `87 passed`; the complete repository
-suite passed `1277 passed, 1 skipped`; and the persisted canary passed `1
-passed`.
+`results/quantcodeeval-v2-mechanism-canary-20260812-v5/RESULT.json` has SHA-256
+`2e6ef538917d7408479d0413b6787cb89d74ff755994179750a1c95de39d563b`.
+Every component smoke is now bound to the exact full candidate digest; later
+edits invalidate that smoke. The focused activation/mechanism suite passed `51
+passed`; a full rerun passed `1280 passed, 1 skipped` with one retry-audit
+timing flake, and that exact test immediately passed alone. The persisted
+canary passed `1 passed`.
 
-The next live step is rootless QuantCodeEval runtime integration and a small
-activation canary, not a multi-round score claim. The measured T24 resource
+The next live step is the implemented one-round real Evolver activation canary,
+not a multi-round score claim. It reuses the exact published H0 and stops before
+candidate benchmark evaluation. The measured T24 resource
 failure should first route to deterministic early-checkpoint `middleware`;
 quant correctness should then be tested separately with executable `tools` or
 `validator` components. See the

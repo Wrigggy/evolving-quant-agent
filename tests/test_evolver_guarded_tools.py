@@ -1053,3 +1053,36 @@ def test_inspect_candidate_reports_components_bindings_and_syntax(guarded_roots)
     assert report["issues"] == []
     assert "tools/calc.py" in report["components"]["tools"]
     assert {item["kind"] for item in report["declarations"]} == {"tool", "skill"}
+
+
+def test_component_smoke_is_bound_to_exact_candidate_digest(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        read_workspace,
+        smoke_candidate_component,
+        write_candidate,
+    )
+    from qea.worker_identity import hash_worker_directory
+
+    candidate, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    decide_candidate(discovery=decision)
+    write_candidate("tools/checkpoint.py", "def checkpoint():\n    return {'ok': True}\n")
+
+    record = smoke_candidate_component(
+        component="tools",
+        target="tools.checkpoint",
+        operation="call",
+        symbol="checkpoint",
+    )
+
+    assert record["status"] == "passed"
+    assert record["candidate_digest"] == hash_worker_directory(candidate)
+    write_candidate(
+        "tools/checkpoint.py", "def checkpoint():\n    return {'ok': False}\n"
+    )
+    assert record["candidate_digest"] != hash_worker_directory(candidate)
