@@ -32,6 +32,8 @@ exec(compile(probe_code, str(probe_path), "exec"), globals(), globals())
 def probe_public_behavior(
     module_path: str,
     probe_code: str,
+    public_basis: str,
+    competing_definitions: list[str],
     data_dir: str = "/app/data",
     timeout_seconds: int = 90,
 ) -> dict[str, object]:
@@ -46,6 +48,18 @@ def probe_public_behavior(
         return {"status": "failed", "error": "public data directory is missing"}
     if not isinstance(probe_code, str) or not probe_code.strip():
         return {"status": "failed", "error": "probe code is empty"}
+    if not isinstance(public_basis, str) or not public_basis.strip():
+        return {"status": "failed", "error": "public basis is empty"}
+    definitions = [
+        value.strip()
+        for value in competing_definitions
+        if isinstance(value, str) and value.strip()
+    ]
+    if len(definitions) < 2 or len(set(definitions)) != len(definitions):
+        return {
+            "status": "failed",
+            "error": "at least two distinct competing definitions are required",
+        }
 
     with tempfile.TemporaryDirectory(prefix="qea-public-probe-") as temporary:
         root = Path(temporary)
@@ -72,6 +86,8 @@ def probe_public_behavior(
     return {
         "status": "passed" if completed.returncode == 0 else "failed",
         "exit_code": completed.returncode,
+        "public_basis": public_basis.strip(),
+        "competing_definitions": definitions,
         "stdout": stdout,
         "stderr": stderr,
     }

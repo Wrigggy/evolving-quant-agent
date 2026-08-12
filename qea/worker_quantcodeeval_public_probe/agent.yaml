@@ -24,5 +24,8 @@ tools:
     yaml_path: ./tool_descriptions/probe_public_behavior.tool.yaml
     binding: tools.public_behavior_probe:probe_public_behavior
 
+skills:
+  - ./skills/quant-contract-arbitration
+
 tracers:
   - import: nexau.archs.tracer.adapters.in_memory:InMemoryTracer

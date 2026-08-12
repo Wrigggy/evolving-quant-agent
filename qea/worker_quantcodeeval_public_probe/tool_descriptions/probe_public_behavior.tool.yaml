@@ -19,6 +19,18 @@ input_schema:
       description: >-
         Python statements containing independent public behavior assertions.
         `strategy`, `data_dir`, `pd`, `np`, and `json` are already defined.
+    public_basis:
+      type: string
+      description: >-
+        Exact public instruction or paper convention used to select the
+        expected behavior. Do not cite evaluator material.
+    competing_definitions:
+      type: array
+      minItems: 2
+      items: {type: string}
+      description: >-
+        At least two plausible quantitative definitions the probe separates,
+        such as arithmetic mean versus geometric cumulative return.
     data_dir:
       type: string
       description: Public data directory; defaults to /app/data.
@@ -27,5 +39,5 @@ input_schema:
       minimum: 1
       maximum: 180
       description: Probe timeout; defaults to 90 seconds.
-  required: [module_path, probe_code]
+  required: [module_path, probe_code, public_basis, competing_definitions]
   additionalProperties: false

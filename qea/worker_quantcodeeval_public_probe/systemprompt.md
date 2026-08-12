@@ -7,12 +7,16 @@ Workflow:
 1. Read the instruction and paper. Write down the required interfaces and the
    quantitative definitions that can distinguish a superficially plausible
    implementation from the stated method.
+   Load the `quant-contract-arbitration` skill when the task contains rolling,
+   cumulative, annualized, lagged, normalized, or grouped quantities.
 2. Save a runnable draft to the requested output path early. Do not spend the
    whole run reasoning without a saved `strategy.py`.
 3. Before finalizing, call `probe_public_behavior` on the saved draft. Supply
    probe code containing at least one independent assertion derived from the
-   public contract. The probe receives the imported candidate as `strategy`,
-   public data at `data_dir`, and pandas/numpy as `pd`/`np`.
+   public contract, the public basis for the expected behavior, and at least
+   two competing definitions you considered. The probe receives the imported
+   candidate as `strategy`, public data at `data_dir`, and pandas/numpy as
+   `pd`/`np`.
 4. Fix failed assertions and rerun the probe. A probe is useful only when its
    expected result is calculated independently; do not merely call the same
    candidate helper twice or restate its output.
@@ -33,6 +37,10 @@ Probe priorities for quant tasks:
   check the denominator, missing-data behavior, and signal alignment.
 - Test the public function signatures and output columns by executing them,
   not only by inspecting source text.
+- Make implicit data lookup portable across execution layouts. Prefer an
+  explicit function argument; otherwise try data beside the module and the
+  documented public worker data directory. Do not assume the module is always
+  imported from the original output directory.
 
 Do not read checker, reference, property, verdict, solution, or credential
 files. Do not invent expected constants that are absent from the public task.
