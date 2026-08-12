@@ -582,8 +582,10 @@ def run_quantcodeeval_v2_activation_canary(
     prior_rejected_attempt_dir: str | Path | Iterable[str | Path] | None = None,
     prior_failed_candidate_activation_dir: str | Path | None = None,
     prior_failed_candidate_run_dir: str | Path | None = None,
-    prior_scored_candidate_activation_dir: str | Path | None = None,
-    prior_scored_candidate_run_dir: str | Path | None = None,
+    prior_scored_candidate_activation_dir: (
+        str | Path | Iterable[str | Path] | None
+    ) = None,
+    prior_scored_candidate_run_dir: str | Path | Iterable[str | Path] | None = None,
     preflight_only: bool = False,
 ) -> dict[str, object]:
     """Run or preflight one real Evolver round without resampling H0."""
@@ -633,23 +635,25 @@ def run_quantcodeeval_v2_activation_canary(
             seed_worker_dir=seed,
             h0_evaluation_id=h0.evaluation_id,
         )
-    if (prior_scored_candidate_activation_dir is None) != (
-        prior_scored_candidate_run_dir is None
-    ):
+    scored_activations = _prior_attempt_paths(
+        prior_scored_candidate_activation_dir
+    )
+    scored_runs = _prior_attempt_paths(prior_scored_candidate_run_dir)
+    if len(scored_activations) != len(scored_runs):
         raise QuantCodeEvalV2LiveError(
-            "scored candidate activation and full run must be supplied together"
+            "scored candidate activations and full runs must be paired"
         )
-    prior_scored_candidate = None
-    if prior_scored_candidate_run_dir is not None:
-        assert prior_scored_candidate_activation_dir is not None
-        prior_scored_candidate = _seed_scored_candidate_history(
+    prior_scored_candidates = [
+        _seed_scored_candidate_history(
             history_root=root / "history",
-            activation_run_dir=Path(prior_scored_candidate_activation_dir),
-            full_candidate_run_dir=Path(prior_scored_candidate_run_dir),
+            activation_run_dir=activation_dir,
+            full_candidate_run_dir=full_run_dir,
             seed_worker_dir=seed,
             h0_evaluation_id=h0.evaluation_id,
             h0_rewards=rewards,
         )
+        for activation_dir, full_run_dir in zip(scored_activations, scored_runs)
+    ]
 
     backend = RootlessDockerBackend(
         docker_host=config.docker_host,
@@ -686,7 +690,7 @@ def run_quantcodeeval_v2_activation_canary(
         "source_sha256": _source_identity(),
         "prior_rejected_attempts": prior_rejected_attempts,
         "prior_full_candidate_failure": prior_full_candidate_failure,
-        "prior_scored_candidate": prior_scored_candidate,
+        "prior_scored_candidates": prior_scored_candidates,
         "search_limits": asdict(
             QuantSearchLimits(
                 max_rounds=1,

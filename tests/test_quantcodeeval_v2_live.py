@@ -415,3 +415,12 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
     assert entry["evaluation"]["official_evaluated"] is True
     assert entry["evaluation"]["official_rewards"] == {"T16": 0.0, "T24": 0.0}
     assert entry["evaluation"]["h0_official_rewards"] == {"T16": 1.0, "T24": 0.0}
+
+
+def test_prior_path_lists_preserve_multiple_scored_rounds():
+    from qea.quantcodeeval_v2_live import _prior_attempt_paths
+
+    assert _prior_attempt_paths([Path("activation-r6"), Path("activation-r8")]) == (
+        Path("activation-r6"),
+        Path("activation-r8"),
+    )
