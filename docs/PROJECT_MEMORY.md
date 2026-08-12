@@ -1406,6 +1406,17 @@ round may import the exact failed candidate as immutable history while keeping
 H0 as incumbent and unresampled. See the updated
 [live activation and full-candidate report](reports/2026-08-12-quantcodeeval-v2-live-activation-r1.md).
 
+r5 then proved that the Evolver consumed both earlier failure classes and
+changed the validator's delivery behavior, but it left
+`tools/_selftest_strategy_validate.py` in the final harness. Its own later
+smokes passed, while independent admission rejected the unbound Python module.
+No benchmark ran. r5 used 35 requests, 2,345,431 tokens, and exact cost
+`$0.0435037288`; all resources were cleaned. The outer loop now persists this
+admission failure as a rejected history entry, and multiple ordered rejected
+attempts can be imported so the next round sees r1, r4 full-panel, and r5
+together. The result is measured component-contract evidence only; see the
+updated live/full-candidate report above.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

@@ -214,3 +214,45 @@ resampling. The next activation may import this exact r4 candidate, diff,
 decision, component tests, passed activation, task-local artifact failures,
 cost, and cleanup state as immutable search history. It must treat r4 as
 rejected and H0 as the incumbent; H0 is not resampled.
+
+## Follow-up activation r5: self-test admission rejection
+
+r5 imported both the original r1 attribution rejection and the recovered r4
+full-panel failure before making any model request. Its zero-request preflight
+bound history entry IDs
+`926ce7e3c76b1fedd004b0e16bf08b6fb6f1ad8db4270ff38cac11067471f740`
+and
+`299b627ef246d73f1b6085c3d3b76dd5e1e84fd13b4692f830e536b9868d620b`.
+The Evolver explicitly compared unit-scale, temporal-lag, and naive-validator
+delivery mechanisms. It cited the prior candidate and failure entry, described
+the bytecode/trade-log overflow and missing-strategy outcomes, and revised the
+validator to disable bytecode writing, clean cache directories, audit exact
+output membership, and encourage write-first finalization.
+
+The candidate ran an inner edit-test-repair loop: early calls failed because of
+an argument mismatch and then an overly narrow fixture; later validator calls,
+tool import, and agent-graph smokes passed on final digest
+`cb80003c0f424251af802284fe343292842f88e8015e37d4469167efacb00e5f`.
+However, it retained `tools/_selftest_strategy_validate.py` in the submitted
+harness. Independent admission correctly rejected that Python module because
+it was not reachable from a declared tool or middleware. No activation round
+record or benchmark panel was produced. This is another component-contract
+negative, not a QuantCodeEval score.
+
+r5 used 35 successful provider requests, 2,345,431 tokens, and exact audited
+cost `$0.0435037288`. Evolver, proxy, and private-network lifecycle records all
+report exact-ID cleanup. Summary, execution result, and proxy-audit SHA-256 are
+respectively
+`8fbf1dbf65363c247f7c5d1a574c3b40f7d57f612370c6316f3b7500e51bbd0e`,
+`706460d69555f40b5b5eff24ccc5a9a17d0a43535a4c6816f73b1be4419940e6`,
+and
+`1d68395775e1121ab314b81de2f2cc4faf1a9790056f55a39aa76ad4b379e98b`.
+The additive mirror is
+`results/bc-mirror/qce-v2-activation-20260812-r5/`.
+
+The outer loop now records independent `CandidateAdmissionError` outcomes as
+failed digest-bound admission checks and rejected immutable history instead of
+letting them escape as coordinator exceptions. Prior rejected-attempt import
+also recognizes both exact-role mismatches and independent admission failures,
+and accepts multiple ordered prior attempts. A later round can therefore see
+r1, the r4 full-panel failure, and r5's retained self-test simultaneously.

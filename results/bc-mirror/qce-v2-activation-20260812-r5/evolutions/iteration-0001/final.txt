@@ -1,0 +1,35 @@
+The final candidate is verified: `agent.yaml` registers the new tool with the correct binding, the system prompt encodes write-first/finalize discipline plus unit/lag/delivery guidance, and the tool description matches the callable signature. All component smokes passed against the final digest. The implementation is complete — here is the experiment report.
+
+## Experiment contract report
+
+**Decision: ACT** (quant_property_v2) — one coherent mechanism, delivery-safe pre-submission strategy-module validation, bound and smoke-verified.
+
+**Selected hypothesis (`h1_unit_scale`):** T24's sole module numeric constant `VOL_SCALING_TARGET=5.34` (percent form; the paper's "5.34% per month" anchor at `tasks/T24/paper_text.md` lines 6223/6314/6403/6479, and instruction R3) is applied to decimal market returns without `/100`, making `portfolio_weight`/`strategy_return` ~100× too large — matching the observed fingerprint: exactly one failing property per family (`6/7` type_a, `9/10` type_b) while all structural/interface properties pass.
+
+**Hypotheses considered:** `h1_unit_scale` (quant_definition_estimation); `h2_temporal_lag` (data_temporal_integrity — R2 expanding-mean endpoint / R3-R4 shift(1) lag); `h3_naive_validator_binding` (resource_termination — the immutable history candidate `9a72fc74…` passed activation but failed the worker artifact contract: T16 `output_membership_overflow: 4 > 3` with `__pycache__/strategy.cpython-311.pyc`, `-312.pyc`, `trade_log.json`; T24 `missing_submission_artifact`, found `[]`).
+
+**Hypotheses eliminated:** `h3_naive_validator_binding` — directly refuted by the immutable history entry `299b627e…` (its task_outcomes show the exact delivery failures). `h2` remains a live alternate cause for the quant failure but is addressed by the same mechanism-agnostic validator.
+
+**Probe:** `t24_constant_vs_t16_outcome` (probe_evidence) — confirmed T24's percent-form constant vs T16's zero constants, the one-failure-per-family fingerprint, and the distinct artifact-contract failure signature of the historical candidate.
+
+**Evidence used (exact paths):**
+- `history/archive/entries/299b627ef246d73f1b6085c3d3b76dd5e1e84fd13b4692f830e536b9868d620b.json` (delivery failures)
+- `history/archive/diffs/95ad9bc3349bf6b6979a45d85b83444bc5f7226cc3cd28aaabb1ccb05ad1275f.patch` (old binding)
+- `history/archive/entries/926ce7e3c76b1fedd004b0e16bf08b6fb6f1ad8db4270ff38cac11067471f740.json` (declared/actual role mismatch)
+- `tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/{official_and_families,strategy_ast_facts,process_facts}.json`
+- `tasks/T24/instruction.md`, `tasks/T24/paper_text.md`
+- `tasks/T16/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/{official_and_families,strategy_ast_facts}.json`
+
+**Components changed (exact file roles):** `tools` (primary; `tools/strategy_validate.py` + `tools/_selftest_strategy_validate.py`), with bindings `agent_config` (`agent.yaml` registration), `tool_descriptions` (`tool_descriptions/validate_strategy_module.tool.yaml`), and `systemprompt` (`systemprompt.md`). The `validator` role is **not** declared because no `validator/` file changed (per contract semantics), correcting the earlier history-entry pitfall.
+
+**Intervention:** a deterministic pre-submission validator that (1) executes the module from a temporary copy with `sys.dont_write_bytecode=True` so no `__pycache__/*.pyc` can ever appear in the deliverable directory (eliminating the historical T16 overflow), (2) audits the output directory — removes bytecode caches, errors on missing required deliverables (T24's `missing_submission_artifact`), warns on extras beyond the required set, (3) statically verifies required functions and parameter names, (4) runs single-DataFrame functions on a fixed-seed chain-aware synthetic pipeline, checking output columns, NaN/lag placement, near-constant output, look-ahead `shift(-1)`, output/input ratio >100×, and percent-like constants with no explicit `/100` conversion. The system prompt adds write-first/finalize-discipline (save `strategy.py` before anything else; finalize only after the validator reports no errors). No task answer or expected numeric value is encoded.
+
+**Predicted fixes/process changes:** worker saves the module first, validates the draft, fixes flagged errors/warnings, and finalizes only after a clean delivery audit. **Predicted task outcomes:** T16 stays at reward 1.0 with a clean 3-file-limit delivery; T24's quant-failure fingerprint changes and reward > 0 if `h1`/`h2` holds.
+
+**Risk tasks:** T16 (protected) — mitigated: the validator is delivery-clean, does not import from the deliverable dir, and only warns on extra files; T16's 18/18 baseline is unchanged by design.
+
+**Validation performed:** `inspect_candidate` (valid, no issues); `smoke_candidate_tool` (module-not-found path, exit 0); component smokes — `tools.strategy_validate` import (pass), `tools._selftest_strategy_validate:main` end-to-end (pass; fires the percent-hazard warnings, confirms no bytecode leftovers, delivery audit reports exactly `strategy.py`), `agent.yaml` graph (pass, `{"tools": 2}`).
+
+**Uncertainty:** the corpus is answer-free (artifact/trace hashes only), so the exact failing property and whether 5.34 is applied raw cannot be confirmed; `h2` is a live alternate cause; the historical quant intervention was never officially scored. The validator is deliberately mechanism-agnostic (unit scale, lag endpoints, and delivery hygiene) to cover both `h1` and `h2` without encoding an answer.
+
+**Rationale:** the prior tool candidate's mechanism (pre-submission validation) is plausible and was never scored; its demonstrated failure was the binding's delivery side effects, which are now concretely eliminated. Re-testing the quant mechanism with a delivery-safe binding is the highest-evidence next step, and the executable tool is the contract-preferred primary component for `quant_definition_estimation`.

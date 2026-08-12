@@ -1,0 +1,32 @@
+{
+  "attempt_id": "evolver-iteration-1",
+  "attempt_identity_sha256": "053e37dd4a0b33a7fe81f09810369be3d6d3b29667a4168b44936271e769f7bc",
+  "backend": "rootless-docker",
+  "cleaned_at": "2026-08-12T07:13:45.828916+00:00",
+  "cleaned_up": true,
+  "cleanup_method": "exact-id",
+  "cleanup_result": "killed",
+  "created_at": "2026-08-12T06:59:48.308013+00:00",
+  "failure": null,
+  "finished_at": "2026-08-12T07:13:45.429801+00:00",
+  "immutable_image_ref": "sha256:950280b19b6215c9a48ae81d5d9fdc6b69fa2192706ff4920efbb0981e33beae",
+  "native_id": "864b86c2b154c2462011649684d370a94e4c37da32fb29be3b4f505c9e9322be",
+  "resource_contract": {
+    "cpu_count": 2,
+    "executable_tmpfs_paths": [],
+    "memory_mb": 4096,
+    "network_policy": "proxy-outbound",
+    "pids_limit": 128,
+    "timeout_seconds": 3600,
+    "writable_tmpfs_mb": {
+      "/run/qea-secrets": 16,
+      "/tmp": 128
+    }
+  },
+  "role": "proxy",
+  "run_id": "qce-v2-activation-20260812-r5",
+  "schema_version": 2,
+  "spec_sha256": "bccd61b1c5b044199c4b4f0cc476102d554daf10be60adaaac37192ded0e8291",
+  "started_at": "2026-08-12T06:59:48.651643+00:00",
+  "task_id": "full-harness-evolver"
+}

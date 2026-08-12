@@ -1,0 +1,90 @@
+{
+  "allow_fallbacks": false,
+  "claim_scope": "one real Evolver edit-and-smoke round; no candidate benchmark score",
+  "config_sha256": "fc8ed88d93fcae11637ca63cf71eea0057e3d3ca70e4e206d7551d0d5db74f8f",
+  "docker_preflight_identity_sha256": "6226ce30b2974e2b7772a8c901ce0154f683b62109e94da0aceff2e86391068c",
+  "evolver_image_ref": "sha256:adb2a68688488fe94e0fffbe1ffecf8c5416a4c3d2325cee6379e854521b29d2",
+  "h0_evaluation_id": "d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06",
+  "h0_official_rewards": {
+    "T16": 1.0,
+    "T24": 0.0
+  },
+  "h0_resampled": false,
+  "h0_worker_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "model_request_count": 0,
+  "plan_identity_sha256": "c22921532aae14ea36adf4b7898e36399820d547c7d95ee41462bdf34cfff03c",
+  "prior_full_candidate_failure": {
+    "activation_run_id": "qce-v2-activation-20260812-r4",
+    "candidate_digest": "9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089",
+    "entry_id": "299b627ef246d73f1b6085c3d3b76dd5e1e84fd13b4692f830e536b9868d620b",
+    "failure_result_sha256": "72e63a654623ed8cee3d239d4af13139bea2f773056c8702e56ac280075b1c3b",
+    "live_result_sha256": "e49fc05748bacc16c8ece558946072e2b91307678a6866c6a94f5b10ce7ccca0",
+    "preflight_sha256": "59fe46540461178aad8b0f83f3dbaeabe59f6b33c68611879e6a5184fac3a5e3",
+    "reason": "candidate passed component activation but failed before official scoring at the worker artifact contract",
+    "run_id": "qce-v2-full-candidate-20260812-r1-recovered"
+  },
+  "prior_rejected_attempt": {
+    "actual_roles": [
+      "agent_config",
+      "systemprompt",
+      "tool_descriptions",
+      "tools"
+    ],
+    "candidate_digest": "5d73211371ffdaf116f845846d980d14e4370d412ced3fba910bdb27607488f3",
+    "declared_roles": [
+      "agent_config",
+      "systemprompt",
+      "tool_descriptions",
+      "tools",
+      "validator"
+    ],
+    "entry_id": "926ce7e3c76b1fedd004b0e16bf08b6fb6f1ad8db4270ff38cac11067471f740",
+    "reason": "declared component file roles differ from the exact mutation: declared=['agent_config', 'systemprompt', 'tool_descriptions', 'tools', 'validator'], actual=['agent_config', 'systemprompt', 'tool_descriptions', 'tools']",
+    "result_sha256": "214f66a50a5579a74818fc556a988f2d29bedd74230d5db0a7683029951a3acf",
+    "run_id": "qce-v2-activation-20260812-r1",
+    "summary_sha256": "c567956fc79b479a3a377f8ecea6a9dff107b09c36584531ee1873c2d1422d24"
+  },
+  "protocol": "quant_property_v2_live_activation_canary",
+  "proxy_image_ref": "sha256:950280b19b6215c9a48ae81d5d9fdc6b69fa2192706ff4920efbb0981e33beae",
+  "release_identity": {
+    "file_count": 1255,
+    "identity_sha256": "4d3813bfc58afb48ad0eb25f9e028a8529f5d4159bd2803cd4fe175f744c5499",
+    "manifest_sha256": "658b79356179d09cdda0770c9f6cedb17a61e8c0ed8b728f0c9811ef10a69199",
+    "release_dir": "/home/julius/qea/runtime/quantcodeeval/releases/published/4d3813bfc58afb48ad0eb25f9e028a8529f5d4159bd2803cd4fe175f744c5499",
+    "surface_names": [
+      "source",
+      "public",
+      "trusted",
+      "image",
+      "no-model",
+      "h0",
+      "pgbhs"
+    ],
+    "total_bytes": 39465784
+  },
+  "required_provider": "deepseek",
+  "run_id": "qce-v2-activation-20260812-r5",
+  "schema_version": 1,
+  "search_limits": {
+    "max_archive_entries": 8,
+    "max_consecutive_abstain": 1,
+    "max_cost_usd": 1.0,
+    "max_model_requests": 64,
+    "max_no_information_rounds": 1,
+    "max_rounds": 1
+  },
+  "source_sha256": {
+    "evolve_agent_full/agent.yaml": "35895099846ded8fd4d161291deaca9a235a7f924b2059e54f06a164968bcbc8",
+    "evolve_agent_full/systemprompt.md": "e41293e82ff477e8df13e11728986c7f160945b820f2ed0295ac59348622dc71",
+    "evolve_agent_full/tools/guarded_workspace.py": "4bcc4b882993075340620a5690ddc0cf3b9572797d4736364b34df39bc3d7d07",
+    "executors/remote_evolver.py": "e9feea043d97458a62529a025ac59cbfbbb931217a49f971f08a8bef9063b062",
+    "executors/sandbox_evolver.py": "f2335158930e69e7a86d788ef6171392fdf16239a368a7765ff790bd4b51a551",
+    "quantcodeeval_history.py": "81d51d9d0cfe84cc4935ef54255aa9b94343818bc8cf027b88d32781aae2618f",
+    "quantcodeeval_search.py": "f7c94adf7ea0ead536ec58ef6d2d1833e125feaedeeb675d96df3bafc05cf2fd",
+    "quantcodeeval_v2_evidence.py": "fcd4159636469bc2afe7902a9698c0db14800e8dbdef169f6aa107c85db2e48e",
+    "quantcodeeval_v2_live.py": "316637ed84fb1fc8c59340fc64506bf2cc6f7c59bb0198deff65690f7bf68fb0",
+    "quantcodeeval_v2_loop.py": "df4ba39e2c8081b2bf53bce587af3cd30b3a8207ac43abb3ba89a6e608ecc0dd"
+  },
+  "status": "preflight_complete"
+}

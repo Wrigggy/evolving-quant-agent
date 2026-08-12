@@ -1,0 +1,59 @@
+{
+  "benchmark": "quantcodeeval",
+  "component_priors_are_advisory": true,
+  "component_role_semantics": "components and primary_components are exact candidate file roles, not conceptual capabilities; declare validator only when validator/** changes, and declare tools for validator behavior implemented in tools/**",
+  "current_evaluation_id": "d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06",
+  "decision_protocol": "quant_property_v2",
+  "declared_components_must_equal_exact_changed_file_roles": true,
+  "exact_history_content_exposed": true,
+  "feedback_tier": "answer_free_property_family_v2",
+  "history_entry_ids": [
+    "926ce7e3c76b1fedd004b0e16bf08b6fb6f1ad8db4270ff38cac11067471f740",
+    "299b627ef246d73f1b6085c3d3b76dd5e1e84fd13b4692f830e536b9868d620b"
+  ],
+  "history_required": true,
+  "max_declared_components": 6,
+  "max_primary_components": 2,
+  "oracle_fields_exposed": false,
+  "preferred_primary_components": {
+    "artifact_interface": [
+      "validator",
+      "tools",
+      "tool_descriptions"
+    ],
+    "data_temporal_integrity": [
+      "tools",
+      "validator",
+      "skills"
+    ],
+    "isolated_task_specific": [],
+    "portfolio_execution": [
+      "tools",
+      "validator",
+      "routing"
+    ],
+    "quant_definition_estimation": [
+      "tools",
+      "skills",
+      "memory"
+    ],
+    "resource_termination": [
+      "middleware",
+      "routing",
+      "agent_config"
+    ],
+    "unknown": []
+  },
+  "protection_task_ids": [
+    "T16"
+  ],
+  "schema_version": 2,
+  "stage": "PGBHS_V2",
+  "target_task_ids": [
+    "T24"
+  ],
+  "task_ids": [
+    "T16",
+    "T24"
+  ]
+}

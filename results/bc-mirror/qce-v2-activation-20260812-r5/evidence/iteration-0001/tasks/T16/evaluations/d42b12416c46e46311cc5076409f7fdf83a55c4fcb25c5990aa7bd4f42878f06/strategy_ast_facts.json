@@ -1,0 +1,112 @@
+{
+  "import_roots": [
+    "__future__",
+    "argparse",
+    "json",
+    "numpy",
+    "pandas",
+    "pathlib"
+  ],
+  "line_count": 288,
+  "module_numeric_constants": [],
+  "parse_valid": true,
+  "path": "strategy.py",
+  "schema_version": 1,
+  "sha256": "7042581312fc4ee44fcd9bf224f6bea8bd40885c3bfb75be9b8b72c8ab64274b",
+  "size_bytes": 10255,
+  "syntax_error": null,
+  "top_level_symbols": [
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "_parse_dates",
+      "positional_arguments": [
+        "df"
+      ]
+    },
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "compute_realized_variance",
+      "positional_arguments": [
+        "daily_df"
+      ]
+    },
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "compute_weight",
+      "positional_arguments": [
+        "rv_df",
+        "c"
+      ]
+    },
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "compute_managed_returns",
+      "positional_arguments": [
+        "weight_df",
+        "monthly_df"
+      ]
+    },
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "solve_normalization_constant",
+      "positional_arguments": [
+        "rv_df",
+        "monthly_df"
+      ]
+    },
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "compute_alpha_appraisal",
+      "positional_arguments": [
+        "managed_df",
+        "monthly_df"
+      ]
+    },
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "_read_data",
+      "positional_arguments": [
+        "data_dir"
+      ]
+    },
+    {
+      "accepts_kwargs": false,
+      "accepts_varargs": false,
+      "is_async": false,
+      "keyword_only_arguments": [],
+      "kind": "function",
+      "name": "main",
+      "positional_arguments": [
+        "data_dir"
+      ]
+    }
+  ]
+}

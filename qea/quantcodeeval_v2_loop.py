@@ -8,7 +8,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
-from .candidate_admission import AdmissionPolicy, admit_candidate
+from .candidate_admission import (
+    AdmissionPolicy,
+    CandidateAdmissionError,
+    admit_candidate,
+)
 from .evolution_evidence import EvidenceRecord
 from .loop_benchmark import hash_worker_directory
 from .mutation_metrics import measure_mutation
@@ -360,39 +364,64 @@ def run_quantcodeeval_v2_loop(
         primary = tuple(
             str(value) for value in decision.get("primary_components", ())
         )
-        admission = admit_candidate(seed, candidate, AdmissionPolicy.qfbench_full())
+        admission = None
+        admission_error: str | None = None
+        try:
+            admission = admit_candidate(
+                seed, candidate, AdmissionPolicy.qfbench_full()
+            )
+        except CandidateAdmissionError as exc:
+            admission_error = str(exc)
         metrics = measure_mutation(
             before_root=parent,
             after_root=candidate,
             declared_roles=components,
         )
         if (
-            not admission.admitted
-            or not primary
+            not primary
             or not set(primary) <= set(components)
             or metrics["changed_file_count"] == 0
         ):
             raise QuantCodeEvalV2LoopError(
-                "ACT candidate failed independent admission or component attribution"
+                "ACT candidate has an invalid component attribution"
             )
         evolver_tests = _proposal_component_test_records(proposal)
-        component_tests: tuple[Mapping[str, object], ...] = (
-            *evolver_tests,
-            {
+        admission_record: Mapping[str, object]
+        if admission_error is None:
+            assert admission is not None and admission.admitted
+            admission_record = {
                 "kind": "independent_full_harness_admission",
                 "status": "passed",
                 "candidate_digest": actual_digest,
                 "checks": list(admission.checks),
-            },
+            }
+        else:
+            admission_record = {
+                "kind": "independent_full_harness_admission",
+                "status": "failed",
+                "candidate_digest": actual_digest,
+                "error_type": "CandidateAdmissionError",
+                "reason": admission_error,
+            }
+        component_tests: tuple[Mapping[str, object], ...] = (
+            *evolver_tests,
+            admission_record,
         )
-        contract_rejection_reason: str | None = None
-        if metrics["declared_roles_match_actual"] is not True:
+        contract_rejection_reason: str | None = (
+            "independent full-harness admission failed: " + admission_error
+            if admission_error is not None
+            else None
+        )
+        if (
+            contract_rejection_reason is None
+            and metrics["declared_roles_match_actual"] is not True
+        ):
             contract_rejection_reason = (
                 "declared component file roles differ from the exact mutation: "
                 f"declared={metrics['declared_roles']}, "
                 f"actual={metrics['component_roles']}"
             )
-        else:
+        elif contract_rejection_reason is None:
             try:
                 _require_final_primary_component_smokes(
                     evolver_tests,

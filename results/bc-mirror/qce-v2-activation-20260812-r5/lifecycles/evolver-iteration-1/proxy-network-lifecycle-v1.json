@@ -1,0 +1,14 @@
+{
+  "backend": "rootless-docker",
+  "cleaned_at": "2026-08-12T07:13:46.005277+00:00",
+  "cleaned_up": true,
+  "cleanup_method": "exact-id",
+  "cleanup_result": "killed",
+  "created_at": "2026-08-12T06:59:48.188462+00:00",
+  "identity_sha256": "d75439925a6360f20e8bc8f83d079cfb9a03f70479db0f555c577e3553fb5907",
+  "name": "qea-qce-v2-activation-20260812-r5-evolver-iteration-1-d75439925a63-internal",
+  "native_id": "073ec41cb957a0a737444a23df12ba023a967307a76294740b69a28dcb13bb23",
+  "network_scope": "evolver-iteration-1",
+  "run_id": "qce-v2-activation-20260812-r5",
+  "schema_version": 1
+}

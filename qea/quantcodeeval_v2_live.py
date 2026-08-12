@@ -14,8 +14,13 @@ import json
 import os
 from dataclasses import asdict
 from pathlib import Path
-from typing import Mapping
+from typing import Iterable, Mapping
 
+from .candidate_admission import (
+    AdmissionPolicy,
+    CandidateAdmissionError,
+    admit_candidate,
+)
 from .backends.rootless_docker import RootlessDockerBackend
 from .executors.sandbox_evolver import (
     SandboxEvolverConfig,
@@ -184,9 +189,18 @@ def _seed_rejected_attempt_history(
         after_root=candidate,
         declared_roles=components,
     )
-    if metrics["declared_roles_match_actual"] is True:
+    attribution_mismatch = metrics["declared_roles_match_actual"] is not True
+    admission_error = None
+    if not attribution_mismatch:
+        try:
+            admit_candidate(
+                seed_worker_dir, candidate, AdmissionPolicy.qfbench_full()
+            )
+        except CandidateAdmissionError as exc:
+            admission_error = str(exc)
+    if not attribution_mismatch and admission_error is None:
         raise QuantCodeEvalV2LiveError(
-            "prior attempt is not the expected component-attribution rejection"
+            "prior rejected attempt now passes attribution and admission"
         )
     hypotheses = decision.get("hypotheses_considered", ())
     mechanism = next(
@@ -203,10 +217,17 @@ def _seed_rejected_attempt_history(
         not isinstance(value, Mapping) for value in raw_tests
     ):
         raise QuantCodeEvalV2LiveError("prior component tests are invalid")
-    reason = (
-        "declared component file roles differ from the exact mutation: "
-        f"declared={metrics['declared_roles']}, actual={metrics['component_roles']}"
-    )
+    if attribution_mismatch:
+        reason = (
+            "declared component file roles differ from the exact mutation: "
+            f"declared={metrics['declared_roles']}, "
+            f"actual={metrics['component_roles']}"
+        )
+        failure_stage = "candidate_contract"
+    else:
+        assert admission_error is not None
+        reason = "independent full-harness admission failed: " + admission_error
+        failure_stage = "candidate_admission"
     history = append_quantcodeeval_history(
         history_root=history_root,
         run_id=prior.name,
@@ -220,7 +241,7 @@ def _seed_rejected_attempt_history(
         component_tests=tuple(dict(value) for value in raw_tests),
         activation={
             "status": "failed",
-            "failure_stage": "candidate_contract",
+            "failure_stage": failure_stage,
             "candidate_digest": candidate_digest,
             "reason": reason,
             "official_worker_evaluation_run": False,
@@ -233,7 +254,7 @@ def _seed_rejected_attempt_history(
         },
         selection="rejected",
         rollback_reason=reason,
-        allow_rejected_attribution_mismatch=True,
+        allow_rejected_attribution_mismatch=attribution_mismatch,
     )
     return {
         "run_id": prior.name,
@@ -245,6 +266,21 @@ def _seed_rejected_attempt_history(
         "actual_roles": list(metrics["component_roles"]),
         "reason": reason,
     }
+
+
+def _prior_attempt_paths(
+    value: str | Path | Iterable[str | Path] | None,
+) -> tuple[Path, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, (str, Path)):
+        return (Path(value),)
+    paths = tuple(Path(item) for item in value)
+    if not paths:
+        raise QuantCodeEvalV2LiveError("prior rejected attempt list is empty")
+    if len({path.expanduser().resolve() for path in paths}) != len(paths):
+        raise QuantCodeEvalV2LiveError("prior rejected attempt list is duplicated")
+    return paths
 
 
 def _selected_mechanism(decision: Mapping[str, object]) -> str:
@@ -427,7 +463,7 @@ def run_quantcodeeval_v2_activation_canary(
     run_dir: str | Path,
     evolver_image_ref: str,
     proxy_image_ref: str,
-    prior_rejected_attempt_dir: str | Path | None = None,
+    prior_rejected_attempt_dir: str | Path | Iterable[str | Path] | None = None,
     prior_failed_candidate_activation_dir: str | Path | None = None,
     prior_failed_candidate_run_dir: str | Path | None = None,
     preflight_only: bool = False,
@@ -454,14 +490,15 @@ def run_quantcodeeval_v2_activation_canary(
         task_id: float(result.official_reward)
         for task_id, result in h0.task_results.items()
     }
-    prior_rejected_attempt = None
-    if prior_rejected_attempt_dir is not None:
-        prior_rejected_attempt = _seed_rejected_attempt_history(
+    prior_rejected_attempts = [
+        _seed_rejected_attempt_history(
             history_root=root / "history",
-            prior_attempt_dir=Path(prior_rejected_attempt_dir),
+            prior_attempt_dir=path,
             seed_worker_dir=seed,
             h0_rewards=rewards,
         )
+        for path in _prior_attempt_paths(prior_rejected_attempt_dir)
+    ]
     if (prior_failed_candidate_activation_dir is None) != (
         prior_failed_candidate_run_dir is None
     ):
@@ -512,7 +549,7 @@ def run_quantcodeeval_v2_activation_canary(
         "proxy_image_ref": proxy_image_ref,
         "docker_preflight_identity_sha256": docker_preflight.identity_sha256,
         "source_sha256": _source_identity(),
-        "prior_rejected_attempt": prior_rejected_attempt,
+        "prior_rejected_attempts": prior_rejected_attempts,
         "prior_full_candidate_failure": prior_full_candidate_failure,
         "search_limits": asdict(
             QuantSearchLimits(

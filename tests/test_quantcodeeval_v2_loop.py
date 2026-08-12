@@ -343,3 +343,82 @@ def test_loop_archives_component_smoke_from_stale_candidate_digest(tmp_path):
     assert archived["activation"]["failure_stage"] == "candidate_contract"
     assert "digest-bound passed smoke" in archived["activation"]["reason"]
     assert archived["evaluation"]["official_evaluated"] is False
+
+
+def test_loop_archives_independent_admission_failure_instead_of_escaping(tmp_path):
+    source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
+    seed = tmp_path / "seed"
+    shutil.copytree(source, seed)
+    evolver = tmp_path / "evolver"
+    evolver.mkdir()
+    (evolver / "agent.yaml").write_text("name: fake\n", encoding="utf-8")
+    run = tmp_path / "run"
+
+    class UnreachableSelftestProposer(FakeProposer):
+        def propose(self, **kwargs):
+            proposal = super().propose(**kwargs)
+            candidate = Path(proposal.candidate_dir)
+            (candidate / "tools").mkdir(exist_ok=True)
+            (candidate / "tools/_selftest.py").write_text(
+                "def run():\n    return True\n", encoding="utf-8"
+            )
+            summary = json.loads(proposal.summary_uri.read_text(encoding="utf-8"))
+            decision = summary["discovery_hypothesis"]["hypothesis"]
+            decision["components"] = ["tools"]
+            decision["primary_components"] = ["tools"]
+            digest = hash_worker_directory(candidate)
+            summary["component_tests"] = [
+                {
+                    "schema_version": 1,
+                    "test_index": 1,
+                    "candidate_digest": digest,
+                    "component": "tools",
+                    "operation": "import",
+                    "target": "tools._selftest",
+                    "status": "passed",
+                    "exit_code": 0,
+                }
+            ]
+            proposal.summary_uri.write_text(json.dumps(summary), encoding="utf-8")
+            proposal.candidate_digest = digest
+            return proposal
+
+    state = initialize_quantcodeeval_search(
+        run_id="qce-v2-admission-rejection",
+        h0_digest=hash_worker_directory(seed),
+        h0_official_rewards={"T16": 1.0, "T24": 0.0},
+        limits=QuantSearchLimits(max_rounds=1),
+    )
+
+    def evidence_builder(current, iteration, history_root):
+        root = run / "evidence" / f"round-{iteration}"
+        root.mkdir(parents=True)
+        (root / "access_log.jsonl").write_text("", encoding="utf-8")
+        (root / "contract.json").write_text("{}", encoding="utf-8")
+        (root / "history").mkdir()
+        (root / "history/SUMMARY.json").write_text("{}", encoding="utf-8")
+        return _record(root)
+
+    final = run_quantcodeeval_v2_loop(
+        state=state,
+        run_dir=run,
+        seed_worker_dir=seed,
+        evolver_dir=evolver,
+        proposer=UnreachableSelftestProposer(),
+        evidence_builder=evidence_builder,
+        activation_runner=lambda candidate, decision, tests, iteration: {
+            "status": "passed"
+        },
+        candidate_evaluator=lambda *args: (_ for _ in ()).throw(
+            AssertionError("an admission-rejected candidate must not be evaluated")
+        ),
+        diagnosis_builder=lambda current, iteration: "archive admission failure",
+    )
+
+    assert final.rounds[0].selection is SearchSelection.REJECTED
+    round_payload = json.loads((run / "rounds/iteration-0001.json").read_text())
+    assert round_payload["activation"]["failure_stage"] == "candidate_contract"
+    assert "not reachable" in round_payload["activation"]["reason"]
+    assert round_payload["component_tests"][-1]["status"] == "failed"
+    assert round_payload["evaluation"]["official_evaluated"] is False
+    assert len(list((run / "history/entries").glob("*.json"))) == 1

@@ -23,7 +23,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-dir", required=True, type=Path)
     parser.add_argument("--evolver-image", required=True)
     parser.add_argument("--proxy-image", required=True)
-    parser.add_argument("--prior-rejected-attempt", type=Path)
+    parser.add_argument("--prior-rejected-attempt", type=Path, action="append")
     parser.add_argument("--prior-failed-candidate-activation", type=Path)
     parser.add_argument("--prior-failed-candidate-run", type=Path)
     parser.add_argument("--preflight-only", action="store_true")

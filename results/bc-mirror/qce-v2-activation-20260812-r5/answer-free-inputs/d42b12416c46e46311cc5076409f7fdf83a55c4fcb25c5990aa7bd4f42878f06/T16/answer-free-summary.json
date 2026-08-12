@@ -1,0 +1,22 @@
+{
+  "benchmark": "quantcodeeval",
+  "diagnostic_tags": [],
+  "official_reward": 1.0,
+  "property_families": {
+    "type_a": {
+      "errors": 0,
+      "failed": 0,
+      "passed": 6,
+      "skipped": 0,
+      "total": 6
+    },
+    "type_b": {
+      "errors": 0,
+      "failed": 0,
+      "passed": 12,
+      "skipped": 0,
+      "total": 12
+    }
+  },
+  "schema_version": 1
+}

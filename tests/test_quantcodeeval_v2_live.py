@@ -143,6 +143,68 @@ def test_prior_rejected_attempt_becomes_exact_searchable_history(tmp_path):
     assert validate_quantcodeeval_history(tmp_path / "history")["entry_count"] == 1
 
 
+def test_prior_admission_rejection_becomes_exact_searchable_history(tmp_path):
+    source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
+    seed = tmp_path / "seed"
+    shutil.copytree(source, seed)
+    prior = tmp_path / "qce-v2-admission-rejected"
+    attempt = prior / "evolutions/iteration-0001"
+    candidate = attempt / "candidate"
+    candidate.parent.mkdir(parents=True)
+    shutil.copytree(seed, candidate)
+    (candidate / "tools").mkdir()
+    (candidate / "tools/_selftest.py").write_text(
+        "def run():\n    return True\n", encoding="utf-8"
+    )
+    decision = {
+        "decision": "ACT",
+        "hypotheses_considered": [
+            {"hypothesis_id": "h1", "mechanism": "self-test delivery"}
+        ],
+        "selected_hypothesis_id": "h1",
+        "primary_components": ["tools"],
+        "components": ["tools"],
+    }
+    digest = hash_worker_directory(candidate)
+    (attempt / "summary.json").write_text(
+        json.dumps(
+            {
+                "discovery_hypothesis": {
+                    "decision": "ACT",
+                    "hypothesis": decision,
+                },
+                "component_tests": [
+                    {
+                        "schema_version": 1,
+                        "test_index": 1,
+                        "status": "passed",
+                        "component": "tools",
+                        "candidate_digest": digest,
+                    }
+                ],
+            }
+        )
+    )
+    (attempt / "result.json").write_text(
+        json.dumps({"candidate_digest": digest})
+    )
+
+    imported = _seed_rejected_attempt_history(
+        history_root=tmp_path / "history",
+        prior_attempt_dir=prior,
+        seed_worker_dir=seed,
+        h0_rewards={"T16": 1.0, "T24": 0.0},
+    )
+
+    entry = json.loads(
+        (tmp_path / "history/entries" / f"{imported['entry_id']}.json").read_text()
+    )
+    assert "not reachable" in imported["reason"]
+    assert entry["activation"]["failure_stage"] == "candidate_admission"
+    assert entry["selection"] == "rejected"
+    assert validate_quantcodeeval_history(tmp_path / "history")["entry_count"] == 1
+
+
 def test_failed_full_candidate_becomes_unscored_searchable_history(tmp_path):
     source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
     seed = tmp_path / "seed"
