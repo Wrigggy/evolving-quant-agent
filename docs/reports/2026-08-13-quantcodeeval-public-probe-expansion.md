@@ -144,3 +144,75 @@ The final two services exited successfully. After each run, the remote host
 reported zero experiment containers and zero experiment networks. The focused
 adapter, candidate, replay, and retained-output suite passed `16 passed, 21
 deselected` after the run.
+
+## Autonomous contract-audit round
+
+Status: measured one-round autonomous engineering search and four-task
+candidate evaluation; no new solved task
+
+Run identities:
+
+- activation: `qce-public-probe-autonomous-activation-20260813-r1`
+- candidate panel: `qce-public-probe-autonomous-candidate-20260813-r1`
+
+The Evolver read 31 of 43 evidence members exactly, including all four task
+instructions, the current answer-free outcomes, the independent T12 16/16
+comparison, and traces or process facts from every task. It compared three
+hypotheses and selected a missing real-data contract-audit mechanism. The
+candidate changed three files across the full harness rather than making a
+prompt-only mutation:
+
+- `tools/public_behavior_probe.py`: added an executable `contract_checks`
+  interface that calls required functions on public data and checks declared
+  columns, index kind, row count, and value domain;
+- `tool_descriptions/probe_public_behavior.tool.yaml`: exposed that interface
+  to the worker; and
+- `systemprompt.md`: required workers to derive and run the checks before
+  submission.
+
+The final tool import smoke and independent harness admission passed. The
+activation used 45 model requests, 2,662,056 tokens, and `$0.0471596608`.
+This establishes a real Evolver-generated executable component change, not a
+conceptual proposal or another prompt-only search.
+
+The candidate was then sampled once on the same four-task panel:
+
+| Task | diagnostic parent | autonomous candidate | property change | official reward |
+| --- | ---: | ---: | ---: | ---: |
+| T01 | 2/17 | 3/17 | +1 | 0 |
+| T12 | 12/16 | 15/16 | +3 | 0 |
+| T18 | 16/18 | 16/18 | 0 | 0 |
+| T19 | 18/18 | 18/18 | 0 | 1 |
+
+The binary vector remained `0,0,0,1` and task mean remained `0.25`. The
+candidate panel used 136 requests, 6,250,275 tokens, and `$0.1638542808`.
+All requests completed on the pinned DeepSeek Flash route without fallback;
+the service exited successfully and left zero experiment containers and zero
+experiment networks.
+
+This is a useful negative localization result. The new mechanism improved
+several public property outcomes and preserved the positive T19 protection
+task, but it did not close any new task. On T01 the worker reported every
+self-declared contract check and independent probe as passing, while the
+official answer-free result was only Type-A `3/7` and Type-B `0/10`. Therefore
+the missing step is not merely executing more checks on real data: a worker
+can construct an internally consistent check for an incorrect interpretation
+of the public instruction. T18 also spent a long generate-audit-repair loop
+and remained 16/18. The stronger component increased worker effort without a
+corresponding solved-task gain.
+
+The next autonomous round should start again from the diagnostic parent, not
+promote or cumulatively layer this candidate. It should receive the exact
+candidate diff, component tests, answer-free per-task outcomes, and rollback
+reason as searchable history. Its search question is now narrower: how to
+translate a public finance instruction into an independently checkable
+semantic contract, or otherwise discriminate between competing definitions,
+instead of trusting the worker's own declared contract. The Evolver still
+chooses the component and must compare this explanation with at least one
+alternative; the investigator does not prescribe a finalizer or fixed routing
+implementation.
+
+The complete new evidence is mirrored additively under:
+
+- `results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r1/`
+- `results/bc-mirror/qce-public-probe-autonomous-candidate-20260813-r1/`

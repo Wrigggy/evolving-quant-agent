@@ -1587,6 +1587,31 @@ the search variable-length. Full measurements, costs, activation counts, and
 evidence paths are in the
 [public-probe expansion report](reports/2026-08-13-quantcodeeval-public-probe-expansion.md).
 
+**Measured later on 2026-08-13:** the first autonomous round over this
+four-task contrast produced a legal ACT and an executable, non-prompt-only
+candidate. The Evolver selected a real-data contract audit and changed the
+public probe tool, its tool description, and the system prompt. Component
+smoke and admission passed. On a fresh candidate panel, property progress
+changed from `2/17, 12/16, 16/18, 18/18` to
+`3/17, 15/16, 16/18, 18/18`; the official vector therefore remained
+`0,0,0,1` and task mean remained `0.25`. The candidate preserved T19 and
+improved some properties, but solved no new task. Activation cost was 45
+requests, 2,662,056 tokens, and `$0.0471596608`; candidate sampling cost was
+136 requests, 6,250,275 tokens, and `$0.1638542808`.
+
+Do not promote or cumulatively layer this candidate. Its central limitation is
+now measured: T01's worker-declared real-data audit and probes were green while
+the official answer-free families were only Type-A `3/7` and Type-B `0/10`.
+Checking a self-declared contract cannot correct a mistaken reading of the
+public instruction, and the added audit also induced long repair loops. The
+next round should restart from the same diagnostic parent with this exact
+candidate diff, component tests, per-task outcomes, cost, and rollback reason
+available as searchable history. Ask the Evolver to compare alternative ways
+to obtain an independently checkable public semantic contract; keep the full
+harness mutation surface open and T19 as the protection task. Detailed
+evidence is appended to the
+[public-probe expansion report](reports/2026-08-13-quantcodeeval-public-probe-expansion.md).
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
