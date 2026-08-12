@@ -440,6 +440,9 @@ def run_quantcodeeval_v2_activation_canary(
     def activation_only_evaluator(
         parent, candidate, decision, tests, activation, iteration
     ):
+        audit = _proxy_audit(root)
+        request_count = int(audit.get("request_count") or 0)
+        audited_cost = audit.get("provider_cost_usd")
         return QuantCandidateEvaluation(
             official_rewards=rewards,
             answer_free_evaluation={
@@ -451,6 +454,16 @@ def run_quantcodeeval_v2_activation_canary(
             official_evaluated=False,
             new_information=True,
             reason="activation canary retained candidate without running T16/T24",
+            # The outer loop already counts one proposer call.  A NexAU
+            # proposal may contain many provider turns, so add the remainder
+            # from the finalized exact proxy audit.
+            model_requests=max(0, request_count - 1),
+            cost_usd=(
+                float(audited_cost)
+                if isinstance(audited_cost, (int, float))
+                and not isinstance(audited_cost, bool)
+                else 0.0
+            ),
         )
 
     state = initialize_quantcodeeval_search(

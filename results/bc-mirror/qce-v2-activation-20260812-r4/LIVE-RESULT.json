@@ -1,0 +1,332 @@
+{
+  "activation": {
+    "activated_primary_components": [
+      "tools"
+    ],
+    "basis": "trusted Evolver sandbox component smoke bound to final candidate digest",
+    "candidate_digest": "9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089",
+    "executable_primary_components": [
+      "tools"
+    ],
+    "iteration": 1,
+    "official_worker_evaluation_run": false,
+    "primary_components": [
+      "tools"
+    ],
+    "schema_version": 1,
+    "status": "passed"
+  },
+  "benchmark_score_claimed": false,
+  "candidate_benchmark_evaluated": false,
+  "candidate_digest": "9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089",
+  "component_tests": [
+    {
+      "candidate_digest": "492c5a90dde4b7f71063734047b1ed89dbddc9178e5dbb88aa11f79a32718fe7",
+      "component": "tools",
+      "exit_code": 0,
+      "operation": "import",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"module\": \"tools.strategy_validate\"}\n",
+      "target": "tools.strategy_validate",
+      "test_index": 1
+    },
+    {
+      "candidate_digest": "492c5a90dde4b7f71063734047b1ed89dbddc9178e5dbb88aa11f79a32718fe7",
+      "component": "agent_config",
+      "exit_code": 0,
+      "operation": "graph",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "E2B SDK not installed. Install it with: pip install e2b\n",
+      "stdout": "{\"tools\": 2}\n",
+      "target": "agent.yaml",
+      "test_index": 2
+    },
+    {
+      "candidate_digest": "5fb6b5dadbda9ff145fb2bf4a581cf9ffdaa7be0262c3a05e2b83ee9df3ec344",
+      "component": "tools",
+      "exit_code": 0,
+      "operation": "import",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"module\": \"tools.strategy_validate\"}\n",
+      "target": "tools.strategy_validate",
+      "test_index": 3
+    },
+    {
+      "candidate_digest": "5fb6b5dadbda9ff145fb2bf4a581cf9ffdaa7be0262c3a05e2b83ee9df3ec344",
+      "component": "agent_config",
+      "exit_code": 0,
+      "operation": "graph",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "E2B SDK not installed. Install it with: pip install e2b\n",
+      "stdout": "{\"tools\": 2}\n",
+      "target": "agent.yaml",
+      "test_index": 4
+    },
+    {
+      "candidate_digest": "9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089",
+      "component": "tools",
+      "exit_code": 0,
+      "operation": "import",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"module\": \"tools.strategy_validate\"}\n",
+      "target": "tools.strategy_validate",
+      "test_index": 5
+    },
+    {
+      "candidate_digest": "9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089",
+      "component": "agent_config",
+      "exit_code": 0,
+      "operation": "graph",
+      "output_truncated": false,
+      "schema_version": 1,
+      "status": "passed",
+      "stderr": "E2B SDK not installed. Install it with: pip install e2b\n",
+      "stdout": "{\"tools\": 2}\n",
+      "target": "agent.yaml",
+      "test_index": 6
+    },
+    {
+      "candidate_digest": "9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089",
+      "checks": [
+        "file_manifest",
+        "protected_config",
+        "python_compile",
+        "declared_imports",
+        "subprocess_timeouts",
+        "local_bindings",
+        "local_skills",
+        "local_middlewares",
+        "component_reachability"
+      ],
+      "kind": "independent_full_harness_admission",
+      "status": "passed"
+    }
+  ],
+  "decision": {
+    "abstain_reason": "",
+    "component_override_reason": "The quant_property_v2 prior for quant_definition_estimation lists [tools, skills, memory]. The evidence (T24's sole numeric constant is the percent-form VOL_SCALING_TARGET=5.34 matching the paper's '5.34% per month' anchor; one systematic failing property per family; answer-free corpus) points to a deterministic pre-submission unit/lag/interface audit. That logic is implemented under tools/ (validator behavior in tools/*.py is the tools role per contract semantics), so tools is the single primary causal role; skills/memory are not needed to bind this mechanism.",
+    "components": [
+      "agent_config",
+      "systemprompt",
+      "tool_descriptions",
+      "tools"
+    ],
+    "counterevidence": "The corpus is answer-free: artifact and trace content are hashes only, so the exact failing property cannot be read. The one-failure-per-family fingerprint is equally consistent with h2 (temporal-lag endpoint), which the evidence cannot exclude. The module storing VOL_SCALING_TARGET=5.34 does not by itself prove misuse (code may divide by 100 at use). T16's success shows the harness can pass without any validator, so the tool is an improvement, not a demonstrated necessity.",
+    "decision": "ACT",
+    "evidence_refs": [
+      "history/archive/diffs/ec56c0d179a1460fbcf5e48f526751dc148fc19649656724c4eac66786e01c79.patch",
+      "history/archive/entries/926ce7e3c76b1fedd004b0e16bf08b6fb6f1ad8db4270ff38cac11067471f740.json",
+      "tasks/T16/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/official_and_families.json",
+      "tasks/T16/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/strategy_ast_facts.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/official_and_families.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/process_facts.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/strategy_ast_facts.json",
+      "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/trace_facts.json",
+      "tasks/T24/instruction.md",
+      "tasks/T24/paper_text.md"
+    ],
+    "failure_class": "quant_definition_estimation",
+    "grounded_comparison_probe_ids": [],
+    "hypotheses_considered": [
+      {
+        "failure_type_id": "quant_definition_estimation",
+        "hypothesis_id": "h1_unit_scale",
+        "mechanism": "Fixed-constant unit-scale error: the paper C.1 prescribes a volatility-scaling target quoted in percent ('5.34% per month') on decimal market-return data. The submitted module stores VOL_SCALING_TARGET = 5.34 (raw percent form) as its only numeric constant; if applied without /100 to decimal weights/returns, portfolio_weight and strategy_return are ~100x too large, failing exactly the scale-sensitive properties (one per family).",
+        "prediction": "Next T24 evaluation: properties checking portfolio_weight/strategy_return magnitudes and return-column scaling fail while structural/interface properties pass (fingerprint already shows 6/7 type_a, 9/10 type_b).",
+        "success_counterfactual": "T16 passes all 18 properties with NO module numeric constants (c solved from the sample per its R6), so percent-form fixed constants are absent there - consistent with a unit-scale hazard being T24-specific."
+      },
+      {
+        "failure_type_id": "data_temporal_integrity",
+        "hypothesis_id": "h2_temporal_lag",
+        "mechanism": "Temporal-lag endpoint error: the expanding window mean must exclude the current month (R2), sum_4_newsy must use strictly-prior newsy months, and portfolio_weight/strategy_return require a shift(1) lag (R3/R4). A wrong endpoint (including current month, or shift applied at the wrong stage) misaligns strategy_return with returns and fails lag/NaN-placement properties.",
+        "prediction": "Next T24 evaluation: properties checking signal causality (expanding_mean endpoint, strategy_return alignment, NaN placement) fail while magnitude-scale properties pass.",
+        "success_counterfactual": "T16's strict one-month lag rules (R3) pass under the same worker digest, so the worker can implement lag rules when the instruction states them; T24's lag structure is more intricate (newsy-month windows), leaving room for an endpoint slip."
+      },
+      {
+        "failure_type_id": "artifact_interface",
+        "hypothesis_id": "h3_baseline_interface",
+        "mechanism": "The worker's four required functions exist at top level with exact parameter names and the module parses and imports, so the failure is not an interface/presence defect; T16 proves the same worker+harness can pass fully without any added validator.",
+        "prediction": "No change is needed for interface compliance; the T24 failure is in quant conventions, not in function presence/signature or artifact existence.",
+        "success_counterfactual": "T16 passes 18/18 under the same worker digest."
+      }
+    ],
+    "hypotheses_eliminated": [
+      "h3_baseline_interface"
+    ],
+    "prediction": {
+      "process_changes": "worker calls validate_strategy_module on the draft before final save; the draft-edit loop consumes validator errors/warnings; no new task-specific branches added",
+      "task_outcomes": {
+        "T16": "official_reward stays 1.0 (all 18 properties pass)",
+        "T24": "official_reward > 0 with diagnostic_tags no longer containing properties_incomplete, or at least the currently failing properties pass"
+      }
+    },
+    "primary_components": [
+      "tools"
+    ],
+    "probe_ids_used": [
+      "t24_mechanism_discrimination_v2"
+    ],
+    "risk_tasks": [
+      "T16"
+    ],
+    "selected_hypothesis_id": "h1_unit_scale",
+    "uncertainty": "Cannot confirm the precise failing property from the answer-free corpus. The intervention is deliberately mechanism-agnostic: a deterministic pre-submission validator that audits interface compliance, synthetic runnability, output columns, all-NaN/last-row-NaN lag placement, look-ahead shift(-1), percent-form constants with no decimal conversion, and percent-vs-decimal magnitude hazards - it addresses both h1 and h2 without encoding any task answer or expected numeric value."
+  },
+  "h0_evaluation_id": "d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06",
+  "h0_resampled": false,
+  "history_entry_id": "287323ea195f13f5983f351bf65f099c123fd8814240465b9f6106ff01df64b6",
+  "plan_identity_sha256": "775336fcf654dc7160162659bb6e95dadfcca76afdd5a988475e58bfa19ef259",
+  "protocol": "quant_property_v2_live_activation_canary",
+  "proxy_audit": {
+    "all_requests_completed": true,
+    "completed_request_count": 48,
+    "cost_complete": true,
+    "input_tokens": 2980699,
+    "output_tokens": 56863,
+    "provider_cost_usd": 0.0345887416,
+    "provider_request_ids": [
+      "gen-1786514405-T2tgCrSL8duTtZUSllBP",
+      "gen-1786514410-KXOC3BhKnhI7g5eGkMqw",
+      "gen-1786514416-FCEpxUovwzWGnjSwjpXI",
+      "gen-1786514421-qQ7l7eBQzBe4Xu8H5Aa7",
+      "gen-1786514431-2deZPIWlRiY8wUVB8U9W",
+      "gen-1786514440-PvLTGBEOPIgsyHHSES8O",
+      "gen-1786514459-qej5X8b9ABdbwWc8OdLL",
+      "gen-1786514464-UOc2BpQYnGgiJ44vgbA9",
+      "gen-1786514511-6ZthqEKToT2qrd5CC2eo",
+      "gen-1786514556-RIYbALUg7I36VD5Hynkr",
+      "gen-1786514561-i35Mwn3pBcR69djFIHXP",
+      "gen-1786514567-1LQr8JnszWIzfdhsIiF6",
+      "gen-1786514574-LwJJiSIQrImd5LX26OFT",
+      "gen-1786514669-uiBOy1eLug8xDbmx5tRe",
+      "gen-1786514683-gK2iD1NbG6GJptfFISNd",
+      "gen-1786514698-0iUCg4c9biFlOJfwHcoz",
+      "gen-1786514717-UiVyEDxnq61ILc1sFlrB",
+      "gen-1786514726-BuYOf1MJgoWTbE0FFroR",
+      "gen-1786514730-ivy5OpiEJZlR1aVai3zB",
+      "gen-1786514733-O5kwlsTOhYvJqkvLhG12",
+      "gen-1786514746-A4aG25DnndpgBMVAvksz",
+      "gen-1786514753-jFMWggRDwAbMXxQh4ePO",
+      "gen-1786514759-GeJ7R2n65YuWQqLQcoTy",
+      "gen-1786514765-IOgk454tykYPyfEYc4zr",
+      "gen-1786514796-3RWPcD3IylWqP61DI1QY",
+      "gen-1786514803-Rw1QfBRmMhIqtdWR17FM",
+      "gen-1786514808-BV7KJHwhbKFmkib49s3M",
+      "gen-1786514814-uS2sLqIyaGfVpidLcDkl",
+      "gen-1786514819-GeX83ueiUOJvHzqeBsjm",
+      "gen-1786514825-Erg19AhI1ofD7TEoTTU0",
+      "gen-1786514829-hLjkXojPp8s0usXwjPDF",
+      "gen-1786514832-R5DyTWu4BnoPb1k3H6Fn",
+      "gen-1786514839-S9hbnMzAfil8kbPT04Av",
+      "gen-1786514843-vMYP12NrNJeEJ6FupV8g",
+      "gen-1786514849-z1hMmlc49QnYbX2pPUbW",
+      "gen-1786514855-huwd4VtlpNTAeBVj2dkH",
+      "gen-1786514861-SsD5URoqIJQX8u60zjWg",
+      "gen-1786514867-TKGAcogm9Lk1JnfL2k2P",
+      "gen-1786514876-JSINs1pemAEna6cRntIh",
+      "gen-1786514882-9ISxdeC3UxULt6dvywnk",
+      "gen-1786514887-lSdNIHrduqVcKgR8pyGI",
+      "gen-1786514898-hy8PhXDy57vgs4hf4llw",
+      "gen-1786514902-Hwtrmp5v1Mob15c803sY",
+      "gen-1786514908-n1IM4RlKHsu1fMYybQlY",
+      "gen-1786514913-NujfqXpqixwP6ozHMS9n",
+      "gen-1786514918-mQhQLpYR8ZZDNAUCD4Lm",
+      "gen-1786514930-tt2IbOC0RybuOy4P4gnf",
+      "gen-1786514935-Q72pwGnEcChjweGhnTSx"
+    ],
+    "provider_request_ids_unique": true,
+    "request_count": 48,
+    "total_tokens": 3037562
+  },
+  "result_identity_sha256": "c9ff158996c34faf74547b409d1500cfb3d1825d4a4b8df07a297cafe71d1fac",
+  "schema_version": 1,
+  "search_state": {
+    "archive": [
+      {
+        "candidate_digest": "9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089",
+        "history_entry_id": "287323ea195f13f5983f351bf65f099c123fd8814240465b9f6106ff01df64b6",
+        "official_rewards": {
+          "T16": 1.0,
+          "T24": 0.0
+        },
+        "selection": "archived"
+      }
+    ],
+    "consecutive_abstain": 0,
+    "consecutive_no_information": 0,
+    "h0_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+    "limits": {
+      "max_archive_entries": 8,
+      "max_consecutive_abstain": 1,
+      "max_cost_usd": 1.0,
+      "max_model_requests": 64,
+      "max_no_information_rounds": 1,
+      "max_rounds": 1
+    },
+    "official_incumbent_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+    "official_rewards": {
+      "T16": 1.0,
+      "T24": 0.0
+    },
+    "protocol": "quant_property_v2_full_harness",
+    "rounds": [
+      {
+        "candidate_digest": "9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089",
+        "cost_usd": 0.0,
+        "decision": "ACT",
+        "declared_roles": [
+          "agent_config",
+          "systemprompt",
+          "tool_descriptions",
+          "tools"
+        ],
+        "history_entry_id": "287323ea195f13f5983f351bf65f099c123fd8814240465b9f6106ff01df64b6",
+        "iteration": 1,
+        "mechanism": "Fixed-constant unit-scale error: the paper C.1 prescribes a volatility-scaling target quoted in percent ('5.34% per month') on decimal market-return data. The submitted module stores VOL_SCALING_TARGET = 5.34 (raw percent form) as its only numeric constant; if applied without /100 to decimal weights/returns, portfolio_weight and strategy_return are ~100x too large, failing exactly the scale-sensitive properties (one per family).",
+        "model_requests": 1,
+        "new_information": true,
+        "official_rewards": {
+          "T16": 1.0,
+          "T24": 0.0
+        },
+        "parent_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+        "primary_components": [
+          "tools"
+        ],
+        "reason": "activation canary retained candidate without running T16/T24",
+        "selection": "archived"
+      }
+    ],
+    "run_id": "qce-v2-activation-20260812-r4",
+    "schema_version": 2,
+    "search_parent_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c",
+    "search_parent_rewards": {
+      "T16": 1.0,
+      "T24": 0.0
+    },
+    "state_sha256": "1ff07d2ac75e8aa85912ee05aea8f0cf290455479b662bf18a9dbf43579bd390",
+    "stop_reason": "budget_exhausted",
+    "stopped": true,
+    "task_ids": [
+      "T16",
+      "T24"
+    ],
+    "total_cost_usd": 0.0,
+    "total_model_requests": 1
+  },
+  "selection": "archived",
+  "status": "PASS"
+}

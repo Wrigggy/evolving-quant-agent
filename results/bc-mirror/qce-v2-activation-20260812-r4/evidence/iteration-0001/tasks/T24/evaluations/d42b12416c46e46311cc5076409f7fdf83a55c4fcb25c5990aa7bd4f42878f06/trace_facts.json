@@ -1,0 +1,16 @@
+{
+  "content_exposed": false,
+  "event_count": 28,
+  "malformed_event_count": 0,
+  "roles": {
+    "assistant": 12,
+    "system": 1,
+    "tool": 14,
+    "user": 1
+  },
+  "schema_version": 1,
+  "sha256": "20c2c6f2fbd4e9b38dc43ff4f769d32bc234e16c235413962a00be3334ae741b",
+  "size_bytes": 74503,
+  "tool_error_count": 0,
+  "tool_event_count": 14
+}

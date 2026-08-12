@@ -1380,6 +1380,19 @@ model to fall back to a legacy schema-1 unlock. This is now fixed and legacy
 unlock is forbidden under quant v2. r3 used 29 requests, 1,506,130 tokens, and
 `$0.036206044`; H0 was not resampled and no worker/verifier ran.
 
+r4 then passed the complete activation mechanism. It persisted schema-4 ACT,
+declared exact file roles, performed multiple draft/self-test repairs, removed
+temporary fixtures, reran final-digest tool and graph smokes, and passed all
+nine independent admission checks. Candidate digest is
+`9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089`,
+history entry is
+`287323ea195f13f5983f351bf65f099c123fd8814240465b9f6106ff01df64b6`,
+and activation result identity is
+`c9ff158996c34faf74547b409d1500cfb3d1825d4a4b8df07a297cafe71d1fac`.
+r4 used 48 requests, 3,037,562 tokens, and `$0.0345887416`. It did not run the
+candidate benchmark panel and makes no T16/T24 score claim. Provider-turn
+request/cost reconciliation is now wired into outer search accounting.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

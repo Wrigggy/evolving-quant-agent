@@ -1,0 +1,52 @@
+Everything is final and coherent. The candidate is complete:
+
+- **`tools/strategy_validate.py`** — chain-aware deterministic pre-submission validator (imports clean, call verified).
+- **`tool_descriptions/validate_strategy_module.tool.yaml`** — schema matches the callable signature.
+- **`agent.yaml`** — `validate_strategy_module` registered (2 tools, graph valid).
+- **`systemprompt.md`** — workflow calls the validator before finalizing, with percent/lag discipline.
+
+## Experiment report
+
+```json
+{
+  "decision": "ACT",
+  "summary": "T24 (target) fails 2/17 properties with interface fully conformant (all 4 required functions, exact params, valid parse) while the module's only numeric constant is the percent-form VOL_SCALING_TARGET=5.34 matching the paper's '5.34% per month' anchor; T16 (protected) passes 18/18 with zero module constants. The prior history entry was rejected solely on a declared/actual role mismatch (declared 'validator' with no validator/ files; validator logic actually lived in tools/) and was never officially evaluated. Implemented the mechanism-agnostic pre-submission validator as a registered tools-role tool with chain-aware synthetic pipeline execution, percent-vs-decimal hazard warnings (including no-decimal-conversion detection), lag/NaN placement audit, and look-ahead shift(-1) scan.",
+  "components_changed": ["agent_config", "systemprompt", "tool_descriptions", "tools"],
+  "primary_components": ["tools"],
+  "failure_types": ["quant_definition_estimation"],
+  "hypotheses_considered": [
+    {"hypothesis_id": "h1_unit_scale", "failure_type_id": "quant_definition_estimation", "mechanism": "Percent-form fixed volatility-scaling target (5.34% stored raw as 5.34) applied to decimal market returns ~100x-scales portfolio_weight/strategy_return, failing scale-sensitive properties.", "prediction": "Scale/magnitude properties on portfolio_weight/strategy_return fail; structural/interface properties pass (6/7 type_a, 9/10 type_b).", "success_counterfactual": "T16 passes with no module constants."},
+    {"hypothesis_id": "h2_temporal_lag", "failure_type_id": "data_temporal_integrity", "mechanism": "Wrong lag endpoint in expanding_mean or strategy_return alignment (shift applied at wrong stage) misaligns signals with returns.", "prediction": "Causality/NaN-placement properties fail while magnitudes pass.", "success_counterfactual": "T16 strict lag rules pass under same worker."},
+    {"hypothesis_id": "h3_baseline_interface", "failure_type_id": "artifact_interface", "mechanism": "Failure is purely an interface/presence defect.", "prediction": "Missing functions/signature/artifact would explain failure.", "success_counterfactual": "T16 passes under same worker."}
+  ],
+  "selected_hypothesis_id": "h1_unit_scale",
+  "hypotheses_eliminated": ["h3_baseline_interface"],
+  "counterevidence": "Answer-free corpus (artifact/trace are hashes) prevents reading the exact failing property; h2 cannot be fully excluded; the constant's mere presence doesn't prove misuse; T16 shows the harness can pass without a validator.",
+  "uncertainty": "The exact failing property is unreadable in this tier; the validator is deliberately mechanism-agnostic so it addresses h1 and h2 without encoding any task answer.",
+  "probe_ids_used": ["t24_mechanism_discrimination_v2"],
+  "grounded_comparison_probe_ids": [],
+  "evidence_used": [
+    "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/strategy_ast_facts.json",
+    "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/official_and_families.json",
+    "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/process_facts.json",
+    "tasks/T24/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/trace_facts.json",
+    "tasks/T24/instruction.md",
+    "tasks/T24/paper_text.md",
+    "tasks/T16/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/official_and_families.json",
+    "tasks/T16/evaluations/d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06/strategy_ast_facts.json",
+    "history/archive/entries/926ce7e3c76b1fedd004b0e16bf08b6fb6f1ad8db4270ff38cac11067471f740.json",
+    "history/archive/diffs/ec56c0d179a1460fbcf5e48f526751dc148fc19649656724c4eac66786e01c79.patch"
+  ],
+  "observed_discriminating_result": "The probe showed T24's 4 functions all present at top level with exact params and valid parse (interface conformant), its only module numeric constant is VOL_SCALING_TARGET=5.34 (percent-form, exactly matching paper's '5.34% per month'), 2 properties fail (1/7 type_a, 1/10 type_b); T16 passes 18/18 with zero constants. This eliminates h3 (interface defect) and makes h1 (unit-scale) more probable than h2 (lag) as the sole failing-mechanism candidate, though h2 remains not-excluded.",
+  "predicted_fixes": {
+    "T24": "Worker runs validate_strategy_module before final save; percent-form constant without decimal conversion is flagged; lag/NaN placement and output-column/scale hazards are caught; T24 reward > 0 (failing properties pass) or diagnostic_tags no longer contains properties_incomplete.",
+    "T16": "Stays 1.0 — validator is a pre-submission aid, not a task answer; all existing passing behavior is preserved."
+  },
+  "predicted_process_changes": "Worker calls validate_strategy_module on the draft before final save and consumes errors/warnings in a draft-edit loop; no new task-specific branches added.",
+  "risk_tasks": ["T16"],
+  "validation_performed": "inspect_candidate valid with all four components; tools/strategy_validate import passed; agent.yaml graph passed ({tools: 2}); validate_strategy_module call on /nonexistent returned proper error; realistic T24-shaped defective module (percent 5.34 constant, no /100) flagged the percent warning and ran all four functions chain-aware with no false KeyError; corrected module (constant divided by 100) produced no errors; temporary test files deleted; dead code removed; all smokes re-passed after final edits.",
+  "rationale": "This is the exact mechanism the previous round attempted but never delivered to evaluation (rejected on a role-declaration mismatch). The chain-aware execution fix is a real improvement over the prior rejected validator: it eliminates a false hard-error on pipeline steps like compute_strategy_returns that read upstream columns, making the tool reliable enough for the worker to trust and act on, while still catching the percent-vs-decimal hazard that is the strongest answer-free evidence of T24's failure."
+}
+```
+
+**Decision state:** ACT (recorded), candidate writes complete and validated. The intervention is a single coherent mechanism — a deterministic pre-submission quant-module validator registered as a tool (`tools` role), bound by `agent_config` registration, a matching `tool_descriptions` schema, and `systemprompt` workflow activation — with `tools` as the single primary causal role, exactly matching the actual changed file roles.

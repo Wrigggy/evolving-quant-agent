@@ -1,0 +1,26 @@
+{
+  "attempt_id": "92dba99655eba84a5d943cc730c4f445bcfeb75d4b4ee862ef90235714dcae3b",
+  "checkpoint": "quantcodeeval-h0-shell-only",
+  "diagnostic_tags": [],
+  "evaluation_id": "d42b12416c46e46311cc5076409f7fdf83a55c4fcb25c5990aa7bd4f42878f06",
+  "official_reward": 1.0,
+  "property_families": {
+    "type_a": {
+      "errors": 0,
+      "failed": 0,
+      "passed": 6,
+      "skipped": 0,
+      "total": 6
+    },
+    "type_b": {
+      "errors": 0,
+      "failed": 0,
+      "passed": 12,
+      "skipped": 0,
+      "total": 12
+    }
+  },
+  "schema_version": 1,
+  "task_id": "T16",
+  "worker_digest": "4ad9cd8d8450dabc845e7bbc6467127d2405f2db156da2d89f152f06887ac46c"
+}

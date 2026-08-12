@@ -141,3 +141,30 @@ The schema and implementation now both use `prediction`. Quant v2 explicitly
 forbids the legacy unlock path, so a future candidate must persist the exact
 schema-4 `quant_property_v2` decision or remain write-locked. r2 and r3 are
 retained additively under `results/bc-mirror/`; neither is a benchmark result.
+
+## Live activation r4: PASS
+
+After those two repairs, r4 completed the entire activation mechanism. It read
+r1's immutable history, persisted a schema-4 `quant_property_v2` ACT, declared
+the exact roles `agent_config, systemprompt, tool_descriptions, tools`, revised
+its draft and local fixtures several times, deleted all temporary fixtures, and
+reran final tool-import and complete-agent-graph smokes on candidate digest
+`9a72fc74626774a24bda67d55bd25c39f06d35e1f3a20416dedd61ef5c092089`.
+Independent admission passed all nine checks. Activation status is `PASS` and
+the immutable history entry is
+`287323ea195f13f5983f351bf65f099c123fd8814240465b9f6106ff01df64b6`.
+
+r4 still makes no benchmark claim: candidate T16/T24 was not run, H0 was not
+resampled, and the candidate is archived pending the full panel. The exact
+proxy audit recorded 48 completed unique requests, 2,980,699 input tokens,
+56,863 output tokens, 3,037,562 total tokens, and `$0.0345887416` cost. The
+result identity is
+`c9ff158996c34faf74547b409d1500cfb3d1825d4a4b8df07a297cafe71d1fac`.
+All managed resources were cleaned.
+
+The activation search-state originally counted one NexAU proposal as one model
+request even though that proposal contained 48 proxy-audited provider turns.
+The live evaluator now reconciles the outer state against the finalized proxy
+audit so request/cost stopping limits use provider-turn accounting. The exact
+r4 artifact is retained under
+`results/bc-mirror/qce-v2-activation-20260812-r4/`.
