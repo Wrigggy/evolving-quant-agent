@@ -473,6 +473,13 @@ def materialize_quantcodeeval_history_evidence(
     try:
         shutil.copytree(source, staging, copy_function=shutil.copy2)
         validate_quantcodeeval_history(staging)
+        # The trusted store calls these records ``tests``.  Evolver evidence
+        # deliberately forbids every path named ``tests`` because that name is
+        # reserved for possible private evaluator material.  Project the same
+        # hash-bound records under an unambiguous public name only after the
+        # copied store has passed full validation.
+        os.replace(staging / "tests", staging / "component_checks")
+        validate_quantcodeeval_history(source)
         for path in staging.rglob("*"):
             if path.is_file():
                 os.chmod(path, stat.S_IMODE(path.stat().st_mode) & ~0o222)

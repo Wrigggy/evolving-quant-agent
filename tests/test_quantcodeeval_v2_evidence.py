@@ -9,6 +9,7 @@ from qea.quantcodeeval_evidence import (
 )
 from qea.quantcodeeval_history import append_quantcodeeval_history
 from qea.quantcodeeval_v2_evidence import build_quantcodeeval_v2_evidence
+from qea.executors.sandbox_evolver import _safe_evidence_member
 
 
 AGENT = """\
@@ -162,6 +163,9 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
     assert "estimate carefully" in patch.read_text()
     assert candidate_source.read_text() == "Solve and estimate carefully.\n"
     assert patch.stat().st_mode & 0o222 == 0
+    assert not (record.root / "history/archive/tests").exists()
+    assert (record.root / "history/archive/component_checks").is_dir()
+    assert all(_safe_evidence_member(member) for member in record.members)
     assert "property_id" not in "\n".join(
         path.read_text(encoding="utf-8")
         for path in record.root.rglob("*")

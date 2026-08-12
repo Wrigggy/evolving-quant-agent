@@ -105,7 +105,15 @@ def test_history_evidence_projection_is_read_only_and_complete(tmp_path):
 
     assert projection["entry_ids"] == [result.entry_id]
     projected = tmp_path / "evidence/history"
-    assert validate_quantcodeeval_history(projected)["entry_count"] == 1
+    assert not (projected / "tests").exists()
+    assert (
+        projected / "component_checks" / f"{result.candidate_digest}.json"
+    ).is_file()
+    assert all(
+        "tests" not in path.relative_to(projected).parts
+        for path in projected.rglob("*")
+    )
+    assert validate_quantcodeeval_history(history)["entry_count"] == 1
     assert (projected / "entries" / f"{result.entry_id}.json").stat().st_mode & 0o222 == 0
 
 
