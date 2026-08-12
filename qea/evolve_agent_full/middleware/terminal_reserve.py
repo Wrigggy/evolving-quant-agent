@@ -295,7 +295,11 @@ class DiscoveryTerminalReserve(Middleware):
         if decision not in _VALID_DECISIONS or state.get("unlocked") is not (decision == "ACT"):
             return None
         protocol = state.get("protocol")
-        if protocol not in {"failure_type_v1", "semantic_contract_v1"}:
+        if protocol not in {
+            "failure_type_v1",
+            "semantic_contract_v1",
+            "quant_property_v2",
+        }:
             return None
         return state
 

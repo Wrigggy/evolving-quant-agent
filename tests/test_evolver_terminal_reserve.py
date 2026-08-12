@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -363,6 +364,39 @@ def test_recorded_abstain_enters_tool_free_final_turn_and_preserves_usage_audit(
     assert post["reported_input_tokens"] == 12_345
     assert post["reported_output_tokens"] == 321
     assert post["reported_total_tokens"] == 12_666
+
+
+def test_recorded_quant_act_with_candidate_change_enters_final_turn(terminal_root):
+    middleware = DiscoveryTerminalReserve()
+    state = _State()
+    initial = _boundary_messages(100)
+    middleware.before_agent(SimpleNamespace(agent_state=state, messages=initial))
+    decision = {
+        "schema_version": 4,
+        "protocol": "quant_property_v2",
+        "decision": "ACT",
+        "unlocked": True,
+        "hypothesis": {"primary_components": ["tools"]},
+    }
+    (terminal_root / "discovery-hypothesis.json").write_text(
+        json.dumps(decision, sort_keys=True) + "\n"
+    )
+    candidate = Path(os.environ["QEA_CANDIDATE_ROOT"])
+    (candidate / "tools").mkdir(exist_ok=True)
+    (candidate / "tools" / "public_behavior_probe.py").write_text(
+        "def probe():\n    return True\n"
+    )
+
+    compacted = middleware.before_model(
+        _before(state, _boundary_messages(550_000))
+    ).messages
+
+    assert compacted is not None
+    assert "A valid decision is already durably recorded" in compacted[-1].get_text_content()
+    audit = json.loads((terminal_root / "terminal-reserve.json").read_text())
+    assert audit["phase"] == "final"
+    assert audit["decision_state_present"] is True
+    assert audit["requires_terminal_abstain"] is False
 
 
 def test_unimplemented_preterminal_act_must_be_superseded_by_abstain(terminal_root):
