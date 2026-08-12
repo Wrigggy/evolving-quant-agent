@@ -25,6 +25,28 @@ Target Python 3.10+ and PEP 8 with four spaces. Use `snake_case`, `PascalCase`, 
 
 Pytest files use `test_*.py`; name tests by observable behavior. Prefer deterministic fakes, `tmp_path`, and `monkeypatch`; gate API/E2B tests behind environment flags. Run `python3 -m pytest tests` with NexAU and `[stirrup]` installed. Cover keep/rollback, score boundaries, and firewall invariants. Never expose gold, raw rubric verdicts, keys, or `.env` to proposer prompts. Update `data/gdpval/MANIFEST.md` when refreshing its snapshot.
 
+## Experimental Engineering Priorities
+
+This repository studies harness evolution, not security attack and defense. Keep
+validation proportional to realistic experimental risk and do not turn routine
+engineering into defensive infrastructure work.
+
+- Optimize first for iteration speed and a flexible mutation surface. Use a
+  small smoke test or preflight when it catches a likely failure; add stricter
+  checks only after a concrete observed need.
+- Do not add new hashes, SHA-256 fields, content-addressed identities, or
+  digest-equality gates to code, experiment evidence, or reports.
+- Test the happy path and observed failure modes. Do not repeatedly implement
+  defenses or regression cases for scenarios that are not realistically
+  expected in this experimental setup.
+- Preserve enough evidence to reconstruct the setup, candidate change, score,
+  cost, and failure. Matching the experimental setup is sufficient for an
+  engineering canary; exhaustive equality across every runtime contract is not
+  required.
+- Retain only the minimum research-integrity boundaries: do not expose verifier
+  answers or credentials to the Evolver, fabricate results, or treat an
+  obviously invalid run as a benchmark result.
+
 ## Commit & Pull Request Guidelines
 
 Use concise history-aligned messages such as `feat(levelb): ...`, `fix(verifier): ...`, `docs: ...`, or `results(fab-weak): ...`. Keep commits scoped. Pull requests should explain the hypothesis/bug, commands, run configuration, metric changes, and relevant specs/issues. Include artifact paths for experiments and screenshots only for rendered-output changes.
