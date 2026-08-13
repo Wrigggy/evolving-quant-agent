@@ -1841,6 +1841,34 @@ the next autonomous search should prefer routing or a T01-specific refinement,
 while retaining the T12/T19 positive evidence. All new run artifacts were
 stored below `/data/qea-julius-storage/runs`; no benchmark-wide claim is made.
 
+**T01 routing and Worker-artifact follow-up later on 2026-08-13:** after the
+failed transfer was imported as exact scored history, the next Evolver round
+correctly refused to reuse the T12 component globally. It returned calibrated
+`ABSTAIN`: four public T01 mechanisms remained observationally confounded by
+the available family counts and coarse runtime facts. That round used 15
+requests, 766,572 tokens, and $0.0298032616. No candidate was produced or
+evaluated.
+
+The history channel was then extended to retain the scored Worker's final
+`strategy.py` as answer-free runtime experience. It does not retain checker,
+gold, property IDs, or raw reasoning. A preflight verified that the T01 history
+entry exposed the 12,181-character failed implementation. A final Evolver
+round read that implementation and compared it with the public instruction and
+paper. It again returned calibrated `ABSTAIN`, using 24 requests, 1,647,094
+tokens, and $0.0470061368. Its analysis eliminated a coarse “component was not
+used” explanation, but did not identify one public-evidence-supported harness
+change. Its suggestion that an exact reference convention may differ from the
+public contract is unverified and must not be reported as a benchmark defect.
+
+The measured conclusion is narrower: runtime experience retrieval can produce
+an autonomous multi-component `COMPOSE`; failed transfer evidence changes the
+next action away from blind reuse; and final Worker artifacts improve failure
+localization but were still insufficient to support a T01 ACT. Stop further
+T01 guessing at this point. The next informative experiment should either add
+a public, independently discriminating probe for one of the remaining T01
+mechanisms or move the same retrieval/routing protocol to a different public
+task where component-task fit is identifiable. All sandboxes were cleaned up.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
