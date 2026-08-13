@@ -99,6 +99,7 @@ def build_quantcodeeval_v2_evidence(
     history_root: str | Path | None,
     component_ledger_path: str | Path | None = None,
     component_sources: Mapping[str, str | Path] | None = None,
+    worker_artifact_sources: Mapping[str, str | Path] | None = None,
     iteration_summaries: Iterable[Mapping[str, object]] = (),
     current_parent: str | None = None,
     max_primary_components: int = 2,
@@ -229,6 +230,22 @@ def build_quantcodeeval_v2_evidence(
                 ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
             )
             exposed_component_sources[name] = relative
+        exposed_worker_artifacts = {}
+        for name, raw_source in sorted((worker_artifact_sources or {}).items()):
+            if _COMPONENT_SOURCE_NAME.fullmatch(name) is None:
+                raise QuantCodeEvalV2EvidenceError(
+                    f"worker artifact name is invalid: {name}"
+                )
+            source = Path(raw_source).expanduser().resolve()
+            if not source.is_file():
+                raise QuantCodeEvalV2EvidenceError(
+                    f"worker artifact is not a file: {source}"
+                )
+            relative = f"guidance/worker_artifacts/{name}.py"
+            destination_path = staging / relative
+            destination_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination_path)
+            exposed_worker_artifacts[name] = relative
         _write_json(
             staging / "contract.json",
             {
@@ -271,6 +288,9 @@ def build_quantcodeeval_v2_evidence(
                 "component_stability_is_advisory": True,
                 "component_sources": exposed_component_sources,
                 "component_sources_are_advisory": True,
+                "worker_artifacts": exposed_worker_artifacts,
+                "worker_artifacts_are_scored_runtime_experience": True,
+                "worker_artifacts_are_reference_answers": False,
                 "quant_failure_classification_required_for_act": False,
                 "domain_guidance_is_advisory": True,
                 "domain_tags_are_extensible": True,

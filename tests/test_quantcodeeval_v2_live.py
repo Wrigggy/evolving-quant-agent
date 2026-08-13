@@ -92,6 +92,7 @@ def test_activation_cli_passes_component_ledger_to_live_runner(
 
     ledger = tmp_path / "component-ledger.json"
     component_source = tmp_path / "component-source"
+    worker_artifact = tmp_path / "t18-strategy.py"
     captured = {}
 
     def fake_run(**kwargs):
@@ -116,6 +117,8 @@ def test_activation_cli_passes_component_ledger_to_live_runner(
             str(ledger),
             "--component-source",
             f"semantic_bound_invariant={component_source}",
+            "--worker-artifact",
+            f"t18_h0={worker_artifact}",
         ]
     )
 
@@ -124,6 +127,7 @@ def test_activation_cli_passes_component_ledger_to_live_runner(
     assert captured["component_sources"] == {
         "semantic_bound_invariant": component_source
     }
+    assert captured["worker_artifact_sources"] == {"t18_h0": worker_artifact}
 
 
 def test_proxy_audit_retains_exact_request_cost_and_ids(tmp_path):

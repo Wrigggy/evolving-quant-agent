@@ -139,6 +139,8 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
     (component_source / "tools/quant_probe.py").write_text(
         "def probe():\n    return True\n", encoding="utf-8"
     )
+    worker_artifact = tmp_path / "t18-strategy.py"
+    worker_artifact.write_text("def strategy():\n    return None\n", encoding="utf-8")
 
     record = build_quantcodeeval_v2_evidence(
         destination=tmp_path / "v2-evidence",
@@ -151,6 +153,7 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
             / "data/quantcodeeval/COMPONENT_EVIDENCE_CANARY.json"
         ),
         component_sources={"semantic_bound_invariant": component_source},
+        worker_artifact_sources={"t18_h0": worker_artifact},
         iteration_summaries=({"iteration": 1, "selection": "rejected"},),
     )
 
@@ -170,6 +173,11 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
         )
     }
     assert contract["component_sources_are_advisory"] is True
+    assert contract["worker_artifacts"] == {
+        "t18_h0": "guidance/worker_artifacts/t18_h0.py"
+    }
+    assert contract["worker_artifacts_are_scored_runtime_experience"] is True
+    assert contract["worker_artifacts_are_reference_answers"] is False
     assert contract["quant_failure_classification_required_for_act"] is False
     assert contract["domain_guidance_is_advisory"] is True
     assert contract["domain_tags_are_extensible"] is True
@@ -226,6 +234,9 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
         record.root
         / "guidance/component_sources/semantic_bound_invariant/tools/quant_probe.py"
     ).is_file()
+    assert (record.root / "guidance/worker_artifacts/t18_h0.py").read_text() == (
+        "def strategy():\n    return None\n"
+    )
     entry = json.loads(
         (record.root / "history/archive/entries" / f"{entry_id}.json").read_text()
     )
@@ -271,5 +282,6 @@ def test_first_v2_round_does_not_require_nonexistent_history(tmp_path):
     assert contract["history_required"] is False
     assert contract["component_stability"] is None
     assert contract["component_sources"] == {}
+    assert contract["worker_artifacts"] == {}
     assert summary["entry_count"] == 0
     assert not (record.root / "history/archive").exists()

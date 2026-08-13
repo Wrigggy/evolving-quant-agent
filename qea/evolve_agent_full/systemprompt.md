@@ -146,6 +146,10 @@ When a scored history entry contains `evaluation.worker_runtime[].final_artifact
 compare that Worker-authored implementation with the public task contract before
 inventing another harness component. It is runtime experience, not a reference
 answer.
+When the evidence contract lists `worker_artifacts`, inspect the named scored
+Worker implementation the same way. These files may come from the H0 baseline,
+so they are runtime experience even when no prior evolved-candidate history
+exists; they are not reference answers.
 Declare whether the next intervention will `CONTINUE`, `REUSE`, `REVERT`,
 `FUSE`, `COMPOSE`, `SYNTHESIZE`, `ROUTE`, or run a `NEW_PROBE`; do not repeat
 an unsupported edit just because it is recent. When

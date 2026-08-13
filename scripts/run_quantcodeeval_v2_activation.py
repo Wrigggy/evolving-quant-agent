@@ -60,6 +60,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--worker-artifact",
+        type=_named_path,
+        action="append",
+        default=[],
+        help=(
+            "Optional scored Worker strategy exposed as answer-free runtime "
+            "experience, as NAME=PATH. May be repeated."
+        ),
+    )
+    parser.add_argument(
         "--task",
         dest="task_ids",
         action="append",
@@ -94,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
         comparison_h0_run_dir=args.comparison_h0_run,
         component_ledger_path=args.component_ledger,
         component_sources=dict(args.component_source),
+        worker_artifact_sources=dict(args.worker_artifact),
         task_ids=args.task_ids,
         diagnosis_note=args.diagnosis_note,
         validate_release=not args.engineering_release,
