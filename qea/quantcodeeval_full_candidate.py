@@ -57,6 +57,11 @@ class QuantCodeEvalFullCandidateError(ValueError):
     """A full-harness candidate or its pre-evaluation evidence is invalid."""
 
 
+_EXECUTABLE_COMPONENTS = frozenset(
+    {"agent_config", "tools", "validator", "skills", "memory", "middleware", "routing"}
+)
+
+
 def _canonical_sha256(value: object) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -113,9 +118,18 @@ def _validate_component_tests(
         raise QuantCodeEvalFullCandidateError(
             "full-harness candidate requires at least one component test"
         )
-    missing = sorted(
+    executable_primary = tuple(
         component
         for component in primary_components
+        if component in _EXECUTABLE_COMPONENTS
+    )
+    if not executable_primary:
+        raise QuantCodeEvalFullCandidateError(
+            "full-harness candidate requires an executable primary component"
+        )
+    missing = sorted(
+        component
+        for component in executable_primary
         if latest.get(component, {}).get("status") != "passed"
         or latest.get(component, {}).get("candidate_digest") != candidate_digest
     )

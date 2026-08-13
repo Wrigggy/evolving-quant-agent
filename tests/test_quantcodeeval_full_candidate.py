@@ -119,6 +119,25 @@ def test_full_candidate_preflight_accepts_coherent_multifile_component(
     assert result["task_ids"] == ["T24"]
 
 
+def test_component_smoke_requires_executable_primary_not_prompt_binding():
+    from qea.quantcodeeval_full_candidate import _validate_component_tests
+
+    digest = "a" * 64
+    tests = _validate_component_tests(
+        (
+            {
+                "status": "passed",
+                "component": "tools",
+                "candidate_digest": digest,
+            },
+        ),
+        candidate_digest=digest,
+        primary_components=("tools", "systemprompt"),
+    )
+
+    assert tests[0]["component"] == "tools"
+
+
 def test_full_candidate_rejects_failed_smoke_and_role_mismatch(tmp_path, monkeypatch):
     if not hasattr(sys, "stdlib_module_names"):
         monkeypatch.setattr(sys, "stdlib_module_names", frozenset(), raising=False)
