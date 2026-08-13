@@ -792,6 +792,7 @@ def run_quantcodeeval_v2_activation_canary(
     prior_scored_candidate_run_dir: str | Path | Iterable[str | Path] | None = None,
     comparison_h0_run_dir: str | Path | Iterable[str | Path] | None = None,
     component_ledger_path: str | Path | None = None,
+    component_sources: Mapping[str, str | Path] | None = None,
     task_ids: Iterable[str] | None = None,
     diagnosis_note: str | None = None,
     validate_release: bool = True,
@@ -948,6 +949,7 @@ def run_quantcodeeval_v2_activation_canary(
             if component_ledger is not None
             else {"enabled": False}
         ),
+        "component_sources": sorted((component_sources or {}).keys()),
         "diagnosis_note": diagnosis_note,
         "search_limits": asdict(
             QuantSearchLimits(
@@ -1038,6 +1040,7 @@ def run_quantcodeeval_v2_activation_canary(
             current_evaluation_id=h0.evaluation_id,
             history_root=history_root,
             component_ledger_path=component_ledger_source,
+            component_sources=component_sources,
             current_parent=state.search_parent_digest,
             iteration_summaries=(
                 {

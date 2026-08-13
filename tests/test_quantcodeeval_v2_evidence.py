@@ -134,6 +134,11 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
         _attempt(tmp_path, "T24", 0.0),
     )
     history, entry_id = _history(tmp_path)
+    component_source = tmp_path / "measured-component"
+    (component_source / "tools").mkdir(parents=True)
+    (component_source / "tools/quant_probe.py").write_text(
+        "def probe():\n    return True\n", encoding="utf-8"
+    )
 
     record = build_quantcodeeval_v2_evidence(
         destination=tmp_path / "v2-evidence",
@@ -145,6 +150,7 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
             Path(__file__).resolve().parents[1]
             / "data/quantcodeeval/COMPONENT_EVIDENCE_CANARY.json"
         ),
+        component_sources={"semantic_bound_invariant": component_source},
         iteration_summaries=({"iteration": 1, "selection": "rejected"},),
     )
 
@@ -158,6 +164,12 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
     assert contract["component_stability"] == "guidance/component_stability.json"
     assert contract["component_stability_is_answer_free"] is True
     assert contract["component_stability_is_advisory"] is True
+    assert contract["component_sources"] == {
+        "semantic_bound_invariant": (
+            "guidance/component_sources/semantic_bound_invariant"
+        )
+    }
+    assert contract["component_sources_are_advisory"] is True
     assert contract["quant_failure_classification_required_for_act"] is False
     assert contract["domain_guidance_is_advisory"] is True
     assert contract["domain_tags_are_extensible"] is True
@@ -210,6 +222,10 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
     assert repaired["stability"] == "protected"
     assert repaired["next_actions"] == ["ABLATE", "TRANSFER"]
     assert repaired["evidence_gap"].startswith("The initial invariant")
+    assert (
+        record.root
+        / "guidance/component_sources/semantic_bound_invariant/tools/quant_probe.py"
+    ).is_file()
     entry = json.loads(
         (record.root / "history/archive/entries" / f"{entry_id}.json").read_text()
     )
@@ -254,5 +270,6 @@ def test_first_v2_round_does_not_require_nonexistent_history(tmp_path):
     summary = json.loads((record.root / "history/SUMMARY.json").read_text())
     assert contract["history_required"] is False
     assert contract["component_stability"] is None
+    assert contract["component_sources"] == {}
     assert summary["entry_count"] == 0
     assert not (record.root / "history/archive").exists()

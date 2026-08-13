@@ -150,7 +150,10 @@ intervention. It records conceptual capabilities and measured activation,
 repeat, protection, transfer, or ablation evidence. Do not confuse those
 conceptual component IDs with the exact candidate file roles required by
 `primary_components` and `components`. A successful composition does not prove
-that every member works alone. Read `guidance/quant_failure_map.json` as an optional diagnostic
+that every member works alone. When the evidence contract lists
+`component_sources`, inspect the corresponding measured harness source before
+choosing `REUSE`, `COMPOSE`, or `ABLATE`; it is a reusable implementation, not
+a mandatory patch. Read `guidance/quant_failure_map.json` as an optional diagnostic
 vocabulary, not a form. You may use its `breakdown_stage` and finance-semantic
 `failure_class`, add free-form `domain_tags`, propose a better class, or omit
 the fixed classification when the observations do not support it. Ground ACT

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import Iterable, Mapping
@@ -44,6 +45,7 @@ _PREFERRED_PRIMARY_COMPONENTS = {
     "isolated_task_specific": [],
     "unknown": [],
 }
+_COMPONENT_SOURCE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}\Z")
 
 
 def _quant_failure_map() -> dict[str, object]:
@@ -96,6 +98,7 @@ def build_quantcodeeval_v2_evidence(
     current_evaluation_id: str,
     history_root: str | Path | None,
     component_ledger_path: str | Path | None = None,
+    component_sources: Mapping[str, str | Path] | None = None,
     iteration_summaries: Iterable[Mapping[str, object]] = (),
     current_parent: str | None = None,
     max_primary_components: int = 2,
@@ -208,6 +211,24 @@ def build_quantcodeeval_v2_evidence(
             component_stability = "guidance/component_stability.json"
             ledger = load_quantcodeeval_component_ledger(component_ledger_path)
             _write_json(staging / component_stability, ledger.summary())
+        exposed_component_sources = {}
+        for name, raw_source in sorted((component_sources or {}).items()):
+            if _COMPONENT_SOURCE_NAME.fullmatch(name) is None:
+                raise QuantCodeEvalV2EvidenceError(
+                    f"component source name is invalid: {name}"
+                )
+            source = Path(raw_source).expanduser().resolve()
+            if not source.is_dir():
+                raise QuantCodeEvalV2EvidenceError(
+                    f"component source is not a directory: {source}"
+                )
+            relative = f"guidance/component_sources/{name}"
+            shutil.copytree(
+                source,
+                staging / relative,
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
+            exposed_component_sources[name] = relative
         _write_json(
             staging / "contract.json",
             {
@@ -248,6 +269,8 @@ def build_quantcodeeval_v2_evidence(
                 "component_stability": component_stability,
                 "component_stability_is_answer_free": True,
                 "component_stability_is_advisory": True,
+                "component_sources": exposed_component_sources,
+                "component_sources_are_advisory": True,
                 "quant_failure_classification_required_for_act": False,
                 "domain_guidance_is_advisory": True,
                 "domain_tags_are_extensible": True,

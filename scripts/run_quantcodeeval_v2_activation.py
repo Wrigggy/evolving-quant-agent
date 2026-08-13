@@ -16,6 +16,16 @@ if str(ROOT) not in sys.path:
 from qea.quantcodeeval_v2_live import run_quantcodeeval_v2_activation_canary
 
 
+def _named_path(value: str) -> tuple[str, Path]:
+    try:
+        name, raw_path = value.split("=", 1)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("value must be NAME=PATH") from exc
+    if not name or not raw_path:
+        raise argparse.ArgumentTypeError("value must be NAME=PATH")
+    return name, Path(raw_path)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, type=Path)
@@ -37,6 +47,16 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Optional answer-free component capability and stability ledger "
             "for this engineering search round."
+        ),
+    )
+    parser.add_argument(
+        "--component-source",
+        type=_named_path,
+        action="append",
+        default=[],
+        help=(
+            "Optional measured harness source exposed read-only to the Evolver, "
+            "as NAME=PATH. May be repeated."
         ),
     )
     parser.add_argument(
@@ -73,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
         prior_scored_candidate_run_dir=args.prior_scored_candidate_run,
         comparison_h0_run_dir=args.comparison_h0_run,
         component_ledger_path=args.component_ledger,
+        component_sources=dict(args.component_source),
         task_ids=args.task_ids,
         diagnosis_note=args.diagnosis_note,
         validate_release=not args.engineering_release,

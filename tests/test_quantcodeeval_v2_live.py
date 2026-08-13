@@ -91,6 +91,7 @@ def test_activation_cli_passes_component_ledger_to_live_runner(
     from scripts import run_quantcodeeval_v2_activation as cli
 
     ledger = tmp_path / "component-ledger.json"
+    component_source = tmp_path / "component-source"
     captured = {}
 
     def fake_run(**kwargs):
@@ -113,11 +114,16 @@ def test_activation_cli_passes_component_ledger_to_live_runner(
             "proxy:test",
             "--component-ledger",
             str(ledger),
+            "--component-source",
+            f"semantic_bound_invariant={component_source}",
         ]
     )
 
     assert exit_code == 0
     assert captured["component_ledger_path"] == ledger
+    assert captured["component_sources"] == {
+        "semantic_bound_invariant": component_source
+    }
 
 
 def test_proxy_audit_retains_exact_request_cost_and_ids(tmp_path):
