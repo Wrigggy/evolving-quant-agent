@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import sys
@@ -12,20 +11,35 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TEST = (
-    "tests/test_quantcodeeval_v2_loop.py::"
-    "test_no_model_loop_reuses_rejected_round_and_promotes_full_component"
-)
-SOURCE_PATHS = (
-    "qea/quantcodeeval_history.py",
-    "qea/quantcodeeval_search.py",
-    "qea/quantcodeeval_v2_loop.py",
-    "tests/test_quantcodeeval_v2_loop.py",
-)
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+TESTS = (
+    (
+        "tests/test_quantcodeeval_v2_loop.py::"
+        "test_no_model_loop_reuses_rejected_round_and_promotes_full_component"
+    ),
+    (
+        "tests/test_quantcodeeval_components.py::"
+        "test_canary_ledger_keeps_failed_component_and_replicated_composition_distinct"
+    ),
+    (
+        "tests/test_quantcodeeval_components.py::"
+        "test_component_ablation_can_remove_one_member_of_a_composition"
+    ),
+    (
+        "tests/test_quantcodeeval_v2_evidence.py::"
+        "test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source"
+    ),
+    (
+        "tests/test_quantcodeeval_v2_live.py::"
+        "test_activation_cli_passes_component_ledger_to_live_runner"
+    ),
+    (
+        "tests/test_evolver_guarded_tools.py::"
+        "test_quant_v2_accepts_component_search_operators"
+    ),
+)
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -35,7 +49,7 @@ def _write_json(path: Path, value: object) -> None:
     os.replace(temporary, path)
 
 
-def _manifest(root: Path) -> list[dict[str, object]]:
+def _file_inventory(root: Path) -> list[dict[str, object]]:
     rows = []
     for path in sorted(root.rglob("*"), key=lambda value: value.as_posix()):
         if not path.is_file() or path.name == "RESULT.json":
@@ -44,7 +58,6 @@ def _manifest(root: Path) -> list[dict[str, object]]:
             {
                 "path": path.relative_to(root).as_posix(),
                 "size_bytes": path.stat().st_size,
-                "sha256": _sha256(path),
             }
         )
     return rows
@@ -58,9 +71,6 @@ def main(argv: list[str] | None = None) -> int:
     if output.exists() or output.is_symlink():
         raise SystemExit("output must not already exist")
     output.mkdir(parents=True)
-    source_identity = {
-        relative: _sha256(ROOT / relative) for relative in SOURCE_PATHS
-    }
     _write_json(
         output / "PLAN.json",
         {
@@ -70,20 +80,23 @@ def main(argv: list[str] | None = None) -> int:
                 "mechanism only: rejected-history reuse, full-component admission, "
                 "variable-length stop; no QuantCodeEval benchmark score"
             ),
-            "test": TEST,
+            "tests": list(TESTS),
             "python": sys.version,
-            "source_sha256": source_identity,
         },
     )
     try:
         import pytest
     except ImportError as exc:
         raise SystemExit("pytest is required for the no-model mechanism canary") from exc
+    selected_tests = [
+        str(ROOT / test.split("::", 1)[0]) + "::" + test.split("::", 1)[1]
+        for test in TESTS
+    ]
     exit_code = int(
         pytest.main(
             [
                 "-q",
-                str(ROOT / TEST.split("::", 1)[0]) + "::" + TEST.split("::", 1)[1],
+                *selected_tests,
                 f"--basetemp={output / 'work'}",
                 f"--junitxml={output / 'junit.xml'}",
             ]
@@ -115,9 +128,13 @@ def main(argv: list[str] | None = None) -> int:
             "round 2 changed tools, tool_descriptions, and agent_config coherently",
             "independent full-harness admission passed before promotion",
             "search stopped on target_reached after 2 rounds, not a fixed 5 rounds",
+            "component evidence distinguishes standalone failure from composition success",
+            "ablation can remove one component from a successful composition",
+            "Evolver evidence and live CLI expose component stability",
+            "COMPOSE, SYNTHESIZE, and ROUTE are accepted search operators",
         ],
         "benchmark_score_claimed": False,
-        "files": _manifest(output),
+        "files": _file_inventory(output),
     }
     _write_json(output / "RESULT.json", result)
     print(json.dumps(result, sort_keys=True, indent=2))
