@@ -1770,6 +1770,34 @@ yet produced an ACT, candidate score, or reward improvement; replay the prior
 T12 traces and rerun the focused autonomous activation before considering an
 investigator-seeded mechanism.
 
+**Measured continuation later on 2026-08-13:** a second focused activation
+received the new action/stage history and also ended in calibrated ABSTAIN. It
+correctly observed that all prior T12 branches eventually passed the existing
+free-form public probe while official completion ranged from 8/16 to 16/16.
+Across both autonomous activations, 45 requests and 2,909,824 tokens cost
+`$0.0756148848`; neither run mutated a candidate or launched a Worker panel.
+
+An explicitly investigator-seeded localization control then tested a
+declarative quant-invariant tool. The first version independently computed the
+operation declared by the Worker, but allowed public “average return” language
+to be paired with an additive sum; that real T12 canary scored 8/16. One
+observed-failure repair bound public quantity vocabulary to arithmetic mean,
+geometric cumulative return, or explicitly additive sum. With that repaired
+component, two independent T12 Workers both scored 16/16 and the T19
+protection Worker scored 18/18. Those four Worker runs used 92 requests,
+2,192,638 tokens, and `$0.0791807128`. The complete continuation total was 137
+requests, 5,102,462 tokens, and `$0.1547955976`; all resources were cleaned.
+
+Treat this as a positive mechanism-localization result, not autonomous harness
+evolution or a benchmark gain. The key causal lesson is that independently
+computing a Worker-selected operation is still self-confirming when the Worker
+also chooses the interpretation. Binding the public term to the executable
+operation removed the observed T12 average-versus-sum drift in two samples.
+Before expanding tasks, append the negative and positive Worker attempts to
+searchable experience and test whether the Evolver can autonomously `REUSE` or
+refine the component for another target. See the
+[runtime invariant localization report](reports/2026-08-13-quant-runtime-invariant-localization.md).
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
