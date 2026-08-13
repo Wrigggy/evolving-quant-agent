@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "2026-08-13 T12 target and T19 protection engineering canary",
+  "scope": "2026-08-13 through 2026-08-14 QuantCodeEval component search canaries",
   "components": [
     {
       "component_id": "declarative_quant_invariant",
@@ -23,6 +23,16 @@
         "explicit_sum_semantics"
       ],
       "description": "Bind public quantity vocabulary to the operation checked by the executable invariant."
+    },
+    {
+      "component_id": "warmup_boundary_arbitration",
+      "origin": "evolver_discovered",
+      "capabilities": [
+        "minimum_history_flip_index",
+        "exactly_n_synthetic_fixture",
+        "temporal_anchor_selection"
+      ],
+      "description": "Force the Worker to choose and test an explicit flip index for minimum-history and warmup clauses."
     }
   ],
   "hypotheses": [
@@ -50,6 +60,20 @@
       "expected_worker_change": "The Worker must bind average return to arithmetic mean before the invariant can pass and must revise a mismatched final strategy.",
       "target_task_ids": [
         "T12"
+      ],
+      "protection_task_ids": [
+        "T19"
+      ]
+    },
+    {
+      "hypothesis_id": "explicit_warmup_boundary_arbitration",
+      "component_ids": [
+        "warmup_boundary_arbitration"
+      ],
+      "evidence_gap": "T18 H0 passed all 14 Type B properties but only 2 of 4 Type A properties; its classifier silently deferred classification until the 121st monthly observation.",
+      "expected_worker_change": "The Worker should load the contract-arbitration skill, execute an exactly-120 fixture, state the chosen flip index, and revise any silent warmup fencepost.",
+      "target_task_ids": [
+        "T18"
       ],
       "protection_task_ids": [
         "T19"
@@ -178,6 +202,28 @@
       "tokens": 662108,
       "cost_usd": 0.0234224144,
       "observation": "The Worker repeatedly used the structured invariant and passed its local checks, but T01 remained 2/17, equal to the parent baseline. The composition activated but did not transfer."
+    },
+    {
+      "run_id": "qce-component-route-t18-candidate-20260814-r1",
+      "hypothesis_id": "explicit_warmup_boundary_arbitration",
+      "task_id": "T18",
+      "role": "target",
+      "available_components": [
+        "warmup_boundary_arbitration"
+      ],
+      "selected_components": [
+        "warmup_boundary_arbitration"
+      ],
+      "activated_components": [
+        "warmup_boundary_arbitration"
+      ],
+      "official_reward": 0,
+      "properties_passed": 16,
+      "properties_total": 18,
+      "requests": 21,
+      "tokens": 641753,
+      "cost_usd": 0.0253538264,
+      "observation": "The Worker loaded the evolved skill, executed an exactly-120 fixture, changed the classifier so the 120th observation was the first classified row, and documented that public reading. T18 nevertheless remained Type A 2/4 and Type B 14/14, exactly matching H0; the warmup-fencepost hypothesis is therefore unsupported as a sufficient cause."
     }
   ],
   "notes": [
@@ -185,6 +231,7 @@
     "The repaired composition has two T12 successes and one T19 protection success, but a T01 transfer failed at the parent baseline despite repeated tool use.",
     "The semantic-binding component has not been evaluated alone, so individual component necessity is untested.",
     "This ledger records a mechanism canary rather than a QuantCodeEval benchmark estimate.",
-    "The T01 result supports task routing or a new T01-specific capability rather than global reuse of the T12 composition."
+    "The T01 result supports task routing or a new T01-specific capability rather than global reuse of the T12 composition.",
+    "The Evolver autonomously discovered and activated warmup-boundary arbitration on T18, but the unchanged 16/18 score rules out that intervention as a sufficient explanation; percentile and early-NaN alternatives remain unresolved."
   ]
 }

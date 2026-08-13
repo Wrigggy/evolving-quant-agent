@@ -1869,6 +1869,41 @@ a public, independently discriminating probe for one of the remaining T01
 mechanisms or move the same retrieval/routing protocol to a different public
 task where component-task fit is identifiable. All sandboxes were cleaned up.
 
+**T18 runtime-artifact component search on 2026-08-14:** the evidence surface
+now accepts an explicitly named, scored H0 Worker `strategy.py` as read-only
+runtime experience. This is a small bridge for first-round tasks whose failed
+Worker output predates evolved-candidate history; it is labeled as runtime
+experience and never as a reference answer. The local and deployed focused
+test suites each passed 53 tests before the run.
+
+On a T18 target plus T19 protection evidence panel, the Evolver read the T18 H0
+implementation and autonomously chose `ACT`. It refined the existing
+`quant-contract-arbitration` skill plus `systemprompt.md` to force explicit
+minimum-history flip-index selection, an exactly-N synthetic fixture, and
+temporal-anchor checking. The change added 28 lines across two files, passed
+skill-load smoke and full-harness admission, and did not blindly reuse the T12
+component. Activation used 28 model requests, 1,454,428 tokens, and
+$0.0403022424.
+
+The fresh T18 Worker then loaded the skill, executed an exactly-120 fixture,
+stated the 120th observation as the first classified row, and changed its final
+implementation accordingly. Despite this real activation, official T18 stayed
+exactly at Type A 2/4 plus Type B 14/14, or 16/18 and reward 0. The Worker run
+used 21 requests, 641,753 tokens, and $0.0253538264. Because the target did not
+improve, no repeat and no T19 protection resample were run. Total incremental
+cost was 49 requests, 2,096,181 tokens, and $0.0656560688; all containers were
+cleaned and all data was stored below `/data/qea-julius-storage`.
+
+Interpret this as a successful autonomous discovery-and-activation canary but a
+negative benchmark-benefit result. The run rules out the warmup-fencepost
+intervention as a sufficient explanation for the two remaining Type A failures.
+The component ledger therefore records `warmup_boundary_arbitration` as
+Evolver-discovered, fully activated, and unsupported. The next round may refine
+toward the still-unresolved percentile-method or early-NaN mechanisms using
+this failed intervention as experience; it must not repeat the same boundary
+edit, and calibrated `ABSTAIN` remains acceptable. Detailed evidence is in
+`docs/reports/2026-08-14-quantcodeeval-t18-runtime-component-search.md`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

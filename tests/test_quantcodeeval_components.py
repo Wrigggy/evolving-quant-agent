@@ -61,15 +61,26 @@ def test_semantic_binding_is_not_mislabeled_as_a_standalone_success():
     assert invariant["standalone_trial_count"] == 1
     assert invariant["composition_trial_count"] == 4
 
+    boundary = ledger.hypothesis_summary(
+        "explicit_warmup_boundary_arbitration"
+    )
+    assert boundary["stability"] == "unsupported"
+    assert boundary["fully_activated_trial_count"] == 1
+    assert boundary["evidence_by_role"]["target"] == {
+        "trials": 1,
+        "successes": 0,
+    }
+    assert boundary["next_actions"] == ["REFINE", "ABSTAIN"]
+
 
 def test_canary_ledger_preserves_measured_component_trial_costs():
     ledger = load_quantcodeeval_component_ledger(LEDGER)
 
     assert ledger.experiment_totals() == {
-        "trial_count": 5,
-        "requests": 120,
-        "tokens": 2854746,
-        "cost_usd": pytest.approx(0.1026031272),
+        "trial_count": 6,
+        "requests": 141,
+        "tokens": 3496499,
+        "cost_usd": pytest.approx(0.1279569536),
     }
     assert any("benchmark estimate" in note for note in ledger.notes)
 
