@@ -9,11 +9,19 @@ from qea.quantcodeeval_v2_live import (
     QuantCodeEvalV2LiveError,
     _activation_from_component_tests,
     _proxy_audit,
+    _reconcile_abstain_usage,
     _seed_full_candidate_failure_history,
     _seed_rejected_attempt_history,
     _seed_scored_candidate_history,
     _select_task_rewards,
     _prior_attempt_paths,
+)
+from qea.quantcodeeval_search import (
+    QuantSearchLimits,
+    SearchDecision,
+    SearchSelection,
+    initialize_quantcodeeval_search,
+    record_quantcodeeval_search_round,
 )
 from qea.quantcodeeval_history import validate_quantcodeeval_history
 
@@ -166,6 +174,36 @@ def test_proxy_audit_retains_exact_request_cost_and_ids(tmp_path):
     assert result["provider_cost_usd"] == 0.03
     assert result["total_tokens"] == 35
     assert result["provider_request_ids"] == ["gen-1", "gen-2"]
+
+
+def test_final_proxy_audit_reconciles_abstain_search_usage():
+    state = initialize_quantcodeeval_search(
+        run_id="qce-abstain",
+        h0_digest="1" * 64,
+        h0_official_rewards={"T18": 0.0, "T19": 1.0},
+        limits=QuantSearchLimits(max_consecutive_abstain=1),
+    )
+    state = record_quantcodeeval_search_round(
+        state,
+        decision=SearchDecision.ABSTAIN,
+        official_rewards=state.official_rewards,
+        selection=SearchSelection.ABSTAINED,
+        reason="public evidence cannot discriminate",
+        new_information=False,
+        model_requests=1,
+        cost_usd=0.0,
+    )
+
+    corrected = _reconcile_abstain_usage(
+        state,
+        {"request_count": 24, "provider_cost_usd": 0.0492410744},
+    )
+
+    assert corrected.rounds[-1].model_requests == 24
+    assert corrected.rounds[-1].cost_usd == pytest.approx(0.0492410744)
+    assert corrected.total_model_requests == 24
+    assert corrected.total_cost_usd == pytest.approx(0.0492410744)
+    assert corrected.stopped is True
 
 
 def test_prior_rejected_attempt_becomes_exact_searchable_history(tmp_path):

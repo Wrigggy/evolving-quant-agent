@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -64,6 +64,37 @@ EXECUTABLE_COMPONENTS = frozenset(
 
 class QuantCodeEvalV2LiveError(RuntimeError):
     """A live activation canary identity or result is incomplete."""
+
+
+def _reconcile_abstain_usage(state, audit: Mapping[str, object]):
+    """Use the finalized proxy audit when an ABSTAIN skips candidate evaluation."""
+
+    if not state.rounds or state.rounds[-1].decision.value != "ABSTAIN":
+        return state
+    request_count = audit.get("request_count")
+    cost = audit.get("provider_cost_usd")
+    if (
+        type(request_count) is not int
+        or request_count < 1
+        or isinstance(cost, bool)
+        or not isinstance(cost, (int, float))
+        or cost < 0
+    ):
+        return state
+    previous = state.rounds[-1]
+    corrected = replace(
+        previous,
+        model_requests=request_count,
+        cost_usd=float(cost),
+    )
+    return replace(
+        state,
+        rounds=(*state.rounds[:-1], corrected),
+        total_model_requests=(
+            state.total_model_requests - previous.model_requests + request_count
+        ),
+        total_cost_usd=(state.total_cost_usd - previous.cost_usd + float(cost)),
+    )
 
 
 def _select_task_rewards(
@@ -1135,6 +1166,12 @@ def run_quantcodeeval_v2_activation_canary(
     proxy_audit = _proxy_audit(root)
     if decision.get("decision") == "ABSTAIN":
         status = "CALIBRATED_ABSTAIN"
+        final = _reconcile_abstain_usage(final, proxy_audit)
+        _atomic_json(
+            root / "SEARCH-STATE.json",
+            quantcodeeval_search_payload(final),
+            replace=True,
+        )
     elif activation.get("status") == "passed":
         status = "PASS"
     else:
