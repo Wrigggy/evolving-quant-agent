@@ -17,18 +17,54 @@ input_schema:
       minItems: 1
       items:
         type: object
+        properties:
+          kind:
+            type: string
+            enum:
+              - window_aggregation
+              - sign_mapping
+              - equal_weighted_signed_return
+          function: {type: string}
+          rows: {type: array, items: {type: object}}
+          function_kwargs: {type: object}
+          group_column: {type: string}
+          time_column: {type: string}
+          value_column: {type: string}
+          input_column: {type: string}
+          output_column: {type: string}
+          window: {type: integer, minimum: 1}
+          lag: {type: integer, minimum: 0}
+          public_quantity:
+            type: string
+            enum: [average_return, cumulative_return, additive_sum]
+          target_where: {type: object}
+          return_rows: {type: array, items: {type: object}}
+          signal_rows: {type: array, items: {type: object}}
+          return_column: {type: string}
+          signal_column: {type: string}
+          denominator:
+            type: string
+            enum: [all_valid, nonzero_signal]
+          tolerance: {type: number, minimum: 0}
+        required: [kind, function, output_column]
         description: >-
           A window_aggregation, sign_mapping, or
           equal_weighted_signed_return check. Supply public column/function
           names and small synthetic rows. For window checks also supply
           group_column, time_column, value_column, output_column, window, lag,
-          aggregation, and target_where. For sign checks supply input_column
-          and output_column. For portfolio checks supply return_rows,
+          public_quantity, and target_where. `average_return` always uses the
+          arithmetic mean, `cumulative_return` always compounds, and
+          `additive_sum` is allowed only when the public definition explicitly
+          states a sum. For sign checks supply input_column and output_column.
+          For portfolio checks supply return_rows,
           signal_rows, join columns, value columns, and output_column.
       description: Declarative checks to execute independently.
     public_basis:
       type: string
-      description: Public instruction or paper convention selecting the definition.
+      description: >-
+        Public instruction or paper convention selecting the definition. Keep
+        terms such as average return, cumulative return, or sum explicit; the
+        tool rejects a public_quantity that contradicts this basis.
     competing_definitions:
       type: array
       minItems: 2

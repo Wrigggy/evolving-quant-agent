@@ -15,6 +15,10 @@ Workflow:
    contains a lagged window, sign mapping, or equal-weighted signed portfolio.
    Declare the public definition and small input rows; let the tool compute the
    expectation, current-value perturbation, and row-order perturbation. Then
+   For a window, select `average_return` when the public basis says average,
+   `cumulative_return` when it says cumulative/compound, and `additive_sum`
+   only when it explicitly defines a sum. Do not translate "average" into a
+   sum merely because only the sign is later consumed. Then
    call `probe_public_behavior` only for important behavior not covered by the
    structured checks. Supply
    probe code containing at least one independent assertion derived from the

@@ -50,7 +50,7 @@ def _checks():
             "output_column": "trailing",
             "window": 3,
             "lag": 1,
-            "aggregation": "sum",
+            "public_quantity": "additive_sum",
             "target_where": {"date": "2020-04-30", "factor_id": "f1"},
         },
         {
@@ -108,3 +108,40 @@ def test_quant_invariant_probe_rejects_current_period_window(tmp_path):
 
     assert result["status"] == "failed"
     assert result["exit_code"] != 0
+
+
+def test_quant_invariant_probe_rejects_sum_when_public_basis_says_average(
+    tmp_path,
+):
+    check = _checks()[0]
+    result = probe_quant_invariants(
+        str(_strategy(tmp_path / "strategy.py")),
+        [check],
+        "The factor's average return over the prior year from t-3 through t-1.",
+        ["arithmetic average", "arithmetic sum"],
+    )
+
+    assert result == {
+        "status": "failed",
+        "error": (
+            "public basis says average return; use public_quantity="
+            "average_return rather than a sum or cumulative return"
+        ),
+    }
+
+
+def test_quant_invariant_probe_maps_public_average_to_mean(tmp_path):
+    check = _checks()[0]
+    check["public_quantity"] = "average_return"
+    source = _strategy(tmp_path / "strategy.py")
+    text = source.read_text(encoding="utf-8").replace(".sum())", ".mean())")
+    source.write_text(text, encoding="utf-8")
+
+    result = probe_quant_invariants(
+        str(source),
+        [check],
+        "The factor's average return over the prior year from t-3 through t-1.",
+        ["arithmetic average", "arithmetic sum"],
+    )
+
+    assert result["status"] == "passed"

@@ -70,14 +70,14 @@ def window_expected(rows, check):
     start = stop - check["window"]
     assert start >= 0 and stop > start
     inputs = group.iloc[start:stop][check["value_column"]].astype(float)
-    aggregation = check["aggregation"]
-    if aggregation == "sum":
+    quantity = check["public_quantity"]
+    if quantity == "additive_sum":
         return inputs.sum()
-    if aggregation == "mean":
+    if quantity == "average_return":
         return inputs.mean()
-    if aggregation == "geometric_return":
+    if quantity == "cumulative_return":
         return (1.0 + inputs).prod() - 1.0
-    raise AssertionError(f"unsupported aggregation: {aggregation}")
+    raise AssertionError(f"unsupported public quantity: {quantity}")
 
 
 def window_check(check):
@@ -206,6 +206,9 @@ def probe_quant_invariants(
             "status": "failed",
             "error": "at least two distinct competing definitions are required",
         }
+    mismatch = _public_definition_mismatch(checks, public_basis)
+    if mismatch is not None:
+        return {"status": "failed", "error": mismatch}
     timeout = max(1, min(int(timeout_seconds), 180))
 
     with tempfile.TemporaryDirectory(prefix="qea-quant-invariants-") as temporary:
@@ -237,6 +240,45 @@ def probe_quant_invariants(
         "stdout": completed.stdout[-4_000:],
         "stderr": completed.stderr[-8_000:],
     }
+
+
+def _public_definition_mismatch(
+    checks: list[dict[str, object]], public_basis: str
+) -> str | None:
+    """Reject a declared operation that contradicts its cited public term."""
+
+    basis = " ".join(public_basis.casefold().replace("-", " ").split())
+    for check in checks:
+        if check.get("kind") != "window_aggregation":
+            continue
+        quantity = check.get("public_quantity")
+        if quantity not in {
+            "average_return",
+            "cumulative_return",
+            "additive_sum",
+        }:
+            return (
+                "window_aggregation requires public_quantity: average_return, "
+                "cumulative_return, or additive_sum"
+            )
+        if "average return" in basis and quantity != "average_return":
+            return (
+                "public basis says average return; use public_quantity="
+                "average_return rather than a sum or cumulative return"
+            )
+        if any(term in basis for term in ("cumulative return", "compound return")):
+            if quantity != "cumulative_return":
+                return (
+                    "public basis says cumulative or compound return; use "
+                    "public_quantity=cumulative_return"
+                )
+        if any(term in basis for term in ("arithmetic sum", "additive sum")):
+            if quantity != "additive_sum":
+                return (
+                    "public basis explicitly says sum; use "
+                    "public_quantity=additive_sum"
+                )
+    return None
 
 
 __all__ = ["probe_quant_invariants"]

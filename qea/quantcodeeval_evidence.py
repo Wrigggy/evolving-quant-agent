@@ -465,7 +465,7 @@ def _planned_trace_tools(content: str) -> list[dict[str, str]]:
                 action_kind="skill_load",
                 quant_stage="requirement_comprehension",
             )
-        elif name == "probe_public_behavior":
+        elif name in {"probe_public_behavior", "probe_quant_invariants"}:
             item.update(
                 action_kind="public_probe",
                 quant_stage="implementation_realization",
