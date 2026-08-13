@@ -387,3 +387,46 @@ The evidence is mirrored additively under:
 - `results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r3c/`
 - `results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r3d/`
 - `results/bc-mirror/qce-public-probe-autonomous-candidate-20260813-r3d-local/`
+
+## Interpretation boundary and next competing directions
+
+The r3 controller repairs and the next harness hypotheses must not be merged
+into one claim. The `quant_property_v2` terminal-reserve bug was an observed
+controller compatibility failure: the Evolver had already recorded ACT and
+written its tool, but the end-of-round middleware recognized only older
+decision schemas and incorrectly requested ABSTAIN until its terminal-call
+budget was exhausted. Fixing this made a valid QuantCodeEval decision visible
+to the controller. It did not improve the Worker, discover a quant solution,
+or contribute a benchmark score.
+
+There are now two distinct candidate directions for the Worker harness:
+
+- **Direction A — independent public-definition fixture.** Materialize a small
+  expected-behavior test from the public instruction, public paper, and public
+  data schema, independently of the Worker implementation, then use it to
+  distinguish competing definitions before submission. The Evolver did partly
+  discover the underlying problem: it observed that a worker-authored contract
+  can be internally green while official answer-free properties remain wrong.
+  However, the external fixture mechanism is an investigator extension of that
+  diagnosis; it has not yet been autonomously proposed and validated by the
+  Evolver.
+- **Direction B — decision-state retention/finalization.** Preserve a selected
+  quantitative definition and its passing local evidence across later repair
+  edits, then check that final submitted code still implements that state. This
+  could live in memory, a checkpoint, regression state, or completion
+  middleware; it need not be a hard-coded artifact finalizer. This is currently
+  an investigator hypothesis motivated by long rewrite trajectories and T12
+  instability. We have not yet observed a trace proving that an intermediate
+  correct implementation was later overwritten, so it is weaker than A and
+  must not be reported as an Evolver finding.
+
+The immediate autonomous search should therefore keep the full harness surface
+open and expose the complete accumulated history without prescribing A or B.
+If the Evolver remains stuck, a second hypothesis-seeded round may present A
+and B as competing explanations while allowing another mechanism or ABSTAIN.
+Only after that should an investigator-authored A control be used to separate
+"the mechanism can work" from "the Evolver can discover it." Start on T12,
+retain T19 as the protection task, and require an apparent T12 solve to survive
+one focused repeat before expansion. The search is variable-length and stops
+on a working repeated mechanism, no new information, calibrated abstention, or
+the declared budget; it is not intrinsically a five-iteration experiment.

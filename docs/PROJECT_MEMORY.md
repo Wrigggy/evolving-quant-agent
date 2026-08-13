@@ -1677,6 +1677,33 @@ submitted code. Start with T12 and protect T19; expand only if a focused gain
 survives an immediate repeat. Full evidence is in the
 [public-probe expansion report](reports/2026-08-13-quantcodeeval-public-probe-expansion.md).
 
+Interpret these next directions carefully. The terminal-reserve repair is a
+controller compatibility fix, not a Worker improvement: r3b already contained
+a real ACT and executable tool, but the terminal middleware did not recognize
+the QuantCodeEval `quant_property_v2` decision schema and incorrectly kept
+requesting ABSTAIN. The fix allowed the completed decision to terminate
+normally; it did not produce a benchmark gain.
+
+Direction A, an independently materialized public-definition fixture, is the
+stronger current hypothesis. The Evolver partly identified its premise—that a
+worker-authored contract can validate its own wrong interpretation—but the
+external fixture itself is an investigator-proposed extension and has not yet
+been autonomously discovered or validated. Direction B, retaining a selected
+definition and passing component state through later edits and final assembly,
+is an unverified investigator hypothesis. No current trace proves that a
+correct intermediate T12 implementation was later overwritten, so do not call
+B an Evolver finding or an observed root cause.
+
+For the next experiment, first give the Evolver the full accumulated
+answer-free history and open harness mutation surface without prescribing A or
+B. If autonomous search stalls, present A and B as competing hypotheses while
+allowing another mechanism or ABSTAIN; label that run hypothesis-seeded. An
+investigator-authored A implementation is a later localization control that
+tests mechanism viability separately from autonomous discovery. Use T12 first,
+protect T19, immediately repeat any apparent T12 solve, and expand only after a
+repeatable gain. Search length is determined by information, success,
+abstention, and budget rather than a fixed five rounds.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
