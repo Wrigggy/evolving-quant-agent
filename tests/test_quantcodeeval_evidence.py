@@ -152,12 +152,17 @@ def test_closed_property_summary_and_coarse_facts_do_not_return_content(tmp_path
     assert ast_facts["module_numeric_constants"] == [
         {"name": "TARGET_VOLATILITY", "value": 5.34}
     ]
+    assert trace_facts["schema_version"] == 3
     assert trace_facts["event_count"] == 2
     assert trace_facts["tool_event_count"] == 1
     assert trace_facts["tool_error_count"] == 1
     assert trace_facts["longest_consecutive_tool_errors"] == 1
     assert trace_facts["tool_duration_ms_total"] == 125
     assert trace_facts["tool_exit_codes"] == {"3": 1}
+    assert trace_facts["action_counts"] == {}
+    assert trace_facts["quant_stage_counts"] == {}
+    assert trace_facts["public_probe_outcomes"] == {}
+    assert trace_facts["implementation_revision_count"] == 0
     assert trace_facts["runtime_timeline"] == [
         {"event": 1, "role": "assistant"},
         {
@@ -169,6 +174,87 @@ def test_closed_property_summary_and_coarse_facts_do_not_return_content(tmp_path
     ]
     assert "private content canary" not in json.dumps(trace_facts)
     assert "private" not in json.dumps(trace_facts)
+
+
+def test_trace_facts_retains_quant_actions_and_probe_outcomes_without_content(
+    tmp_path,
+):
+    trace = tmp_path / "worker-trace.jsonl"
+    assistant = {
+        "role": "assistant",
+        "content": (
+            '<ToolUse>{"input":{"command":"sed -n 1,80p '
+            '/app/data/paper_text.md","description":"Read paper definition"},'
+            '"name":"run_shell_command"}</ToolUse>'
+            '<ToolUse>{"input":{"command":"cat > '
+            '/app/output/strategy.py <<EOF\\nSECRET\\nEOF"},'
+            '"name":"run_shell_command"}</ToolUse>'
+            '<ToolUse>{"input":{"module_path":"/app/output/strategy.py",'
+            '"probe_code":"SECRET"},"name":"probe_public_behavior"}</ToolUse>'
+        ),
+    }
+    trace.write_text(
+        json.dumps(assistant)
+        + "\n"
+        + json.dumps({"role": "tool", "content": '{"exit_code":0}'})
+        + "\n"
+        + json.dumps({"role": "tool", "content": '{"exit_code":0}'})
+        + "\n"
+        + json.dumps(
+            {
+                "role": "tool",
+                "content": json.dumps(
+                    {
+                        "status": "failed",
+                        "exit_code": 1,
+                        "public_basis": "SECRET",
+                        "competing_definitions": ["SECRET"],
+                    }
+                ),
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    facts = trace_coarse_facts(trace)
+
+    assert facts["action_counts"] == {
+        "implementation_update": 1,
+        "public_definition_retrieval": 1,
+        "public_probe": 1,
+    }
+    assert facts["quant_stage_counts"] == {
+        "implementation_realization": 2,
+        "source_retrieval": 1,
+    }
+    assert facts["public_probe_outcomes"] == {"failed": 1}
+    assert facts["implementation_revision_count"] == 1
+    assert facts["runtime_timeline"][0]["planned_actions"] == [
+        {
+            "action_kind": "public_definition_retrieval",
+            "quant_stage": "source_retrieval",
+            "tool_name": "run_shell_command",
+        },
+        {
+            "action_kind": "implementation_update",
+            "quant_stage": "implementation_realization",
+            "tool_name": "run_shell_command",
+        },
+        {
+            "action_kind": "public_probe",
+            "quant_stage": "implementation_realization",
+            "tool_name": "probe_public_behavior",
+        },
+    ]
+    assert facts["runtime_timeline"][3] == {
+        "action_kind": "public_probe_result",
+        "event": 4,
+        "probe_outcome": "failed",
+        "role": "tool",
+        "tool_status": "error",
+    }
+    assert "SECRET" not in json.dumps(facts)
 
 
 def test_build_evidence_contains_only_aggregate_ast_and_trace_facts(tmp_path):

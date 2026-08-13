@@ -75,3 +75,25 @@ The live activation CLI accepts repeated `--task` arguments so a mechanism
 search can expose only its declared target and protection panel. The next run
 uses `--task T12 --task T19`; T01 and T18 remain preserved historical outcomes
 but are not current optimization targets.
+
+## First live use and observed information gap
+
+The first focused live activation over T12 with T19 protection ended in a
+calibrated ABSTAIN. The Evolver read the accumulated experience view and exact
+prior records, but concluded that the same harness had produced both a full
+T12 pass and a partial T12 result while four candidate mechanisms tied on the
+binary panel. The run used 23 successful model requests, about 1.25 million
+tokens, and $0.0294. It changed no candidate and ran no new Worker panel.
+
+Inspection after the run found that the persisted Worker traces already
+contained a useful sequence: public-definition retrieval, data inspection,
+candidate writes, local checks, public-probe failures, revisions, and later
+probe success. The answer-free projection had reduced this to role and generic
+tool-status order, so the Evolver could not use the sequence to distinguish a
+missing capability from a repair-loop or implementation-state problem.
+
+The projection now additionally retains coarse action and quant-stage labels,
+implementation revision counts, and public-probe outcome order. It still
+omits commands, arguments, messages, stdout, submitted source text, and
+verifier details. This is an evidence-sufficiency repair motivated by the
+observed ABSTAIN, not a new fixed failure taxonomy or a measured reward gain.

@@ -9,6 +9,7 @@ materializes coarse public/task-process facts for the PGBHS coordinator.
 from __future__ import annotations
 
 import ast
+from collections import Counter
 import hashlib
 import json
 import os
@@ -340,6 +341,9 @@ def trace_coarse_facts(path: str | Path) -> dict[str, object]:
     tool_durations_ms = 0
     exit_codes: dict[str, int] = {}
     timeline: list[dict[str, object]] = []
+    action_counts: Counter[str] = Counter()
+    quant_stage_counts: Counter[str] = Counter()
+    public_probe_outcomes: Counter[str] = Counter()
     for index, line in enumerate(lines, start=1):
         try:
             event = json.loads(line)
@@ -353,10 +357,18 @@ def trace_coarse_facts(path: str | Path) -> dict[str, object]:
         if role.startswith("role."):
             role = role.removeprefix("role.")
         roles[role] = roles.get(role, 0) + 1
+        content = event.get("content")
+        timeline_item: dict[str, object] = {"event": index, "role": role}
+        if role == "assistant" and isinstance(content, str):
+            planned = _planned_trace_tools(content)
+            if planned:
+                timeline_item["planned_actions"] = planned
+            for item in planned:
+                action_counts[item["action_kind"]] += 1
+                quant_stage_counts[item["quant_stage"]] += 1
         event_type = str(event.get("type", "")).casefold()
         is_tool = role in {"tool", "tool_result"} or "tool" in event_type
         inner: Mapping[str, object] = {}
-        content = event.get("content")
         if is_tool and isinstance(content, str) and content.strip().startswith("{"):
             try:
                 decoded = json.loads(content)
@@ -376,10 +388,16 @@ def trace_coarse_facts(path: str | Path) -> dict[str, object]:
                 and exit_code != 0
             )
         )
-        timeline_item: dict[str, object] = {"event": index, "role": role}
         if is_tool:
             tool_events += 1
             timeline_item["tool_status"] = "error" if is_error else "ok"
+            if _is_public_probe_result(inner):
+                timeline_item["action_kind"] = "public_probe_result"
+                outcome = str(inner.get("status", "")).strip().casefold()
+                if outcome not in {"passed", "failed"}:
+                    outcome = "error" if is_error else "completed"
+                timeline_item["probe_outcome"] = outcome
+                public_probe_outcomes[outcome] += 1
             if isinstance(exit_code, int) and not isinstance(exit_code, bool):
                 exit_codes[str(exit_code)] = exit_codes.get(str(exit_code), 0) + 1
             duration = inner.get("duration_ms", event.get("duration_ms"))
@@ -398,7 +416,7 @@ def trace_coarse_facts(path: str | Path) -> dict[str, object]:
                 current_tool_error_run = 0
         timeline.append(timeline_item)
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "sha256": hashlib.sha256(payload).hexdigest(),
         "size_bytes": len(payload),
         "event_count": len(lines),
@@ -408,10 +426,114 @@ def trace_coarse_facts(path: str | Path) -> dict[str, object]:
         "longest_consecutive_tool_errors": longest_tool_error_run,
         "tool_duration_ms_total": tool_durations_ms,
         "tool_exit_codes": dict(sorted(exit_codes.items())),
+        "action_counts": dict(sorted(action_counts.items())),
+        "quant_stage_counts": dict(sorted(quant_stage_counts.items())),
+        "public_probe_outcomes": dict(sorted(public_probe_outcomes.items())),
+        "implementation_revision_count": action_counts.get(
+            "implementation_update", 0
+        ),
         "runtime_timeline": timeline,
         "malformed_event_count": malformed,
         "content_exposed": False,
     }
+
+
+_TOOL_USE = re.compile(r"<ToolUse>(.*?)</ToolUse>", re.DOTALL)
+
+
+def _is_public_probe_result(value: Mapping[str, object]) -> bool:
+    return "public_basis" in value and "competing_definitions" in value
+
+
+def _planned_trace_tools(content: str) -> list[dict[str, str]]:
+    """Classify Worker tool intentions without retaining arguments or output."""
+
+    planned: list[dict[str, str]] = []
+    for match in _TOOL_USE.finditer(content):
+        try:
+            payload = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, Mapping):
+            continue
+        name = payload.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        item = {"tool_name": name}
+        if name == "LoadSkill":
+            item.update(
+                action_kind="skill_load",
+                quant_stage="requirement_comprehension",
+            )
+        elif name == "probe_public_behavior":
+            item.update(
+                action_kind="public_probe",
+                quant_stage="implementation_realization",
+            )
+        elif name == "run_shell_command":
+            raw_input = payload.get("input")
+            input_map = raw_input if isinstance(raw_input, Mapping) else {}
+            command = str(input_map.get("command", "")).casefold()
+            description = str(input_map.get("description", "")).casefold()
+            hint = f"{description}\n{command}"
+            if (
+                "/app/output/strategy.py" in command
+                and any(
+                    marker in command
+                    for marker in ("cat >", "apply_patch", "patched")
+                )
+            ):
+                item.update(
+                    action_kind="implementation_update",
+                    quant_stage="implementation_realization",
+                )
+            elif any(
+                marker in hint
+                for marker in ("sanity", "smoke", "assert", "fixture", "py_compile")
+            ):
+                item.update(
+                    action_kind="synthetic_invariant",
+                    quant_stage="implementation_realization",
+                )
+            elif "paper_text" in hint:
+                item.update(
+                    action_kind="public_definition_retrieval",
+                    quant_stage="source_retrieval",
+                )
+            elif any(
+                marker in hint
+                for marker in (
+                    "data_descriptor",
+                    "read_csv",
+                    "factor_returns_monthly",
+                    "data profile",
+                    "peek csv",
+                )
+            ):
+                item.update(
+                    action_kind="data_profile",
+                    quant_stage="requirement_comprehension",
+                )
+            elif any(
+                marker in hint
+                for marker in ("import strategy", "import ok", "interface")
+            ):
+                item.update(
+                    action_kind="artifact_smoke",
+                    quant_stage="execution_completion",
+                )
+            else:
+                item.update(
+                    action_kind="shell_inspection",
+                    quant_stage="implementation_realization",
+                )
+        else:
+            item.update(
+                action_kind="other_tool",
+                quant_stage="implementation_realization",
+            )
+        planned.append(item)
+    return planned
 
 
 def _write_json(path: Path, payload: object) -> None:

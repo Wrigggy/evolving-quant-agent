@@ -540,7 +540,7 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
                 "secs": 31.5,
             },
             "trace": {
-                "schema_version": 2,
+                "schema_version": 3,
                 "event_count": 2,
                 "roles": {"assistant": 1, "tool": 1},
                 "tool_event_count": 1,
@@ -548,6 +548,10 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
                 "longest_consecutive_tool_errors": 1,
                 "tool_duration_ms_total": 80,
                 "tool_exit_codes": {"2": 1},
+                "action_counts": {},
+                "quant_stage_counts": {},
+                "public_probe_outcomes": {},
+                "implementation_revision_count": 0,
                 "runtime_timeline": [
                     {"event": 1, "role": "assistant"},
                     {

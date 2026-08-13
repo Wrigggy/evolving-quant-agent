@@ -1753,6 +1753,23 @@ mechanism search must use T12 as its target and T19 as its protection task;
 historical T01/T18 outcomes may remain in archived experience but must not be
 presented as current optimization targets.
 
+**Measured first focused use later on 2026-08-13:** the T12-target/T19-protect
+activation ended in a calibrated ABSTAIN, with no candidate mutation and no
+new Worker evaluation. The Evolver read four prior scored mechanisms and their
+exact history, but judged them tied against run-to-run T12 variation. It used
+23 successful model requests, about 1.25 million tokens, and `$0.0294`.
+
+This run exposed a narrower evidence problem. Raw Worker traces already record
+definition retrieval, data inspection, candidate writes, local checks,
+public-probe failures, revisions, and later probe success, but the next-round
+projection retained only generic role and tool-status order. The projection
+therefore now keeps coarse action/stage labels, revision counts, and probe
+outcome order while still omitting message, command, output, source, and
+verifier content. Treat this as a locally tested evidence repair. It has not
+yet produced an ACT, candidate score, or reward improvement; replay the prior
+T12 traces and rerun the focused autonomous activation before considering an
+investigator-seeded mechanism.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

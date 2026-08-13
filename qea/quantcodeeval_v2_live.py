@@ -383,6 +383,10 @@ def _candidate_worker_runtime(
                     "longest_consecutive_tool_errors",
                     "tool_duration_ms_total",
                     "tool_exit_codes",
+                    "action_counts",
+                    "quant_stage_counts",
+                    "public_probe_outcomes",
+                    "implementation_revision_count",
                     "runtime_timeline",
                     "malformed_event_count",
                 )
