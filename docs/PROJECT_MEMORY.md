@@ -1904,6 +1904,35 @@ this failed intervention as experience; it must not repeat the same boundary
 edit, and calibrated `ABSTAIN` remains acceptable. Detailed evidence is in
 `docs/reports/2026-08-14-quantcodeeval-t18-runtime-component-search.md`.
 
+**T18 history-guided refinement later on 2026-08-14:** the next Evolver round
+imported the prior activation and scored candidate as searchable experience,
+including its decision, exact diff, component tests, answer-free tied outcome,
+and final Worker artifact. The updated ledger identified
+`warmup_boundary_arbitration` as fully activated but unsupported. The Evolver
+read and cited that history, used the unchanged Type A 2/4 plus Type B 14/14 to
+eliminate the warmup flip index, and also eliminated the already conforming
+weight-cap formula.
+
+It retained percentile/quintile boundary semantics and early-observation NaN
+policy as plausible competitors, but found that the authorized public
+instruction and paper did not uniquely select strict versus inclusive/rank
+thresholds or sample-versus-population first-month behavior. Because the two
+failing Type A property definitions were not exposed, it returned calibrated
+`ABSTAIN`, produced no candidate, and triggered no T18 or T19 benchmark run.
+This is measured evidence that the Evolver can use its own failed component
+intervention to avoid repetition and preserve uncertainty; it is not a score
+gain. The activation used 24 completed requests, 1,807,639 tokens, and
+$0.0492410744, with complete top-level proxy accounting and cleaned containers.
+
+An observed bookkeeping defect recorded one request and zero cost inside the
+ABSTAIN search-state round even though the finalized proxy audit was correct.
+The live controller now reconciles finalized proxy usage into future ABSTAIN
+states; focused tests cover the correction. The historical result remains
+unchanged and the top-level proxy audit is authoritative. Stop this T18 branch
+under the current answer-free evidence rather than guessing another convention.
+Detailed evidence is in
+`docs/reports/2026-08-14-quantcodeeval-t18-history-refinement-abstain.md`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
