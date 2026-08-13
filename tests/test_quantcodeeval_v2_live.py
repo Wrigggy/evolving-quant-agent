@@ -85,6 +85,41 @@ def test_activation_task_panel_can_focus_target_and_protection():
         _select_task_rewards(rewards, ("T24",))
 
 
+def test_activation_cli_passes_component_ledger_to_live_runner(
+    tmp_path, monkeypatch
+):
+    from scripts import run_quantcodeeval_v2_activation as cli
+
+    ledger = tmp_path / "component-ledger.json"
+    captured = {}
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        return {"status": "PASS"}
+
+    monkeypatch.setattr(cli, "run_quantcodeeval_v2_activation_canary", fake_run)
+
+    exit_code = cli.main(
+        [
+            "--config",
+            str(tmp_path / "config.json"),
+            "--release",
+            str(tmp_path / "release"),
+            "--run-dir",
+            str(tmp_path / "run"),
+            "--evolver-image",
+            "evolver:test",
+            "--proxy-image",
+            "proxy:test",
+            "--component-ledger",
+            str(ledger),
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured["component_ledger_path"] == ledger
+
+
 def test_proxy_audit_retains_exact_request_cost_and_ids(tmp_path):
     audit = tmp_path / "attempts/evolver-iteration-1/proxy-audit.jsonl"
     audit.parent.mkdir(parents=True)

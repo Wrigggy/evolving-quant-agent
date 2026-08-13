@@ -33,6 +33,7 @@ from .quantcodeeval_experiment import (
     h0_evaluation_ref,
     materialize_h0_attempt_sources,
 )
+from .quantcodeeval_components import load_quantcodeeval_component_ledger
 from .quantcodeeval_evidence import trace_coarse_facts
 from .quantcodeeval_release import validate_quantcodeeval_release
 from .quantcodeeval_history import append_quantcodeeval_history
@@ -790,6 +791,7 @@ def run_quantcodeeval_v2_activation_canary(
     ) = None,
     prior_scored_candidate_run_dir: str | Path | Iterable[str | Path] | None = None,
     comparison_h0_run_dir: str | Path | Iterable[str | Path] | None = None,
+    component_ledger_path: str | Path | None = None,
     task_ids: Iterable[str] | None = None,
     diagnosis_note: str | None = None,
     validate_release: bool = True,
@@ -832,6 +834,13 @@ def run_quantcodeeval_v2_activation_canary(
         for task_id, result in h0.task_results.items()
     }
     rewards = _select_task_rewards(all_rewards, task_ids)
+    component_ledger = None
+    component_ledger_source = None
+    if component_ledger_path is not None:
+        component_ledger_source = Path(component_ledger_path).expanduser().resolve()
+        component_ledger = load_quantcodeeval_component_ledger(
+            component_ledger_source
+        )
     prior_rejected_attempts = [
         _seed_rejected_attempt_history(
             history_root=root / "history",
@@ -928,6 +937,17 @@ def run_quantcodeeval_v2_activation_canary(
             path.expanduser().resolve().name
             for path in _prior_attempt_paths(comparison_h0_run_dir)
         ],
+        "component_stability": (
+            {
+                "enabled": True,
+                "scope": component_ledger.scope,
+                "component_count": len(component_ledger.components),
+                "hypothesis_count": len(component_ledger.hypotheses),
+                "trial_count": len(component_ledger.trials),
+            }
+            if component_ledger is not None
+            else {"enabled": False}
+        ),
         "diagnosis_note": diagnosis_note,
         "search_limits": asdict(
             QuantSearchLimits(
@@ -1017,6 +1037,7 @@ def run_quantcodeeval_v2_activation_canary(
             attempts=attempts,
             current_evaluation_id=h0.evaluation_id,
             history_root=history_root,
+            component_ledger_path=component_ledger_source,
             current_parent=state.search_parent_digest,
             iteration_summaries=(
                 {

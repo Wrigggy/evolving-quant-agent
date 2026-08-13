@@ -141,6 +141,10 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
         attempts=attempts,
         current_evaluation_id="eval-current",
         history_root=history,
+        component_ledger_path=(
+            Path(__file__).resolve().parents[1]
+            / "data/quantcodeeval/COMPONENT_EVIDENCE_CANARY.json"
+        ),
         iteration_summaries=({"iteration": 1, "selection": "rejected"},),
     )
 
@@ -151,6 +155,9 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
     assert contract["history_required"] is True
     assert contract["history_entry_ids"] == [entry_id]
     assert contract["quant_failure_map"] == "guidance/quant_failure_map.json"
+    assert contract["component_stability"] == "guidance/component_stability.json"
+    assert contract["component_stability_is_answer_free"] is True
+    assert contract["component_stability_is_advisory"] is True
     assert contract["quant_failure_classification_required_for_act"] is False
     assert contract["domain_guidance_is_advisory"] is True
     assert contract["domain_tags_are_extensible"] is True
@@ -159,6 +166,9 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
         "REUSE",
         "REVERT",
         "FUSE",
+        "COMPOSE",
+        "SYNTHESIZE",
+        "ROUTE",
         "NEW_PROBE",
     ]
     relevant = json.loads(
@@ -189,6 +199,17 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
         "signal_direction",
         "portfolio_accounting",
     }
+    stability = json.loads(
+        (record.root / "guidance/component_stability.json").read_text()
+    )
+    repaired = next(
+        item
+        for item in stability["hypotheses"]
+        if item["hypothesis_id"] == "public_semantic_bound_invariant"
+    )
+    assert repaired["stability"] == "protected"
+    assert repaired["next_actions"] == ["ABLATE", "TRANSFER"]
+    assert repaired["evidence_gap"].startswith("The initial invariant")
     entry = json.loads(
         (record.root / "history/archive/entries" / f"{entry_id}.json").read_text()
     )
@@ -232,5 +253,6 @@ def test_first_v2_round_does_not_require_nonexistent_history(tmp_path):
     contract = json.loads((record.root / "contract.json").read_text())
     summary = json.loads((record.root / "history/SUMMARY.json").read_text())
     assert contract["history_required"] is False
+    assert contract["component_stability"] is None
     assert summary["entry_count"] == 0
     assert not (record.root / "history/archive").exists()

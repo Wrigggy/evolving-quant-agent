@@ -1798,6 +1798,28 @@ searchable experience and test whether the Evolver can autonomously `REUSE` or
 refine the component for another target. See the
 [runtime invariant localization report](reports/2026-08-13-quant-runtime-invariant-localization.md).
 
+**Component-stability representation implemented later on 2026-08-13:** the
+first non-paid step toward scalable component search is now a lightweight
+component-hypothesis ledger. It is deliberately separate from candidate-file
+history: a hypothesis records a claimed capability composition and its expected
+Worker effect, while trials record availability, selection, actual activation,
+target, independent repeat, protection, transfer, and ablation roles. The
+current T12/T19 canary is represented without overstating attribution: the
+independent invariant alone is unsupported at 8/16; the invariant plus public-
+quantity semantic binding is repeated on T12 and protected on T19; semantic
+binding has no standalone trial; transfer and component necessity remain
+untested. The existing evidence builder can optionally expose an answer-free
+summary of this ledger to the Evolver, but default search behavior is unchanged.
+No model call, Worker run, or official evaluation was launched for this step.
+
+Use this representation to make stability sequential rather than a one-run
+claim. A first target success is provisional, an independent repeat can make it
+replicated, and protection can make it protected; conflicting repeat or
+protection evidence remains mixed. For a successful composition, prefer a small
+ablation and then transfer rather than enumerating all component subsets. Full
+bidirectional discovery is a future fallback for capability gaps not covered by
+retrieved components, not the default path for every task.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

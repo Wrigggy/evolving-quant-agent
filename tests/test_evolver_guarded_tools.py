@@ -1012,6 +1012,30 @@ def test_quant_v2_accepts_extensible_domain_tags_and_experience_operator(
     assert result["failure_class"] == "unclassified"
 
 
+@pytest.mark.parametrize("operator", ["COMPOSE", "SYNTHESIZE", "ROUTE"])
+def test_quant_v2_accepts_component_search_operators(guarded_roots, operator):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, access_log = guarded_roots
+    _write_flexible_quant_v2_contract(evidence, history_required=False)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    decision["search_operator"] = operator
+
+    result = decide_candidate(discovery=decision)
+    state = json.loads(
+        (access_log.parent / "discovery-hypothesis.json").read_text()
+    )
+
+    assert result["decision"] == "ACT"
+    assert state["hypothesis"]["search_operator"] == operator
+
+
 def test_failure_type_probe_can_unlock_two_declared_components(guarded_roots):
     from qea.evolve_agent_full.tools.guarded_workspace import (
         GuardedWorkspaceError,

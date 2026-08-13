@@ -19,7 +19,7 @@ input_schema:
           description: Optional extensible finance, data, execution, or runtime tags grounded in the inspected evidence.
         search_operator:
           type: string
-          enum: [CONTINUE, REUSE, REVERT, FUSE, NEW_PROBE]
+          enum: [CONTINUE, REUSE, REVERT, FUSE, COMPOSE, SYNTHESIZE, ROUTE, NEW_PROBE]
           description: How this intervention relates to prior experience; defaults to NEW_PROBE for older decisions.
         breakdown_stage:
           type: string

@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "scope": "2026-08-13 T12 target and T19 protection engineering canary",
+  "components": [
+    {
+      "component_id": "declarative_quant_invariant",
+      "origin": "investigator_seeded",
+      "capabilities": [
+        "window_and_lag_checks",
+        "independent_perturbation",
+        "signal_sign_checks",
+        "equal_weight_portfolio_checks"
+      ],
+      "description": "Independently execute declared quant operations against public and synthetic inputs."
+    },
+    {
+      "component_id": "public_quantity_semantic_binding",
+      "origin": "investigator_seeded",
+      "capabilities": [
+        "public_quantity_to_operation",
+        "average_return_semantics",
+        "cumulative_return_semantics",
+        "explicit_sum_semantics"
+      ],
+      "description": "Bind public quantity vocabulary to the operation checked by the executable invariant."
+    }
+  ],
+  "hypotheses": [
+    {
+      "hypothesis_id": "independent_invariant_without_semantic_binding",
+      "component_ids": [
+        "declarative_quant_invariant"
+      ],
+      "evidence_gap": "The free-form Worker probe did not discriminate official T12 outcomes.",
+      "expected_worker_change": "An independently executed invariant should reject incorrect lag, sign, and portfolio behavior.",
+      "target_task_ids": [
+        "T12"
+      ],
+      "protection_task_ids": [
+        "T19"
+      ]
+    },
+    {
+      "hypothesis_id": "public_semantic_bound_invariant",
+      "component_ids": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "evidence_gap": "The initial invariant correctly executed an operation that the Worker had selected from a wrong public interpretation.",
+      "expected_worker_change": "The Worker must bind average return to arithmetic mean before the invariant can pass and must revise a mismatched final strategy.",
+      "target_task_ids": [
+        "T12"
+      ],
+      "protection_task_ids": [
+        "T19"
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "run_id": "qce-quant-invariant-seeded-t12-20260813-r1",
+      "hypothesis_id": "independent_invariant_without_semantic_binding",
+      "task_id": "T12",
+      "role": "target",
+      "available_components": [
+        "declarative_quant_invariant"
+      ],
+      "selected_components": [
+        "declarative_quant_invariant"
+      ],
+      "activated_components": [
+        "declarative_quant_invariant"
+      ],
+      "official_reward": 0,
+      "properties_passed": 8,
+      "properties_total": 16,
+      "requests": 32,
+      "tokens": 761905,
+      "cost_usd": 0.0207160072,
+      "observation": "The Worker cited average return but selected additive sum, and the independent tool self-confirmed that selected operation."
+    },
+    {
+      "run_id": "qce-quant-invariant-seeded-t12-20260813-r2",
+      "hypothesis_id": "public_semantic_bound_invariant",
+      "task_id": "T12",
+      "role": "target",
+      "available_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "selected_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "activated_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "official_reward": 1,
+      "properties_passed": 16,
+      "properties_total": 16,
+      "requests": 23,
+      "tokens": 622616,
+      "cost_usd": 0.0237421464,
+      "observation": "The final Worker selected average_return, revised failed checks, and passed the final semantic-bound invariant."
+    },
+    {
+      "run_id": "qce-quant-invariant-seeded-t12-repeat1-20260813-r2",
+      "hypothesis_id": "public_semantic_bound_invariant",
+      "task_id": "T12",
+      "role": "repeat",
+      "available_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "selected_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "activated_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "official_reward": 1,
+      "properties_passed": 16,
+      "properties_total": 16,
+      "requests": 17,
+      "tokens": 360994,
+      "cost_usd": 0.0151102112,
+      "observation": "An independent Worker repeat with the same harness passed all T12 properties."
+    },
+    {
+      "run_id": "qce-quant-invariant-seeded-t19-protect-20260813-r2",
+      "hypothesis_id": "public_semantic_bound_invariant",
+      "task_id": "T19",
+      "role": "protection",
+      "available_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "selected_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "activated_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "official_reward": 1,
+      "properties_passed": 18,
+      "properties_total": 18,
+      "requests": 20,
+      "tokens": 447123,
+      "cost_usd": 0.019612348,
+      "observation": "The repaired composition preserved the already solved T19 protection task."
+    }
+  ],
+  "notes": [
+    "The final component was investigator-seeded rather than autonomously discovered by the Evolver.",
+    "The repaired composition has two T12 successes and one T19 protection success, but no transfer result.",
+    "The semantic-binding component has not been evaluated alone, so individual component necessity is untested.",
+    "This ledger records a mechanism canary rather than a QuantCodeEval benchmark estimate."
+  ]
+}

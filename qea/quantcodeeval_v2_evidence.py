@@ -15,6 +15,10 @@ from .quantcodeeval_evidence import (
     QuantEvidenceAttemptSource,
     build_quantcodeeval_evidence,
 )
+from .quantcodeeval_components import (
+    QuantComponentLedgerError,
+    load_quantcodeeval_component_ledger,
+)
 from .quantcodeeval_history import (
     QuantCodeEvalHistoryError,
     materialize_quantcodeeval_history_evidence,
@@ -91,6 +95,7 @@ def build_quantcodeeval_v2_evidence(
     attempts: Iterable[QuantEvidenceAttemptSource],
     current_evaluation_id: str,
     history_root: str | Path | None,
+    component_ledger_path: str | Path | None = None,
     iteration_summaries: Iterable[Mapping[str, object]] = (),
     current_parent: str | None = None,
     max_primary_components: int = 2,
@@ -198,6 +203,11 @@ def build_quantcodeeval_v2_evidence(
             staging / "guidance" / "quant_failure_map.json",
             _quant_failure_map(),
         )
+        component_stability = None
+        if component_ledger_path is not None:
+            component_stability = "guidance/component_stability.json"
+            ledger = load_quantcodeeval_component_ledger(component_ledger_path)
+            _write_json(staging / component_stability, ledger.summary())
         _write_json(
             staging / "contract.json",
             {
@@ -235,6 +245,9 @@ def build_quantcodeeval_v2_evidence(
                 "preferred_primary_components": _PREFERRED_PRIMARY_COMPONENTS,
                 "component_priors_are_advisory": True,
                 "quant_failure_map": "guidance/quant_failure_map.json",
+                "component_stability": component_stability,
+                "component_stability_is_answer_free": True,
+                "component_stability_is_advisory": True,
                 "quant_failure_classification_required_for_act": False,
                 "domain_guidance_is_advisory": True,
                 "domain_tags_are_extensible": True,
@@ -243,6 +256,9 @@ def build_quantcodeeval_v2_evidence(
                     "REUSE",
                     "REVERT",
                     "FUSE",
+                    "COMPOSE",
+                    "SYNTHESIZE",
+                    "ROUTE",
                     "NEW_PROBE",
                 ],
                 "component_role_semantics": (
@@ -261,6 +277,7 @@ def build_quantcodeeval_v2_evidence(
         return EvidenceRecord(root=target, sha256=sha256, members=members)
     except (
         QuantCodeEvalEvidenceError,
+        QuantComponentLedgerError,
         QuantCodeEvalExperienceError,
         OSError,
         ValueError,

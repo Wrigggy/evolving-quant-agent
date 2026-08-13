@@ -1618,6 +1618,9 @@ def _decide_quant_property_candidate(
         "REUSE",
         "REVERT",
         "FUSE",
+        "COMPOSE",
+        "SYNTHESIZE",
+        "ROUTE",
         "NEW_PROBE",
     }:
         raise GuardedWorkspaceError("search_operator is unsupported")
