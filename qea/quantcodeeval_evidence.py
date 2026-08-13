@@ -326,7 +326,7 @@ def strategy_ast_facts(path: str | Path) -> dict[str, object]:
 
 
 def trace_coarse_facts(path: str | Path) -> dict[str, object]:
-    """Count trace event kinds without returning messages or tool arguments."""
+    """Retain an answer-free runtime timeline without messages or arguments."""
 
     source = _safe_source(Path(path), label="worker trace")
     payload = source.read_bytes()
@@ -336,7 +336,11 @@ def trace_coarse_facts(path: str | Path) -> dict[str, object]:
         raise QuantCodeEvalEvidenceError("worker trace must be UTF-8") from exc
     roles: dict[str, int] = {}
     tool_events = tool_errors = malformed = 0
-    for line in lines:
+    longest_tool_error_run = current_tool_error_run = 0
+    tool_durations_ms = 0
+    exit_codes: dict[str, int] = {}
+    timeline: list[dict[str, object]] = []
+    for index, line in enumerate(lines, start=1):
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
@@ -346,23 +350,65 @@ def trace_coarse_facts(path: str | Path) -> dict[str, object]:
             malformed += 1
             continue
         role = str(event.get("role", "unknown")).strip().casefold() or "unknown"
+        if role.startswith("role."):
+            role = role.removeprefix("role.")
         roles[role] = roles.get(role, 0) + 1
         event_type = str(event.get("type", "")).casefold()
-        if role in {"tool", "tool_result"} or "tool" in event_type:
+        is_tool = role in {"tool", "tool_result"} or "tool" in event_type
+        inner: Mapping[str, object] = {}
+        content = event.get("content")
+        if is_tool and isinstance(content, str) and content.strip().startswith("{"):
+            try:
+                decoded = json.loads(content)
+            except json.JSONDecodeError:
+                decoded = None
+            if isinstance(decoded, Mapping):
+                inner = decoded
+        status = str(event.get("status", inner.get("status", ""))).casefold()
+        exit_code = inner.get("exit_code", event.get("exit_code"))
+        is_error = (
+            event.get("is_error") is True
+            or inner.get("is_error") is True
+            or status in {"error", "failed"}
+            or (
+                isinstance(exit_code, int)
+                and not isinstance(exit_code, bool)
+                and exit_code != 0
+            )
+        )
+        timeline_item: dict[str, object] = {"event": index, "role": role}
+        if is_tool:
             tool_events += 1
-        if event.get("is_error") is True or str(event.get("status", "")).casefold() in {
-            "error",
-            "failed",
-        }:
-            tool_errors += 1
+            timeline_item["tool_status"] = "error" if is_error else "ok"
+            if isinstance(exit_code, int) and not isinstance(exit_code, bool):
+                exit_codes[str(exit_code)] = exit_codes.get(str(exit_code), 0) + 1
+            duration = inner.get("duration_ms", event.get("duration_ms"))
+            if isinstance(duration, (int, float)) and not isinstance(duration, bool):
+                tool_durations_ms += max(0, int(duration))
+                timeline_item["duration_ms"] = max(0, int(duration))
+            if inner.get("truncated") is True or event.get("truncated") is True:
+                timeline_item["truncated"] = True
+            if is_error:
+                tool_errors += 1
+                current_tool_error_run += 1
+                longest_tool_error_run = max(
+                    longest_tool_error_run, current_tool_error_run
+                )
+            else:
+                current_tool_error_run = 0
+        timeline.append(timeline_item)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "sha256": hashlib.sha256(payload).hexdigest(),
         "size_bytes": len(payload),
         "event_count": len(lines),
         "roles": dict(sorted(roles.items())),
         "tool_event_count": tool_events,
         "tool_error_count": tool_errors,
+        "longest_consecutive_tool_errors": longest_tool_error_run,
+        "tool_duration_ms_total": tool_durations_ms,
+        "tool_exit_codes": dict(sorted(exit_codes.items())),
+        "runtime_timeline": timeline,
         "malformed_event_count": malformed,
         "content_exposed": False,
     }

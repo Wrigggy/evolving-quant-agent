@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-13",
+  "experiment": "QuantCodeEval runtime experience retrieval and domain guidance smoke",
+  "setup": {
+    "branch": "qfbench-discovery-evolver",
+    "python": "3.14.3",
+    "mode": "local deterministic tests",
+    "paid_model_calls": 0,
+    "benchmark_worker_runs": 0,
+    "cost_usd": 0.0
+  },
+  "command": ".venv/bin/python -m pytest -q tests/test_quantcodeeval_evidence.py tests/test_quantcodeeval_history.py tests/test_quantcodeeval_v2_evidence.py tests/test_quantcodeeval_v2_loop.py tests/test_quantcodeeval_v2_live.py tests/test_evolver_guarded_tools.py tests/test_evolver_terminal_reserve.py",
+  "outcome": {
+    "passed": 82,
+    "failed": 0,
+    "elapsed_seconds": 7.51
+  },
+  "measured": [
+    "A rejected prompt mutation becomes an explicit unsupported experience lesson.",
+    "A later round can read the experience view and exact prior diff before switching to an executable tool component.",
+    "Worker trace evidence retains answer-free event order, tool status, duration, exit-code counts, truncation, and consecutive error structure.",
+    "Quant decisions accept extensible domain tags and an explicit search operator without requiring the fixed failure taxonomy."
+  ],
+  "not_measured": [
+    "No Evolver model was called.",
+    "No QuantCodeEval task was evaluated.",
+    "No benchmark reward or search-quality improvement is claimed."
+  ]
+}

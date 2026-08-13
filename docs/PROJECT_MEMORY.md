@@ -1728,6 +1728,24 @@ Implementation and local tests are recorded in the
 [quant/finance failure-map decision](decisions/2026-08-13-quant-finance-failure-map-middleware.md).
 No paid model call or candidate benchmark run has yet used this middleware.
 
+**Superseding flexibility and experience decision later on 2026-08-13:** keep
+the failure map, but use it as optional domain vocabulary rather than a
+mandatory two-axis form. The Evolver may add free-form finance/data/execution
+tags or propose a better class. A legal ACT still needs competing mechanisms,
+inspected evidence, a falsifiable prediction, explicit component roles, and a
+coherent edit; it no longer needs to populate every fixed taxonomy field.
+
+The exact mutation archive remains the source of truth. Each later evidence
+bundle now adds an experience catalog, current branch ancestry, and a compact
+relevant set with result-validated lessons and suggested branch operations
+(`CONTINUE`, `REUSE`, `REVERT`, `FUSE`, or `NEW_PROBE`). Worker evidence also
+retains a longer answer-free runtime timeline with event role, tool success or
+error, duration, exit-code counts, truncation, and consecutive-error structure,
+while excluding messages, commands, tool output, and evaluator details. This is
+locally smoke-tested retrieval/plumbing, not a measured reward improvement; no
+paid model or benchmark run was launched. See the
+[runtime-experience retrieval decision](decisions/2026-08-13-quantcodeeval-runtime-experience-retrieval.md).
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

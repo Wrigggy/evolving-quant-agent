@@ -1514,10 +1514,16 @@ def _decide_quant_property_candidate(
     decision = _text(discovery.get("decision"), label="decision").upper()
     if decision not in {"ACT", "ABSTAIN"}:
         raise GuardedWorkspaceError("decision must be ACT or ABSTAIN")
-    failure_class = _text(
-        discovery.get("failure_class"), label="failure_class"
-    ).casefold()
-    if failure_class not in _QUANT_FAILURE_CLASSES:
+    classification_required = (
+        contract.get("quant_failure_classification_required_for_act") is True
+    )
+    raw_failure_class = discovery.get("failure_class")
+    failure_class = (
+        _text(raw_failure_class, label="failure_class").casefold()
+        if raw_failure_class is not None
+        else "unclassified"
+    )
+    if classification_required and failure_class not in _QUANT_FAILURE_CLASSES:
         raise GuardedWorkspaceError("failure_class is unsupported")
 
     raw_hypotheses = discovery.get("hypotheses_considered")
@@ -1604,17 +1610,34 @@ def _decide_quant_property_candidate(
         ),
         "uncertainty": _text(discovery.get("uncertainty"), label="uncertainty"),
     }
+    normalized["search_operator"] = _text(
+        discovery.get("search_operator", "NEW_PROBE"), label="search_operator"
+    ).upper()
+    if normalized["search_operator"] not in {
+        "CONTINUE",
+        "REUSE",
+        "REVERT",
+        "FUSE",
+        "NEW_PROBE",
+    }:
+        raise GuardedWorkspaceError("search_operator is unsupported")
+    normalized["domain_tags"] = _text_list(
+        discovery.get("domain_tags", []), label="domain_tags"
+    )
 
     components: list[str] = []
     primary_components: list[str] = []
     if decision == "ACT":
-        if failure_class in {"unknown", "isolated_task_specific"}:
+        if classification_required and failure_class in {
+            "unknown",
+            "isolated_task_specific",
+        }:
             raise GuardedWorkspaceError(
                 "unknown or isolated_task_specific evidence must ABSTAIN"
             )
         if selected_id is None:
             raise GuardedWorkspaceError("ACT requires selected_hypothesis_id")
-        if contract.get("quant_failure_classification_required_for_act") is True:
+        if classification_required:
             breakdown_stage = _text(
                 discovery.get("breakdown_stage"), label="breakdown_stage"
             ).casefold()
@@ -1652,6 +1675,16 @@ def _decide_quant_property_candidate(
                 discovery.get("component_state_target"),
                 label="component_state_target",
             )
+        else:
+            for field in (
+                "breakdown_stage",
+                "observed_symptoms",
+                "adjacent_failure_classes_considered",
+                "class_selection_reason",
+                "component_state_target",
+            ):
+                if field in discovery:
+                    normalized[field] = discovery[field]
         components = _text_list(
             discovery.get("components"), label="components", minimum=1
         )

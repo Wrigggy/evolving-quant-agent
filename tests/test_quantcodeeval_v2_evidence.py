@@ -151,7 +151,29 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
     assert contract["history_required"] is True
     assert contract["history_entry_ids"] == [entry_id]
     assert contract["quant_failure_map"] == "guidance/quant_failure_map.json"
-    assert contract["quant_failure_classification_required_for_act"] is True
+    assert contract["quant_failure_classification_required_for_act"] is False
+    assert contract["domain_guidance_is_advisory"] is True
+    assert contract["domain_tags_are_extensible"] is True
+    assert contract["search_operators"] == [
+        "CONTINUE",
+        "REUSE",
+        "REVERT",
+        "FUSE",
+        "NEW_PROBE",
+    ]
+    relevant = json.loads(
+        (record.root / "history/experience/RELEVANT.json").read_text()
+    )
+    assert relevant["target_task_ids"] == ["T24"]
+    assert relevant["experiences"][0]["prediction_result"] == "not_supported"
+    assert relevant["experiences"][0]["primary_components"] == ["systemprompt"]
+    assert relevant["experiences"][0]["suggested_next_operators"] == [
+        "REVERT",
+        "NEW_PROBE",
+    ]
+    assert relevant["experiences"][0]["source_entry"].endswith(
+        f"/entries/{entry_id}.json"
+    )
     failure_map = json.loads(
         (record.root / "guidance/quant_failure_map.json").read_text()
     )

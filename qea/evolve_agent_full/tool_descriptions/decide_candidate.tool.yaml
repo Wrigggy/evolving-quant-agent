@@ -12,7 +12,15 @@ input_schema:
           enum: [ACT, ABSTAIN]
         failure_class:
           type: string
-          enum: [interface_delivery, data_universe_preprocessing, temporal_causality, formula_parameterization, signal_direction, portfolio_accounting, runtime_completion, isolated_task_specific, unknown]
+          description: Optional finance-domain tag. Prefer a map label when it fits, or propose a concise new class when the observed runtime experience does not fit the map.
+        domain_tags:
+          type: array
+          items: {type: string}
+          description: Optional extensible finance, data, execution, or runtime tags grounded in the inspected evidence.
+        search_operator:
+          type: string
+          enum: [CONTINUE, REUSE, REVERT, FUSE, NEW_PROBE]
+          description: How this intervention relates to prior experience; defaults to NEW_PROBE for older decisions.
         breakdown_stage:
           type: string
           enum: [source_retrieval, requirement_comprehension, specification_preservation, implementation_realization, execution_completion, unable_to_decide]

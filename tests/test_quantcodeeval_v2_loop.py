@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from qea.evolution_evidence import EvidenceRecord
 from qea.loop_benchmark import hash_worker_directory
 from qea.quantcodeeval_history import materialize_quantcodeeval_history_evidence
+from qea.quantcodeeval_experience import materialize_quantcodeeval_experience
 from qea.quantcodeeval_search import (
     QuantSearchLimits,
     SearchSelection,
@@ -73,6 +74,7 @@ def _add_tool(candidate: Path) -> None:
 class FakeProposer:
     def __init__(self):
         self.saw_rejected_diff = False
+        self.saw_rejected_experience = False
 
     def propose(self, **kwargs):
         iteration = kwargs["iteration"]
@@ -105,6 +107,16 @@ class FakeProposer:
                 },
             ]
         else:
+            relevant_path = evidence / "history/experience/RELEVANT.json"
+            if relevant_path.is_file():
+                relevant = json.loads(relevant_path.read_text())
+                prior = relevant["experiences"][0]
+                self.saw_rejected_experience = (
+                    prior["prediction_result"] == "not_supported"
+                    and prior["suggested_next_operators"]
+                    == ["REVERT", "NEW_PROBE"]
+                )
+                assert self.saw_rejected_experience
             patches = list((evidence / "history/archive/diffs").glob("*.patch"))
             assert len(patches) == 1
             self.saw_rejected_diff = "generic estimation prose" in patches[0].read_text()
@@ -128,6 +140,8 @@ class FakeProposer:
         decision = {
             "decision": "ACT",
             "failure_class": "quant_definition_estimation",
+            "domain_tags": ["estimator semantics", "runtime operation"],
+            "search_operator": "NEW_PROBE" if iteration == 1 else "REVERT",
             "hypotheses_considered": hypotheses,
             "selected_hypothesis_id": selected,
             "evidence_refs": ["contract.json", "history/SUMMARY.json"],
@@ -209,6 +223,12 @@ def test_no_model_loop_reuses_rejected_round_and_promotes_full_component(tmp_pat
                 destination=history / "archive",
             )
             count = projection["entry_count"]
+            materialize_quantcodeeval_experience(
+                archive_root=history / "archive",
+                destination=history / "experience",
+                target_task_ids=("T24",),
+                current_parent=current.search_parent_digest,
+            )
         else:
             count = 0
         (history / "SUMMARY.json").write_text(
@@ -266,6 +286,7 @@ def test_no_model_loop_reuses_rejected_round_and_promotes_full_component(tmp_pat
         SearchSelection.OFFICIAL_PROMOTED,
     ]
     assert proposer.saw_rejected_diff is True
+    assert proposer.saw_rejected_experience is True
     assert final.official_rewards == {"T16": 1.0, "T24": 1.0}
     assert (run / "SEARCH-STATE.json").is_file()
     assert len(list((run / "history/entries").glob("*.json"))) == 2

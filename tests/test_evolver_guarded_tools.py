@@ -781,6 +781,24 @@ def _write_quant_v2_contract(evidence: Path, *, history_required: bool = True):
     )
 
 
+def _write_flexible_quant_v2_contract(
+    evidence: Path, *, history_required: bool = True
+):
+    _write_quant_v2_contract(evidence, history_required=history_required)
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["quant_failure_classification_required_for_act"] = False
+    contract["domain_tags_are_extensible"] = True
+    contract_path.write_text(json.dumps(contract, sort_keys=True) + "\n", encoding="utf-8")
+    experience = evidence / "history" / "experience"
+    experience.mkdir(parents=True)
+    (experience / "RELEVANT.json").write_text(
+        '{"experiences":[{"experience_key":"experience-0001",'
+        '"prediction_result":"not_supported"}]}\n',
+        encoding="utf-8",
+    )
+
+
 def _quant_v2_decision():
     return {
         "decision": "ACT",
@@ -950,6 +968,48 @@ def test_quant_v2_act_requires_two_axis_finance_localization(guarded_roots):
     ]
     with pytest.raises(GuardedWorkspaceError, match="must differ"):
         decide_candidate(discovery=decision)
+
+
+def test_quant_v2_accepts_extensible_domain_tags_and_experience_operator(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_flexible_quant_v2_contract(evidence)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(
+        source="evidence", file_path="history/experience/RELEVANT.json"
+    )
+    read_workspace(source="evidence", file_path="history/archive/diffs/prior.patch")
+    decision = _quant_v2_decision()
+    for field in (
+        "failure_class",
+        "breakdown_stage",
+        "observed_symptoms",
+        "adjacent_failure_classes_considered",
+        "class_selection_reason",
+        "component_state_target",
+    ):
+        decision.pop(field)
+    decision["evidence_refs"] = [
+        "overview.md",
+        "history/experience/RELEVANT.json",
+        "history/archive/diffs/prior.patch",
+    ]
+    decision["domain_tags"] = [
+        "cross-sectional rank semantics",
+        "warm-up window availability",
+    ]
+    decision["search_operator"] = "FUSE"
+
+    result = decide_candidate(discovery=decision)
+
+    assert result["decision"] == "ACT"
+    assert result["failure_class"] == "unclassified"
 
 
 def test_failure_type_probe_can_unlock_two_declared_components(guarded_roots):

@@ -79,7 +79,15 @@ def _attempt_source(tmp_path: Path, task_id: str) -> QuantEvidenceAttemptSource:
     trace.write_text(
         json.dumps({"role": "assistant", "content": "private content canary"})
         + "\n"
-        + json.dumps({"role": "tool", "type": "tool_result", "status": "ok"})
+        + json.dumps(
+            {
+                "role": "tool",
+                "type": "tool_result",
+                "content": json.dumps(
+                    {"exit_code": 3, "duration_ms": 125, "stderr": "private"}
+                ),
+            }
+        )
         + "\n",
         encoding="utf-8",
     )
@@ -146,7 +154,21 @@ def test_closed_property_summary_and_coarse_facts_do_not_return_content(tmp_path
     ]
     assert trace_facts["event_count"] == 2
     assert trace_facts["tool_event_count"] == 1
+    assert trace_facts["tool_error_count"] == 1
+    assert trace_facts["longest_consecutive_tool_errors"] == 1
+    assert trace_facts["tool_duration_ms_total"] == 125
+    assert trace_facts["tool_exit_codes"] == {"3": 1}
+    assert trace_facts["runtime_timeline"] == [
+        {"event": 1, "role": "assistant"},
+        {
+            "duration_ms": 125,
+            "event": 2,
+            "role": "tool",
+            "tool_status": "error",
+        },
+    ]
     assert "private content canary" not in json.dumps(trace_facts)
+    assert "private" not in json.dumps(trace_facts)
 
 
 def test_build_evidence_contains_only_aggregate_ast_and_trace_facts(tmp_path):

@@ -705,7 +705,8 @@ def test_quant_failure_map_middleware_injects_only_for_quant_v2(
     assert injected is not None
     assert len(injected) == len(messages) + 1
     guidance = injected[-1].get_text_content()
-    assert "two-axis diagnostic prior" in guidance
+    assert "optional domain vocabulary" in guidance
+    assert "free-form domain_tags" in guidance
     assert "specification_preservation" in guidance
     assert "formula_parameterization" in guidance
     assert "you may reject both" in guidance

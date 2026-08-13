@@ -140,18 +140,21 @@ locked.
 For `quant_property_v2`, do not force a single failed task into a fabricated
 cross-task failure type and do not require the A5 probe log. Compare at least
 two plausible quantitative mechanisms, then cite the exact answer-free task
-evidence you inspected. Read `guidance/quant_failure_map.json` and use it as a
-diagnostic prior, not an answer. First locate the earliest `breakdown_stage`
-(retrieval, comprehension, specification preservation, implementation, or
-completion), then select the finance-semantic `failure_class`. For ACT, record
-`observed_symptoms`, at least one `adjacent_failure_classes_considered`, a
-`class_selection_reason`, and the concrete `component_state_target` that the
-intervention should change. This two-axis classification must distinguish a
-nearby alternative; it does not require a cross-task cluster. From the second
+evidence you inspected. Start with `history/experience/RELEVANT.json` when it
+exists, then open the linked exact entry, diff, or candidate source you need.
+Declare whether the next intervention will `CONTINUE`, `REUSE`, `REVERT`,
+`FUSE`, or run a `NEW_PROBE`; do not repeat an unsupported edit just because it
+is recent. Read `guidance/quant_failure_map.json` as an optional diagnostic
+vocabulary, not a form. You may use its `breakdown_stage` and finance-semantic
+`failure_class`, add free-form `domain_tags`, propose a better class, or omit
+the fixed classification when the observations do not support it. Ground ACT
+in concrete observed symptoms and name the component state the intervention
+should change. From the second
 outer round onward the contract sets
-`history_required: true`: read at least one prior immutable history entry plus
-its exact diff or candidate source before deciding, so a rejected or ineffective
-edit remains usable experience. Name `primary_components` as the one or two
+`history_required: true`: use the experience view for navigation, then read at
+least one prior immutable history entry, exact diff, or candidate source before
+deciding, so a rejected or ineffective edit remains usable experience. Name
+`primary_components` as the one or two
 causal *file roles* and name `components` as the complete, exact set of file
 roles whose files actually changed to bind and activate that mechanism. Roles
 are structural, not conceptual labels: validator behavior implemented in

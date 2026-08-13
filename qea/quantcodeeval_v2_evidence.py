@@ -19,6 +19,10 @@ from .quantcodeeval_history import (
     QuantCodeEvalHistoryError,
     materialize_quantcodeeval_history_evidence,
 )
+from .quantcodeeval_experience import (
+    QuantCodeEvalExperienceError,
+    materialize_quantcodeeval_experience,
+)
 
 
 class QuantCodeEvalV2EvidenceError(ValueError):
@@ -88,6 +92,7 @@ def build_quantcodeeval_v2_evidence(
     current_evaluation_id: str,
     history_root: str | Path | None,
     iteration_summaries: Iterable[Mapping[str, object]] = (),
+    current_parent: str | None = None,
     max_primary_components: int = 2,
     max_declared_components: int = 6,
 ) -> EvidenceRecord:
@@ -146,6 +151,8 @@ def build_quantcodeeval_v2_evidence(
             "entry_ids": [],
             "object_count": 0,
             "diff_count": 0,
+            "experience_count": 0,
+            "relevant_experience_count": 0,
         }
         if history_root is not None:
             try:
@@ -167,6 +174,25 @@ def build_quantcodeeval_v2_evidence(
                     "diff_count",
                 )
             }
+            experience = materialize_quantcodeeval_experience(
+                archive_root=staging / "history" / "archive",
+                destination=staging / "history" / "experience",
+                target_task_ids=(
+                    task_id
+                    for task_id, reward in current_rewards.items()
+                    if reward == 0.0
+                ),
+                current_parent=current_parent,
+            )
+            history_summary.update(
+                {
+                    "experience_count": experience["experience_count"],
+                    "relevant_experience_count": experience["relevant_count"],
+                    "current_parent_experience_key": experience[
+                        "current_parent_experience_key"
+                    ],
+                }
+            )
         _write_json(staging / "history" / "SUMMARY.json", history_summary)
         _write_json(
             staging / "guidance" / "quant_failure_map.json",
@@ -194,12 +220,31 @@ def build_quantcodeeval_v2_evidence(
                 "current_evaluation_id": current_evaluation_id,
                 "history_required": history_summary["entry_count"] != 0,
                 "history_entry_ids": history_summary["entry_ids"],
+                "experience_catalog": (
+                    "history/experience/CATALOG.json"
+                    if history_summary["entry_count"]
+                    else None
+                ),
+                "relevant_experience": (
+                    "history/experience/RELEVANT.json"
+                    if history_summary["entry_count"]
+                    else None
+                ),
                 "max_primary_components": max_primary_components,
                 "max_declared_components": max_declared_components,
                 "preferred_primary_components": _PREFERRED_PRIMARY_COMPONENTS,
                 "component_priors_are_advisory": True,
                 "quant_failure_map": "guidance/quant_failure_map.json",
-                "quant_failure_classification_required_for_act": True,
+                "quant_failure_classification_required_for_act": False,
+                "domain_guidance_is_advisory": True,
+                "domain_tags_are_extensible": True,
+                "search_operators": [
+                    "CONTINUE",
+                    "REUSE",
+                    "REVERT",
+                    "FUSE",
+                    "NEW_PROBE",
+                ],
                 "component_role_semantics": (
                     "components and primary_components are exact candidate file roles, "
                     "not conceptual capabilities; declare validator only when validator/** "
@@ -214,7 +259,12 @@ def build_quantcodeeval_v2_evidence(
         target.parent.mkdir(parents=True, exist_ok=True)
         os.replace(staging, target)
         return EvidenceRecord(root=target, sha256=sha256, members=members)
-    except (QuantCodeEvalEvidenceError, OSError, ValueError) as exc:
+    except (
+        QuantCodeEvalEvidenceError,
+        QuantCodeEvalExperienceError,
+        OSError,
+        ValueError,
+    ) as exc:
         if isinstance(exc, QuantCodeEvalV2EvidenceError):
             raise
         raise QuantCodeEvalV2EvidenceError(f"cannot build v2 evidence: {exc}") from exc

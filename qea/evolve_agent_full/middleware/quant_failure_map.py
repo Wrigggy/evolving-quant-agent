@@ -75,13 +75,13 @@ class QuantFailureMapMiddleware(Middleware):
             )
         guidance = (
             "QUANT/FINANCE DIAGNOSTIC MAP\n"
-            "Use this as a two-axis diagnostic prior, not as an answer. First locate "
-            "the earliest observed breakdown stage, then the finance-semantic "
-            "failure class. Before ACT, distinguish a nearby alternative and name "
-            "the concrete component state that should change. A and B are optional "
-            "mechanism hypotheses; you may reject both, propose another mechanism, "
-            "or ABSTAIN. Read evidence/guidance/quant_failure_map.json for the "
-            "complete map.\n"
+            "Use this as optional domain vocabulary, not a required form or answer. "
+            "Use a listed stage/class only when runtime evidence supports it; add "
+            "free-form domain_tags or propose a new concise class when it does not. "
+            "The concrete component state and a falsifiable mechanism matter more "
+            "than filling every category. A and B are optional mechanism hypotheses; "
+            "you may reject both, propose another mechanism, or ABSTAIN. Read "
+            "evidence/guidance/quant_failure_map.json for the complete map.\n"
             + json.dumps(
                 {"breakdown_stages": compact_stages, "semantic_classes": compact_classes},
                 ensure_ascii=False,

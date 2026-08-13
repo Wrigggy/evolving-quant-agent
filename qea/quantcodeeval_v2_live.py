@@ -925,6 +925,7 @@ def run_quantcodeeval_v2_activation_canary(
             attempts=attempts,
             current_evaluation_id=h0.evaluation_id,
             history_root=history_root,
+            current_parent=state.search_parent_digest,
             iteration_summaries=(
                 {
                     "iteration": item.iteration,
