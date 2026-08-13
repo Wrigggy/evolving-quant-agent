@@ -67,10 +67,10 @@ class QuantCodeEvalV2LiveError(RuntimeError):
     """A live activation canary identity or result is incomplete."""
 
 
-def _reconcile_abstain_usage(state, audit: Mapping[str, object]):
-    """Use the finalized proxy audit when an ABSTAIN skips candidate evaluation."""
+def _reconcile_finalized_usage(state, audit: Mapping[str, object]):
+    """Use the finalized proxy audit for the terminal search round."""
 
-    if not state.rounds or state.rounds[-1].decision.value != "ABSTAIN":
+    if not state.rounds:
         return state
     request_count = audit.get("request_count")
     cost = audit.get("provider_cost_usd")
@@ -1232,14 +1232,14 @@ def run_quantcodeeval_v2_activation_canary(
     decision = round_payload["decision"]
     activation = round_payload["activation"]
     proxy_audit = _proxy_audit(root)
+    final = _reconcile_finalized_usage(final, proxy_audit)
+    _atomic_json(
+        root / "SEARCH-STATE.json",
+        quantcodeeval_search_payload(final),
+        replace=True,
+    )
     if decision.get("decision") == "ABSTAIN":
         status = "CALIBRATED_ABSTAIN"
-        final = _reconcile_abstain_usage(final, proxy_audit)
-        _atomic_json(
-            root / "SEARCH-STATE.json",
-            quantcodeeval_search_payload(final),
-            replace=True,
-        )
     elif activation.get("status") == "passed":
         status = "PASS"
     else:

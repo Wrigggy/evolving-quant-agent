@@ -43,6 +43,16 @@
         "same_signal_endpoint_comparison"
       ],
       "description": "Statically detect a signal expression that combines windows formed at different information-set endpoints."
+    },
+    {
+      "component_id": "empty_response_recovery",
+      "origin": "evolver_discovered",
+      "capabilities": [
+        "reachable_model_call_interception",
+        "bounded_empty_response_retry",
+        "recovery_directive_injection"
+      ],
+      "description": "Catch empty model-response exceptions at the reachable model-call wrapper, inject a short completion directive, and retry within a fixed local budget."
     }
   ],
   "hypotheses": [
@@ -96,6 +106,21 @@
       ],
       "evidence_gap": "The prior T24 candidate passed all Type-B properties but retained one Type-A failure while mixing a current-inclusive cumulative window with a strictly-causal expanding mean in one signal.",
       "expected_worker_change": "The Worker should invoke the audit, align every component of the signal to one formation-time endpoint, and produce a strategy that can be officially evaluated.",
+      "target_task_ids": [
+        "T24"
+      ],
+      "protection_task_ids": [
+        "T16"
+      ]
+    },
+    {
+      "hypothesis_id": "recover_delivery_then_audit_endpoints",
+      "component_ids": [
+        "empty_response_recovery",
+        "window_endpoint_consistency_audit"
+      ],
+      "evidence_gap": "Two endpoint-audit Worker attempts ended before artifact delivery when a 32000-reasoning-token response contained neither content nor a tool call.",
+      "expected_worker_change": "The reachable model-call wrapper should recover a bounded empty response, allow the Worker to deliver strategy.py, and preserve endpoint auditing in the completed implementation.",
       "target_task_ids": [
         "T24"
       ],
@@ -288,6 +313,31 @@
       "tokens": 162549,
       "cost_usd": 0.0203747656,
       "observation": "The single replacement reproduced the same 32000-reasoning-token empty response and missing artifact. It did not reach the verifier; no third retry was run."
+    },
+    {
+      "run_id": "qce-component-delivery-t24-candidate-20260814-r2",
+      "hypothesis_id": "recover_delivery_then_audit_endpoints",
+      "task_id": "T24",
+      "role": "target",
+      "available_components": [
+        "empty_response_recovery",
+        "window_endpoint_consistency_audit"
+      ],
+      "selected_components": [
+        "empty_response_recovery",
+        "window_endpoint_consistency_audit"
+      ],
+      "activated_components": [
+        "empty_response_recovery",
+        "window_endpoint_consistency_audit"
+      ],
+      "official_reward": 0,
+      "properties_passed": 11,
+      "properties_total": 17,
+      "requests": 39,
+      "tokens": 1554118,
+      "cost_usd": 0.0667760408,
+      "observation": "The reachable wrapper caught two consecutive 32000-reasoning-token empty-response exceptions and the third call continued to a delivered strategy.py and official evaluation. The endpoint audit also ran, but T24 regressed to Type A 5/7 and Type B 6/10; delivery recovery is directly supported while the benchmark composition is unsupported."
     }
   ],
   "notes": [
@@ -297,6 +347,8 @@
     "This ledger records a mechanism canary rather than a QuantCodeEval benchmark estimate.",
     "The T01 result supports task routing or a new T01-specific capability rather than global reuse of the T12 composition.",
     "The Evolver autonomously discovered and activated warmup-boundary arbitration on T18, but the unchanged 16/18 score rules out that intervention as a sufficient explanation; percentile and early-NaN alternatives remain unresolved.",
-    "The Evolver autonomously discovered and smoke-tested window-endpoint consistency for T24, but two terminal empty-response attempts produced no artifact. Its benchmark status is pending_evaluation rather than supported or refuted."
+    "The Evolver autonomously discovered and smoke-tested window-endpoint consistency for T24, but two terminal empty-response attempts produced no artifact. Its standalone benchmark status remains unmeasured.",
+    "A later Evolver-discovered wrap-model-call recovery caught the exact repeated empty-response failure twice and delivered an officially evaluated artifact. The composed T24 Worker nevertheless regressed to 11/17, so process recovery and benchmark benefit must be interpreted separately.",
+    "The regressed Worker artifact repeatedly applied a non-idempotent percent-to-decimal transform as data flowed across components. A unit-state or transformation-lifecycle component is the next hypothesis, but it has not yet been autonomously selected or tested and is therefore not registered as a measured component."
   ]
 }

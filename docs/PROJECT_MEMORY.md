@@ -1966,6 +1966,40 @@ choose the harness locus and write a local component smoke; do not hand it a
 preselected finalizer. Detailed evidence is in
 `docs/reports/2026-08-14-quantcodeeval-t24-endpoint-component-delivery-blocked.md`.
 
+**T24 delivery recovery and component interaction later on 2026-08-14:** the
+Evolver used the two failed Worker attempts as runtime experience and correctly
+selected middleware rather than another prompt-only quant mutation. Its first
+implementation used an `after_model` hook and passed a fabricated-input smoke,
+but installed-runtime inspection showed the observed empty-response exception
+is raised before that hook. No Worker was spent on this unreachable design.
+
+A second autonomous round incorporated that reachability observation, selected
+`COMPOSE`, and implemented bounded recovery at `wrap_model_call` while retaining
+the endpoint-audit tool. The Evolver omitted a final repeat of the unchanged
+tool smoke after composition, so an explicitly labeled investigator supplement
+ran the missing tool smoke, real middleware-manager cases, and admission on an
+unchanged copy. The resulting T24 Worker then hit the exact 32,000-reasoning-
+token empty response twice; the middleware caught both exceptions, the third
+call continued, `strategy.py` was delivered, and the official checker ran.
+This directly supports the runtime delivery mechanism.
+
+The quant composition did not improve. T24 regressed from the prior candidate's
+Type A 6/7 plus Type B 10/10 to Type A 5/7 plus Type B 6/10, or 11/17 overall,
+so no T16 protection run was launched. The final artifact repeatedly invokes
+an in-place percent-to-decimal conversion as a DataFrame crosses four pipeline
+components. That suggests a missing unit-state or transformation-lifecycle
+contract, but it is an artifact-based hypothesis rather than a measured cause.
+The next round should let the Evolver compare the exact scored artifacts,
+preserve delivery recovery, and autonomously choose whether to introduce such a
+component. Do not hard-code the repair.
+
+The delivery phase used 142 completed requests, 11,733,043 tokens, and
+$0.178233636. All data remains below `/data/qea-julius-storage/runs`, and all
+containers were cleaned. A separate observed bookkeeping bug left rejected
+`ACT` search rounds with provisional request/cost values; finalized proxy usage
+is now reconciled for all terminal decisions. Detailed evidence is in the
+[delivery recovery report](reports/2026-08-14-quantcodeeval-delivery-recovery-component-interaction.md).
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
