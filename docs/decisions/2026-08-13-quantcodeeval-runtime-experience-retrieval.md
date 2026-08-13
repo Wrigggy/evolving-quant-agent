@@ -32,6 +32,12 @@ excluded. This gives later rounds enough temporal evidence to distinguish an
 early execution failure from a late completion/finalization failure without
 exposing answers.
 
+When a previously completed candidate panel is imported into a later search,
+derive the same process and timeline profile from its persisted attempt files
+and attach it to that history experience. No Worker rerun is needed. Thus the
+later Evolver receives runtime experience from H0/comparison runs and from
+scored candidate panels, not only the candidate score vector.
+
 Treat the finance failure map as optional diagnostic vocabulary. The Evolver
 may use a known breakdown stage and failure class, add free-form `domain_tags`,
 propose a new concise class, or leave the fixed classification unspecified.

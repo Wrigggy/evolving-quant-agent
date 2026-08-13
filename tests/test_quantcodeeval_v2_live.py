@@ -452,10 +452,12 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
                 "attempts": [
                     {
                         "task_id": "T16",
+                        "attempt_id": "attempt-t16",
                         "answer_free_evidence": {"official_reward": 0.0},
                     },
                     {
                         "task_id": "T24",
+                        "attempt_id": "attempt-t24",
                         "answer_free_evidence": {
                             "diagnostic_tags": ["missing_artifact"]
                         },
@@ -464,6 +466,35 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
                 "cost_audit": {"request_count": 24},
             }
         )
+    )
+    attempt_root = full / "attempts/attempt-t16"
+    attempt_root.mkdir(parents=True)
+    (attempt_root / "worker-execution.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "turns": 12,
+                    "tool_calls": 4,
+                    "tool_errors": 1,
+                    "files": 1,
+                    "secs": 31.5,
+                }
+            }
+        )
+    )
+    (attempt_root / "raw-trace.jsonl").write_text(
+        json.dumps({"role": "assistant", "content": "private reasoning"})
+        + "\n"
+        + json.dumps(
+            {
+                "role": "tool",
+                "content": json.dumps(
+                    {"exit_code": 2, "duration_ms": 80, "stderr": "private"}
+                ),
+            }
+        )
+        + "\n",
+        encoding="utf-8",
     )
 
     imported = _seed_scored_candidate_history(
@@ -485,6 +516,39 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
     assert entry["evaluation"]["official_evaluated"] is True
     assert entry["evaluation"]["official_rewards"] == {"T16": 0.0, "T24": 0.0}
     assert entry["evaluation"]["h0_official_rewards"] == {"T16": 1.0, "T24": 0.0}
+    assert entry["evaluation"]["worker_runtime"] == [
+        {
+            "task_id": "T16",
+            "process": {
+                "turns": 12,
+                "tool_calls": 4,
+                "tool_errors": 1,
+                "files": 1,
+                "secs": 31.5,
+            },
+            "trace": {
+                "schema_version": 2,
+                "event_count": 2,
+                "roles": {"assistant": 1, "tool": 1},
+                "tool_event_count": 1,
+                "tool_error_count": 1,
+                "longest_consecutive_tool_errors": 1,
+                "tool_duration_ms_total": 80,
+                "tool_exit_codes": {"2": 1},
+                "runtime_timeline": [
+                    {"event": 1, "role": "assistant"},
+                    {
+                        "event": 2,
+                        "role": "tool",
+                        "tool_status": "error",
+                        "duration_ms": 80,
+                    },
+                ],
+                "malformed_event_count": 0,
+            },
+        }
+    ]
+    assert "private" not in json.dumps(entry["evaluation"]["worker_runtime"])
 
 
 def test_scored_history_paths_allow_one_candidate_with_distinct_evaluations():

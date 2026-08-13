@@ -33,6 +33,7 @@ from .quantcodeeval_experiment import (
     h0_evaluation_ref,
     materialize_h0_attempt_sources,
 )
+from .quantcodeeval_evidence import trace_coarse_facts
 from .quantcodeeval_release import validate_quantcodeeval_release
 from .quantcodeeval_history import append_quantcodeeval_history
 from .quantcodeeval_search import (
@@ -320,6 +321,63 @@ def _selected_mechanism(decision: Mapping[str, object]) -> str:
     raise QuantCodeEvalV2LiveError("ACT lacks its selected mechanism")
 
 
+def _candidate_worker_runtime(
+    run_root: Path, attempts: Iterable[Mapping[str, object]]
+) -> list[dict[str, object]]:
+    """Summarize persisted candidate Worker attempts without message content."""
+
+    runtime: list[dict[str, object]] = []
+    for attempt in attempts:
+        task_id = attempt.get("task_id")
+        attempt_id = attempt.get("attempt_id")
+        if not isinstance(task_id, str) or not isinstance(attempt_id, str):
+            continue
+        attempt_root = run_root / "attempts" / attempt_id
+        item: dict[str, object] = {"task_id": task_id}
+        execution_path = attempt_root / "worker-execution.json"
+        if execution_path.is_file():
+            execution = json.loads(execution_path.read_text(encoding="utf-8"))
+            summary = (
+                execution.get("summary")
+                if isinstance(execution, Mapping)
+                else None
+            )
+            if isinstance(summary, Mapping):
+                item["process"] = {
+                    key: summary.get(key)
+                    for key in (
+                        "turns",
+                        "tool_calls",
+                        "tool_errors",
+                        "files",
+                        "secs",
+                        "outcome",
+                    )
+                    if key in summary
+                }
+        trace_path = attempt_root / "raw-trace.jsonl"
+        if trace_path.is_file():
+            trace = trace_coarse_facts(trace_path)
+            item["trace"] = {
+                key: trace[key]
+                for key in (
+                    "schema_version",
+                    "event_count",
+                    "roles",
+                    "tool_event_count",
+                    "tool_error_count",
+                    "longest_consecutive_tool_errors",
+                    "tool_duration_ms_total",
+                    "tool_exit_codes",
+                    "runtime_timeline",
+                    "malformed_event_count",
+                )
+            }
+        if len(item) > 1:
+            runtime.append(item)
+    return runtime
+
+
 def _seed_full_candidate_failure_history(
     *,
     history_root: Path,
@@ -403,6 +461,7 @@ def _seed_full_candidate_failure_history(
         raise QuantCodeEvalV2LiveError("failed candidate has no partial audit")
     if any(value.get("official_score_available") is not False for value in attempts):
         raise QuantCodeEvalV2LiveError("failed panel unexpectedly exposes a score")
+    worker_runtime = _candidate_worker_runtime(full_root, attempts)
     reason = (
         "candidate passed component activation but failed before official scoring "
         "at the worker artifact contract"
@@ -425,6 +484,7 @@ def _seed_full_candidate_failure_history(
             "official_evaluated": False,
             "benchmark_score_claimed": False,
             "task_outcomes": [dict(value) for value in attempts],
+            "worker_runtime": worker_runtime,
             "cost_and_lifecycle_audit": dict(partial_audit),
             "new_information": True,
             "reason": reason,
@@ -522,6 +582,10 @@ def _seed_scored_candidate_history(
     attempts = result.get("attempts")
     if not isinstance(attempts, list):
         raise QuantCodeEvalV2LiveError("completed panel lacks answer-free outcomes")
+    worker_runtime = _candidate_worker_runtime(
+        full_root,
+        tuple(value for value in attempts if isinstance(value, Mapping)),
+    )
     h0_on_panel = {
         task_id: float(h0_rewards[task_id])
         for task_id in official_rewards
@@ -563,6 +627,7 @@ def _seed_scored_candidate_history(
             "official_rewards": official_rewards,
             "h0_official_rewards": dict(h0_rewards),
             "task_outcomes": [dict(value) for value in attempts],
+            "worker_runtime": worker_runtime,
             "cost_audit": dict(result.get("cost_audit") or {}),
             "new_information": True,
             "reason": reason,

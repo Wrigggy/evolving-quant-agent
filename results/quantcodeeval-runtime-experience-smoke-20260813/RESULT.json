@@ -20,6 +20,7 @@
     "A rejected prompt mutation becomes an explicit unsupported experience lesson.",
     "A later round can read the experience view and exact prior diff before switching to an executable tool component.",
     "Worker trace evidence retains answer-free event order, tool status, duration, exit-code counts, truncation, and consecutive error structure.",
+    "A completed candidate panel can contribute its persisted Worker process and trace profile to later search history without a Worker rerun.",
     "Quant decisions accept extensible domain tags and an explicit search operator without requiring the fixed failure taxonomy."
   ],
   "not_measured": [

@@ -1742,6 +1742,9 @@ relevant set with result-validated lessons and suggested branch operations
 retains a longer answer-free runtime timeline with event role, tool success or
 error, duration, exit-code counts, truncation, and consecutive-error structure,
 while excluding messages, commands, tool output, and evaluator details. This is
+derived both for ordinary H0/comparison evidence and when completed candidate
+panels are imported into later search history; importing reuses their persisted
+attempt files and does not rerun the Worker. This is
 locally smoke-tested retrieval/plumbing, not a measured reward improvement; no
 paid model or benchmark run was launched. See the
 [runtime-experience retrieval decision](decisions/2026-08-13-quantcodeeval-runtime-experience-retrieval.md).

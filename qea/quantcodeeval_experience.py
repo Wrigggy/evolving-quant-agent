@@ -136,6 +136,11 @@ def _experience_card(
         ),
         "official_evaluated": evaluation_map.get("official_evaluated", False),
         "task_outcomes": _task_outcomes(evaluation_map),
+        "worker_runtime": (
+            list(evaluation_map["worker_runtime"])
+            if isinstance(evaluation_map.get("worker_runtime"), list)
+            else []
+        ),
         "new_information": evaluation_map.get("new_information"),
         "selection": selection,
         "prediction_result": prediction_result,
