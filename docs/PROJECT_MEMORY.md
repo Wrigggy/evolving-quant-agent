@@ -1820,6 +1820,27 @@ ablation and then transfer rather than enumerating all component subsets. Full
 bidirectional discovery is a future fallback for capability gaps not covered by
 retrieved components, not the default path for every task.
 
+**Autonomous retrieval and first transfer result later on 2026-08-13:** the
+Evolver was given the answer-free stability ledger plus a read-only measured
+source for the semantic-bound invariant. It independently chose `COMPOSE`,
+cited the ledger and source files, and reproduced the exact multi-component
+harness (`tools`, tool description, agent config, and system-prompt routing).
+Its executable tool smoke passed. The activation used 29 model requests,
+1,410,616 tokens, and $0.0282095352; it did not run a candidate benchmark.
+Because the resulting harness matched the already measured T12/T19 candidate,
+the existing T12 repeat and T19 protection results were reused rather than
+resampled.
+
+The same candidate was then evaluated once on T01 as the first transfer probe.
+The Worker repeatedly invoked the structured invariant and passed both its
+declarative checks and a public-behavior probe, but official T01 stayed at the
+parent's 2/17 properties and reward 0. The run used 28 requests, 662,108 tokens,
+and $0.0234224144. This is an activated-but-nontransferring component result,
+not an activation failure. The composition is therefore mixed across domains;
+the next autonomous search should prefer routing or a T01-specific refinement,
+while retaining the T12/T19 positive evidence. All new run artifacts were
+stored below `/data/qea-julius-storage/runs`; no benchmark-wide claim is made.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

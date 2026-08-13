@@ -219,8 +219,8 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
         for item in stability["hypotheses"]
         if item["hypothesis_id"] == "public_semantic_bound_invariant"
     )
-    assert repaired["stability"] == "protected"
-    assert repaired["next_actions"] == ["ABLATE", "TRANSFER"]
+    assert repaired["stability"] == "mixed"
+    assert repaired["next_actions"] == ["ROUTE", "REFINE", "ABSTAIN"]
     assert repaired["evidence_gap"].startswith("The initial invariant")
     assert (
         record.root

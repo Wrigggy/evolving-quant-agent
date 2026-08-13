@@ -153,12 +153,38 @@
       "tokens": 447123,
       "cost_usd": 0.019612348,
       "observation": "The repaired composition preserved the already solved T19 protection task."
+    },
+    {
+      "run_id": "qce-component-experience-transfer-t01-20260813-r1",
+      "hypothesis_id": "public_semantic_bound_invariant",
+      "task_id": "T01",
+      "role": "transfer",
+      "available_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "selected_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "activated_components": [
+        "declarative_quant_invariant",
+        "public_quantity_semantic_binding"
+      ],
+      "official_reward": 0,
+      "properties_passed": 2,
+      "properties_total": 17,
+      "requests": 28,
+      "tokens": 662108,
+      "cost_usd": 0.0234224144,
+      "observation": "The Worker repeatedly used the structured invariant and passed its local checks, but T01 remained 2/17, equal to the parent baseline. The composition activated but did not transfer."
     }
   ],
   "notes": [
     "The final component was investigator-seeded rather than autonomously discovered by the Evolver.",
-    "The repaired composition has two T12 successes and one T19 protection success, but no transfer result.",
+    "The repaired composition has two T12 successes and one T19 protection success, but a T01 transfer failed at the parent baseline despite repeated tool use.",
     "The semantic-binding component has not been evaluated alone, so individual component necessity is untested.",
-    "This ledger records a mechanism canary rather than a QuantCodeEval benchmark estimate."
+    "This ledger records a mechanism canary rather than a QuantCodeEval benchmark estimate.",
+    "The T01 result supports task routing or a new T01-specific capability rather than global reuse of the T12 composition."
   ]
 }

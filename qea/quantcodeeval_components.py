@@ -253,6 +253,8 @@ def _next_actions(
     if stability is ComponentStability.NOT_ACTIVATED:
         return ["REFINE_ACTIVATION", "ABSTAIN"]
     if stability in {ComponentStability.UNSUPPORTED, ComponentStability.MIXED}:
+        if is_composition:
+            return ["ROUTE", "REFINE", "ABSTAIN"]
         return ["REFINE", "ABSTAIN"]
     if stability is ComponentStability.PROVISIONAL:
         return ["REPLICATE"]
@@ -278,6 +280,15 @@ def _claim_boundary(
         return "The component hypothesis has not reached a Worker trial."
     if stability is ComponentStability.NOT_ACTIVATED:
         return "The component was not fully activated, so its task effect is unknown."
+    if stability is ComponentStability.MIXED and (
+        by_role["target"]["trials"]
+        and by_role["target"]["successes"] == by_role["target"]["trials"]
+        and by_role["transfer"]["trials"] > by_role["transfer"]["successes"]
+    ):
+        return (
+            "The target result repeated and passed protection, but the measured "
+            "cross-task transfer failed."
+        )
     if stability in {ComponentStability.UNSUPPORTED, ComponentStability.MIXED}:
         return "Observed trials do not support a stable target improvement."
     if stability is ComponentStability.PROVISIONAL:

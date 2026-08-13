@@ -30,14 +30,17 @@ def test_canary_ledger_keeps_failed_component_and_replicated_composition_distinc
     }
     assert initial["next_actions"] == ["REFINE", "ABSTAIN"]
 
-    assert repaired["stability"] == "protected"
-    assert repaired["fully_activated_trial_count"] == 3
+    assert repaired["stability"] == "mixed"
+    assert repaired["fully_activated_trial_count"] == 4
     assert repaired["evidence_by_role"]["target"]["successes"] == 1
     assert repaired["evidence_by_role"]["repeat"]["successes"] == 1
     assert repaired["evidence_by_role"]["protection"]["successes"] == 1
-    assert repaired["evidence_by_role"]["transfer"]["trials"] == 0
-    assert repaired["next_actions"] == ["ABLATE", "TRANSFER"]
-    assert "individual component necessity" in repaired["claim_boundary"]
+    assert repaired["evidence_by_role"]["transfer"] == {
+        "trials": 1,
+        "successes": 0,
+    }
+    assert repaired["next_actions"] == ["ROUTE", "REFINE", "ABSTAIN"]
+    assert "cross-task transfer failed" in repaired["claim_boundary"]
 
 
 def test_semantic_binding_is_not_mislabeled_as_a_standalone_success():
@@ -48,27 +51,27 @@ def test_semantic_binding_is_not_mislabeled_as_a_standalone_success():
 
     assert semantic == {
         "component_id": "public_quantity_semantic_binding",
-        "available_trial_count": 3,
-        "selected_trial_count": 3,
-        "activated_trial_count": 3,
+        "available_trial_count": 4,
+        "selected_trial_count": 4,
+        "activated_trial_count": 4,
         "standalone_trial_count": 0,
-        "composition_trial_count": 3,
+        "composition_trial_count": 4,
         "hypothesis_ids": ["public_semantic_bound_invariant"],
     }
     assert invariant["standalone_trial_count"] == 1
-    assert invariant["composition_trial_count"] == 3
+    assert invariant["composition_trial_count"] == 4
 
 
 def test_canary_ledger_preserves_measured_component_trial_costs():
     ledger = load_quantcodeeval_component_ledger(LEDGER)
 
     assert ledger.experiment_totals() == {
-        "trial_count": 4,
-        "requests": 92,
-        "tokens": 2192638,
-        "cost_usd": pytest.approx(0.0791807128),
+        "trial_count": 5,
+        "requests": 120,
+        "tokens": 2854746,
+        "cost_usd": pytest.approx(0.1026031272),
     }
-    assert "benchmark estimate" in ledger.notes[-1]
+    assert any("benchmark estimate" in note for note in ledger.notes)
 
 
 def test_success_followed_by_failed_repeat_remains_mixed(tmp_path):
@@ -82,7 +85,7 @@ def test_success_followed_by_failed_repeat_remains_mixed(tmp_path):
     repaired = ledger.hypothesis_summary("public_semantic_bound_invariant")
 
     assert repaired["stability"] == "mixed"
-    assert repaired["next_actions"] == ["REFINE", "ABSTAIN"]
+    assert repaired["next_actions"] == ["ROUTE", "REFINE", "ABSTAIN"]
 
 
 def test_component_ablation_can_remove_one_member_of_a_composition(tmp_path):
@@ -115,12 +118,12 @@ def test_component_ablation_can_remove_one_member_of_a_composition(tmp_path):
     ledger = load_quantcodeeval_component_ledger(path)
     repaired = ledger.hypothesis_summary("public_semantic_bound_invariant")
 
-    assert repaired["stability"] == "protected"
+    assert repaired["stability"] == "mixed"
     assert repaired["evidence_by_role"]["ablation"] == {
         "trials": 1,
         "successes": 0,
     }
-    assert repaired["next_actions"] == ["TRANSFER"]
+    assert repaired["next_actions"] == ["ROUTE", "REFINE", "ABSTAIN"]
 
 
 def test_ledger_requires_activated_components_to_have_been_selected(tmp_path):
