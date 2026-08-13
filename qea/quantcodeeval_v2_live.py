@@ -493,14 +493,36 @@ def _seed_full_candidate_failure_history(
         or preflight.get("source_h0_evaluation_id") != h0_evaluation_id
     ):
         raise QuantCodeEvalV2LiveError("full-candidate preflight identity differs")
-    if (
-        not isinstance(failure, Mapping)
-        or failure.get("status") != "evaluation_failed"
-        or failure.get("official_evaluated") is not False
-        or failure.get("benchmark_score_claimed") is not False
-    ):
+    if not isinstance(failure, Mapping):
         raise QuantCodeEvalV2LiveError(
             "full-candidate result is not a fail-closed unscored panel"
+        )
+    legacy_unscored = (
+        failure.get("status") == "evaluation_failed"
+        and failure.get("official_evaluated") is False
+        and failure.get("benchmark_score_claimed") is False
+    )
+    score_summary = failure.get("score_summary")
+    score_rows = (
+        score_summary.get("scores") if isinstance(score_summary, Mapping) else None
+    )
+    completed_without_verifier = (
+        failure.get("status") == "complete"
+        and failure.get("official_evaluated") is True
+        and isinstance(score_rows, list)
+        and bool(score_rows)
+        and all(
+            isinstance(row, Mapping)
+            and "missing_artifact" in row.get("diagnostic_tags", [])
+            and row.get("verifier_exit_code") is None
+            and row.get("tests_passed") is None
+            and row.get("tests_failed") is None
+            for row in score_rows
+        )
+    )
+    if not legacy_unscored and not completed_without_verifier:
+        raise QuantCodeEvalV2LiveError(
+            "full-candidate result is not an unscored worker-delivery failure"
         )
     candidate_digest = hash_worker_directory(candidate)
     if (
@@ -527,15 +549,33 @@ def _seed_full_candidate_failure_history(
     if not isinstance(activation, Mapping) or activation.get("status") != "passed":
         raise QuantCodeEvalV2LiveError("failed candidate activation did not pass")
     attempts = failure.get("attempts")
-    partial_audit = failure.get("partial_cost_and_lifecycle_audit")
+    partial_audit = (
+        failure.get("partial_cost_and_lifecycle_audit")
+        if legacy_unscored
+        else failure.get("cost_audit")
+    )
     if not isinstance(attempts, list) or not attempts or any(
         not isinstance(value, Mapping) for value in attempts
     ):
         raise QuantCodeEvalV2LiveError("failed candidate has no task outcomes")
     if not isinstance(partial_audit, Mapping):
         raise QuantCodeEvalV2LiveError("failed candidate has no partial audit")
-    if any(value.get("official_score_available") is not False for value in attempts):
+    if legacy_unscored and any(
+        value.get("official_score_available") is not False for value in attempts
+    ):
         raise QuantCodeEvalV2LiveError("failed panel unexpectedly exposes a score")
+    if completed_without_verifier:
+        attempts = [
+            {
+                "task_id": value.get("task_id"),
+                "attempt_id": value.get("attempt_id"),
+                "failure_stage": "worker_artifact_contract",
+                "failure_class": "missing_submission_artifact",
+                "diagnostic_tags": ["missing_artifact"],
+                "official_score_available": False,
+            }
+            for value in attempts
+        ]
     worker_runtime = _candidate_worker_runtime(full_root, attempts)
     reason = (
         "candidate passed component activation but failed before official scoring "

@@ -485,6 +485,129 @@ def test_failed_full_candidate_becomes_unscored_searchable_history(tmp_path):
     )
 
 
+def test_completed_missing_artifact_is_imported_as_unscored_delivery_history(
+    tmp_path,
+):
+    source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
+    seed = tmp_path / "seed"
+    shutil.copytree(source, seed)
+    activation = tmp_path / "activation"
+    candidate = activation / "evolutions/iteration-0001/candidate"
+    candidate.parent.mkdir(parents=True)
+    shutil.copytree(seed, candidate)
+    (candidate / "tools").mkdir()
+    (candidate / "tools/checkpoint.py").write_text("def save():\n    pass\n")
+    digest = hash_worker_directory(candidate)
+    decision = {
+        "decision": "ACT",
+        "hypotheses_considered": [
+            {"hypothesis_id": "h1", "mechanism": "save early"}
+        ],
+        "selected_hypothesis_id": "h1",
+        "primary_components": ["tools"],
+        "components": ["tools"],
+    }
+    activation_payload = {"status": "passed", "candidate_digest": digest}
+    component_tests = [
+        {"status": "passed", "component": "tools", "candidate_digest": digest}
+    ]
+    (activation / "LIVE-RESULT.json").write_text(
+        json.dumps(
+            {
+                "status": "PASS",
+                "candidate_benchmark_evaluated": False,
+                "candidate_digest": digest,
+                "decision": decision,
+                "component_tests": component_tests,
+                "activation": activation_payload,
+            }
+        )
+    )
+    full = tmp_path / "full"
+    attempt = full / "attempts/attempt-t24"
+    attempt.mkdir(parents=True)
+    h0_id = "7" * 64
+    (full / "FULL-CANDIDATE-PREFLIGHT.json").write_text(
+        json.dumps(
+            {
+                "status": "preflight_complete",
+                "source_h0_evaluation_id": h0_id,
+                "candidate_worker_digest": digest,
+                "declared_roles": ["tools"],
+                "iteration": 1,
+            }
+        )
+    )
+    (attempt / "worker-command.json").write_text(
+        json.dumps(
+            {
+                "exit_code": 0,
+                "timed_out": False,
+                "stderr": (
+                    "Empty model response received: usage={'reasoning_tokens': 32000}\n"
+                    "No response content or tool calls\n"
+                    "Force stop reason: ERROR_OCCURRED"
+                ),
+            }
+        )
+    )
+    (full / "FULL-CANDIDATE-RESULT.json").write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "official_evaluated": True,
+                "candidate_worker_digest": digest,
+                "attempts": [
+                    {
+                        "task_id": "T24",
+                        "attempt_id": "attempt-t24",
+                        "answer_free_evidence": {
+                            "official_reward": 0.0,
+                            "diagnostic_tags": ["missing_artifact"],
+                        },
+                    }
+                ],
+                "score_summary": {
+                    "scores": [
+                        {
+                            "task_id": "T24",
+                            "diagnostic_tags": ["missing_artifact"],
+                            "verifier_exit_code": None,
+                            "tests_passed": None,
+                            "tests_failed": None,
+                        }
+                    ]
+                },
+                "cost_audit": {"request_count": 7},
+            }
+        )
+    )
+
+    imported = _seed_full_candidate_failure_history(
+        history_root=tmp_path / "history",
+        activation_run_dir=activation,
+        full_candidate_run_dir=full,
+        seed_worker_dir=seed,
+        h0_evaluation_id=h0_id,
+    )
+
+    entry = json.loads(
+        (tmp_path / "history/entries" / f"{imported['entry_id']}.json").read_text()
+    )
+    outcome = entry["evaluation"]["task_outcomes"][0]
+    assert entry["evaluation"]["official_evaluated"] is False
+    assert outcome["official_score_available"] is False
+    assert "official_reward" not in outcome
+    assert entry["evaluation"]["worker_runtime"][0]["termination"] == {
+        "exit_code": 0,
+        "timed_out": False,
+        "empty_model_response": True,
+        "no_content_or_tool_calls": True,
+        "force_stop_error": True,
+        "reasoning_tokens": 32000,
+    }
+
+
 def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
     source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
     seed = tmp_path / "seed"
