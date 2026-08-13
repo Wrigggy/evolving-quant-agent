@@ -1933,6 +1933,39 @@ under the current answer-free evidence rather than guessing another convention.
 Detailed evidence is in
 `docs/reports/2026-08-14-quantcodeeval-t18-history-refinement-abstain.md`.
 
+**T24 endpoint-consistency search and repeated delivery block later on
+2026-08-14:** the next autonomous branch reused the earlier T24 candidate that
+had moved the task from Type A 6/7 plus Type B 9/10 to Type A 6/7 plus Type B
+10/10 while preserving T16 at 18/18. The Evolver read that scored Worker
+artifact, selected a residual temporal-causality mechanism, and extended the
+existing static audit with an executable window-endpoint consistency check.
+The candidate changed configuration, prompt, tool description, and Python tool;
+after four failed tool self-tests it repaired the implementation, passed the
+final discriminating self-test, passed graph smoke and admission, and returned
+legal `ACT`. This is autonomous component discovery and activation, not a
+prompt-only mutation. The activation used 28 completed requests, 2,546,172
+tokens, and $0.0623815864; three uncharged provider-429 attempts were retained
+as nonaccepted requests.
+
+The benchmark effect was not measured. The first T24 Worker attempt and its
+single preregistered replacement both ended with the same model-delivery
+failure: the terminal request consumed 32,000 reasoning tokens and returned an
+empty assistant message with no tool call, leaving no `strategy.py`. The first
+attempt used six requests, 101,455 tokens, and $0.0164936856; the replacement
+used seven requests, 162,549 tokens, and $0.0203747656. Neither reached the
+verifier, so neither is an official T24 reward-zero result. No third retry,
+success repeat, or T16 protection resample was run. Total incremental use was
+41 completed requests, 2,810,176 tokens, and $0.0992500376; all containers were
+cleaned.
+
+Keep the endpoint component in `pending_evaluation`: these runs neither support
+nor refute its benchmark effect. The repeated observed failure does justify a
+new autonomous component-search round focused on artifact delivery and
+recoverable completion. Give the Evolver both failed attempts and require it to
+choose the harness locus and write a local component smoke; do not hand it a
+preselected finalizer. Detailed evidence is in
+`docs/reports/2026-08-14-quantcodeeval-t24-endpoint-component-delivery-blocked.md`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

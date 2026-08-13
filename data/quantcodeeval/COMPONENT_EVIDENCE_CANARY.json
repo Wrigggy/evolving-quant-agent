@@ -33,6 +33,16 @@
         "temporal_anchor_selection"
       ],
       "description": "Force the Worker to choose and test an explicit flip index for minimum-history and warmup clauses."
+    },
+    {
+      "component_id": "window_endpoint_consistency_audit",
+      "origin": "evolver_discovered",
+      "capabilities": [
+        "current_inclusive_window_detection",
+        "strictly_causal_window_detection",
+        "same_signal_endpoint_comparison"
+      ],
+      "description": "Statically detect a signal expression that combines windows formed at different information-set endpoints."
     }
   ],
   "hypotheses": [
@@ -77,6 +87,20 @@
       ],
       "protection_task_ids": [
         "T19"
+      ]
+    },
+    {
+      "hypothesis_id": "consistent_signal_window_endpoints",
+      "component_ids": [
+        "window_endpoint_consistency_audit"
+      ],
+      "evidence_gap": "The prior T24 candidate passed all Type-B properties but retained one Type-A failure while mixing a current-inclusive cumulative window with a strictly-causal expanding mean in one signal.",
+      "expected_worker_change": "The Worker should invoke the audit, align every component of the signal to one formation-time endpoint, and produce a strategy that can be officially evaluated.",
+      "target_task_ids": [
+        "T24"
+      ],
+      "protection_task_ids": [
+        "T16"
       ]
     }
   ],
@@ -224,6 +248,46 @@
       "tokens": 641753,
       "cost_usd": 0.0253538264,
       "observation": "The Worker loaded the evolved skill, executed an exactly-120 fixture, changed the classifier so the 120th observation was the first classified row, and documented that public reading. T18 nevertheless remained Type A 2/4 and Type B 14/14, exactly matching H0; the warmup-fencepost hypothesis is therefore unsupported as a sufficient cause."
+    },
+    {
+      "run_id": "qce-component-refine-t24-candidate-20260814-r1",
+      "hypothesis_id": "consistent_signal_window_endpoints",
+      "task_id": "T24",
+      "role": "target",
+      "available_components": [
+        "window_endpoint_consistency_audit"
+      ],
+      "selected_components": [
+        "window_endpoint_consistency_audit"
+      ],
+      "activated_components": [],
+      "official_reward": null,
+      "properties_passed": null,
+      "properties_total": null,
+      "requests": 6,
+      "tokens": 101455,
+      "cost_usd": 0.0164936856,
+      "observation": "The final model request exhausted 32000 reasoning tokens and returned empty content with no tool call. No strategy.py was produced and the verifier did not run, so component effect is unmeasured."
+    },
+    {
+      "run_id": "qce-component-refine-t24-candidate-20260814-retry1",
+      "hypothesis_id": "consistent_signal_window_endpoints",
+      "task_id": "T24",
+      "role": "repeat",
+      "available_components": [
+        "window_endpoint_consistency_audit"
+      ],
+      "selected_components": [
+        "window_endpoint_consistency_audit"
+      ],
+      "activated_components": [],
+      "official_reward": null,
+      "properties_passed": null,
+      "properties_total": null,
+      "requests": 7,
+      "tokens": 162549,
+      "cost_usd": 0.0203747656,
+      "observation": "The single replacement reproduced the same 32000-reasoning-token empty response and missing artifact. It did not reach the verifier; no third retry was run."
     }
   ],
   "notes": [
@@ -232,6 +296,7 @@
     "The semantic-binding component has not been evaluated alone, so individual component necessity is untested.",
     "This ledger records a mechanism canary rather than a QuantCodeEval benchmark estimate.",
     "The T01 result supports task routing or a new T01-specific capability rather than global reuse of the T12 composition.",
-    "The Evolver autonomously discovered and activated warmup-boundary arbitration on T18, but the unchanged 16/18 score rules out that intervention as a sufficient explanation; percentile and early-NaN alternatives remain unresolved."
+    "The Evolver autonomously discovered and activated warmup-boundary arbitration on T18, but the unchanged 16/18 score rules out that intervention as a sufficient explanation; percentile and early-NaN alternatives remain unresolved.",
+    "The Evolver autonomously discovered and smoke-tested window-endpoint consistency for T24, but two terminal empty-response attempts produced no artifact. Its benchmark status is pending_evaluation rather than supported or refuted."
   ]
 }
