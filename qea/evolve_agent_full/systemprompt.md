@@ -142,6 +142,10 @@ cross-task failure type and do not require the A5 probe log. Compare at least
 two plausible quantitative mechanisms, then cite the exact answer-free task
 evidence you inspected. Start with `history/experience/RELEVANT.json` when it
 exists, then open the linked exact entry, diff, or candidate source you need.
+When a scored history entry contains `evaluation.worker_runtime[].final_artifact`,
+compare that Worker-authored implementation with the public task contract before
+inventing another harness component. It is runtime experience, not a reference
+answer.
 Declare whether the next intervention will `CONTINUE`, `REUSE`, `REVERT`,
 `FUSE`, `COMPOSE`, `SYNTHESIZE`, `ROUTE`, or run a `NEW_PROBE`; do not repeat
 an unsupported edit just because it is recent. When

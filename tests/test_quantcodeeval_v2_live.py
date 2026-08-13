@@ -550,6 +550,10 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
         + "\n",
         encoding="utf-8",
     )
+    (attempt_root / "artifacts").mkdir()
+    (attempt_root / "artifacts/strategy.py").write_text(
+        "def select_universe(data):\n    return []\n", encoding="utf-8"
+    )
 
     imported = _seed_scored_candidate_history(
         history_root=tmp_path / "history",
@@ -603,6 +607,10 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
                     },
                 ],
                 "malformed_event_count": 0,
+            },
+            "final_artifact": {
+                "path": "strategy.py",
+                "content": "def select_universe(data):\n    return []\n",
             },
         }
     ]

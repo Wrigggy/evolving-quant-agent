@@ -392,6 +392,12 @@ def _candidate_worker_runtime(
                     "malformed_event_count",
                 )
             }
+        artifact_path = attempt_root / "artifacts" / "strategy.py"
+        if artifact_path.is_file():
+            item["final_artifact"] = {
+                "path": "strategy.py",
+                "content": artifact_path.read_text(encoding="utf-8"),
+            }
         if len(item) > 1:
             runtime.append(item)
     return runtime
