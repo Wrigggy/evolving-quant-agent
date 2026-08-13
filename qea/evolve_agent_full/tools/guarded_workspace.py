@@ -93,13 +93,25 @@ _COMPONENT_ROLES = frozenset(
 )
 _QUANT_FAILURE_CLASSES = frozenset(
     {
-        "artifact_interface",
-        "data_temporal_integrity",
-        "quant_definition_estimation",
-        "portfolio_execution",
-        "resource_termination",
+        "interface_delivery",
+        "data_universe_preprocessing",
+        "temporal_causality",
+        "formula_parameterization",
+        "signal_direction",
+        "portfolio_accounting",
+        "runtime_completion",
         "isolated_task_specific",
         "unknown",
+    }
+)
+_QUANT_BREAKDOWN_STAGES = frozenset(
+    {
+        "source_retrieval",
+        "requirement_comprehension",
+        "specification_preservation",
+        "implementation_realization",
+        "execution_completion",
+        "unable_to_decide",
     }
 )
 
@@ -1602,6 +1614,44 @@ def _decide_quant_property_candidate(
             )
         if selected_id is None:
             raise GuardedWorkspaceError("ACT requires selected_hypothesis_id")
+        if contract.get("quant_failure_classification_required_for_act") is True:
+            breakdown_stage = _text(
+                discovery.get("breakdown_stage"), label="breakdown_stage"
+            ).casefold()
+            if breakdown_stage not in _QUANT_BREAKDOWN_STAGES:
+                raise GuardedWorkspaceError("breakdown_stage is unsupported")
+            if breakdown_stage == "unable_to_decide":
+                raise GuardedWorkspaceError(
+                    "unable_to_decide breakdown evidence must ABSTAIN"
+                )
+            normalized["breakdown_stage"] = breakdown_stage
+            normalized["observed_symptoms"] = _text_list(
+                discovery.get("observed_symptoms"),
+                label="observed_symptoms",
+                minimum=1,
+            )
+            adjacent = _text_list(
+                discovery.get("adjacent_failure_classes_considered"),
+                label="adjacent_failure_classes_considered",
+                minimum=1,
+            )
+            if any(value not in _QUANT_FAILURE_CLASSES for value in adjacent):
+                raise GuardedWorkspaceError(
+                    "adjacent_failure_classes_considered contains an unknown class"
+                )
+            if failure_class in adjacent:
+                raise GuardedWorkspaceError(
+                    "adjacent failure classes must differ from failure_class"
+                )
+            normalized["adjacent_failure_classes_considered"] = adjacent
+            normalized["class_selection_reason"] = _text(
+                discovery.get("class_selection_reason"),
+                label="class_selection_reason",
+            )
+            normalized["component_state_target"] = _text(
+                discovery.get("component_state_target"),
+                label="component_state_target",
+            )
         components = _text_list(
             discovery.get("components"), label="components", minimum=1
         )

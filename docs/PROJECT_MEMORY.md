@@ -1704,6 +1704,30 @@ protect T19, immediately repeat any apparent T12 solve, and expand only after a
 repeatable gain. Search length is determined by information, success,
 abstention, and budget rather than a fixed five rounds.
 
+**Superseding implementation decision later on 2026-08-13:** before the next
+paid autonomous search, enhance the Evolver's diagnosis with the locally tested
+two-axis quant/finance failure map. The first axis locates the earliest
+breakdown among public-source retrieval, requirement comprehension,
+specification preservation, implementation realization, and execution/
+completion. The second axis identifies interface delivery, data/universe
+preprocessing, temporal causality, formula/parameterization, signal direction,
+portfolio accounting, runtime/completion, isolated task-specific, or unknown
+semantics. A legal ACT must cite observed symptoms, distinguish an adjacent
+semantic class, explain the selected class, and name the concrete component
+state to change. The map and component routing remain advisory; the Evolver may
+reject A and B, propose another mechanism, or ABSTAIN.
+
+This refines rather than erases the earlier five-class PGBS history. Direction
+A is a possible mechanism for comprehension or implementation failures where
+an independent public expectation can distinguish definitions. Direction B is
+specific to specification preservation and requires evidence that a correct
+requirement or intermediate implementation was later lost; it is not justified
+by final failure alone. The third open family is a failure-specialized
+component chosen by the Evolver for a recurring finance state or operation.
+Implementation and local tests are recorded in the
+[quant/finance failure-map decision](decisions/2026-08-13-quant-finance-failure-map-middleware.md).
+No paid model call or candidate benchmark run has yet used this middleware.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

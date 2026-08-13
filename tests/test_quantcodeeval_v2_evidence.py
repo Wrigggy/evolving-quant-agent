@@ -150,6 +150,23 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
     assert contract["protection_task_ids"] == ["T16"]
     assert contract["history_required"] is True
     assert contract["history_entry_ids"] == [entry_id]
+    assert contract["quant_failure_map"] == "guidance/quant_failure_map.json"
+    assert contract["quant_failure_classification_required_for_act"] is True
+    failure_map = json.loads(
+        (record.root / "guidance/quant_failure_map.json").read_text()
+    )
+    assert failure_map["schema_version"] == 2
+    assert {item["breakdown_stage"] for item in failure_map["breakdown_stages"]} >= {
+        "requirement_comprehension",
+        "specification_preservation",
+        "implementation_realization",
+    }
+    assert {item["failure_class"] for item in failure_map["semantic_classes"]} >= {
+        "temporal_causality",
+        "formula_parameterization",
+        "signal_direction",
+        "portfolio_accounting",
+    }
     entry = json.loads(
         (record.root / "history/archive/entries" / f"{entry_id}.json").read_text()
     )

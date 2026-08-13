@@ -67,6 +67,7 @@ tools:
     binding: tools.guarded_workspace:smoke_candidate_tool
 
 middlewares:
+  - import: middleware.quant_failure_map:QuantFailureMapMiddleware
   - import: middleware.terminal_reserve:DiscoveryTerminalReserve
     params:
       max_context_tokens: 200000

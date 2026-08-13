@@ -26,17 +26,33 @@ class QuantCodeEvalV2EvidenceError(ValueError):
 
 
 _PREFERRED_PRIMARY_COMPONENTS = {
-    "artifact_interface": ["validator", "tools", "tool_descriptions"],
-    "data_temporal_integrity": ["tools", "validator", "skills"],
-    "quant_definition_estimation": ["tools", "skills", "memory"],
-    "portfolio_execution": ["tools", "validator", "routing"],
-    "resource_termination": ["middleware", "routing", "agent_config"],
+    "interface_delivery": ["validator", "tools", "tool_descriptions"],
+    "data_universe_preprocessing": ["tools", "skills", "validator"],
+    "temporal_causality": ["tools", "validator", "skills"],
+    "formula_parameterization": ["tools", "skills", "memory"],
+    "signal_direction": ["tools", "validator", "memory"],
+    "portfolio_accounting": ["tools", "validator", "routing"],
+    "runtime_completion": ["middleware", "agent_config", "routing"],
     "isolated_task_specific": [],
     "unknown": [],
 }
 
 
+def _quant_failure_map() -> dict[str, object]:
+    path = Path(__file__).resolve().parent / "evolve_agent_full/quant_failure_map.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise QuantCodeEvalV2EvidenceError(
+            f"cannot read quant failure map: {exc}"
+        ) from exc
+    if not isinstance(value, dict):
+        raise QuantCodeEvalV2EvidenceError("quant failure map must be an object")
+    return value
+
+
 def _write_json(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(
         json.dumps(value, sort_keys=True, indent=2, ensure_ascii=False) + "\n",
@@ -153,6 +169,10 @@ def build_quantcodeeval_v2_evidence(
             }
         _write_json(staging / "history" / "SUMMARY.json", history_summary)
         _write_json(
+            staging / "guidance" / "quant_failure_map.json",
+            _quant_failure_map(),
+        )
+        _write_json(
             staging / "contract.json",
             {
                 "schema_version": 2,
@@ -178,6 +198,8 @@ def build_quantcodeeval_v2_evidence(
                 "max_declared_components": max_declared_components,
                 "preferred_primary_components": _PREFERRED_PRIMARY_COMPONENTS,
                 "component_priors_are_advisory": True,
+                "quant_failure_map": "guidance/quant_failure_map.json",
+                "quant_failure_classification_required_for_act": True,
                 "component_role_semantics": (
                     "components and primary_components are exact candidate file roles, "
                     "not conceptual capabilities; declare validator only when validator/** "

@@ -1,0 +1,156 @@
+{
+  "schema_version": 2,
+  "benchmark_family": "quant_finance_code_generation",
+  "purpose": "Locate the earliest observable breakdown, then identify the finance semantic state that failed. This is a diagnostic prior for component search, not a task answer or a fixed component prescription.",
+  "breakdown_stages": [
+    {
+      "breakdown_stage": "source_retrieval",
+      "diagnostic_question": "Was the required public instruction or paper passage absent from the Worker trace before implementation began?",
+      "distinguishing_evidence": [
+        "required public clause or paper section was not inspected",
+        "the Worker substituted general prior knowledge before retrieving task-specific detail"
+      ],
+      "component_state_target": "task-specific requirement coverage and evidence retrieval state",
+      "component_priors": ["routing", "skills", "tools"]
+    },
+    {
+      "breakdown_stage": "requirement_comprehension",
+      "diagnostic_question": "Was the relevant public requirement observed but its terminology, relation, temporal meaning, formula, or convention interpreted incorrectly?",
+      "distinguishing_evidence": [
+        "the trace cites the requirement but paraphrases it incorrectly",
+        "competing definitions remain unresolved before coding",
+        "the stated formula, direction, unit, or temporal relation already differs from the public basis"
+      ],
+      "component_state_target": "resolved public definition plus discriminating evidence",
+      "component_priors": ["tools", "skills", "routing"]
+    },
+    {
+      "breakdown_stage": "specification_preservation",
+      "diagnostic_question": "Was the requirement understood, then replaced by a familiar default, simplification, or later rewrite before final submission?",
+      "distinguishing_evidence": [
+        "an earlier trace states the correct requirement but later reasoning or code abandons it",
+        "a task-specific parameter or definition is overwritten by a library default or generic finance prior",
+        "a locally supported decision is not retained through repair and final assembly"
+      ],
+      "component_state_target": "selected definition, supporting evidence, and best-known implementation state across edits",
+      "component_priors": ["memory", "middleware", "validator"]
+    },
+    {
+      "breakdown_stage": "implementation_realization",
+      "diagnostic_question": "Was the intended requirement stated correctly, but the submitted code failed to realize it?",
+      "distinguishing_evidence": [
+        "reasoning states the right convention while AST or runtime behavior implements another",
+        "function calls, indices, parameters, branches, or state transitions contradict the stated intent",
+        "an independent fixture fails despite a correct textual plan"
+      ],
+      "component_state_target": "executable mapping from intended finance state to submitted code",
+      "component_priors": ["tools", "validator", "tool_descriptions"]
+    },
+    {
+      "breakdown_stage": "execution_completion",
+      "diagnostic_question": "Did runtime, repair-loop, stopping, or delivery behavior prevent a runnable and correctly assembled submission?",
+      "distinguishing_evidence": [
+        "no runnable strategy after substantial work",
+        "repeated generate-audit-rewrite loops add no new evidence",
+        "the final artifact or required callable is missing even though implementation work occurred"
+      ],
+      "component_state_target": "runnable candidate, completion progress, and final artifact assembly",
+      "component_priors": ["middleware", "agent_config", "validator"]
+    },
+    {
+      "breakdown_stage": "unable_to_decide",
+      "diagnostic_question": "Does answer-free evidence fail to locate the earliest breakdown?",
+      "distinguishing_evidence": [
+        "multiple stages remain observationally equivalent",
+        "the trace or submitted-code facts needed for attribution are absent"
+      ],
+      "component_state_target": "additional discriminating evidence",
+      "component_priors": []
+    }
+  ],
+  "semantic_classes": [
+    {
+      "failure_class": "interface_delivery",
+      "diagnostic_question": "Is the public function, file, schema, dtype, ordering, unit, or serialization contract wrong or missing?",
+      "observable_signals": ["missing callable or artifact", "shape, column, dtype, order, unit, or serialization mismatch"],
+      "nearby_classes_to_eliminate": ["runtime_completion", "formula_parameterization"],
+      "component_priors": ["validator", "tools", "tool_descriptions"]
+    },
+    {
+      "failure_class": "data_universe_preprocessing",
+      "diagnostic_question": "Are data selection, universe construction, filtering, missing-data handling, adjustment, resampling, or portfolio grouping wrong?",
+      "observable_signals": ["wrong eligible universe or survivorship treatment", "incorrect sequential versus independent sort", "missing-data, adjustment, breakpoint, or weighting policy differs"],
+      "nearby_classes_to_eliminate": ["temporal_causality", "portfolio_accounting"],
+      "component_priors": ["tools", "skills", "validator"]
+    },
+    {
+      "failure_class": "temporal_causality",
+      "diagnostic_question": "Are timestamp meaning, information availability, lag, lookback, training window, formation/holding period, or rebalance alignment wrong?",
+      "observable_signals": ["look-ahead or stale information", "shift, lag, window endpoint, warmup, or output date mismatch", "signal and realized-return periods are causally misaligned"],
+      "nearby_classes_to_eliminate": ["data_universe_preprocessing", "formula_parameterization", "portfolio_accounting"],
+      "component_priors": ["tools", "validator", "skills"]
+    },
+    {
+      "failure_class": "formula_parameterization",
+      "diagnostic_question": "Are a paper-specific formula, estimator, parameter identity, sign restriction, annualization, denominator, named method, or library mapping wrong?",
+      "observable_signals": ["constants appear correct but library parameterization differs", "paper-specific definition is simplified to a familiar estimator", "worker-authored checks pass while an independent public expectation disagrees"],
+      "nearby_classes_to_eliminate": ["temporal_causality", "signal_direction", "data_universe_preprocessing"],
+      "component_priors": ["tools", "skills", "memory"]
+    },
+    {
+      "failure_class": "signal_direction",
+      "diagnostic_question": "Is the intended mapping from score or prediction to long/short label, rank, sleeve, or trade sign reversed or distorted?",
+      "observable_signals": ["high-minus-low becomes low-minus-high", "long and short labels are swapped", "a coefficient or position sign restriction is lost"],
+      "nearby_classes_to_eliminate": ["formula_parameterization", "portfolio_accounting", "temporal_causality"],
+      "component_priors": ["tools", "validator", "memory"]
+    },
+    {
+      "failure_class": "portfolio_accounting",
+      "diagnostic_question": "Are position sizing, weights, cash, holdings, turnover, costs, constraints, rebalance transitions, sleeve combination, PnL, or risk aggregation wrong?",
+      "observable_signals": ["weights or cash do not reconcile", "signal is plausible but execution timing or portfolio state is wrong", "cost, constraint, sleeve, or return aggregation is omitted or double-counted"],
+      "nearby_classes_to_eliminate": ["signal_direction", "temporal_causality", "data_universe_preprocessing"],
+      "component_priors": ["tools", "validator", "routing"]
+    },
+    {
+      "failure_class": "runtime_completion",
+      "diagnostic_question": "Is the dominant failure a crash, unavailable dependency, excessive repair loop, timeout, or missing runnable submission?",
+      "observable_signals": ["runtime error before meaningful quant behavior", "timeout or no strategy file", "completion state is lost across repeated rewrites"],
+      "nearby_classes_to_eliminate": ["interface_delivery", "formula_parameterization"],
+      "component_priors": ["middleware", "agent_config", "routing"]
+    },
+    {
+      "failure_class": "isolated_task_specific",
+      "diagnostic_question": "Is the evidence confined to one task-specific convention with no supported reusable harness intervention?",
+      "observable_signals": ["no transferable phenotype or component state", "only a task-specific answer would resolve the uncertainty"],
+      "nearby_classes_to_eliminate": [],
+      "component_priors": []
+    },
+    {
+      "failure_class": "unknown",
+      "diagnostic_question": "Does available answer-free evidence fail to distinguish the semantic alternatives?",
+      "observable_signals": ["competing classes predict the same observation", "the necessary public, process, or code fact is absent"],
+      "nearby_classes_to_eliminate": [],
+      "component_priors": []
+    }
+  ],
+  "mechanism_patterns": [
+    {
+      "name": "independent_public_definition_fixture",
+      "best_fit": ["requirement_comprehension", "implementation_realization", "formula_parameterization", "temporal_causality", "signal_direction"],
+      "use_when": "A worker-authored contract can self-confirm an incorrect interpretation or mapping.",
+      "status": "investigator hypothesis; the Evolver may accept, reject, refine, or replace it"
+    },
+    {
+      "name": "decision_state_retention",
+      "best_fit": ["specification_preservation"],
+      "use_when": "Trace evidence shows a correct requirement or supported intermediate implementation is later replaced, forgotten, or omitted from final assembly.",
+      "status": "weaker investigator hypothesis until an intermediate-correct to final-wrong transition is observed"
+    },
+    {
+      "name": "failure_specialized_component",
+      "best_fit": ["any supported stage and semantic class"],
+      "use_when": "A recurring finance failure maps to reusable state or an executable operation absent from the harness.",
+      "status": "open mechanism family; the Evolver chooses the component and local test"
+    }
+  ]
+}

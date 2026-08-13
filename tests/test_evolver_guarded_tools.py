@@ -758,8 +758,9 @@ def _write_quant_v2_contract(evidence: Path, *, history_required: bool = True):
                 "max_primary_components": 2,
                 "max_declared_components": 6,
                 "preferred_primary_components": {
-                    "quant_definition_estimation": ["tools", "skills", "memory"]
+                    "formula_parameterization": ["tools", "skills", "memory"]
                 },
+                "quant_failure_classification_required_for_act": True,
                 "oracle_fields_exposed": False,
             },
             sort_keys=True,
@@ -783,7 +784,18 @@ def _write_quant_v2_contract(evidence: Path, *, history_required: bool = True):
 def _quant_v2_decision():
     return {
         "decision": "ACT",
-        "failure_class": "quant_definition_estimation",
+        "failure_class": "formula_parameterization",
+        "breakdown_stage": "implementation_realization",
+        "observed_symptoms": [
+            "the submitted library mapping differs from the stated estimator"
+        ],
+        "adjacent_failure_classes_considered": ["temporal_causality"],
+        "class_selection_reason": (
+            "the dates align, but the formula-to-library parameter identity differs"
+        ),
+        "component_state_target": (
+            "the executable mapping from the paper identity to library arguments"
+        ),
         "hypotheses_considered": [
             {
                 "hypothesis_id": "h_operation",
@@ -912,6 +924,32 @@ def test_quant_v2_component_prior_is_advisory_but_requires_override_reason(
     assert decide_candidate(discovery=decision)["primary_components"] == [
         "middleware"
     ]
+
+
+def test_quant_v2_act_requires_two_axis_finance_localization(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    decision.pop("breakdown_stage")
+    with pytest.raises(GuardedWorkspaceError, match="breakdown_stage"):
+        decide_candidate(discovery=decision)
+
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    decision["adjacent_failure_classes_considered"] = [
+        "formula_parameterization"
+    ]
+    with pytest.raises(GuardedWorkspaceError, match="must differ"):
+        decide_candidate(discovery=decision)
 
 
 def test_failure_type_probe_can_unlock_two_declared_components(guarded_roots):

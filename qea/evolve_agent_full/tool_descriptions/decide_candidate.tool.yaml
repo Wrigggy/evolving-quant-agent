@@ -12,7 +12,27 @@ input_schema:
           enum: [ACT, ABSTAIN]
         failure_class:
           type: string
-          enum: [artifact_interface, data_temporal_integrity, quant_definition_estimation, portfolio_execution, resource_termination, isolated_task_specific, unknown]
+          enum: [interface_delivery, data_universe_preprocessing, temporal_causality, formula_parameterization, signal_direction, portfolio_accounting, runtime_completion, isolated_task_specific, unknown]
+        breakdown_stage:
+          type: string
+          enum: [source_retrieval, requirement_comprehension, specification_preservation, implementation_realization, execution_completion, unable_to_decide]
+          description: QuantCodeEval v2 ACT localization; earliest observable stage where the Worker departed from a faithful strategy reproduction.
+        observed_symptoms:
+          type: array
+          items: {type: string}
+          description: QuantCodeEval v2 ACT evidence; concrete public/process observations supporting the selected failure class.
+        adjacent_failure_classes_considered:
+          type: array
+          items:
+            type: string
+            enum: [interface_delivery, data_universe_preprocessing, temporal_causality, formula_parameterization, signal_direction, portfolio_accounting, runtime_completion, isolated_task_specific, unknown]
+          description: QuantCodeEval v2 ACT alternatives considered and distinguished from failure_class.
+        class_selection_reason:
+          type: string
+          description: Why observed evidence fits failure_class better than the adjacent alternatives.
+        component_state_target:
+          type: string
+          description: Concrete finance or execution state the selected harness mechanism should change or preserve.
         failure_types:
           type: array
           minItems: 1

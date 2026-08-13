@@ -140,7 +140,15 @@ locked.
 For `quant_property_v2`, do not force a single failed task into a fabricated
 cross-task failure type and do not require the A5 probe log. Compare at least
 two plausible quantitative mechanisms, then cite the exact answer-free task
-evidence you inspected. From the second outer round onward the contract sets
+evidence you inspected. Read `guidance/quant_failure_map.json` and use it as a
+diagnostic prior, not an answer. First locate the earliest `breakdown_stage`
+(retrieval, comprehension, specification preservation, implementation, or
+completion), then select the finance-semantic `failure_class`. For ACT, record
+`observed_symptoms`, at least one `adjacent_failure_classes_considered`, a
+`class_selection_reason`, and the concrete `component_state_target` that the
+intervention should change. This two-axis classification must distinguish a
+nearby alternative; it does not require a cross-task cluster. From the second
+outer round onward the contract sets
 `history_required: true`: read at least one prior immutable history entry plus
 its exact diff or candidate source before deciding, so a rejected or ineffective
 edit remains usable experience. Name `primary_components` as the one or two

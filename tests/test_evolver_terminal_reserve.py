@@ -11,6 +11,7 @@ from nexau.archs.main_sub.execution.hooks import (
     AfterModelHookInput,
     AfterToolHookInput,
     BeforeModelHookInput,
+    BeforeAgentHookInput,
     ModelCallParams,
     ToolCallParams,
     MiddlewareManager,
@@ -23,6 +24,9 @@ from nexau.core.messages import Message, Role, TextBlock
 from qea.evolve_agent_full.middleware.terminal_reserve import (
     DiscoveryTerminalReserve,
     TerminalReserveError,
+)
+from qea.evolve_agent_full.middleware.quant_failure_map import (
+    QuantFailureMapMiddleware,
 )
 
 
@@ -643,8 +647,9 @@ def test_agent_profile_registers_exact_terminal_middleware(
 
     config = AgentConfig.from_yaml(config_path=root / "agent.yaml")
 
-    assert len(config.middlewares or []) == 1
-    middleware = config.middlewares[0]
+    assert len(config.middlewares or []) == 2
+    assert type(config.middlewares[0]).__name__ == "QuantFailureMapMiddleware"
+    middleware = config.middlewares[1]
     assert type(middleware).__name__ == "DiscoveryTerminalReserve"
     assert type(middleware).__module__ == "middleware.terminal_reserve"
     assert middleware.trigger_tokens == 136_000
@@ -653,6 +658,7 @@ def test_agent_profile_registers_exact_terminal_middleware(
     agent = Agent(config=config)
     configured = agent.executor.middleware_manager.middlewares
     assert [type(value).__name__ for value in configured] == [
+        "QuantFailureMapMiddleware",
         "DiscoveryTerminalReserve"
     ]
     assert any(
@@ -674,3 +680,32 @@ def test_agent_profile_registers_exact_terminal_middleware(
     assert middleware._bound_executor is agent.executor
     assert state._executor.token_counter is agent.executor.token_counter
     assert provider_calls[0].tools == agent.executor.structured_tool_payload
+
+
+def test_quant_failure_map_middleware_injects_only_for_quant_v2(
+    tmp_path, monkeypatch
+):
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    contract = evidence / "contract.json"
+    monkeypatch.setenv("QEA_EVIDENCE_ROOT", str(evidence))
+    messages = _boundary_messages(100)
+    hook = BeforeAgentHookInput(agent_state=_State(), messages=messages)
+    middleware = QuantFailureMapMiddleware()
+
+    contract.write_text(
+        json.dumps({"decision_protocol": "failure_type_v1"}) + "\n"
+    )
+    assert middleware.before_agent(hook).messages is None
+
+    contract.write_text(
+        json.dumps({"decision_protocol": "quant_property_v2"}) + "\n"
+    )
+    injected = middleware.before_agent(hook).messages
+    assert injected is not None
+    assert len(injected) == len(messages) + 1
+    guidance = injected[-1].get_text_content()
+    assert "two-axis diagnostic prior" in guidance
+    assert "specification_preservation" in guidance
+    assert "formula_parameterization" in guidance
+    assert "you may reject both" in guidance
