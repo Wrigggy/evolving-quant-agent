@@ -1,0 +1,42 @@
+type: tool
+name: probe_quant_invariants
+description: >-
+  Run declarative quant checks whose expected values and perturbations are
+  computed by the tool rather than by candidate code. Supports lagged rolling
+  aggregation with current-value and row-order perturbations, sign mapping,
+  and equal-weighted signed-return accounting. Use public task definitions;
+  this tool does not read evaluator material.
+input_schema:
+  type: object
+  properties:
+    module_path:
+      type: string
+      description: Absolute path to the saved strategy.py.
+    checks:
+      type: array
+      minItems: 1
+      items:
+        type: object
+        description: >-
+          A window_aggregation, sign_mapping, or
+          equal_weighted_signed_return check. Supply public column/function
+          names and small synthetic rows. For window checks also supply
+          group_column, time_column, value_column, output_column, window, lag,
+          aggregation, and target_where. For sign checks supply input_column
+          and output_column. For portfolio checks supply return_rows,
+          signal_rows, join columns, value columns, and output_column.
+      description: Declarative checks to execute independently.
+    public_basis:
+      type: string
+      description: Public instruction or paper convention selecting the definition.
+    competing_definitions:
+      type: array
+      minItems: 2
+      items: {type: string}
+      description: At least two plausible definitions separated by the checks.
+    timeout_seconds:
+      type: integer
+      minimum: 1
+      maximum: 180
+  required: [module_path, checks, public_basis, competing_definitions]
+  additionalProperties: false

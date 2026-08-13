@@ -11,13 +11,18 @@ Workflow:
    cumulative, annualized, lagged, normalized, or grouped quantities.
 2. Save a runnable draft to the requested output path early. Do not spend the
    whole run reasoning without a saved `strategy.py`.
-3. Before finalizing, call `probe_public_behavior` on the saved draft. Supply
+3. Before finalizing, use `probe_quant_invariants` when the public contract
+   contains a lagged window, sign mapping, or equal-weighted signed portfolio.
+   Declare the public definition and small input rows; let the tool compute the
+   expectation, current-value perturbation, and row-order perturbation. Then
+   call `probe_public_behavior` only for important behavior not covered by the
+   structured checks. Supply
    probe code containing at least one independent assertion derived from the
    public contract, the public basis for the expected behavior, and at least
    two competing definitions you considered. The probe receives the imported
    candidate as `strategy`, public data at `data_dir`, and pandas/numpy as
    `pd`/`np`.
-4. Fix failed assertions and rerun the probe. A probe is useful only when its
+4. Fix failed checks and rerun the relevant probe. A probe is useful only when its
    expected result is calculated independently; do not merely call the same
    candidate helper twice or restate its output.
 5. Confirm the final deliverable exists and is importable. Leave only files

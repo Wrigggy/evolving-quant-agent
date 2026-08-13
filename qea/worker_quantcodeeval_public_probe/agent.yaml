@@ -23,6 +23,9 @@ tools:
   - name: probe_public_behavior
     yaml_path: ./tool_descriptions/probe_public_behavior.tool.yaml
     binding: tools.public_behavior_probe:probe_public_behavior
+  - name: probe_quant_invariants
+    yaml_path: ./tool_descriptions/probe_quant_invariants.tool.yaml
+    binding: tools.quant_invariant_probe:probe_quant_invariants
 
 skills:
   - ./skills/quant-contract-arbitration
