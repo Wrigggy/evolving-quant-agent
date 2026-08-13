@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Iterable, Mapping
@@ -423,6 +424,24 @@ def _candidate_worker_runtime(
                     "malformed_event_count",
                 )
             }
+        command_path = attempt_root / "worker-command.json"
+        if command_path.is_file():
+            command = json.loads(command_path.read_text(encoding="utf-8"))
+            stderr = command.get("stderr") if isinstance(command, Mapping) else None
+            if isinstance(stderr, str):
+                reasoning = re.search(r"reasoning_tokens['\"]?:\s*(\d+)", stderr)
+                item["termination"] = {
+                    "exit_code": command.get("exit_code"),
+                    "timed_out": command.get("timed_out"),
+                    "empty_model_response": "Empty model response received" in stderr,
+                    "no_content_or_tool_calls": (
+                        "No response content or tool calls" in stderr
+                    ),
+                    "force_stop_error": "Force stop reason: ERROR_OCCURRED" in stderr,
+                    "reasoning_tokens": (
+                        int(reasoning.group(1)) if reasoning is not None else None
+                    ),
+                }
         artifact_path = attempt_root / "artifacts" / "strategy.py"
         if artifact_path.is_file():
             item["final_artifact"] = {
@@ -821,8 +840,10 @@ def run_quantcodeeval_v2_activation_canary(
     evolver_image_ref: str,
     proxy_image_ref: str,
     prior_rejected_attempt_dir: str | Path | Iterable[str | Path] | None = None,
-    prior_failed_candidate_activation_dir: str | Path | None = None,
-    prior_failed_candidate_run_dir: str | Path | None = None,
+    prior_failed_candidate_activation_dir: (
+        str | Path | Iterable[str | Path] | None
+    ) = None,
+    prior_failed_candidate_run_dir: str | Path | Iterable[str | Path] | None = None,
     prior_scored_candidate_activation_dir: (
         str | Path | Iterable[str | Path] | None
     ) = None,
@@ -889,22 +910,29 @@ def run_quantcodeeval_v2_activation_canary(
         )
         for path in _prior_attempt_paths(prior_rejected_attempt_dir)
     ]
-    if (prior_failed_candidate_activation_dir is None) != (
-        prior_failed_candidate_run_dir is None
-    ):
+    failed_activations = _prior_attempt_paths(
+        prior_failed_candidate_activation_dir, allow_duplicates=True
+    )
+    failed_runs = _prior_attempt_paths(
+        prior_failed_candidate_run_dir, allow_duplicates=True
+    )
+    if len(failed_activations) != len(failed_runs):
         raise QuantCodeEvalV2LiveError(
-            "failed candidate activation and full run must be supplied together"
+            "failed candidate activations and full runs must be paired"
         )
-    prior_full_candidate_failure = None
-    if prior_failed_candidate_run_dir is not None:
-        assert prior_failed_candidate_activation_dir is not None
-        prior_full_candidate_failure = _seed_full_candidate_failure_history(
+    failed_pairs = tuple(zip(failed_activations, failed_runs))
+    if len(set(failed_pairs)) != len(failed_pairs):
+        raise QuantCodeEvalV2LiveError("failed candidate pair is duplicated")
+    prior_full_candidate_failures = [
+        _seed_full_candidate_failure_history(
             history_root=root / "history",
-            activation_run_dir=Path(prior_failed_candidate_activation_dir),
-            full_candidate_run_dir=Path(prior_failed_candidate_run_dir),
+            activation_run_dir=activation_dir,
+            full_candidate_run_dir=run_dir,
             seed_worker_dir=seed,
             h0_evaluation_id=h0.evaluation_id,
         )
+        for activation_dir, run_dir in failed_pairs
+    ]
     scored_activations = _prior_attempt_paths(
         prior_scored_candidate_activation_dir,
         allow_duplicates=True,
@@ -970,7 +998,7 @@ def run_quantcodeeval_v2_activation_canary(
         "docker_preflight_identity_sha256": docker_preflight.identity_sha256,
         "source_sha256": _source_identity(),
         "prior_rejected_attempts": prior_rejected_attempts,
-        "prior_full_candidate_failure": prior_full_candidate_failure,
+        "prior_full_candidate_failures": prior_full_candidate_failures,
         "prior_scored_candidates": prior_scored_candidates,
         "comparison_h0_runs": [
             path.expanduser().resolve().name

@@ -34,8 +34,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--evolver-image", required=True)
     parser.add_argument("--proxy-image", required=True)
     parser.add_argument("--prior-rejected-attempt", type=Path, action="append")
-    parser.add_argument("--prior-failed-candidate-activation", type=Path)
-    parser.add_argument("--prior-failed-candidate-run", type=Path)
+    parser.add_argument(
+        "--prior-failed-candidate-activation", type=Path, action="append"
+    )
+    parser.add_argument(
+        "--prior-failed-candidate-run", type=Path, action="append"
+    )
     parser.add_argument(
         "--prior-scored-candidate-activation", type=Path, action="append"
     )

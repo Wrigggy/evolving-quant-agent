@@ -592,6 +592,20 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
         + "\n",
         encoding="utf-8",
     )
+    (attempt_root / "worker-command.json").write_text(
+        json.dumps(
+            {
+                "exit_code": 0,
+                "timed_out": False,
+                "stderr": (
+                    "Empty model response received: usage={'reasoning_tokens': 32000}\n"
+                    "No response content or tool calls\n"
+                    "Force stop reason: ERROR_OCCURRED\n"
+                    "private provider detail"
+                ),
+            }
+        )
+    )
     (attempt_root / "artifacts").mkdir()
     (attempt_root / "artifacts/strategy.py").write_text(
         "def select_universe(data):\n    return []\n", encoding="utf-8"
@@ -649,6 +663,14 @@ def test_completed_panel_becomes_rejected_searchable_history(tmp_path):
                     },
                 ],
                 "malformed_event_count": 0,
+            },
+            "termination": {
+                "exit_code": 0,
+                "timed_out": False,
+                "empty_model_response": True,
+                "no_content_or_tool_calls": True,
+                "force_stop_error": True,
+                "reasoning_tokens": 32000,
             },
             "final_artifact": {
                 "path": "strategy.py",
