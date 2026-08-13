@@ -12,6 +12,7 @@ from qea.quantcodeeval_v2_live import (
     _seed_full_candidate_failure_history,
     _seed_rejected_attempt_history,
     _seed_scored_candidate_history,
+    _select_task_rewards,
     _prior_attempt_paths,
 )
 from qea.quantcodeeval_history import validate_quantcodeeval_history
@@ -70,6 +71,18 @@ def test_comparison_run_paths_preserve_order_and_reject_duplicates(tmp_path):
     assert _prior_attempt_paths([first, second]) == (first, second)
     with pytest.raises(QuantCodeEvalV2LiveError, match="duplicated"):
         _prior_attempt_paths([first, first])
+
+
+def test_activation_task_panel_can_focus_target_and_protection():
+    rewards = {"T01": 0.0, "T12": 0.0, "T18": 0.0, "T19": 1.0}
+
+    assert _select_task_rewards(rewards, ("T12", "T19")) == {
+        "T12": 0.0,
+        "T19": 1.0,
+    }
+    assert _select_task_rewards(rewards, None) == rewards
+    with pytest.raises(QuantCodeEvalV2LiveError, match="outside H0"):
+        _select_task_rewards(rewards, ("T24",))
 
 
 def test_proxy_audit_retains_exact_request_cost_and_ids(tmp_path):

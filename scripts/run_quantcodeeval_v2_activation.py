@@ -32,6 +32,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prior-scored-candidate-run", type=Path, action="append")
     parser.add_argument("--comparison-h0-run", type=Path, action="append")
     parser.add_argument(
+        "--task",
+        dest="task_ids",
+        action="append",
+        help="Restrict the current Evolver evidence panel, for example T12 and T19.",
+    )
+    parser.add_argument(
         "--diagnosis-note",
         help="Answer-free investigator context for this engineering round.",
     )
@@ -58,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
         prior_scored_candidate_run_dir=args.prior_scored_candidate_run,
         comparison_h0_run_dir=args.comparison_h0_run,
+        task_ids=args.task_ids,
         diagnosis_note=args.diagnosis_note,
         validate_release=not args.engineering_release,
         preflight_only=args.preflight_only,

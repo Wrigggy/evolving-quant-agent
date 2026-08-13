@@ -70,3 +70,8 @@ Focused unit tests cover:
 
 This confirms the local mechanism and evidence flow only. It does not show that
 the retrieval view or domain guidance improves QuantCodeEval reward.
+
+The live activation CLI accepts repeated `--task` arguments so a mechanism
+search can expose only its declared target and protection panel. The next run
+uses `--task T12 --task T19`; T01 and T18 remain preserved historical outcomes
+but are not current optimization targets.

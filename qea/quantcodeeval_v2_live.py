@@ -65,6 +65,20 @@ class QuantCodeEvalV2LiveError(RuntimeError):
     """A live activation canary identity or result is incomplete."""
 
 
+def _select_task_rewards(
+    all_rewards: Mapping[str, float], task_ids: Iterable[str] | None
+) -> dict[str, float]:
+    requested = tuple(dict.fromkeys(str(value) for value in (task_ids or ())))
+    if not requested:
+        return dict(all_rewards)
+    missing = sorted(set(requested) - set(all_rewards))
+    if missing:
+        raise QuantCodeEvalV2LiveError(
+            "requested task panel is outside H0: " + ", ".join(missing)
+        )
+    return {task_id: float(all_rewards[task_id]) for task_id in requested}
+
+
 def _canonical_sha256(value: object) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -772,6 +786,7 @@ def run_quantcodeeval_v2_activation_canary(
     ) = None,
     prior_scored_candidate_run_dir: str | Path | Iterable[str | Path] | None = None,
     comparison_h0_run_dir: str | Path | Iterable[str | Path] | None = None,
+    task_ids: Iterable[str] | None = None,
     diagnosis_note: str | None = None,
     validate_release: bool = True,
     preflight_only: bool = False,
@@ -808,10 +823,11 @@ def run_quantcodeeval_v2_activation_canary(
     seed_digest = hash_worker_directory(seed)
     if seed_digest != h0.worker_digest:
         raise QuantCodeEvalV2LiveError("released H0 worker digest differs")
-    rewards = {
+    all_rewards = {
         task_id: float(result.official_reward)
         for task_id, result in h0.task_results.items()
     }
+    rewards = _select_task_rewards(all_rewards, task_ids)
     prior_rejected_attempts = [
         _seed_rejected_attempt_history(
             history_root=root / "history",
@@ -890,6 +906,7 @@ def run_quantcodeeval_v2_activation_canary(
         "h0_evaluation_id": h0.evaluation_id,
         "h0_worker_digest": seed_digest,
         "h0_official_rewards": rewards,
+        "task_ids": list(rewards),
         "h0_resampled": False,
         "release_identity": release_identity,
         "config_sha256": _sha256(config_file),
@@ -961,11 +978,15 @@ def run_quantcodeeval_v2_activation_canary(
         resource_pool=pool,
         model_name=MODEL,
     )
-    attempts = list(materialize_h0_attempt_sources(
-        master_root=root,
-        h0_root=h0_root,
-        evaluation=h0,
-    ))
+    attempts = [
+        source
+        for source in materialize_h0_attempt_sources(
+            master_root=root,
+            h0_root=h0_root,
+            evaluation=h0,
+        )
+        if source.record.task_id in rewards
+    ]
     for comparison_root in _prior_attempt_paths(comparison_h0_run_dir):
         comparison = h0_evaluation_ref(comparison_root)
         if not set(comparison.task_results) <= set(h0.task_results):
@@ -973,14 +994,16 @@ def run_quantcodeeval_v2_activation_canary(
                 "comparison H0 contains a task outside the current panel"
             )
         attempts.extend(
-            materialize_h0_attempt_sources(
+            source
+            for source in materialize_h0_attempt_sources(
                 master_root=root,
                 h0_root=comparison_root.expanduser().resolve(),
                 evaluation=comparison,
             )
+            if source.record.task_id in rewards
         )
     public_roots = {
-        task_id: public / "tasks" / task_id for task_id in h0.task_results
+        task_id: public / "tasks" / task_id for task_id in rewards
     }
 
     def evidence_builder(state, iteration, history_root):

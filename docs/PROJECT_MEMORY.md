@@ -1748,6 +1748,10 @@ attempt files and does not rerun the Worker. This is
 locally smoke-tested retrieval/plumbing, not a measured reward improvement; no
 paid model or benchmark run was launched. See the
 [runtime-experience retrieval decision](decisions/2026-08-13-quantcodeeval-runtime-experience-retrieval.md).
+The live activation entry point now supports an explicit task panel. The next
+mechanism search must use T12 as its target and T19 as its protection task;
+historical T01/T18 outcomes may remain in archived experience but must not be
+presented as current optimization targets.
 
 ## Memory Maintenance Rules
 
