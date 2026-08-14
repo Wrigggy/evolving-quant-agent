@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-15",
+  "status": "preflight_passed",
+  "experiment": "cross_benchmark_component_search_breadth_preflight",
+  "model_calls": 0,
+  "provider_cost_usd": 0.0,
+  "qfbench": {
+    "evidence_source": "results/bc-mirror/qfbench-a6-discovery-e-flash-high-20260811-r11-me7/authorized-evidence",
+    "task_cards_built": 4,
+    "component_cards_built": 5,
+    "files_materialized": 47,
+    "targets": [
+      {
+        "task_id": "swap-curve-bootstrap-ois",
+        "baseline": "17/19 in each of 5 repeats"
+      },
+      {
+        "task_id": "earnings-surprise-calculator",
+        "baseline": "4/8 in each of 5 repeats"
+      }
+    ],
+    "protections": [
+      {
+        "task_id": "credit-spread-decomposition",
+        "baseline": "39/39 in each of 5 repeats"
+      },
+      {
+        "task_id": "historical-var-data-prep",
+        "baseline": "12/12 in each of 5 repeats"
+      }
+    ]
+  },
+  "quantcodeeval": {
+    "source_location": "/data/qea-julius-storage/benchmarks/quantcodeeval-breadth-source-20260815",
+    "source_files": 161,
+    "source_bytes": 11009685,
+    "runtime": "Python 3.11.15 engineering canary container",
+    "network_during_check": "disabled",
+    "tasks": [
+      {
+        "task_id": "T26",
+        "golden_execution": "completed",
+        "checker_result": "17/17 PASS"
+      },
+      {
+        "task_id": "T27",
+        "golden_execution": "completed",
+        "checker_result": "18/18 PASS"
+      }
+    ],
+    "wrds_used": false,
+    "benchmark_baseline_measured": false
+  },
+  "mechanism": {
+    "unit": "component hypothesis",
+    "common_evolver_view": [
+      "public task state",
+      "answer-free outcome",
+      "runtime summary",
+      "worker trace and artifacts",
+      "component experience"
+    ],
+    "benchmark_specific_surfaces": [
+      "candidate contract",
+      "worker execution",
+      "official verifier"
+    ],
+    "operators": [
+      "REUSE",
+      "REFINE",
+      "COMPOSE",
+      "SYNTHESIZE",
+      "ROUTE",
+      "REPLICATE",
+      "PROTECT",
+      "TRANSFER",
+      "ABLATE",
+      "ABSTAIN"
+    ]
+  },
+  "claim_boundary": "This is a zero-model setup and runtime preflight. It does not measure Worker baseline performance or harness benefit."
+}

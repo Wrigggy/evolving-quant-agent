@@ -2000,6 +2000,37 @@ containers were cleaned. A separate observed bookkeeping bug left rejected
 is now reconciled for all terminal decisions. Detailed evidence is in the
 [delivery recovery report](reports/2026-08-14-quantcodeeval-delivery-recovery-component-interaction.md).
 
+**Cross-benchmark component-search breadth preflight on 2026-08-15:** the next
+method unit remains a component hypothesis, but task navigation is no longer
+limited to the T18/T24 QuantCodeEval branches. A thin answer-free experience
+adapter now presents public task state, runtime history, Worker artifacts, and
+positive or negative component evidence through one task-card interface for
+both QuantCodeEval and QFBench. Candidate contracts, Worker execution, and
+official verification remain benchmark-specific. Component retrieval is an
+advisory public-state match rather than an exhaustive finance failure map;
+QuantCodeEval-only components are not routed to QFBench, and no match permits
+new synthesis or calibrated abstention.
+
+The real QFBench evidence preflight built four task cards and five component
+cards for two targets plus two protections. Separately, public QuantCodeEval
+T26/T27 source and runtime support were staged below `/data/qea-julius-storage`
+on bc without WRDS. In a network-disabled Python 3.11.15 canary container, the
+official golden/checker smoke passed T26 at 17/17 and T27 at 18/18. These are
+setup checks, not Worker baselines or harness-benefit measurements; no model
+was called and cost was zero.
+
+The proposed paid breadth phase uses T26/T27 with T19 protection and two
+QFBench targets (`swap-curve-bootstrap-ois`,
+`earnings-surprise-calculator`) with two QFBench protections
+(`credit-spread-decomposition`, `historical-var-data-prep`). Start with one
+target from each benchmark, stop a branch after abstention or scored
+non-improvement, and run one repeat plus one protection only after improvement.
+The experiment asks whether runtime history can localize a component on an
+unseen task, whether the navigation mechanism transfers across benchmark
+contracts, and whether multi-component composition helps without regressing a
+known-good protection task. Detailed setup and evidence are in
+`docs/reports/2026-08-15-cross-benchmark-breadth-adapter-preflight.md`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

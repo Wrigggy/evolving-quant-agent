@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "status": "engineering_preflight",
+  "purpose": "Cross-benchmark runtime-experience and component-search breadth canary",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "provider": "deepseek",
+  "fallback": false,
+  "tasks": [
+    {
+      "benchmark": "quantcodeeval",
+      "task_id": "T26",
+      "role": "target",
+      "domain": "cross_sectional_shrinkage",
+      "state_tags": [
+        "quantity_semantic",
+        "estimator_state",
+        "portfolio_normalization",
+        "cross_section"
+      ],
+      "setup_status": "role_materialization_required"
+    },
+    {
+      "benchmark": "quantcodeeval",
+      "task_id": "T27",
+      "role": "target",
+      "domain": "combination_forecasts",
+      "state_tags": [
+        "temporal_causality",
+        "forecast_aggregation",
+        "out_of_sample",
+        "public_semantic"
+      ],
+      "setup_status": "role_materialization_required"
+    },
+    {
+      "benchmark": "quantcodeeval",
+      "task_id": "T19",
+      "role": "protection",
+      "domain": "downside_volatility_management",
+      "state_tags": [
+        "quantity_semantic",
+        "temporal_causality",
+        "portfolio_normalization"
+      ],
+      "setup_status": "existing_evidence_ready"
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "swap-curve-bootstrap-ois",
+      "role": "target",
+      "domain": "rates_fx_macro",
+      "state_tags": [
+        "curve_bootstrap",
+        "public_semantic",
+        "ordering",
+        "valuation_state",
+        "unit_state"
+      ],
+      "baseline": {"tests_passed": 17, "tests_failed": 2, "repeats": 5},
+      "setup_status": "existing_evidence_ready"
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "credit-spread-decomposition",
+      "role": "protection",
+      "domain": "risk_credit",
+      "state_tags": [
+        "public_semantic",
+        "valuation_state",
+        "decomposition"
+      ],
+      "baseline": {"tests_passed": 39, "tests_failed": 0, "repeats": 5},
+      "setup_status": "existing_evidence_ready"
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "earnings-surprise-calculator",
+      "role": "target",
+      "domain": "data_engineering",
+      "state_tags": [
+        "temporal_causality",
+        "public_semantic",
+        "data_state",
+        "aggregation"
+      ],
+      "baseline": {"tests_passed": 4, "tests_failed": 4, "repeats": 5},
+      "setup_status": "existing_evidence_ready"
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "historical-var-data-prep",
+      "role": "protection",
+      "domain": "risk_credit",
+      "state_tags": [
+        "temporal_causality",
+        "data_state",
+        "missing_data"
+      ],
+      "baseline": {"tests_passed": 12, "tests_failed": 0, "repeats": 5},
+      "setup_status": "existing_evidence_ready"
+    }
+  ],
+  "component_portability": {
+    "empty_response_recovery": "source_reusable_if_same_nexau_runtime",
+    "declarative_quant_invariant": "lesson_only",
+    "public_quantity_semantic_binding": "lesson_only",
+    "warmup_boundary_arbitration": "quantcodeeval_only",
+    "window_endpoint_consistency_audit": "lesson_only"
+  },
+  "limits": {
+    "max_evolver_calls_per_target": 2,
+    "default_worker_calls_per_target": 1,
+    "max_total_worker_calls": 8,
+    "max_completed_model_requests": 300,
+    "max_provider_cost_usd": 0.6,
+    "max_relevant_components_per_task": 4
+  },
+  "stop_rules": [
+    "stop target after a calibrated ABSTAIN",
+    "stop target after an officially scored non-improvement or regression",
+    "run one repeat and then one protection only after a target improvement",
+    "allow a second Evolver only when the first attempt produces a new runtime observation before official scoring"
+  ],
+  "claim_boundary": "Engineering breadth canary only; not a benchmark-wide performance estimate."
+}
