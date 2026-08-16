@@ -2031,6 +2031,36 @@ contracts, and whether multi-component composition helps without regressing a
 known-good protection task. Detailed setup and evidence are in
 `docs/reports/2026-08-15-cross-benchmark-breadth-adapter-preflight.md`.
 
+**Cross-benchmark breadth live canary on 2026-08-16:** the common navigation
+surface produced calibrated semantic ABSTAINs in matched task-only and
+history-enabled QFBench `swap-curve-bootstrap-ois` arms; neither changed the
+harness or launched a Worker. The history arm read two retrieved component
+cards but correctly refused unsupported reuse. Both old reports recorded a
+null decision because the runner ignored an explicit `prediction.json`
+ABSTAIN; the runner now recognizes either terminal artifact, while the original
+evidence remains unchanged.
+
+QuantCodeEval T26 H0 scored 13/17 (Type A 5/7, Type B 8/10). The history-enabled
+Evolver then autonomously synthesized an independent public-clause audit and
+revision loop, changed five files across tools, tool description, agent config,
+and system prompt, passed smoke/admission, and registered ACT. The first T26
+Worker activated the checker three times and improved to 14/17, but the repeat
+also activated it and regressed to 12/17. The target benefit is not stable and
+binary reward remained zero in both samples.
+
+The T19 protection Worker scored 18/18 versus the earlier shell-only 16/18
+sample. However, the T26-specific checker reported two irrelevant failures on
+all three T19 audits. This makes the broader contract-read, independent-
+validation, revise, and re-audit workflow a stronger transfer hypothesis than
+the static checker itself. The result is protected and process-positive but
+causally unresolved; next run a workflow-only ablation on two T26 samples plus
+one T19 protection before designing a task-conditioned checker or expanding to
+more tasks. The seven live runs used 183 completed requests, 8,231,008 tokens,
+and $0.2101171912 with zero restarts. All run-scoped monitoring and containers
+were cleaned, and evidence was additively mirrored. See
+`docs/reports/2026-08-16-cross-benchmark-breadth-live-results.md` and
+`results/cross-benchmark-breadth-20260816/RESULT.json`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

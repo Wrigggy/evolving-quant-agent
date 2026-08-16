@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-16",
+  "status": "complete_mixed",
+  "experiment": "cross_benchmark_component_search_breadth_live_canary",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "provider": "deepseek",
+  "fallback": false,
+  "qfbench": {
+    "task": "swap-curve-bootstrap-ois",
+    "baseline": "17/19 in five prior repeats",
+    "task_only": {
+      "run_id": "breadth-qf-swap-task-only-20260816-r1",
+      "semantic_decision": "ABSTAIN",
+      "registered_decision": null,
+      "candidate_changed": false,
+      "requests": 22,
+      "tokens": 1737664,
+      "cost_usd": 0.040469156
+    },
+    "history_enabled": {
+      "run_id": "breadth-qf-swap-history-20260816-r1",
+      "semantic_decision": "ABSTAIN",
+      "registered_decision": null,
+      "retrieved_components": [
+        "public_quantity_semantic_binding",
+        "declarative_quant_invariant"
+      ],
+      "candidate_changed": false,
+      "requests": 13,
+      "tokens": 896523,
+      "cost_usd": 0.0334927488
+    },
+    "interpretation": "Both arms calibrated abstention because answer-free evidence could not distinguish the two surviving public-clause interpretations. The old runner failed to register prediction.json ABSTAIN; this observed bookkeeping defect was fixed after the runs without resampling them."
+  },
+  "quantcodeeval": {
+    "target": "T26",
+    "protection": "T19",
+    "h0": {
+      "run_id": "qce-breadth-t26-h0-20260816-r1",
+      "properties_passed": 13,
+      "properties_total": 17,
+      "type_a_passed": 5,
+      "type_a_total": 7,
+      "type_b_passed": 8,
+      "type_b_total": 10,
+      "official_reward": 0,
+      "requests": 36,
+      "tokens": 1644894,
+      "cost_usd": 0.0408489088
+    },
+    "evolver": {
+      "run_id": "breadth-qce-t26-history-20260816-r1",
+      "decision": "ACT",
+      "admitted": true,
+      "component_id": "clause_semantic_revision_loop",
+      "primary_component": "tools",
+      "changed_roles": [
+        "agent_config",
+        "systemprompt",
+        "tool_descriptions",
+        "tools"
+      ],
+      "changed_files": 5,
+      "requests": 21,
+      "tokens": 801854,
+      "cost_usd": 0.019496848
+    },
+    "target_runs": [
+      {
+        "run_id": "breadth-qce-t26-candidate-20260816-r1",
+        "role": "target",
+        "properties_passed": 14,
+        "properties_total": 17,
+        "type_a_passed": 6,
+        "type_b_passed": 8,
+        "official_reward": 0,
+        "component_invocations": 3,
+        "requests": 34,
+        "tokens": 1289295,
+        "cost_usd": 0.0313506088
+      },
+      {
+        "run_id": "breadth-qce-t26-candidate-20260816-r2",
+        "role": "repeat",
+        "properties_passed": 12,
+        "properties_total": 17,
+        "type_a_passed": 5,
+        "type_b_passed": 7,
+        "official_reward": 0,
+        "component_invocations": 3,
+        "requests": 32,
+        "tokens": 1333000,
+        "cost_usd": 0.0263097184
+      }
+    ],
+    "protection_run": {
+      "run_id": "breadth-qce-t19-protection-20260816-r1",
+      "prior_shell_only_properties_passed": 16,
+      "properties_passed": 18,
+      "properties_total": 18,
+      "type_a_passed": 7,
+      "type_b_passed": 11,
+      "official_reward": 1,
+      "component_invocations": 3,
+      "task_specific_checker_failed_each_audit": true,
+      "requests": 25,
+      "tokens": 527778,
+      "cost_usd": 0.0181492024
+    },
+    "interpretation": "Autonomous component discovery, activation, and one target property recovery were measured. The target repeat regressed below H0, so target benefit is not stable. T19 passed 18/18 despite irrelevant T26-specific checker failures, which points to the broader revision workflow as the transferable part and leaves component-level causal attribution unresolved."
+  },
+  "totals": {
+    "completed_requests": 183,
+    "tokens": 8231008,
+    "cost_usd": 0.2101171912,
+    "restart_count": 0
+  },
+  "claim_boundary": "Engineering mechanism canary. It supports cross-benchmark navigation and autonomous component activation, but not a stable T26 improvement or benchmark-wide gain.",
+  "next_experiment": "Ablate the T26-specific static checker from the general contract-read, independent-validation, and post-revision audit workflow; compare repeated T26 and T19 outcomes before designing a task-conditioned checker."
+}

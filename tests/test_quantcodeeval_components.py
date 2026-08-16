@@ -77,10 +77,10 @@ def test_canary_ledger_preserves_measured_component_trial_costs():
     ledger = load_quantcodeeval_component_ledger(LEDGER)
 
     assert ledger.experiment_totals() == {
-        "trial_count": 9,
-        "requests": 193,
-        "tokens": 5314621,
-        "cost_usd": pytest.approx(0.2316014456),
+        "trial_count": 12,
+        "requests": 284,
+        "tokens": 8464694,
+        "cost_usd": pytest.approx(0.3074109752),
     }
     assert any("benchmark estimate" in note for note in ledger.notes)
 

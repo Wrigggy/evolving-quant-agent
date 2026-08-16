@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "2026-08-13 through 2026-08-14 QuantCodeEval component search canaries",
+  "scope": "2026-08-13 through 2026-08-16 QuantCodeEval component search canaries",
   "components": [
     {
       "component_id": "declarative_quant_invariant",
@@ -53,6 +53,16 @@
         "recovery_directive_injection"
       ],
       "description": "Catch empty model-response exceptions at the reachable model-call wrapper, inject a short completion directive, and retry within a fixed local budget."
+    },
+    {
+      "component_id": "clause_semantic_revision_loop",
+      "origin": "evolver_discovered",
+      "capabilities": [
+        "public_clause_audit",
+        "post_revision_recheck",
+        "independent_semantic_validation"
+      ],
+      "description": "Register an independent public-clause checker and require the Worker to audit and revise its implementation before finalization."
     }
   ],
   "hypotheses": [
@@ -126,6 +136,20 @@
       ],
       "protection_task_ids": [
         "T16"
+      ]
+    },
+    {
+      "hypothesis_id": "independent_clause_semantic_revision_loop",
+      "component_ids": [
+        "clause_semantic_revision_loop"
+      ],
+      "evidence_gap": "T26 H0 produced all required functions but used only two late self-written invariant checks and passed 13 of 17 properties.",
+      "expected_worker_change": "The Worker should call an independently registered public-clause audit after implementation revisions, consume its findings, and improve property completion without damaging a solved protection task.",
+      "target_task_ids": [
+        "T26"
+      ],
+      "protection_task_ids": [
+        "T19"
       ]
     }
   ],
@@ -338,6 +362,72 @@
       "tokens": 1554118,
       "cost_usd": 0.0667760408,
       "observation": "The reachable wrapper caught two consecutive 32000-reasoning-token empty-response exceptions and the third call continued to a delivered strategy.py and official evaluation. The endpoint audit also ran, but T24 regressed to Type A 5/7 and Type B 6/10; delivery recovery is directly supported while the benchmark composition is unsupported."
+    },
+    {
+      "run_id": "breadth-qce-t26-candidate-20260816-r1",
+      "hypothesis_id": "independent_clause_semantic_revision_loop",
+      "task_id": "T26",
+      "role": "target",
+      "available_components": [
+        "clause_semantic_revision_loop"
+      ],
+      "selected_components": [
+        "clause_semantic_revision_loop"
+      ],
+      "activated_components": [
+        "clause_semantic_revision_loop"
+      ],
+      "official_reward": 0,
+      "properties_passed": 14,
+      "properties_total": 17,
+      "requests": 34,
+      "tokens": 1289295,
+      "cost_usd": 0.0313506088,
+      "observation": "The Worker invoked the independent checker three times and revised its code between audits. T26 improved from H0 13/17 to 14/17, with Type A increasing from 5/7 to 6/7 while Type B remained 8/10; binary reward stayed zero."
+    },
+    {
+      "run_id": "breadth-qce-t26-candidate-20260816-r2",
+      "hypothesis_id": "independent_clause_semantic_revision_loop",
+      "task_id": "T26",
+      "role": "repeat",
+      "available_components": [
+        "clause_semantic_revision_loop"
+      ],
+      "selected_components": [
+        "clause_semantic_revision_loop"
+      ],
+      "activated_components": [
+        "clause_semantic_revision_loop"
+      ],
+      "official_reward": 0,
+      "properties_passed": 12,
+      "properties_total": 17,
+      "requests": 32,
+      "tokens": 1333000,
+      "cost_usd": 0.0263097184,
+      "observation": "The independent repeat again invoked the checker three times but regressed to 12/17, below H0. The one-property target gain is not stable."
+    },
+    {
+      "run_id": "breadth-qce-t19-protection-20260816-r1",
+      "hypothesis_id": "independent_clause_semantic_revision_loop",
+      "task_id": "T19",
+      "role": "protection",
+      "available_components": [
+        "clause_semantic_revision_loop"
+      ],
+      "selected_components": [
+        "clause_semantic_revision_loop"
+      ],
+      "activated_components": [
+        "clause_semantic_revision_loop"
+      ],
+      "official_reward": 1,
+      "properties_passed": 18,
+      "properties_total": 18,
+      "requests": 25,
+      "tokens": 527778,
+      "cost_usd": 0.0181492024,
+      "observation": "T19 improved from its prior shell-only 16/18 to 18/18 even though the T26-specific checker reported two irrelevant failures on every audit. The protection success therefore supports the broader revision workflow, not the task-specific static assertions alone."
     }
   ],
   "notes": [
@@ -349,6 +439,7 @@
     "The Evolver autonomously discovered and activated warmup-boundary arbitration on T18, but the unchanged 16/18 score rules out that intervention as a sufficient explanation; percentile and early-NaN alternatives remain unresolved.",
     "The Evolver autonomously discovered and smoke-tested window-endpoint consistency for T24, but two terminal empty-response attempts produced no artifact. Its standalone benchmark status remains unmeasured.",
     "A later Evolver-discovered wrap-model-call recovery caught the exact repeated empty-response failure twice and delivered an officially evaluated artifact. The composed T24 Worker nevertheless regressed to 11/17, so process recovery and benchmark benefit must be interpreted separately.",
-    "The regressed Worker artifact repeatedly applied a non-idempotent percent-to-decimal transform as data flowed across components. A unit-state or transformation-lifecycle component is the next hypothesis, but it has not yet been autonomously selected or tested and is therefore not registered as a measured component."
+    "The regressed Worker artifact repeatedly applied a non-idempotent percent-to-decimal transform as data flowed across components. A unit-state or transformation-lifecycle component is the next hypothesis, but it has not yet been autonomously selected or tested and is therefore not registered as a measured component.",
+    "The T26 breadth Evolver autonomously created and activated a clause-semantic revision loop. Its target evidence is mixed at the property level (14/17 then 12/17 versus 13/17 H0), while T19 improved from 16/18 to 18/18 despite task-mismatched checker failures. The next experiment must ablate the task-specific checker from the general revision workflow before assigning causal credit."
   ]
 }
