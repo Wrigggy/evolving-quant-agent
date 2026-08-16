@@ -8,6 +8,11 @@
 
 **Search level:** A — reusable transfer
 
+**Transfer-task amendment:** T27 is an unconfirmed transfer candidate until its
+blind H0 demonstrates a failure mechanism matched to the evolved T26 component.
+See
+[`2026-08-16-t26-failure-family-transfer-gate.md`](2026-08-16-t26-failure-family-transfer-gate.md).
+
 ## Question
 
 Can the Evolver use answer-bearing, item-level T26 diagnostics to convert a
@@ -105,17 +110,21 @@ not a new defensive subsystem.
    exceeds 13/17.
 6. Run T19 answer-free protection with unchanged code. Continue only if it
    preserves the current 18/18 reference result.
-7. Measure T27 transfer with one shell-only H0 Worker and one unchanged-code
-   candidate Worker under the same task/model/budget setup. Do not expose T27
-   answers to the Evolver before this comparison.
+7. Run one T27 shell-only H0 Worker and apply the predeclared failure-family
+   eligibility gate. Run the unchanged-code candidate Worker only when the T27
+   H0 failure matches the component's T26 mechanism. Do not expose T27 answers
+   to the Evolver before this comparison. If the failure is unrelated, stop and
+   select another task with a measured matching H0 failure.
 
 If the first T26 result improves but the repeat does not, retain the candidate
 as an unstable optimization branch and do not spend T19/T27 calls. If T27 is
 used to guide another edit, relabel it development/protection data from that
 point onward.
 
-The T27 official golden 18/18 setup check is not a Worker baseline. A matched
-shell-only Worker attempt is required before interpreting candidate transfer.
+The T27 official golden 18/18 setup check is not a Worker baseline. A blind H0
+is required both to establish the Worker baseline and to confirm that T27 is
+eligible to test the same failure mechanism. Sharing a benchmark or generic
+property family is insufficient.
 
 ## Outcomes
 

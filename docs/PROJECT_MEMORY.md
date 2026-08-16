@@ -2121,6 +2121,26 @@ is at most six model executions with a proposed $0.25 cap. No paid run has been
 launched or authorized by this documentation update. See
 `docs/decisions/2026-08-16-t26-answer-rich-evolver-experiment-design.md`.
 
+**Matched failure-family gate added on 2026-08-16:** improvement outside T26
+counts as positive component transfer only when the source and destination H0
+failures share a mechanism on which the same task-conditioned component can
+act. Match on semantic primitive or state, pipeline phase, and observable;
+benchmark membership, finance topic, Type A/Type B, or the generic A10 label is
+not sufficient. T26's observed H0 failures cover training/CV temporal scope,
+HJ-objective semantics, and end-to-end reconciliation. T19's observed H0
+failures cover volatility-normalization semantics and end-to-end
+reconciliation, so it matches only a broader formula/scale reconciliation
+component, not an HJ-specific repair.
+
+T27 is source-compatible with temporal and end-to-end mechanisms, but it has no
+blind Worker H0; the golden 18/18 result is only a setup check. The planned T27
+H0 now acts as an eligibility gate. Run the unchanged candidate only if its
+observed H0 failure matches the predeclared T26 component mechanism; otherwise
+stop and choose another task with a measured matching H0 failure. An unrelated
+task may still be protection evidence, but preserving it is not positive
+transfer. See
+`docs/decisions/2026-08-16-t26-failure-family-transfer-gate.md`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
