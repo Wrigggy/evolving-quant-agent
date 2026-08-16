@@ -616,6 +616,7 @@ def test_discovery_pilot_missing_terminal_decision_never_reaches_admission(
     monkeypatch.setattr(pilot, "admit_candidate", forbidden_admission)
     assert pilot._terminal_decision({}) is None
     assert pilot._terminal_decision({"decision": "continue"}) is None
+    assert pilot._terminal_decision({}, {"decision": "ABSTAIN"}) == "ABSTAIN"
 
     admission = pilot._candidate_admission(
         decision=None,

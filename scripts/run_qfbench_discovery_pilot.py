@@ -123,14 +123,19 @@ def _diagnosis(evidence_root: Path, arm: str) -> dict[str, object]:
     }
 
 
-def _terminal_decision(discovery_state: Mapping[str, object]) -> str | None:
-    """Return only an explicitly recorded valid terminal decision."""
+def _terminal_decision(
+    discovery_state: Mapping[str, object],
+    prediction: Mapping[str, object] | None = None,
+) -> str | None:
+    """Return an explicitly recorded decision from either terminal artifact."""
 
-    raw = discovery_state.get("decision")
-    if not isinstance(raw, str):
-        return None
-    decision = raw.strip().upper()
-    return decision if decision in {"ACT", "ABSTAIN"} else None
+    for record in (discovery_state, prediction or {}):
+        raw = record.get("decision")
+        if isinstance(raw, str):
+            decision = raw.strip().upper()
+            if decision in {"ACT", "ABSTAIN"}:
+                return decision
+    return None
 
 
 def _candidate_admission(
@@ -611,7 +616,8 @@ def main(argv: list[str] | None = None) -> int:
         discovery_state = (
             dict(discovery_state) if isinstance(discovery_state, Mapping) else {}
         )
-        decision = _terminal_decision(discovery_state)
+        prediction = _json(proposal.prediction_uri)
+        decision = _terminal_decision(discovery_state, prediction)
         hypothesis = discovery_state.get("hypothesis")
         hypothesis = dict(hypothesis) if isinstance(hypothesis, Mapping) else {}
         declared_roles = hypothesis.get("components")
@@ -636,7 +642,7 @@ def main(argv: list[str] | None = None) -> int:
             "candidate_digest": proposal.candidate_digest,
             "admission": admission,
             "diff": dir_unified_diff(backbone, proposal.candidate_dir),
-            "prediction": _json(proposal.prediction_uri),
+            "prediction": prediction,
             "access_summary": _json(proposal.access_summary_uri),
             "summary": proposal_summary,
             "mutation_metrics": mutation_metrics,
