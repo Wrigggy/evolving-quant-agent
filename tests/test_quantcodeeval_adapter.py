@@ -1,5 +1,6 @@
 import hashlib
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -243,6 +244,25 @@ def test_task_panel_can_select_a_pinned_public_task_without_a_new_oracle_hash(
     assert snapshot.optimize.task_ids == ("T16",)
     assert snapshot.task("T16").domain == "panel_override"
     assert (trusted / "tasks/T16/tests/golden_ref.py").is_file()
+
+
+def test_materializer_accepts_preflighted_engineering_source_without_git(tmp_path):
+    from qea.benchmarks.quantcodeeval import materialize_quantcodeeval_role_snapshot
+
+    source, commit, track_sha = _source_fixture(tmp_path)
+    manifest = _manifest(tmp_path, commit, track_sha)
+    shutil.rmtree(source / ".git")
+
+    materialize_quantcodeeval_role_snapshot(
+        source,
+        tmp_path / "public-engineering",
+        tmp_path / "trusted-engineering",
+        manifest_path=manifest,
+        engineering_source=True,
+    )
+
+    assert (tmp_path / "public-engineering/tasks/T16/instruction.md").is_file()
+    assert (tmp_path / "trusted-engineering/tasks/T16/tests/test.sh").is_file()
 
 
 def test_official_runner_without_traceback_patch_point_is_preserved(tmp_path):

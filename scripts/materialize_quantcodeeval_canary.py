@@ -32,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="optional public-task panel overriding the default T16/T24 canary",
     )
+    parser.add_argument(
+        "--engineering-source",
+        action="store_true",
+        help="accept a preflighted public-mirror directory without Git metadata",
+    )
     return parser
 
 
@@ -44,6 +49,7 @@ def main(argv: list[str] | None = None) -> int:
         manifest_path=args.manifest,
         trusted_oracle_root=args.trusted_oracle_root,
         task_panel_path=args.task_panel,
+        engineering_source=args.engineering_source,
     )
     print(f"public role:  {result.public_root}")
     print(f"trusted role: {result.trusted_root}")

@@ -585,6 +585,7 @@ def materialize_quantcodeeval_role_snapshot(
     manifest_path: str | Path | None = None,
     trusted_oracle_root: str | Path | None = None,
     task_panel_path: str | Path | None = None,
+    engineering_source: bool = False,
 ) -> QuantCodeEvalRoleSnapshotResult:
     """Create disjoint public and verifier-only roots from a pinned checkout."""
 
@@ -592,7 +593,7 @@ def materialize_quantcodeeval_role_snapshot(
     protocol = _load_protocol_manifest(
         Path(manifest_path or default_manifest_path()).expanduser().resolve()
     )
-    revision = _source_revision(source)
+    revision = protocol["commit"] if engineering_source else _source_revision(source)
     if revision != protocol["commit"]:
         raise QuantCodeEvalConfigError(
             f"source commit mismatch: expected {protocol['commit']}, found {revision}"
@@ -642,10 +643,11 @@ def materialize_quantcodeeval_role_snapshot(
         descriptor = source_task / "data" / "data_descriptor.json"
         if descriptor.is_file():
             consumed_source_paths.append(descriptor)
-    _require_pinned_source_paths(source, tuple(consumed_source_paths))
-    if _source_revision(oracle_root) != revision:
-        raise QuantCodeEvalConfigError("trusted oracle checkout revision mismatch")
-    _require_pinned_source_paths(oracle_root, tuple(consumed_oracle_paths))
+    if not engineering_source:
+        _require_pinned_source_paths(source, tuple(consumed_source_paths))
+        if _source_revision(oracle_root) != revision:
+            raise QuantCodeEvalConfigError("trusted oracle checkout revision mismatch")
+        _require_pinned_source_paths(oracle_root, tuple(consumed_oracle_paths))
 
     public_target = Path(public_root).expanduser().resolve()
     trusted_target = Path(trusted_root).expanduser().resolve()

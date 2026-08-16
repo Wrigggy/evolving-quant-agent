@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "name": "cross-benchmark-breadth",
+  "optimize": [
+    {
+      "task_id": "T26",
+      "domain": "machine_learning_asset_pricing",
+      "lineage": "hj-distance-machine-learning-factor-models",
+      "difficulty": "paper_reproduction",
+      "reward_kind": "binary_all_properties",
+      "agent_timeout_seconds": 3600,
+      "verifier_timeout_seconds": 3600,
+      "build_timeout_seconds": 900,
+      "cpus": 2,
+      "memory_mb": 4096
+    },
+    {
+      "task_id": "T27",
+      "domain": "return_predictability",
+      "lineage": "equity-premium-prediction-combination",
+      "difficulty": "paper_reproduction",
+      "reward_kind": "binary_all_properties",
+      "agent_timeout_seconds": 3600,
+      "verifier_timeout_seconds": 3600,
+      "build_timeout_seconds": 900,
+      "cpus": 2,
+      "memory_mb": 4096
+    }
+  ],
+  "held_out": []
+}
