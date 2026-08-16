@@ -294,3 +294,57 @@ def test_builds_matched_task_only_and_history_enabled_views(tmp_path):
         assert catalog["tasks"][0]["task_key"] == (
             "qfbench:swap-curve-bootstrap-ois"
         )
+
+
+def test_quantcodeeval_answer_rich_view_is_evolver_only(tmp_path):
+    corpus = tmp_path / "breadth"
+    build_cross_benchmark_experience(
+        destination=corpus,
+        task_profiles=(
+            {
+                "benchmark": "quantcodeeval",
+                "task_id": "T26",
+                "role": "target",
+                "state_tags": ["formula_semantics", "temporal_state"],
+            },
+        ),
+        component_ledger_path=LEDGER,
+        quantcodeeval_evidence_root=_quantcodeeval_evidence(tmp_path),
+    )
+    diagnostic = tmp_path / "optimization-diagnostic.json"
+    _write(
+        diagnostic,
+        {
+            "schema_version": 1,
+            "task_id": "T26",
+            "feedback_mode": "answer_rich_evolver",
+            "visibility": "evolver_only",
+            "worker_visible": False,
+            "rubric_items": [{"property_id": "B5", "expected_behavior": "HJ"}],
+        },
+    )
+
+    result = build_breadth_evolver_view(
+        corpus_root=corpus,
+        destination=tmp_path / "answer-rich",
+        task_key="quantcodeeval:T26",
+        include_component_history=True,
+        optimization_diagnostic_path=diagnostic,
+    )
+
+    projected = tmp_path / "answer-rich"
+    contract = json.loads((projected / "contract.json").read_text())
+    catalog = json.loads((projected / "tasks/CATALOG.json").read_text())
+    diagnostic_path = (
+        projected
+        / "benchmarks/quantcodeeval/tasks/T26/optimization-diagnostic.json"
+    )
+    assert result["evolver_feedback_mode"] == "answer_rich_evolver"
+    assert contract["decision_protocol"] == "quant_property_v2"
+    assert contract["feedback_tier"] == "answer_rich_optimization_v1"
+    assert contract["failure_signature_required_for_act"] is True
+    assert contract["optimization_answers_exposed_to_evolver"] is True
+    assert contract["optimization_answers_exposed_to_worker"] is False
+    assert catalog["tasks"][0]["feedback_mode"] == "answer_rich_evolver"
+    assert diagnostic_path.is_file()
+    assert not list(corpus.rglob("optimization-diagnostic.json"))

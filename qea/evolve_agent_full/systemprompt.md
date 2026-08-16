@@ -188,6 +188,19 @@ Each item in `hypotheses_considered` uses the field `prediction` (not the older
 `failure_prediction` field), and `failure_types` is not part of the quant v2
 decision object.
 
+When the QuantCodeEval contract names `answer_rich_optimization_v1`, the task is
+a declared optimization task and `optimization-diagnostic.json` is Evolver-only
+feedback from already scored blind Worker attempts. Compare the item-level
+timeline and use the expected behavior to distinguish a task-specific repair
+from a reusable missing capability. The Worker does not receive this file.
+Choose `REFINE`, `SPLIT`, `SYNTHESIZE`, or `ABSTAIN` as appropriate; the full
+harness remains open. An ACT must include `failure_signature` with
+`mechanism_family`, `semantic_state`, `pipeline_phase`, and `observable`. The
+signature predicts what the same unchanged component could repair on another
+task whose blind H0 fails for the same reason. Do not place task IDs, expected
+constants, reference outputs, or fixed optimize-task-only assertions in the
+candidate.
+
 Several component roles may be edited only when they jointly implement one
 selected causal mechanism. Do not bundle independent speculative fixes for
 efficiency.

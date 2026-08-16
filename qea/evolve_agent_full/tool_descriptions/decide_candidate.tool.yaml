@@ -19,7 +19,7 @@ input_schema:
           description: Optional extensible finance, data, execution, or runtime tags grounded in the inspected evidence.
         search_operator:
           type: string
-          enum: [CONTINUE, REUSE, REVERT, FUSE, COMPOSE, SYNTHESIZE, ROUTE, NEW_PROBE]
+          enum: [CONTINUE, REUSE, REFINE, REVERT, FUSE, COMPOSE, SYNTHESIZE, SPLIT, ROUTE, NEW_PROBE]
           description: How this intervention relates to prior experience; defaults to NEW_PROBE for older decisions.
         breakdown_stage:
           type: string
@@ -112,6 +112,16 @@ input_schema:
           type: string
           description: Required when QuantCodeEval v2 evidence justifies a primary component outside the failure-class routing prior.
         prediction: {}
+        failure_signature:
+          type: object
+          description: Required for answer-rich QuantCodeEval ACT. Describe the reusable failure mechanism to test on another blind-H0 task; do not copy the optimize-task answer.
+          properties:
+            mechanism_family: {type: string}
+            semantic_state: {type: string}
+            pipeline_phase: {type: string}
+            observable: {type: string}
+          required: [mechanism_family, semantic_state, pipeline_phase, observable]
+          additionalProperties: true
         risk_tasks:
           type: array
           items: {type: string}

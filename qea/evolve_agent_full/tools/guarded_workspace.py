@@ -1509,7 +1509,11 @@ def _decide_quant_property_candidate(
 ) -> dict[str, Any]:
     """Record a QuantCodeEval v2 decision without requiring cross-task failures."""
 
-    if contract.get("feedback_tier") != "answer_free_property_family_v2":
+    feedback_tier = contract.get("feedback_tier")
+    if feedback_tier not in {
+        "answer_free_property_family_v2",
+        "answer_rich_optimization_v1",
+    }:
         raise GuardedWorkspaceError("unsupported QuantCodeEval feedback tier")
     decision = _text(discovery.get("decision"), label="decision").upper()
     if decision not in {"ACT", "ABSTAIN"}:
@@ -1616,10 +1620,12 @@ def _decide_quant_property_candidate(
     if normalized["search_operator"] not in {
         "CONTINUE",
         "REUSE",
+        "REFINE",
         "REVERT",
         "FUSE",
         "COMPOSE",
         "SYNTHESIZE",
+        "SPLIT",
         "ROUTE",
         "NEW_PROBE",
     }:
@@ -1741,6 +1747,23 @@ def _decide_quant_property_candidate(
         if not isinstance(prediction, (str, list, Mapping)) or not prediction:
             raise GuardedWorkspaceError("ACT requires a falsifiable prediction")
         normalized["prediction"] = prediction
+        if contract.get("failure_signature_required_for_act") is True:
+            raw_signature = discovery.get("failure_signature")
+            if not isinstance(raw_signature, Mapping):
+                raise GuardedWorkspaceError(
+                    "ACT requires a matched-family failure_signature"
+                )
+            signature = dict(raw_signature)
+            for field in (
+                "mechanism_family",
+                "semantic_state",
+                "pipeline_phase",
+                "observable",
+            ):
+                signature[field] = _text(
+                    raw_signature.get(field), label=f"failure_signature.{field}"
+                )
+            normalized["failure_signature"] = signature
         normalized["risk_tasks"] = _text_list(
             discovery.get("risk_tasks", []), label="risk_tasks"
         )
@@ -1804,6 +1827,7 @@ def _decide_quant_property_candidate(
         "failure_class": failure_class,
         "primary_components": primary_components,
         "components": components,
+        "failure_signature": normalized.get("failure_signature"),
     }
 
 

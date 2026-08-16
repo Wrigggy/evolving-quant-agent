@@ -486,8 +486,9 @@ def build_breadth_evolver_view(
     destination: str | Path,
     task_key: str,
     include_component_history: bool,
+    optimization_diagnostic_path: str | Path | None = None,
 ) -> dict[str, object]:
-    """Select one task and optionally its retrieved component history."""
+    """Select one task, history, and optional Evolver-only optimization feedback."""
 
     source = Path(corpus_root).expanduser().resolve()
     target = Path(destination).expanduser().resolve()
@@ -508,6 +509,35 @@ def build_breadth_evolver_view(
     benchmark = str(card["benchmark"])
     task_id = str(card["task_id"])
     arm = "history-enabled" if include_component_history else "task-only"
+    diagnostic: dict[str, object] | None = None
+    if optimization_diagnostic_path is not None:
+        if benchmark != "quantcodeeval":
+            raise ComponentExperienceError(
+                "answer-rich optimization feedback is only configured for QuantCodeEval"
+            )
+        diagnostic = _json(
+            Path(optimization_diagnostic_path).expanduser().resolve(),
+            label="optimization diagnostic",
+        )
+        if diagnostic.get("task_id") != task_id:
+            raise ComponentExperienceError(
+                "optimization diagnostic task does not match the selected task"
+            )
+        if diagnostic.get("feedback_mode") != "answer_rich_evolver":
+            raise ComponentExperienceError(
+                "optimization diagnostic has the wrong feedback mode"
+            )
+        if diagnostic.get("worker_visible") is not False:
+            raise ComponentExperienceError(
+                "optimization diagnostic must be marked Evolver-only"
+            )
+        card["feedback_mode"] = "answer_rich_evolver"
+        card["evolver_only_evidence_paths"] = {
+            "optimization_diagnostic": (
+                f"benchmarks/quantcodeeval/tasks/{task_id}/"
+                "optimization-diagnostic.json"
+            )
+        }
 
     target.mkdir(parents=True)
     (target / "access_log.jsonl").write_text("", encoding="utf-8")
@@ -523,6 +553,16 @@ def build_breadth_evolver_view(
         source / "benchmarks" / benchmark / "tasks" / task_id,
         target / "benchmarks" / benchmark / "tasks" / task_id,
     )
+    if diagnostic is not None:
+        _write_json(
+            target
+            / "benchmarks"
+            / "quantcodeeval"
+            / "tasks"
+            / task_id
+            / "optimization-diagnostic.json",
+            diagnostic,
+        )
 
     relevant_rows: list[dict[str, object]] = []
     if include_component_history:
@@ -570,6 +610,41 @@ def build_breadth_evolver_view(
             " This arm intentionally contains no prior component catalog; infer the "
             "component from the current task runtime evidence alone."
         )
+    if diagnostic is not None:
+        instruction += (
+            " This is a declared answer-rich optimization task. Read the Evolver-only "
+            "optimization diagnostic, compare all retained attempts item by item, and "
+            "separate the task-specific answer from a reusable missing capability. "
+            "Choose REFINE, SPLIT, SYNTHESIZE, or ABSTAIN. For ACT, record a compact "
+            "failure signature naming the mechanism family, semantic state, pipeline "
+            "phase, and observable that an unchanged component could test elsewhere. "
+            "Never copy task answers, expected constants, or fixed task-only assertions "
+            "into the reusable candidate."
+        )
+    quant_contract: dict[str, object] = {}
+    if benchmark == "quantcodeeval":
+        quant_contract = {
+            "benchmark": "quantcodeeval",
+            "decision_protocol": "quant_property_v2",
+            "feedback_tier": (
+                "answer_rich_optimization_v1"
+                if diagnostic is not None
+                else "answer_free_property_family_v2"
+            ),
+            "task_ids": [task_id],
+            "target_task_ids": [task_id],
+            "protection_task_ids": [],
+            "history_required": False,
+            "max_primary_components": 2,
+            "max_declared_components": 9,
+            "quant_failure_classification_required_for_act": False,
+            "domain_tags_are_extensible": True,
+            "failure_signature_required_for_act": diagnostic is not None,
+            "optimization_answers_exposed_to_evolver": diagnostic is not None,
+            "optimization_answers_exposed_to_worker": False,
+            "worker_feedback_mode": "blind_public_task",
+            "oracle_fields_exposed": diagnostic is not None,
+        }
     _write_json(
         target / "contract.json",
         {
@@ -577,10 +652,20 @@ def build_breadth_evolver_view(
             "stage": "BREADTH",
             "contract_arm": arm,
             "task_key": task_key,
-            "answer_free": True,
+            "answer_free": diagnostic is None,
             "component_history_enabled": include_component_history,
+            "evolver_feedback_mode": (
+                "answer_rich_evolver" if diagnostic is not None else "answer_free"
+            ),
+            "optimization_diagnostic": (
+                f"benchmarks/quantcodeeval/tasks/{task_id}/"
+                "optimization-diagnostic.json"
+                if diagnostic is not None
+                else None
+            ),
             "evolver_instruction": instruction,
             "worker_evaluation_in_this_stage": False,
+            **quant_contract,
         },
     )
     return {
@@ -589,6 +674,9 @@ def build_breadth_evolver_view(
         "task_key": task_key,
         "arm": arm,
         "component_history_enabled": include_component_history,
+        "evolver_feedback_mode": (
+            "answer_rich_evolver" if diagnostic is not None else "answer_free"
+        ),
         "retrieved_component_count": sum(
             len(row.get("components", []))
             for row in relevant_rows

@@ -1012,7 +1012,9 @@ def test_quant_v2_accepts_extensible_domain_tags_and_experience_operator(
     assert result["failure_class"] == "unclassified"
 
 
-@pytest.mark.parametrize("operator", ["COMPOSE", "SYNTHESIZE", "ROUTE"])
+@pytest.mark.parametrize(
+    "operator", ["REFINE", "SPLIT", "COMPOSE", "SYNTHESIZE", "ROUTE"]
+)
 def test_quant_v2_accepts_component_search_operators(guarded_roots, operator):
     from qea.evolve_agent_full.tools.guarded_workspace import (
         decide_candidate,
@@ -1034,6 +1036,45 @@ def test_quant_v2_accepts_component_search_operators(guarded_roots, operator):
 
     assert result["decision"] == "ACT"
     assert state["hypothesis"]["search_operator"] == operator
+
+
+def test_answer_rich_quant_act_requires_transferable_failure_signature(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_flexible_quant_v2_contract(evidence, history_required=False)
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["feedback_tier"] = "answer_rich_optimization_v1"
+    contract["failure_signature_required_for_act"] = True
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    decision["search_operator"] = "SPLIT"
+
+    with pytest.raises(GuardedWorkspaceError, match="failure_signature"):
+        decide_candidate(discovery=decision)
+
+    decision["failure_signature"] = {
+        "mechanism_family": "task_conditioned_formula_reconciliation",
+        "semantic_state": "public formula and unit state",
+        "pipeline_phase": "estimation through final reconciliation",
+        "observable": "intermediate formula and final metrics disagree",
+    }
+    result = decide_candidate(discovery=decision)
+
+    assert result["decision"] == "ACT"
+    assert result["failure_signature"]["mechanism_family"] == (
+        "task_conditioned_formula_reconciliation"
+    )
 
 
 def test_failure_type_probe_can_unlock_two_declared_components(guarded_roots):

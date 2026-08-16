@@ -22,12 +22,18 @@ def main() -> int:
     parser.add_argument(
         "--arm", choices=("task-only", "history-enabled"), required=True
     )
+    parser.add_argument(
+        "--optimization-diagnostic",
+        type=Path,
+        help="optional Evolver-only answer-rich diagnostic for a QuantCodeEval task",
+    )
     args = parser.parse_args()
     result = build_breadth_evolver_view(
         corpus_root=args.corpus,
         destination=args.destination,
         task_key=args.task_key,
         include_component_history=args.arm == "history-enabled",
+        optimization_diagnostic_path=args.optimization_diagnostic,
     )
     print(json.dumps(result, sort_keys=True))
     return 0
