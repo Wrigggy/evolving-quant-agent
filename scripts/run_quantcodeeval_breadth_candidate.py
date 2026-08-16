@@ -63,7 +63,13 @@ def main() -> int:
     if not isinstance(hypothesis, dict):
         raise ValueError("breadth discovery hypothesis is missing")
     mechanism = hypothesis.get("selected_mechanism")
+    if not isinstance(mechanism, str) or not mechanism.strip():
+        mechanism = hypothesis.get("search_operator")
     primary = hypothesis.get("component")
+    if not isinstance(primary, str) or not primary.strip():
+        primary_components = hypothesis.get("primary_components")
+        if isinstance(primary_components, list) and primary_components:
+            primary = primary_components[0]
     if not isinstance(mechanism, str) or not isinstance(primary, str):
         raise ValueError("breadth discovery component mechanism is missing")
     metrics = proposal.get("mutation_metrics")
