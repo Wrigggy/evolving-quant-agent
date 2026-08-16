@@ -77,6 +77,8 @@ def _latest_progress(run_dir: Path) -> tuple[int, int, int, float | None]:
         "pilot-report.json",
         "H0-PREFLIGHT.json",
         "H0-RESULT.json",
+        "FULL-CANDIDATE-PREFLIGHT.json",
+        "FULL-CANDIDATE-RESULT.json",
     ):
         path = run_dir / name
         if path.is_file():
@@ -87,7 +89,11 @@ def _latest_progress(run_dir: Path) -> tuple[int, int, int, float | None]:
 
 
 def _complete(run_dir: Path) -> bool:
-    for name in ("pilot-report.json", "H0-RESULT.json"):
+    for name in (
+        "pilot-report.json",
+        "H0-RESULT.json",
+        "FULL-CANDIDATE-RESULT.json",
+    ):
         report = run_dir / name
         if not report.is_file():
             continue
