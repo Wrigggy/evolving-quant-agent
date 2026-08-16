@@ -37,6 +37,24 @@ def test_health_is_healthy_then_complete(tmp_path, monkeypatch):
     assert complete["needs_codex"] is False
 
 
+def test_health_recognizes_quantcodeeval_h0_result(tmp_path, monkeypatch):
+    from scripts.watch_qfbench_component_pilot import build_health
+
+    _state(
+        monkeypatch,
+        ActiveState="inactive",
+        SubState="dead",
+    )
+    (tmp_path / "H0-RESULT.json").write_text(
+        json.dumps({"status": "complete"}) + "\n"
+    )
+
+    health = build_health(run_id="qce-h0", unit="qea-qce-h0.service", run_dir=tmp_path)
+
+    assert health["category"] == "complete"
+    assert health["needs_codex"] is False
+
+
 def test_health_alerts_after_bounded_restart_budget(tmp_path, monkeypatch):
     from scripts.watch_qfbench_component_pilot import build_health
 

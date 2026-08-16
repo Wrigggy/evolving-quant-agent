@@ -71,7 +71,13 @@ def _latest_progress(run_dir: Path) -> tuple[int, int, int, float | None]:
     progress = scores + workers + replacements
     progress.extend(run_dir.glob("attempts/*/proxy-audit.jsonl"))
     progress.extend(run_dir.glob("lifecycles/**/*.json"))
-    for name in ("pilot-plan.json", "pilot-progress.json", "pilot-report.json"):
+    for name in (
+        "pilot-plan.json",
+        "pilot-progress.json",
+        "pilot-report.json",
+        "H0-PREFLIGHT.json",
+        "H0-RESULT.json",
+    ):
         path = run_dir / name
         if path.is_file():
             progress.append(path)
@@ -81,14 +87,17 @@ def _latest_progress(run_dir: Path) -> tuple[int, int, int, float | None]:
 
 
 def _complete(run_dir: Path) -> bool:
-    report = run_dir / "pilot-report.json"
-    if not report.is_file():
-        return False
-    try:
-        payload = json.loads(report.read_text())
-    except (OSError, json.JSONDecodeError):
-        return False
-    return payload.get("status") == "complete"
+    for name in ("pilot-report.json", "H0-RESULT.json"):
+        report = run_dir / name
+        if not report.is_file():
+            continue
+        try:
+            payload = json.loads(report.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if payload.get("status") == "complete":
+            return True
+    return False
 
 
 def build_health(*, run_id: str, unit: str, run_dir: Path) -> dict[str, object]:
