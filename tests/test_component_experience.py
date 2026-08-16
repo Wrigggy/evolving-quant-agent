@@ -5,6 +5,7 @@ import pytest
 
 from qea.component_experience import (
     ComponentExperienceError,
+    build_breadth_evolver_view,
     build_cross_benchmark_experience,
 )
 
@@ -246,3 +247,49 @@ def test_missing_benchmark_task_stops_before_materialization(tmp_path):
             qfbench_evidence_root=_qfbench_evidence(tmp_path),
         )
     assert not (tmp_path / "breadth").exists()
+
+
+def test_builds_matched_task_only_and_history_enabled_views(tmp_path):
+    corpus = tmp_path / "breadth"
+    build_cross_benchmark_experience(
+        destination=corpus,
+        task_profiles=(
+            {
+                "benchmark": "qfbench",
+                "task_id": "swap-curve-bootstrap-ois",
+                "role": "target",
+                "state_tags": ["public_semantic", "quantity"],
+            },
+        ),
+        component_ledger_path=LEDGER,
+        qfbench_evidence_root=_qfbench_evidence(tmp_path),
+    )
+
+    task_only = build_breadth_evolver_view(
+        corpus_root=corpus,
+        destination=tmp_path / "task-only",
+        task_key="qfbench:swap-curve-bootstrap-ois",
+        include_component_history=False,
+    )
+    history = build_breadth_evolver_view(
+        corpus_root=corpus,
+        destination=tmp_path / "history",
+        task_key="qfbench:swap-curve-bootstrap-ois",
+        include_component_history=True,
+    )
+
+    assert task_only["retrieved_component_count"] == 0
+    assert history["retrieved_component_count"] > 0
+    assert not (tmp_path / "task-only/components").exists()
+    assert (tmp_path / "history/components/CATALOG.json").is_file()
+    for root, enabled in (
+        (tmp_path / "task-only", False),
+        (tmp_path / "history", True),
+    ):
+        contract = json.loads((root / "contract.json").read_text())
+        catalog = json.loads((root / "tasks/CATALOG.json").read_text())
+        assert contract["component_history_enabled"] is enabled
+        assert catalog["task_count"] == 1
+        assert catalog["tasks"][0]["task_key"] == (
+            "qfbench:swap-curve-bootstrap-ois"
+        )

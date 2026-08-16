@@ -480,7 +480,124 @@ def build_cross_benchmark_experience(
         raise
 
 
+def build_breadth_evolver_view(
+    *,
+    corpus_root: str | Path,
+    destination: str | Path,
+    task_key: str,
+    include_component_history: bool,
+) -> dict[str, object]:
+    """Select one task and optionally its retrieved component history."""
+
+    source = Path(corpus_root).expanduser().resolve()
+    target = Path(destination).expanduser().resolve()
+    if target.exists():
+        raise ComponentExperienceError(f"destination already exists: {target}")
+    task_catalog = _json(source / "tasks/CATALOG.json", label="task catalog")
+    raw_tasks = task_catalog.get("tasks")
+    if not isinstance(raw_tasks, list):
+        raise ComponentExperienceError("task catalog has no task list")
+    matches = [
+        row
+        for row in raw_tasks
+        if isinstance(row, Mapping) and row.get("task_key") == task_key
+    ]
+    if len(matches) != 1:
+        raise ComponentExperienceError(f"corpus has no unique task {task_key}")
+    card = dict(matches[0])
+    benchmark = str(card["benchmark"])
+    task_id = str(card["task_id"])
+    arm = "history-enabled" if include_component_history else "task-only"
+
+    target.mkdir(parents=True)
+    _write_json(
+        target / "tasks/CATALOG.json",
+        {"schema_version": 1, "task_count": 1, "tasks": [card]},
+    )
+    _write_json(
+        target / "tasks/cards" / f"{benchmark}--{task_id}.json",
+        card,
+    )
+    _copy_tree(
+        source / "benchmarks" / benchmark / "tasks" / task_id,
+        target / "benchmarks" / benchmark / "tasks" / task_id,
+    )
+
+    relevant_rows: list[dict[str, object]] = []
+    if include_component_history:
+        component_source = source / "components/CATALOG.json"
+        if not component_source.is_file():
+            raise ComponentExperienceError("history-enabled view needs components")
+        _copy_text(component_source, target / "components/CATALOG.json")
+        relevant = _json(
+            source / "tasks/RELEVANT_COMPONENTS.json",
+            label="relevant components",
+        )
+        raw_relevant = relevant.get("tasks")
+        if isinstance(raw_relevant, list):
+            relevant_rows = [
+                dict(row)
+                for row in raw_relevant
+                if isinstance(row, Mapping) and row.get("task_key") == task_key
+            ]
+    _write_json(
+        target / "tasks/RELEVANT_COMPONENTS.json",
+        {
+            "schema_version": 1,
+            "task_key": task_key,
+            "history_enabled": include_component_history,
+            "tasks": relevant_rows,
+        },
+    )
+    instruction = (
+        "Use only the authorized public and answer-free evidence for the selected "
+        "task. Localize the earliest observable harness breakdown and compare at "
+        "least two plausible component hypotheses. You may modify any coherent "
+        "harness component, not only the prompt. Do not assume a listed component "
+        "is correct. If ACT, implement one bounded component hypothesis and run a "
+        "discriminating component smoke after the final edit. Otherwise record a "
+        "calibrated ABSTAIN."
+    )
+    if include_component_history:
+        instruction += (
+            " Inspect positive and negative component history, explain whether you "
+            "REUSE, REFINE, COMPOSE, reject, or replace it, and do not repeat an "
+            "unsupported intervention unchanged."
+        )
+    else:
+        instruction += (
+            " This arm intentionally contains no prior component catalog; infer the "
+            "component from the current task runtime evidence alone."
+        )
+    _write_json(
+        target / "contract.json",
+        {
+            "schema_version": 1,
+            "stage": "BREADTH",
+            "contract_arm": arm,
+            "task_key": task_key,
+            "answer_free": True,
+            "component_history_enabled": include_component_history,
+            "evolver_instruction": instruction,
+            "worker_evaluation_in_this_stage": False,
+        },
+    )
+    return {
+        "schema_version": 1,
+        "destination": str(target),
+        "task_key": task_key,
+        "arm": arm,
+        "component_history_enabled": include_component_history,
+        "retrieved_component_count": sum(
+            len(row.get("components", []))
+            for row in relevant_rows
+            if isinstance(row.get("components", []), list)
+        ),
+    }
+
+
 __all__ = [
     "ComponentExperienceError",
+    "build_breadth_evolver_view",
     "build_cross_benchmark_experience",
 ]
