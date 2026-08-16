@@ -2091,6 +2091,36 @@ packet, then asks the Evolver to abstract a reusable capability before running
 a fresh blind Worker. See
 `docs/decisions/2026-08-16-answer-rich-evolver-and-task-conditioned-harness.md`.
 
+**Transfer-first path and closed-benchmark fallback accepted on 2026-08-16:**
+the next experiment remains a strict reusable-transfer test, but held-out gain
+is not an indefinite prerequisite for useful benchmark optimization. Level A
+searches for a shared, task-conditioned component using answer-rich optimization
+evidence, a blind Worker, and answer-free protection/transfer. After two
+genuinely different, activated component hypotheses show repeated target gains
+but consistently null or negative transfer, record reusable transfer as a
+negative result for this setup and move to Level B: full-QuantCodeEval adaptive
+development with one shared harness. That result is reported as closed-
+benchmark or full-corpus optimization, not held-out generalization.
+
+If a shared harness then shows repeated cross-task interference despite routing
+or composition attempts, Level C permits separate per-task test-time discovery
+lineages. Its final artifact is a task-conditioned portfolio and its claim is
+task-solving under test-time compute, not reusable harness evolution. At every
+level keep matched-budget seed, best-of-N, and sequential task-solution controls
+and report score against requests, verifier calls, cost, and wall time. A
+within-benchmark held-out result supports internal task transfer only; it does
+not by itself establish universal quant generalization. See
+`docs/decisions/2026-08-16-transfer-first-and-closed-benchmark-fallback.md`.
+
+The immediate Level-A design reuses the existing T26 13/17, 14/17, and 12/17
+attempts to build an Evolver-only item-level diagnostic packet. One Evolver call
+may edit the full harness; a fresh blind T26 Worker is run only after local
+admission, followed by a T26 repeat, T19 protection, and matched T27 shell-only
+versus candidate transfer only when each preceding gate passes. The full path
+is at most six model executions with a proposed $0.25 cap. No paid run has been
+launched or authorized by this documentation update. See
+`docs/decisions/2026-08-16-t26-answer-rich-evolver-experiment-design.md`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
