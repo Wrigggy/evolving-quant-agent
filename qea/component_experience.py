@@ -510,6 +510,7 @@ def build_breadth_evolver_view(
     arm = "history-enabled" if include_component_history else "task-only"
 
     target.mkdir(parents=True)
+    (target / "access_log.jsonl").write_text("", encoding="utf-8")
     _write_json(
         target / "tasks/CATALOG.json",
         {"schema_version": 1, "task_count": 1, "tasks": [card]},

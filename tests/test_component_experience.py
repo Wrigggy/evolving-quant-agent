@@ -289,6 +289,7 @@ def test_builds_matched_task_only_and_history_enabled_views(tmp_path):
         contract = json.loads((root / "contract.json").read_text())
         catalog = json.loads((root / "tasks/CATALOG.json").read_text())
         assert contract["component_history_enabled"] is enabled
+        assert (root / "access_log.jsonl").read_text() == ""
         assert catalog["task_count"] == 1
         assert catalog["tasks"][0]["task_key"] == (
             "qfbench:swap-curve-bootstrap-ois"
