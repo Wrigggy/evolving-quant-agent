@@ -1,7 +1,7 @@
 # QEA Repository Memory
 
 > Canonical research and architecture memory for future contributors and agents.
-> Last updated: 2026-08-13. This file records current decisions, not merely historical discussion.
+> Last updated: 2026-08-16. This file records current decisions, not merely historical discussion.
 
 ## How to Use This Memory
 
@@ -71,7 +71,7 @@ R_overall = mean_domain(mean_task(r_i))
 
 Daily optimization diagnostics may additionally report test/checkpoint pass fractions, but the headline score must remain the official reward. A worker is upgraded only when it improves held-out domain-macro reward beyond uncertainty, avoids material domain regression, and stays within declared runtime/token/cost budgets. Always publish raw per-benchmark scores beside any normalized `UpgradeIndex`; suite weights remain a proposal until preregistered.
 
-GDPval, PRBench, hosted blind sets, gold artifacts, raw rubric verdicts, hidden tests, and reference solutions must never enter proposer-facing prompts. The proposer receives only scalar reward and answer-free process/failure tags.
+GDPval, PRBench, hosted blind sets, and sealed held-out answers must never enter proposer-facing prompts. A declared optimization task may return post-run rubric answers, expected-versus-observed diagnostics, and counterexamples to the Evolver only. The Worker remains blind, protection/transfer tasks remain answer-free, and no task answer may be persisted in a reusable harness component. This scoped exception and its split semantics are defined in [the 2026-08-16 answer-rich Evolver decision](decisions/2026-08-16-answer-rich-evolver-and-task-conditioned-harness.md).
 
 ## Execution Architecture Decision
 
@@ -80,7 +80,7 @@ High-parallel memory pressure primarily comes from one NexAU `Agent` per task, 2
 Adopt the original AHE pattern in stages:
 
 1. **Current default:** keep the trusted QEA coordinator on the persistent `bc-server` user account and run evolver, worker, credential-proxy, and independent offline-verifier roles in attempt-isolated rootless Docker containers.
-2. Return only compact answer-free summaries, rewards, artifact manifests, and trace URIs to the coordinator.
+2. Return compact summaries, rewards, artifact manifests, and trace URIs to the coordinator. For a declared answer-rich optimization task, the trusted coordinator may also construct a post-run Evolver-only rubric diagnostic; it never enters the Worker or a reusable candidate.
 3. Use the host-local weighted resource lease and preserve CPU, memory, PID, tmpfs, disk, and Docker headroom. Start scored fan-out conservatively; never infer safe concurrency from nominal core count alone.
 4. Keep the coordinator outside task containers because it owns checkpoints, trusted verifier inputs, admission, and exact-ID cleanup. E2B remains an explicit fallback and historical reference, not the operational default.
 
@@ -2060,6 +2060,36 @@ and $0.2101171912 with zero restarts. All run-scoped monitoring and containers
 were cleaned, and evidence was additively mirrored. See
 `docs/reports/2026-08-16-cross-benchmark-breadth-live-results.md` and
 `results/cross-benchmark-breadth-20260816/RESULT.json`.
+
+**Answer-rich optimization and reusable-component definition accepted on
+2026-08-16:** QEA now distinguishes task-specific evidence, task-conditioned
+behavior, and task-specific harness patches. A declared optimization task may
+show post-run rubric answers, expected-versus-observed behavior, and
+counterexamples to the Evolver after a blind Worker attempt. Answers never
+enter the Worker. A reusable component may dynamically inspect the current
+public task contract and data, but it may not persist an optimization task ID,
+expected constant/output, reference implementation, or fixed task-only
+assertion. Such an edit is an overfit task patch, not a reusable component.
+
+The macro protocol combines two related-work lessons. From Learning to
+Discover at Test Time, retain complete candidate/reward history, explicit
+best-state retention, promising-branch reuse, and a matched-budget
+task-solution-search control; do not inherit its single-problem no-
+generalization claim boundary. From Self-Harness, mine proposer-facing failure
+evidence only from held-in tasks, abstract verifier causes into reusable agent
+mechanisms, propose minimal edits, and require answer-free regression evidence.
+QEA uses stricter naming: any split repeatedly consulted for promotion is
+protection/selection data, while sealed held-out tasks never guide search.
+
+T26 is now an answer-rich optimization task, T19 is answer-free
+protection/development, and T27 may be a one-shot answer-free transfer canary.
+The existing T26 clause-semantic component is reclassified as an unresolved
+mixed candidate because it combines a potentially general revision workflow
+with T26-specific static assertions. The next experiment reuses the existing
+13/17, 14/17, and 12/17 attempts to build an Evolver-only item-level diagnostic
+packet, then asks the Evolver to abstract a reusable capability before running
+a fresh blind Worker. See
+`docs/decisions/2026-08-16-answer-rich-evolver-and-task-conditioned-harness.md`.
 
 ## Memory Maintenance Rules
 

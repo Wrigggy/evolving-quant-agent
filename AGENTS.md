@@ -23,7 +23,7 @@ Target Python 3.10+ and PEP 8 with four spaces. Use `snake_case`, `PascalCase`, 
 
 ## Testing and Research Integrity
 
-Pytest files use `test_*.py`; name tests by observable behavior. Prefer deterministic fakes, `tmp_path`, and `monkeypatch`; gate API/E2B tests behind environment flags. Run `python3 -m pytest tests` with NexAU and `[stirrup]` installed. Cover keep/rollback, score boundaries, and firewall invariants. Never expose gold, raw rubric verdicts, keys, or `.env` to proposer prompts. Update `data/gdpval/MANIFEST.md` when refreshing its snapshot.
+Pytest files use `test_*.py`; name tests by observable behavior. Prefer deterministic fakes, `tmp_path`, and `monkeypatch`; gate API/E2B tests behind environment flags. Run `python3 -m pytest tests` with NexAU and `[stirrup]` installed. Cover keep/rollback, score boundaries, and firewall invariants. In a declared answer-rich optimization experiment, post-run rubric answers and expected-versus-observed diagnostics may be shown to the Evolver, but never to the Worker. Protection, transfer, and sealed held-out tasks remain answer-free, and credentials or `.env` are never prompt-visible. Update `data/gdpval/MANIFEST.md` when refreshing its snapshot.
 
 ## Experimental Engineering Priorities
 
@@ -43,9 +43,11 @@ engineering into defensive infrastructure work.
   cost, and failure. Matching the experimental setup is sufficient for an
   engineering canary; exhaustive equality across every runtime contract is not
   required.
-- Retain only the minimum research-integrity boundaries: do not expose verifier
-  answers or credentials to the Evolver, fabricate results, or treat an
-  obviously invalid run as a benchmark result.
+- Retain only the minimum research-integrity boundaries: optimization answers
+  may supervise the Evolver after a blind Worker attempt, but never enter a
+  Worker run or be embedded in a reusable candidate as a task-specific patch.
+  Never expose credentials, fabricate results, or treat an obviously invalid
+  run as a benchmark result.
 
 ## Commit & Pull Request Guidelines
 
