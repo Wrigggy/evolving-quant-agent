@@ -26,6 +26,12 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--qfbench-evidence-root", type=Path)
     parser.add_argument("--quantcodeeval-evidence-root", type=Path)
     parser.add_argument(
+        "--task",
+        dest="task_keys",
+        action="append",
+        help="optional benchmark:task_id selector; may be repeated",
+    )
+    parser.add_argument(
         "--component-ledger",
         type=Path,
         default=Path("data/quantcodeeval/COMPONENT_EVIDENCE_CANARY.json"),
@@ -41,6 +47,16 @@ def main() -> int:
         for row in plan["tasks"]
         if args.benchmark == "all" or row["benchmark"] == args.benchmark
     ]
+    if args.task_keys:
+        selected = set(args.task_keys)
+        tasks = [
+            row
+            for row in tasks
+            if f"{row['benchmark']}:{row['task_id']}" in selected
+        ]
+        found = {f"{row['benchmark']}:{row['task_id']}" for row in tasks}
+        if found != selected:
+            raise ValueError(f"task selectors not found in plan: {sorted(selected - found)}")
     result = build_cross_benchmark_experience(
         destination=args.destination,
         task_profiles=tasks,
