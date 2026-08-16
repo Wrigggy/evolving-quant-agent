@@ -1,7 +1,7 @@
 # QEA Repository Memory
 
 > Canonical research and architecture memory for future contributors and agents.
-> Last updated: 2026-08-16. This file records current decisions, not merely historical discussion.
+> Last updated: 2026-08-17. This file records current decisions, not merely historical discussion.
 
 ## How to Use This Memory
 
@@ -2140,6 +2140,29 @@ stop and choose another task with a measured matching H0 failure. An unrelated
 task may still be protection evidence, but preserving it is not positive
 transfer. See
 `docs/decisions/2026-08-16-t26-failure-family-transfer-gate.md`.
+
+**T26 answer-rich REFINE canary on 2026-08-17:** the Evolver consumed the three
+retained blind T26 attempts and autonomously refined the unstable prompt-led
+audit loop into a registered executable quant-contract auditor. The admitted
+candidate changed `tools`, `tool_descriptions`, `agent_config`, and
+`systemprompt`; it was not a prompt-only mutation. The one valid fresh blind
+Worker called the auditor 14 times, revised its artifact repeatedly, and
+improved T26 to 16/17: all ten Type-B properties passed, including the predicted
+B5/B9 HJ-objective checks, while A10 end-to-end numeric identity remained the
+only failure. This is measured component activation and a strong single-sample
+property gain, but binary reward remains zero and repeat stability is not yet
+measured.
+
+Two replacement Workers were invalid for performance comparison. The first
+lost its model stream after ten completed requests and produced no artifact;
+the second spent its final 32,000 completion tokens entirely on hidden
+reasoning, returned empty content with no tool call, and likewise produced no
+artifact. Stop paid redraws after these two route failures. Do not count either
+as a component regression, and do not advance to T19/T27 transfer until a valid
+T26 repeat confirms the B5/B9 gain. The complete round used 101 completed model
+requests, 4,178,080 tokens, and $0.1098010424. See
+`docs/reports/2026-08-17-quantcodeeval-answer-rich-refine-canary.md` and
+`results/quantcodeeval-answer-rich-refine-20260817/RESULT.json`.
 
 ## Memory Maintenance Rules
 

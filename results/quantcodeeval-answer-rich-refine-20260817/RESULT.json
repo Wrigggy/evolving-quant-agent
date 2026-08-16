@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "status": "complete_with_repeat_unmeasured",
+  "benchmark": "QuantCodeEval",
+  "optimization_task": "T26",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "provider": "deepseek",
+  "worker_answer_visibility": "blind_public_task_only",
+  "evolver_feedback": "answer_rich_optimization_v1",
+  "evolver": {
+    "run_id": "qce-t26-answer-rich-evolver-20260816-r2",
+    "decision": "ACT",
+    "search_operator": "REFINE",
+    "primary_components": ["tools"],
+    "changed_components": [
+      "tools",
+      "tool_descriptions",
+      "agent_config",
+      "systemprompt"
+    ],
+    "admitted": true,
+    "completed_requests": 26,
+    "total_tokens": 1365579,
+    "provider_cost_usd": 0.0301527968
+  },
+  "worker_attempts": [
+    {
+      "run_id": "qce-t26-answer-rich-candidate-20260817-r1",
+      "valid_score": false,
+      "outcome": "network_connection_lost_before_artifact",
+      "completed_requests": 10,
+      "total_tokens": 265153,
+      "provider_cost_usd": 0.0128399432
+    },
+    {
+      "run_id": "qce-t26-answer-rich-candidate-20260817-r2",
+      "valid_score": true,
+      "outcome": "officially_scored",
+      "type_a_passed": 6,
+      "type_a_total": 7,
+      "type_b_passed": 10,
+      "type_b_total": 10,
+      "properties_passed": 16,
+      "properties_total": 17,
+      "official_reward": 0.0,
+      "failed_properties": ["A10"],
+      "predicted_properties_repaired": ["B5", "B9"],
+      "audit_tool_calls": 14,
+      "artifact_revised_after_creation": true,
+      "completed_requests": 52,
+      "total_tokens": 2214819,
+      "provider_cost_usd": 0.0438079376
+    },
+    {
+      "run_id": "qce-t26-answer-rich-candidate-20260817-r3",
+      "valid_score": false,
+      "outcome": "empty_model_response_after_reasoning_budget",
+      "completed_requests": 13,
+      "total_tokens": 332529,
+      "provider_cost_usd": 0.0230003648
+    }
+  ],
+  "aggregate": {
+    "completed_requests": 101,
+    "total_tokens": 4178080,
+    "provider_cost_usd": 0.1098010424
+  },
+  "claim_boundary": {
+    "component_activation": "supported",
+    "single_sample_property_gain": "supported",
+    "official_binary_reward_gain": "not_supported",
+    "repeat_stability": "not_measured_due_to_two_invalid_replacement_runs",
+    "cross_task_transfer": "not_tested"
+  },
+  "next_gate": "obtain one valid T26 repeat before any matched-failure transfer run"
+}
