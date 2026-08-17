@@ -2186,6 +2186,33 @@ used 139 completed requests, 5,841,009 tokens, and $0.2923158504. See
 `docs/reports/2026-08-17-quantcodeeval-answer-rich-repeat-and-delivery-recovery.md`
 and `results/quantcodeeval-answer-rich-refine-repeat-20260817/RESULT.json`.
 
+**Mechanism-first binary gate accepted later on 2026-08-17:** do not implement
+a progressive asynchronous evaluation scheduler before the current discovery
+mechanism reaches an official task-level success. The repeated T26 `16/17`
+result remains valid property-mechanism evidence, but the next hard gate is an
+Evolver-produced harness that moves a fresh blind optimization Worker from
+official reward `0` to `1`. Continue T26 with its retained answer-rich A10
+history and full-harness mutation surface. Search length is evidence-driven,
+not fixed at five rounds; retain each candidate, result, cost, and failure
+lesson. A first `17/17` triggers an independent blind repeat, followed only then
+by protection and matched transfer.
+
+The previously discussed L0-L4 progressive evaluation is deferred until task
+breadth makes long-tail evaluation a measured bottleneck. At that future scale,
+the early L0-L2 cycle may give the Evolver a budgeted action to decide when its
+candidate is ready for a benchmark call, which allowed optimization task is
+most informative, and whether a repeat is worth the cost. L0 remains local;
+the coordinator executes and records allowed L1/L2 requests. This is a proposed
+adaptive-evaluation extension, not a tested mechanism or current implementation.
+
+After a binary mechanism success, freeze the method and run a fresh shell-only
+H0-to-Evolver-to-candidate lineage. The final primary gate is improvement in
+official binary reward on a declared test set whose answers and scores did not
+guide candidate selection. If all benchmark tasks instead become answer-rich
+adaptive evidence, retain the accepted Level B label: closed-benchmark
+optimization, not unseen-test generalization. See
+`docs/decisions/2026-08-17-mechanism-first-binary-gate-and-deferred-adaptive-evaluation.md`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
