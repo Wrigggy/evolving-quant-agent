@@ -266,6 +266,82 @@ def test_extends_answer_rich_timeline_without_rewriting_prior_attempts(tmp_path)
     ]
 
 
+def test_extension_accepts_new_analysis_without_a_new_scored_attempt(tmp_path):
+    base = tmp_path / "base.json"
+    _write(
+        base,
+        {
+            "schema_version": 1,
+            "task_id": "T26",
+            "feedback_mode": "answer_rich_evolver",
+            "visibility": "evolver_only",
+            "worker_visible": False,
+            "attempts": [{"label": "r1", "role": "candidate"}],
+            "rubric_items": [
+                {"property_id": "A10", "observations": []}
+            ],
+            "candidate_changes": [],
+            "observed_failure_signatures": [],
+            "evolver_assignment": {},
+        },
+    )
+
+    result = extend_quantcodeeval_optimization_diagnostic(
+        destination=tmp_path / "extended.json",
+        base_diagnostic_path=base,
+        attempts=[],
+        candidate_changes=[
+            {
+                "component": "trusted_numeric_localization",
+                "runtime_outcome": "grid resolution changes the selected parameter",
+            }
+        ],
+        failure_signatures=[
+            _signature("T26", family="hyperparameter_resolution")
+        ],
+    )
+
+    extended = json.loads((tmp_path / "extended.json").read_text())
+    assert result["added_attempt_count"] == 0
+    assert result["added_candidate_change_count"] == 1
+    assert result["added_failure_signature_count"] == 1
+    assert extended["attempts"] == [{"label": "r1", "role": "candidate"}]
+    assert extended["candidate_changes"][-1]["component"] == (
+        "trusted_numeric_localization"
+    )
+    assert extended["observed_failure_signatures"][-1][
+        "mechanism_family"
+    ] == "hyperparameter_resolution"
+
+
+def test_extension_rejects_when_it_adds_no_evidence(tmp_path):
+    base = tmp_path / "base.json"
+    _write(
+        base,
+        {
+            "schema_version": 1,
+            "task_id": "T26",
+            "feedback_mode": "answer_rich_evolver",
+            "visibility": "evolver_only",
+            "worker_visible": False,
+            "attempts": [{"label": "r1", "role": "candidate"}],
+            "rubric_items": [
+                {"property_id": "A10", "observations": []}
+            ],
+            "candidate_changes": [],
+            "observed_failure_signatures": [],
+            "evolver_assignment": {},
+        },
+    )
+
+    with pytest.raises(QuantCodeEvalOptimizationError, match="analysis record"):
+        extend_quantcodeeval_optimization_diagnostic(
+            destination=tmp_path / "extended.json",
+            base_diagnostic_path=base,
+            attempts=[],
+        )
+
+
 def test_extension_rejects_a_duplicate_attempt_label(tmp_path):
     base = tmp_path / "base.json"
     _write(

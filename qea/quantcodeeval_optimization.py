@@ -417,9 +417,17 @@ def extend_quantcodeeval_optimization_diagnostic(
             }
         )
         added += 1
-    if added == 0:
+    new_changes = [
+        dict(value) for value in candidate_changes if isinstance(value, Mapping)
+    ]
+    new_signatures = [
+        _signature(value, label=f"failure_signatures[{index}]")
+        for index, value in enumerate(failure_signatures)
+        if isinstance(value, Mapping)
+    ]
+    if added == 0 and not new_changes and not new_signatures:
         raise QuantCodeEvalOptimizationError(
-            "at least one new optimize attempt is required"
+            "at least one new optimize attempt or analysis record is required"
         )
 
     raw_changes = base.get("candidate_changes", [])
@@ -461,15 +469,11 @@ def extend_quantcodeeval_optimization_diagnostic(
         "rubric_items": list(rubric.values()),
         "candidate_changes": [
             *(deepcopy(dict(value)) for value in raw_changes),
-            *(dict(value) for value in candidate_changes),
+            *new_changes,
         ],
         "observed_failure_signatures": [
             *(deepcopy(dict(value)) for value in raw_signatures),
-            *(
-                _signature(value, label=f"failure_signatures[{index}]")
-                for index, value in enumerate(failure_signatures)
-                if isinstance(value, Mapping)
-            ),
+            *new_signatures,
         ],
         "evolver_assignment": assignment,
     }
@@ -480,6 +484,8 @@ def extend_quantcodeeval_optimization_diagnostic(
         "task_id": task,
         "prior_attempt_count": len(existing_attempts),
         "added_attempt_count": added,
+        "added_candidate_change_count": len(new_changes),
+        "added_failure_signature_count": len(new_signatures),
         "attempt_count": len(attempt_rows),
         "rubric_item_count": len(rubric),
     }
