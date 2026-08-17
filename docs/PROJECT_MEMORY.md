@@ -2164,6 +2164,28 @@ requests, 4,178,080 tokens, and $0.1098010424. See
 `docs/reports/2026-08-17-quantcodeeval-answer-rich-refine-canary.md` and
 `results/quantcodeeval-answer-rich-refine-20260817/RESULT.json`.
 
+**T26 repeat and Worker-delivery repair later on 2026-08-17:** the same admitted
+candidate produced a second valid blind T26 sample without resampling H0 or the
+Evolver. Run `qce-t26-answer-rich-candidate-20260817-r4` scored 16/17 again:
+Type A was 6/7, Type B was 10/10, B5/B9 both remained PASS, and A10 remained the
+only failure. A10's worst relative metric difference improved from about 25.9%
+in r2 to 8.65% in r4. The Worker made 38 completed requests, used 1,662,929
+tokens, ran for 1,131.21 seconds, invoked the audit component repeatedly, and
+made four measured implementation revisions. This supports repeated
+property-level benefit and component activation on T26, but official binary
+reward remains zero and cross-task transfer is untested.
+
+The coordinator now performs at most one same-evaluation QuantCodeEval Worker
+replacement for the two observed model-delivery failures: a lost model stream,
+or an empty model response when no `strategy.py` exists. It accepts both the
+older and current Proxy audit record shapes. Focused tests passed, and read-only
+classification of the retained r1/r3 failure records recognized both. The r4
+live run did not trigger replacement, so live replacement success is not
+claimed. r4 cost $0.182514808; the complete retained Evolver+r1+r2+r3+r4 lineage
+used 139 completed requests, 5,841,009 tokens, and $0.2923158504. See
+`docs/reports/2026-08-17-quantcodeeval-answer-rich-repeat-and-delivery-recovery.md`
+and `results/quantcodeeval-answer-rich-refine-repeat-20260817/RESULT.json`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
