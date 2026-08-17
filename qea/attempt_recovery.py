@@ -35,6 +35,9 @@ _AUDIT_FIELDS = frozenset(
         "failure_class",
     }
 )
+_AUDIT_FIELDS_V2 = _AUDIT_FIELDS | frozenset(
+    {"logical_request_identity_sha256", "retry_index"}
+)
 _MANIFEST_FIELDS_V1 = frozenset(
     {
         "schema_version",
@@ -184,13 +187,27 @@ def _recoverable_audit(
             raise AttemptRecoveryError("attempt recovery proxy audit is malformed") from exc
         if (
             not isinstance(record, dict)
-            or set(record) != _AUDIT_FIELDS
-            or record.get("schema_version") != 1
+            or (
+                record.get("schema_version") == 1
+                and set(record) != _AUDIT_FIELDS
+            )
+            or (
+                record.get("schema_version") == 2
+                and set(record) != _AUDIT_FIELDS_V2
+            )
+            or record.get("schema_version") not in {1, 2}
         ):
             raise AttemptRecoveryError("attempt recovery proxy audit schema is invalid")
         identity = record.get("request_identity_sha256")
         if not isinstance(identity, str) or not _SHA256.fullmatch(identity):
             raise AttemptRecoveryError("attempt recovery request identity is invalid")
+        if record["schema_version"] == 2 and (
+            not isinstance(record.get("logical_request_identity_sha256"), str)
+            or not _SHA256.fullmatch(record["logical_request_identity_sha256"])
+            or type(record.get("retry_index")) is not int
+            or not 0 <= record["retry_index"] < 3
+        ):
+            raise AttemptRecoveryError("attempt recovery retry identity is invalid")
         records.append(record)
     if not records:
         raise AttemptRecoveryError("attempt recovery proxy audit is empty")

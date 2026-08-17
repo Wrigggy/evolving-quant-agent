@@ -524,8 +524,10 @@ def test_sandbox_evaluator_replaces_ambiguous_worker_attempt_without_replay(
         json.dumps(logical_attempt.__dict__)
     )
     completed = {
-        "schema_version": 1,
+        "schema_version": 2,
         "request_identity_sha256": "a" * 64,
+        "logical_request_identity_sha256": "b" * 64,
+        "retry_index": 0,
         "model": "deepseek/deepseek-v4-flash-0731",
         "started_at": "2026-08-04T06:00:00+00:00",
         "finished_at": "2026-08-04T06:00:01+00:00",
