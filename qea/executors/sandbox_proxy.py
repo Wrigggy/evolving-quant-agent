@@ -171,6 +171,7 @@ class SandboxProxyConfig:
     finalize_timeout_seconds: int = 360
     expect_request: bool = True
     required_provider: str | None = None
+    fallback_providers: tuple[str, ...] = ()
     pre_accept_connect_attempts: int = 3
 
     def __post_init__(self) -> None:
@@ -213,6 +214,26 @@ class SandboxProxyConfig:
             object.__setattr__(
                 self, "required_provider", normalized_provider
             )
+        if not isinstance(self.fallback_providers, tuple):
+            raise SandboxProxyError("fallback_providers must be a tuple")
+        try:
+            normalized_fallbacks = tuple(
+                _validate_provider_slug(provider)
+                for provider in self.fallback_providers
+            )
+        except ModelProxyError as exc:
+            raise SandboxProxyError(str(exc)) from exc
+        if normalized_fallbacks and self.required_provider is None:
+            raise SandboxProxyError(
+                "fallback providers require a primary required provider"
+            )
+        if len(set(normalized_fallbacks)) != len(normalized_fallbacks):
+            raise SandboxProxyError("fallback providers must be unique")
+        if self.required_provider in normalized_fallbacks:
+            raise SandboxProxyError(
+                "fallback providers must not repeat the primary provider"
+            )
+        object.__setattr__(self, "fallback_providers", normalized_fallbacks)
         object.__setattr__(self, "token_file", Path(self.token_file).expanduser())
 
 
@@ -227,6 +248,7 @@ class SandboxProxySession:
     audit_uri: Path
     allowed_model: str
     required_provider: str | None
+    fallback_providers: tuple[str, ...]
     immutable_image_ref: str
     spec_sha256: str
     public_plan_sha256: str
@@ -890,6 +912,7 @@ class SandboxProxyManager:
                 network_scope=attempt_id,
                 allowed_model=self.config.allowed_model,
                 required_provider=self.config.required_provider,
+                fallback_providers=self.config.fallback_providers,
                 audit_path=_PRIVATE_AUDIT_PATH,
                 denied_request_identities_sha256=tuple(
                     sorted(denied_request_identities)
@@ -999,6 +1022,7 @@ class SandboxProxyManager:
                 audit_uri=audit_uri,
                 allowed_model=self.config.allowed_model,
                 required_provider=self.config.required_provider,
+                fallback_providers=self.config.fallback_providers,
                 immutable_image_ref=handle.immutable_image_ref,
                 spec_sha256=handle.spec_sha256,
                 public_plan_sha256=public_plan_sha256,

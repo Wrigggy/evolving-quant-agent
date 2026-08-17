@@ -77,7 +77,8 @@ required = {
     'rate_limit_max_attempts', 'rate_limit_retry_budget_seconds',
     'rate_limit_backoff_seconds',
 }
-if set(config) not in (required, required | {'required_provider'}):
+optional = {'required_provider', 'fallback_providers'}
+if not required <= set(config) or set(config) - required - optional:
     raise SystemExit(78)
 argv = [
     '/usr/local/bin/python3',
@@ -100,6 +101,8 @@ argv = [
 ]
 if 'required_provider' in config:
     argv.extend(['--required-provider', str(config['required_provider'])])
+for provider in config.get('fallback_providers', []):
+    argv.extend(['--fallback-provider', str(provider)])
 for identity in config['denied_request_identities_sha256']:
     argv.extend(['--denied-request-identity-sha256', str(identity)])
 environment = os.environ.copy()

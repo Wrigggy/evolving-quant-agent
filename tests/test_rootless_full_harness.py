@@ -500,6 +500,7 @@ def test_rootless_config_preserves_openrouter_base_path_and_proxy_route(tmp_path
         token="fixture-token",
         allowed_model=config.allowed_model,
         required_provider="deepseek",
+        fallback_providers=(),
         audit_file=tmp_path / "unused-audit.jsonl",
         denied_request_identities_sha256=frozenset(),
         max_request_bytes=1,
@@ -699,6 +700,16 @@ def test_rootless_config_loader_rejects_secret_value_and_parses_paths(tmp_path) 
         with pytest.raises((ValueError, RuntimeError), match="lease timeout"):
             load_rootless_full_harness_config(path)
     payload["lease_timeout_seconds"] = 6000
+
+    payload["schema_version"] = 6
+    payload["fallback_providers"] = ["baseten", "gmicloud", "deepinfra"]
+    path.write_text(json.dumps(payload))
+    fallback_route = load_rootless_full_harness_config(path)
+    assert fallback_route.fallback_providers == (
+        "baseten",
+        "gmicloud",
+        "deepinfra",
+    )
 
     payload["model_token"] = "forbidden-inline-secret"
     path.write_text(json.dumps(payload))

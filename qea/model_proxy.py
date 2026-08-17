@@ -356,6 +356,7 @@ class ModelProxyConfig:
     rate_limit_retry_budget_seconds: float = _RATE_LIMIT_RETRY_BUDGET_SECONDS
     rate_limit_backoff_seconds: float = _RATE_LIMIT_BACKOFF_SECONDS
     required_provider: str | None = None
+    fallback_providers: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.listen_host not in {"127.0.0.1", "0.0.0.0"}:
@@ -373,6 +374,23 @@ class ModelProxyConfig:
                 "required_provider",
                 _validate_provider_slug(self.required_provider),
             )
+        if not isinstance(self.fallback_providers, tuple):
+            raise ModelProxyError("fallback_providers must be a tuple")
+        normalized_fallbacks = tuple(
+            _validate_provider_slug(provider)
+            for provider in self.fallback_providers
+        )
+        if normalized_fallbacks and self.required_provider is None:
+            raise ModelProxyError(
+                "fallback providers require a primary required provider"
+            )
+        if len(set(normalized_fallbacks)) != len(normalized_fallbacks):
+            raise ModelProxyError("fallback providers must be unique")
+        if self.required_provider in normalized_fallbacks:
+            raise ModelProxyError(
+                "fallback providers must not repeat the primary provider"
+            )
+        object.__setattr__(self, "fallback_providers", normalized_fallbacks)
         token_path = Path(self.token_file).expanduser()
         _read_token(token_path)
         object.__setattr__(self, "token_file", token_path)
@@ -511,6 +529,7 @@ class ModelProxySandboxPlan:
     network_scope: str | None = None
     denied_request_identities_sha256: tuple[str, ...] = ()
     required_provider: str | None = None
+    fallback_providers: tuple[str, ...] = ()
     pre_accept_connect_attempts: int = 3
     rate_limit_max_attempts: int = _MAX_RATE_LIMIT_ATTEMPTS
     rate_limit_retry_budget_seconds: float = _RATE_LIMIT_RETRY_BUDGET_SECONDS
@@ -537,6 +556,10 @@ class ModelProxySandboxPlan:
             payload["allowed_model"] = self.allowed_model
             if self.required_provider is not None:
                 payload["required_provider"] = self.required_provider
+                if self.fallback_providers:
+                    payload["fallback_providers"] = list(
+                        self.fallback_providers
+                    )
             payload["audit_file"] = self.audit_path
             payload["denied_request_identities_sha256"] = list(
                 self.denied_request_identities_sha256
@@ -579,6 +602,8 @@ class ModelProxySandboxPlan:
         }
         if self.required_provider is not None:
             payload["required_provider"] = self.required_provider
+            if self.fallback_providers:
+                payload["fallback_providers"] = list(self.fallback_providers)
         return payload
 
 
@@ -649,6 +674,7 @@ def build_model_proxy_sandbox_plan(
     network_scope: str | None = None,
     allowed_model: str | None = None,
     required_provider: str | None = None,
+    fallback_providers: Sequence[str] = (),
     audit_path: str | None = None,
     denied_request_identities_sha256: Sequence[str] = (),
     writable_tmpfs_mb: Mapping[str, int] | None = None,
@@ -674,12 +700,28 @@ def build_model_proxy_sandbox_plan(
         allowed_model = _validate_model(allowed_model)
         if required_provider is not None:
             required_provider = _validate_provider_slug(required_provider)
+        normalized_fallbacks = tuple(
+            _validate_provider_slug(provider)
+            for provider in fallback_providers
+        )
+        if normalized_fallbacks and required_provider is None:
+            raise ModelProxyError(
+                "fallback providers require a primary required provider"
+            )
+        if len(set(normalized_fallbacks)) != len(normalized_fallbacks):
+            raise ModelProxyError("fallback providers must be unique")
+        if required_provider in normalized_fallbacks:
+            raise ModelProxyError(
+                "fallback providers must not repeat the primary provider"
+            )
         if not isinstance(audit_path, str) or not audit_path.startswith("/"):
             raise ModelProxyError("proxy plan audit path must be absolute")
     elif required_provider is not None:
         raise ModelProxyError(
             "required provider requires the complete scoped proxy policy"
         )
+    else:
+        normalized_fallbacks = ()
     denied_identities = _validate_denied_request_identities(
         denied_request_identities_sha256
     )
@@ -750,6 +792,7 @@ def build_model_proxy_sandbox_plan(
         network_scope=network_scope,
         denied_request_identities_sha256=denied_identities,
         required_provider=required_provider,
+        fallback_providers=normalized_fallbacks,
         pre_accept_connect_attempts=pre_accept_connect_attempts,
         rate_limit_max_attempts=rate_limit_max_attempts,
         rate_limit_retry_budget_seconds=rate_limit_retry_budget_seconds,
@@ -843,6 +886,7 @@ class _ProxyPolicy:
     token: str
     allowed_model: str
     required_provider: str | None
+    fallback_providers: tuple[str, ...]
     audit_file: Path
     denied_request_identities_sha256: frozenset[str]
     max_request_bytes: int
@@ -1388,7 +1432,6 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                     connect_timeout_seconds=min(
                         policy.connect_timeout_seconds, remaining
                     ),
-                    read_timeout_seconds=min(policy.read_timeout_seconds, remaining),
                 )
             connection = self._connect_upstream(attempt_policy)
             request_transmission_started = True
@@ -1400,13 +1443,6 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             )
             if connection.sock is not None:
                 read_timeout = attempt_policy.read_timeout_seconds
-                if retry_deadline is not None:
-                    remaining = retry_deadline - self._retry_monotonic()
-                    if remaining <= 0:
-                        raise _RateLimitRetryDeadlineExpired(
-                            "rate-limit retry deadline expired"
-                        )
-                    read_timeout = min(read_timeout, remaining)
                 connection.sock.settimeout(read_timeout)
             response = connection.getresponse()
             response_status = response.status
@@ -1530,28 +1566,6 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             spool.seek(0)
             response_payload = spool.read()
             usage = _response_usage(response_payload)
-            if (
-                retry_deadline is not None
-                and self._retry_monotonic() >= retry_deadline
-            ):
-                self._audit(
-                    request_identity_sha256=logical_request_identity_sha256,
-                    retry_index=retry_index,
-                    model=policy.allowed_model,
-                    started_at=started_at,
-                    started_monotonic=started_monotonic,
-                    request_state="quarantined",
-                    upstream_status_code=response.status,
-                    provider_request_id=provider_request_id,
-                    input_tokens=usage[0],
-                    output_tokens=usage[1],
-                    total_tokens=usage[2],
-                    provider_cost_usd=usage[3],
-                    failure_class="post_accept_transport",
-                )
-                audit_written = True
-                self._reject(502, "rate_limit_retry_deadline_expired")
-                return None
             return _BufferedUpstreamResponse(
                 status=response.status,
                 headers=_filtered_response_headers(response.headers),
@@ -1775,10 +1789,22 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                 )
                 self._reject(400, "provider_forbidden")
                 return
-            request_payload["provider"] = {
-                "only": [policy.required_provider],
-                "allow_fallbacks": False,
-            }
+            providers = [
+                policy.required_provider,
+                *policy.fallback_providers,
+            ]
+            if policy.fallback_providers:
+                request_payload["provider"] = {
+                    "order": providers,
+                    "only": providers,
+                    "allow_fallbacks": True,
+                    "require_parameters": True,
+                }
+            else:
+                request_payload["provider"] = {
+                    "only": providers,
+                    "allow_fallbacks": False,
+                }
             outbound_body = json.dumps(
                 request_payload,
                 sort_keys=True,
@@ -1957,6 +1983,7 @@ def create_proxy_server(config: ModelProxyConfig) -> ThreadingHTTPServer:
         token=_read_token(Path(config.token_file)),
         allowed_model=config.allowed_model,
         required_provider=config.required_provider,
+        fallback_providers=config.fallback_providers,
         audit_file=audit_file,
         denied_request_identities_sha256=frozenset(
             config.denied_request_identities_sha256

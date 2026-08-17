@@ -481,8 +481,13 @@ def run_quantcodeeval_full_candidate(
     }
     sampling_identity = {
         "model": MODEL,
-        "required_provider": "deepseek",
-        "allow_fallbacks": False,
+        "required_provider": baseline_preflight.get(
+            "required_provider", "deepseek"
+        ),
+        "fallback_providers": baseline_preflight.get(
+            "fallback_providers", []
+        ),
+        "allow_fallbacks": baseline_preflight.get("allow_fallbacks", False),
         "split": SPLIT,
         "runtime_identity_sha256": baseline_preflight["runtime_identity_sha256"],
         "worker_image_ref": worker_image_ref,
@@ -645,8 +650,11 @@ def run_quantcodeeval_full_candidate(
     # path is retained only for CLI compatibility and is intentionally unused.
     route = {
         "model": MODEL,
-        "provider": "deepseek",
-        "allow_fallbacks": False,
+        "provider_order": [
+            baseline_preflight.get("required_provider", "deepseek"),
+            *baseline_preflight.get("fallback_providers", []),
+        ],
+        "allow_fallbacks": baseline_preflight.get("allow_fallbacks", False),
         "basis": "completed proxy audit",
     }
     attempt_rows: list[dict[str, object]] = []

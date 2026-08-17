@@ -141,7 +141,8 @@ def _validate_provider_route(
     allowed_path_prefix: str,
     allowed_model: str,
     required_provider: str | None,
-) -> tuple[str, str, str, str | None]:
+    fallback_providers: tuple[str, ...] = (),
+) -> tuple[str, str, str, str | None, tuple[str, ...]]:
     """Validate the fixed upstream base path and independent caller prefix."""
 
     from .model_proxy import (
@@ -218,6 +219,22 @@ def _validate_provider_route(
             if required_provider is None
             else _validate_provider_slug(required_provider)
         )
+        if not isinstance(fallback_providers, tuple):
+            raise ModelProxyError("fallback providers must be a tuple")
+        normalized_fallbacks = tuple(
+            _validate_provider_slug(provider)
+            for provider in fallback_providers
+        )
+        if normalized_fallbacks and normalized_provider is None:
+            raise ModelProxyError(
+                "fallback providers require a primary provider"
+            )
+        if len(set(normalized_fallbacks)) != len(normalized_fallbacks):
+            raise ModelProxyError("fallback providers must be unique")
+        if normalized_provider in normalized_fallbacks:
+            raise ModelProxyError(
+                "fallback providers must not repeat the primary provider"
+            )
     except ModelProxyError as exc:
         if "provider" in str(exc):
             label = "required_provider"
@@ -231,6 +248,7 @@ def _validate_provider_route(
         normalized_prefix,
         normalized_model,
         normalized_provider,
+        normalized_fallbacks,
     )
 
 
@@ -240,6 +258,7 @@ def rootless_model_route_identity(
     allowed_path_prefix: str,
     allowed_model: str,
     required_provider: str | None = None,
+    fallback_providers: tuple[str, ...] = (),
 ) -> str:
     """Return the canonical answer-free identity of the fixed model route."""
 
@@ -251,10 +270,20 @@ def rootless_model_route_identity(
     }
     if required_provider is not None:
         payload["schema_version"] = 2
-        payload["provider_routing"] = {
-            "only": [required_provider],
-            "allow_fallbacks": False,
-        }
+        providers = [required_provider, *fallback_providers]
+        if fallback_providers:
+            payload["schema_version"] = 3
+            payload["provider_routing"] = {
+                "order": providers,
+                "only": providers,
+                "allow_fallbacks": True,
+                "require_parameters": True,
+            }
+        else:
+            payload["provider_routing"] = {
+                "only": providers,
+                "allow_fallbacks": False,
+            }
     return _canonical_digest(payload)
 
 
@@ -392,6 +421,7 @@ class RootlessFullHarnessConfig:
     worker_concurrency: int
     verifier_concurrency: int
     required_provider: str | None = None
+    fallback_providers: tuple[str, ...] = ()
     scheduler_epoch: str | None = None
     worker_launch_interval_seconds: int = 0
     lease_timeout_seconds: int = 120
@@ -425,12 +455,14 @@ class RootlessFullHarnessConfig:
             allowed_path_prefix,
             allowed_model,
             required_provider,
+            fallback_providers,
         ) = (
             _validate_provider_route(
                 self.upstream_base_url,
                 self.allowed_path_prefix,
                 self.allowed_model,
                 self.required_provider,
+                self.fallback_providers,
             )
         )
         for name in ("evolver_resources", "proxy_resources"):
@@ -490,6 +522,7 @@ class RootlessFullHarnessConfig:
         object.__setattr__(self, "allowed_path_prefix", allowed_path_prefix)
         object.__setattr__(self, "allowed_model", allowed_model)
         object.__setattr__(self, "required_provider", required_provider)
+        object.__setattr__(self, "fallback_providers", fallback_providers)
 
 
 _CONFIG_KEYS_V1 = frozenset(
@@ -517,6 +550,7 @@ _CONFIG_KEYS_V2 = _CONFIG_KEYS_V1 | {"required_provider"}
 _CONFIG_KEYS_V3 = _CONFIG_KEYS_V2 | {"scheduler_epoch"}
 _CONFIG_KEYS_V4 = _CONFIG_KEYS_V3 | {"worker_launch_interval_seconds"}
 _CONFIG_KEYS_V5 = _CONFIG_KEYS_V4 | {"lease_timeout_seconds"}
+_CONFIG_KEYS_V6 = _CONFIG_KEYS_V5 | {"fallback_providers"}
 
 
 def load_rootless_full_harness_config(
@@ -542,21 +576,27 @@ def load_rootless_full_harness_config(
         3: _CONFIG_KEYS_V3,
         4: _CONFIG_KEYS_V4,
         5: _CONFIG_KEYS_V5,
+        6: _CONFIG_KEYS_V6,
     }.get(schema_version)
     if expected_keys is None:
         raise ValueError(
-            "rootless config schema_version must be 1, 2, 3, 4, or 5"
+            "rootless config schema_version must be 1, 2, 3, 4, 5, or 6"
         )
     if set(payload) != expected_keys:
         raise ValueError("rootless config has unknown or missing fields")
-    if schema_version in {2, 3, 4, 5} and not isinstance(
+    if schema_version in {2, 3, 4, 5, 6} and not isinstance(
         payload["required_provider"], str
     ):
         raise ValueError("rootless config required_provider must be a string")
-    if schema_version in {3, 4, 5} and not isinstance(
+    if schema_version in {3, 4, 5, 6} and not isinstance(
         payload["scheduler_epoch"], str
     ):
         raise ValueError("rootless config scheduler_epoch must be a string")
+    if schema_version == 6 and not (
+        isinstance(payload["fallback_providers"], list)
+        and all(isinstance(value, str) for value in payload["fallback_providers"])
+    ):
+        raise ValueError("rootless config fallback_providers must be a string list")
     try:
         return RootlessFullHarnessConfig(
             docker_host=payload["docker_host"],
@@ -576,6 +616,7 @@ def load_rootless_full_harness_config(
             worker_concurrency=payload["worker_concurrency"],
             verifier_concurrency=payload["verifier_concurrency"],
             required_provider=payload.get("required_provider"),
+            fallback_providers=tuple(payload.get("fallback_providers", ())),
             scheduler_epoch=payload.get("scheduler_epoch"),
             worker_launch_interval_seconds=payload.get(
                 "worker_launch_interval_seconds", 0
@@ -1068,6 +1109,7 @@ def build_rootless_full_harness_runtime(
             allowed_path_prefix=config.allowed_path_prefix,
             allowed_model=config.allowed_model,
             required_provider=config.required_provider,
+            fallback_providers=config.fallback_providers,
         )
         proxy_manager = SandboxProxyManager(
             backend=backend,
@@ -1159,13 +1201,26 @@ def build_rootless_full_harness_runtime(
                 allowed_path_prefix=config.allowed_path_prefix,
                 allowed_model=config.allowed_model,
                 required_provider=config.required_provider,
+                fallback_providers=config.fallback_providers,
             ),
         }
         if config.required_provider is not None:
-            model_egress_policy["provider_routing"] = {
-                "only": [config.required_provider],
-                "allow_fallbacks": False,
-            }
+            providers = [
+                config.required_provider,
+                *config.fallback_providers,
+            ]
+            if config.fallback_providers:
+                model_egress_policy["provider_routing"] = {
+                    "order": providers,
+                    "only": providers,
+                    "allow_fallbacks": True,
+                    "require_parameters": True,
+                }
+            else:
+                model_egress_policy["provider_routing"] = {
+                    "only": providers,
+                    "allow_fallbacks": False,
+                }
         runtime_identity = _canonical_digest(
             {
                 "schema_version": 1,

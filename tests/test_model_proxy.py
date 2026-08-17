@@ -495,6 +495,30 @@ def test_rate_limit_replay_uses_three_fresh_exact_pinned_wire_requests(tmp_path)
         _stop(upstream, upstream_thread)
 
 
+def test_required_provider_can_use_a_bounded_fallback_order(tmp_path):
+    upstream, upstream_thread = _start_upstream()
+    proxy, proxy_thread = _start_proxy(
+        tmp_path,
+        upstream,
+        required_provider="deepseek",
+        fallback_providers=("baseten", "gmicloud", "deepinfra"),
+    )
+    try:
+        status, _, _ = _request(proxy)
+
+        assert status == 200
+        [captured] = upstream.captured
+        assert json.loads(captured["body"])["provider"] == {
+            "order": ["deepseek", "baseten", "gmicloud", "deepinfra"],
+            "only": ["deepseek", "baseten", "gmicloud", "deepinfra"],
+            "allow_fallbacks": True,
+            "require_parameters": True,
+        }
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
 def test_rate_limit_retry_after_precedes_fallback_backoff(
     tmp_path, monkeypatch
 ):
@@ -629,7 +653,7 @@ def test_real_nexau_outer_retry_policy_keeps_exhaustion_to_three_wires(
         _stop(upstream, upstream_thread)
 
 
-def test_retry_wire_cannot_return_success_after_monotonic_deadline(
+def test_completed_retry_is_returned_even_if_start_budget_has_elapsed(
     tmp_path, monkeypatch
 ):
     from qea.model_proxy import _ModelProxyHandler
@@ -637,8 +661,8 @@ def test_retry_wire_cannot_return_success_after_monotonic_deadline(
     upstream, upstream_thread = _start_rate_limit_upstream(
         rate_limit_count=1, retry_after="0"
     )
-    # Keep the retry within budget through connect and response read, then
-    # expire immediately before the buffered 200 could be returned downstream.
+    # The retry starts within budget. Once a complete 200 is available, the
+    # start budget must not discard an already paid successful generation.
     clock_values = iter((0.0, 0.0, 0.0, 0.0, 0.0, 61.0))
     last_clock = [61.0]
 
@@ -664,21 +688,19 @@ def test_retry_wire_cannot_return_success_after_monotonic_deadline(
     try:
         status, _, payload = _request(proxy)
 
-        assert status == 502
-        assert json.loads(payload)["error"]["code"] == (
-            "rate_limit_retry_deadline_expired"
-        )
+        assert status == 200
+        assert json.loads(payload)["ok"] is True
         assert len(upstream.captured) == 2
         assert len(seen_policies) == 2
         assert seen_policies[0].read_timeout_seconds == 300.0
-        assert seen_policies[1].read_timeout_seconds == 60.0
+        assert seen_policies[1].read_timeout_seconds == 300.0
         records = _read_audit(tmp_path)
         assert [record["request_state"] for record in records] == [
             "not_accepted",
-            "quarantined",
+            "completed",
         ]
         assert records[0]["failure_class"] == "rate_limited"
-        assert records[1]["failure_class"] == "post_accept_transport"
+        assert records[1]["failure_class"] is None
         assert records[1]["upstream_status_code"] == 200
         assert records[1]["total_tokens"] == 18
     finally:

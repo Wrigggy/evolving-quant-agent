@@ -296,6 +296,7 @@ def _manager(
     mode: int = 0o600,
     expect_request: bool | None = None,
     required_provider: str | None = None,
+    fallback_providers: tuple[str, ...] = (),
 ):
     from qea.executors.sandbox_proxy import SandboxProxyConfig, SandboxProxyManager
 
@@ -313,6 +314,8 @@ def _manager(
         config_values["expect_request"] = expect_request
     if required_provider is not None:
         config_values["required_provider"] = required_provider
+    if fallback_providers:
+        config_values["fallback_providers"] = fallback_providers
     return SandboxProxyManager(
         backend=backend,
         config=SandboxProxyConfig(**config_values),
@@ -442,6 +445,29 @@ def test_session_binds_required_provider_into_private_config_and_identity(tmp_pa
         pass
     assert session.public_config_sha256 != unpinned_session.public_config_sha256
     assert session.attempt_identity_sha256 != unpinned_session.attempt_identity_sha256
+
+
+def test_session_binds_provider_fallbacks_into_private_config(tmp_path):
+    run_dir = tmp_path / "run"
+    backend = RecordingBackend(run_dir, audit_payload=_audit_bytes("completed"))
+    manager = _manager(
+        tmp_path,
+        backend,
+        required_provider="deepseek",
+        fallback_providers=("baseten", "gmicloud"),
+    )
+
+    with _open(manager, run_dir) as session:
+        config_upload = next(
+            payload
+            for _, path, payload in backend.uploads
+            if path == "/run/qea-secrets/proxy-config.json"
+        )
+        assert json.loads(config_upload)["fallback_providers"] == [
+            "baseten",
+            "gmicloud",
+        ]
+        assert session.fallback_providers == ("baseten", "gmicloud")
 
 
 def test_two_attempts_in_one_run_never_share_proxy_or_network_ids(tmp_path):

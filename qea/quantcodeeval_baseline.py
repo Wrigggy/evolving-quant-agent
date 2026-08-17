@@ -101,6 +101,23 @@ def _read_config(path: Path) -> dict[str, object]:
         raise QuantCodeEvalBaselineError("runtime config has the wrong model")
     if str(payload.get("required_provider", "")).casefold() != PROVIDER:
         raise QuantCodeEvalBaselineError("runtime config must require DeepSeek")
+    fallback_providers = payload.get("fallback_providers", [])
+    if not (
+        isinstance(fallback_providers, list)
+        and all(
+            isinstance(provider, str) and provider.strip()
+            for provider in fallback_providers
+        )
+    ):
+        raise QuantCodeEvalBaselineError(
+            "runtime fallback providers must be a string list"
+        )
+    if len(set(fallback_providers)) != len(fallback_providers):
+        raise QuantCodeEvalBaselineError("runtime fallback providers must be unique")
+    if PROVIDER in fallback_providers:
+        raise QuantCodeEvalBaselineError(
+            "runtime fallback providers must not repeat DeepSeek"
+        )
     if payload.get("allowed_path_prefix") != "/v1":
         raise QuantCodeEvalBaselineError("runtime config must restrict /v1")
     if payload.get("worker_concurrency") != 1:
@@ -166,6 +183,8 @@ class QuantCodeEvalWorkerRouter:
             if (
                 session.allowed_model != MODEL
                 or session.required_provider != PROVIDER
+                or session.fallback_providers
+                != self.proxy_manager.config.fallback_providers
                 or session.immutable_image_ref
                 != self.proxy_manager.config.image_ref
                 or session.network_scope != attempt.attempt_id
@@ -202,7 +221,11 @@ class QuantCodeEvalWorkerRouter:
             )
 
 
-def _generation_metadata(generation_id: str, token: str) -> dict[str, object]:
+def _generation_metadata(
+    generation_id: str,
+    token: str,
+    allowed_providers: tuple[str, ...],
+) -> dict[str, object]:
     url = GENERATION_ENDPOINT + "?" + urllib.parse.urlencode({"id": generation_id})
     request = urllib.request.Request(
         url,
@@ -223,7 +246,9 @@ def _generation_metadata(generation_id: str, token: str) -> dict[str, object]:
                 )
             provider = data.get("provider_name")
             resolved_model = data.get("model")
-            if not isinstance(provider, str) or provider.casefold() != PROVIDER:
+            if not isinstance(provider, str) or provider.casefold() not in {
+                value.casefold() for value in allowed_providers
+            }:
                 raise QuantCodeEvalBaselineError(
                     f"generation used unexpected provider {provider!r}"
                 )
@@ -250,7 +275,11 @@ def _generation_metadata(generation_id: str, token: str) -> dict[str, object]:
     )
 
 
-def _route_evidence(run_dir: Path, token_file: Path) -> dict[str, object]:
+def _route_evidence(
+    run_dir: Path,
+    token_file: Path,
+    allowed_providers: tuple[str, ...],
+) -> dict[str, object]:
     records: list[dict[str, object]] = []
     generation_ids: list[str] = []
     for audit in sorted((run_dir / "attempts").glob("*/proxy-audit.jsonl")):
@@ -292,13 +321,17 @@ def _route_evidence(run_dir: Path, token_file: Path) -> dict[str, object]:
     if not token:
         raise QuantCodeEvalBaselineError("model token is empty")
     try:
-        resolved = [_generation_metadata(item, token) for item in generation_ids]
+        resolved = [
+            _generation_metadata(item, token, allowed_providers)
+            for item in generation_ids
+        ]
     finally:
         token = ""
     return {
         "requested_model": MODEL,
         "required_provider": PROVIDER,
-        "allow_fallbacks": False,
+        "fallback_providers": list(allowed_providers[1:]),
+        "allow_fallbacks": len(allowed_providers) > 1,
         "requests": records,
         "generation_metadata": resolved,
     }
@@ -414,6 +447,7 @@ def prepare_quantcodeeval_h0(
         allowed_path_prefix="/v1",
         allowed_model=MODEL,
         required_provider=PROVIDER,
+        fallback_providers=tuple(config.get("fallback_providers", [])),
         timeout_seconds=120,
         finalize_timeout_seconds=360,
         expect_request=True,
@@ -462,7 +496,8 @@ def prepare_quantcodeeval_h0(
         "rootless_preflight_identity_sha256": preflight.identity_sha256,
         "model": MODEL,
         "required_provider": PROVIDER,
-        "allow_fallbacks": False,
+        "fallback_providers": list(proxy_config.fallback_providers),
+        "allow_fallbacks": bool(proxy_config.fallback_providers),
         "worker_concurrency": 1,
         "verifier_concurrency": 1,
         "checkpoint": CHECKPOINT,
@@ -520,7 +555,14 @@ def run_quantcodeeval_h0(
         checkpoint=CHECKPOINT,
         split=SPLIT,
     )
-    route = _route_evidence(run_root, Path(token_file).resolve())
+    route = _route_evidence(
+        run_root,
+        Path(token_file).resolve(),
+        (
+            PROVIDER,
+            *tuple(str(value) for value in plan.get("fallback_providers", [])),
+        ),
+    )
     attempts = []
     worker_digest = str(plan["worker_digest"])
     for task in snapshot.optimize.tasks:
