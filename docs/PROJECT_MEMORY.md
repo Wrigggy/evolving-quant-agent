@@ -2273,6 +2273,36 @@ protection/matched transfer. Detailed evidence is in
 and
 `results/quantcodeeval-t26-provider-and-binary-improvement-20260817/RESULT.json`.
 
+**Estimator-semantics and empty-response recovery on 2026-08-18:** an
+autonomous estimator-state refinement was admitted but rejected by independent
+component contrasts. A generalized repair then produced a fresh blind T26
+15/17 result with all ten Type-B properties passing, but reward remained zero.
+The next static refinement added first-versus-second-moment and public
+training-scope checks. Although its synthetic contrasts passed, its valid blind
+artifact scored only 3/17 because a multi-output OLS helper crashed on
+incompatible array shapes. Static contrast success is therefore insufficient
+evidence of component runtime stability.
+
+Provider diagnosis also supersedes the assumption that ordered fallback alone
+resolves empty completions. A real SSE-aware proxy intercepted a reasoning-only
+empty response, but the first fallback also returned empty after a long
+full-budget attempt. Their combined latency exceeded the downstream timeout,
+interrupted audit finalization, and made the emitted result report zero cost.
+Live observation before cleanup retained a lower bound of 16 paid responses,
+557,902 tokens, and $0.075398272; use that lower bound, not the emitted zero.
+
+The proxy now permits one recovery continuation with low reasoning and an
+8,192-token output cap, then returns a prompt infrastructure error if recovery
+is also empty. Paid empty responses remain cost records. Local validation
+passed 97 related tests with one skip; this final bounded behavior has not yet
+been used in a paid Worker. Next compose the static quant-contract auditor with
+a small executable runtime probe for public-entrypoint no-crash, shape, and
+finiteness. Do not add more static failure classes or start protection/transfer
+before a fresh blind 17/17 T26 result repeats. See
+`docs/reports/2026-08-18-quantcodeeval-estimator-semantics-and-empty-response-recovery.md`
+and
+`results/quantcodeeval-estimator-semantics-and-provider-recovery-20260818/RESULT.json`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

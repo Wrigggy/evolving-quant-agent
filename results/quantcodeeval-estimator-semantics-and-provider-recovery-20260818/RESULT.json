@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-18",
+  "benchmark": "QuantCodeEval",
+  "task": "T26",
+  "result_class": "engineering_canary",
+  "headline": {
+    "best_fresh_blind_properties": "15/17",
+    "fresh_blind_binary_reward": 0.0,
+    "sse_empty_response_detected_live": true,
+    "final_bounded_recovery_paid_tested": false
+  },
+  "runs": [
+    {
+      "run_id": "qce-t26-estimator-state-evolver-20260818-r3",
+      "role": "evolver",
+      "outcome": "admitted but component contrasts rejected",
+      "requests": 79,
+      "tokens": 8102961,
+      "cost_usd": 0.136398588
+    },
+    {
+      "run_id": "qce-t26-estimator-state-manual-candidate-20260818-r1",
+      "role": "blind_worker",
+      "official_properties": "15/17",
+      "official_reward": 0.0,
+      "requests": 44,
+      "tokens": 1941604,
+      "cost_usd": 0.084313672
+    },
+    {
+      "run_id": "qce-t26-estimator-semantics-fallback-candidate-20260818-r2",
+      "role": "blind_worker_with_replacement",
+      "official_properties": "3/17",
+      "official_reward": 0.0,
+      "requests": 34,
+      "tokens": 1087189,
+      "cost_usd": 0.12706106
+    },
+    {
+      "run_id": "qce-t26-estimator-semantics-sse-fallback-candidate-20260818-r3",
+      "role": "blind_worker",
+      "outcome": "no artifact; downstream timed out during second empty response",
+      "official_score_available": false,
+      "observed_requests_lower_bound": 16,
+      "observed_tokens_lower_bound": 557902,
+      "observed_cost_usd_lower_bound": 0.075398272,
+      "emitted_zero_cost_superseded": true
+    }
+  ],
+  "mechanism_findings": [
+    "Static estimator-semantics contrasts changed Worker code but did not prevent a multi-output OLS shape crash.",
+    "SSE reasoning-only emptiness must be detected at the proxy, not only in NexAU.",
+    "Full-budget serial provider fallback can exceed the downstream client timeout.",
+    "The next component should combine static semantic localization with a bounded executable runtime probe."
+  ],
+  "final_validation": {
+    "focused_proxy_tests": "3 passed",
+    "related_suite": "97 passed, 1 skipped",
+    "paid_final_bounded_recovery": "not run"
+  }
+}
