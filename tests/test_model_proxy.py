@@ -359,9 +359,24 @@ class EmptyThenSuccessHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length)
+        streaming = json.loads(body).get("stream") is True
         index = len(self.server.captured)
         self.server.captured.append(body)
-        if index == 0:
+        if streaming and index == 0:
+            payload = b"".join((
+                b'data: {"choices":[{"delta":{"reasoning":"thinking"}}]}\n\n',
+                b'data: {"choices":[],"usage":{"prompt_tokens":10,',
+                b'"completion_tokens":32,"total_tokens":42,"cost":0.02}}\n\n',
+                b'data: [DONE]\n\n',
+            ))
+        elif streaming:
+            payload = b"".join((
+                b'data: {"choices":[{"delta":{"content":"done"}}]}\n\n',
+                b'data: {"choices":[],"usage":{"prompt_tokens":11,',
+                b'"completion_tokens":3,"total_tokens":14,"cost":0.003}}\n\n',
+                b'data: [DONE]\n\n',
+            ))
+        elif index == 0:
             payload = json.dumps({
                 "choices": [{"message": {"content": None, "tool_calls": []}}],
                 "usage": {
@@ -382,7 +397,10 @@ class EmptyThenSuccessHandler(BaseHTTPRequestHandler):
                 },
             }).encode()
         self.send_response(200)
-        self.send_header("Content-Type", "application/json")
+        self.send_header(
+            "Content-Type",
+            "text/event-stream" if streaming else "application/json",
+        )
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Connection", "close")
         self.end_headers()
@@ -601,6 +619,38 @@ def test_completed_empty_response_retries_on_fallback_provider(tmp_path):
         assert records[1]["request_state"] == "completed"
         assert records[1]["failure_class"] is None
         _validate_v2_retry_groups(tuple(records), source=tmp_path)
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_streaming_empty_response_retries_on_fallback_provider(tmp_path):
+    upstream, upstream_thread = _start_empty_then_success_upstream()
+    proxy, proxy_thread = _start_proxy(
+        tmp_path,
+        upstream,
+        required_provider="deepseek",
+        fallback_providers=("baseten", "gmicloud", "deepinfra"),
+    )
+    try:
+        status, _, payload = _request(
+            proxy,
+            body=b'{"model":"fixture","stream":true}',
+        )
+
+        assert status == 200
+        assert b'"content":"done"' in payload
+        assert len(upstream.captured) == 2
+        second_provider = json.loads(upstream.captured[1])["provider"]
+        assert second_provider["order"] == ["baseten", "gmicloud", "deepinfra"]
+        finalize_status, _ = _finalize(proxy)
+        assert finalize_status == 200
+        records = _read_audit(tmp_path)
+        assert [record["failure_class"] for record in records] == [
+            "empty_model_response",
+            None,
+        ]
+        assert [record["provider_cost_usd"] for record in records] == [0.02, 0.003]
     finally:
         _stop(proxy, proxy_thread)
         _stop(upstream, upstream_thread)

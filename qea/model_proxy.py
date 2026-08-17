@@ -1063,7 +1063,38 @@ def _is_empty_model_response(payload: bytes) -> bool:
     try:
         decoded = json.loads(payload)
     except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
-        return False
+        decoded = None
+    if decoded is None:
+        saw_choice = False
+        for line in payload.splitlines():
+            if not line.startswith(b"data:"):
+                continue
+            event = line[len(b"data:") :].lstrip(b" ")
+            if not event or event == b"[DONE]":
+                continue
+            try:
+                decoded_event = json.loads(event)
+            except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+                return False
+            if not isinstance(decoded_event, dict):
+                return False
+            choices = decoded_event.get("choices")
+            if not isinstance(choices, list):
+                return False
+            for choice in choices:
+                if not isinstance(choice, dict):
+                    return False
+                message = choice.get("delta", choice.get("message"))
+                if not isinstance(message, dict):
+                    return False
+                saw_choice = True
+                content = message.get("content")
+                if isinstance(content, str) and content.strip():
+                    return False
+                tool_calls = message.get("tool_calls")
+                if isinstance(tool_calls, list) and tool_calls:
+                    return False
+        return saw_choice
     if not isinstance(decoded, dict):
         return False
     choices = decoded.get("choices")
