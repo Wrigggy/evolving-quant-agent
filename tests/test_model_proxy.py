@@ -362,7 +362,7 @@ class EmptyThenSuccessHandler(BaseHTTPRequestHandler):
         streaming = json.loads(body).get("stream") is True
         index = len(self.server.captured)
         self.server.captured.append(body)
-        if streaming and index == 0:
+        if streaming and index < self.server.empty_count:
             payload = b"".join((
                 b'data: {"choices":[{"delta":{"reasoning":"thinking"}}]}\n\n',
                 b'data: {"choices":[],"usage":{"prompt_tokens":10,',
@@ -413,6 +413,7 @@ class EmptyThenSuccessHandler(BaseHTTPRequestHandler):
 def _start_empty_then_success_upstream():
     server = ThreadingHTTPServer(("127.0.0.1", 0), EmptyThenSuccessHandler)
     server.captured = []
+    server.empty_count = 1
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, thread
@@ -643,6 +644,9 @@ def test_streaming_empty_response_retries_on_fallback_provider(tmp_path):
         assert len(upstream.captured) == 2
         second_provider = json.loads(upstream.captured[1])["provider"]
         assert second_provider["order"] == ["baseten", "gmicloud", "deepinfra"]
+        second_payload = json.loads(upstream.captured[1])
+        assert second_payload["max_tokens"] == 8192
+        assert second_payload["reasoning"]["effort"] == "low"
         finalize_status, _ = _finalize(proxy)
         assert finalize_status == 200
         records = _read_audit(tmp_path)
@@ -651,6 +655,40 @@ def test_streaming_empty_response_retries_on_fallback_provider(tmp_path):
             None,
         ]
         assert [record["provider_cost_usd"] for record in records] == [0.02, 0.003]
+    finally:
+        _stop(proxy, proxy_thread)
+        _stop(upstream, upstream_thread)
+
+
+def test_streaming_empty_fallback_stops_before_client_timeout(tmp_path):
+    from qea.qfbench_baseline import _validate_v2_retry_groups
+
+    upstream, upstream_thread = _start_empty_then_success_upstream()
+    upstream.empty_count = 2
+    proxy, proxy_thread = _start_proxy(
+        tmp_path,
+        upstream,
+        required_provider="deepseek",
+        fallback_providers=("baseten", "gmicloud", "deepinfra"),
+    )
+    try:
+        status, _, _ = _request(
+            proxy,
+            body=(
+                b'{"model":"fixture","stream":true,"max_tokens":32000,'
+                b'"reasoning":{"effort":"high"}}'
+            ),
+        )
+
+        assert status == 502
+        assert len(upstream.captured) == 2
+        records = _read_audit(tmp_path)
+        assert [record["failure_class"] for record in records] == [
+            "empty_model_response",
+            "empty_model_response",
+        ]
+        assert [record["retry_index"] for record in records] == [0, 1]
+        _validate_v2_retry_groups(tuple(records), source=tmp_path)
     finally:
         _stop(proxy, proxy_thread)
         _stop(upstream, upstream_thread)

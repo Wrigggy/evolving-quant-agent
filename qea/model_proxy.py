@@ -73,6 +73,7 @@ _MAX_DENIED_REQUEST_IDENTITIES = 10_000
 _MAX_PRE_ACCEPT_CONNECT_ATTEMPTS = 5
 _PRE_ACCEPT_CONNECT_BACKOFF_SECONDS = 0.25
 _MAX_RATE_LIMIT_ATTEMPTS = 3
+_EMPTY_RESPONSE_RECOVERY_MAX_TOKENS = 8192
 _RATE_LIMIT_RETRY_BUDGET_SECONDS = 60.0
 _RATE_LIMIT_BACKOFF_SECONDS = 1.0
 
@@ -1115,6 +1116,28 @@ def _is_empty_model_response(payload: bytes) -> bool:
     return True
 
 
+def _empty_response_recovery_payload(payload: dict) -> dict:
+    """Use a bounded reasoning budget for one otherwise lost continuation."""
+
+    recovered = dict(payload)
+    token_key = (
+        "max_completion_tokens"
+        if "max_completion_tokens" in recovered
+        else "max_tokens"
+    )
+    current = recovered.get(token_key)
+    if type(current) is int and current > 0:
+        recovered[token_key] = min(current, _EMPTY_RESPONSE_RECOVERY_MAX_TOKENS)
+    else:
+        recovered[token_key] = _EMPTY_RESPONSE_RECOVERY_MAX_TOKENS
+    reasoning = recovered.get("reasoning")
+    recovered_reasoning = dict(reasoning) if isinstance(reasoning, dict) else {}
+    recovered_reasoning.pop("max_tokens", None)
+    recovered_reasoning["effort"] = "low"
+    recovered["reasoning"] = recovered_reasoning
+    return recovered
+
+
 def _provider_request_id(headers, *, forbidden: str) -> str | None:
     for name in (
         "X-Generation-Id",
@@ -1893,12 +1916,17 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             self._reject(409, "request_replay_forbidden")
             return
         retry_deadline: float | None = None
+        empty_response_seen = False
         for retry_index in range(policy.rate_limit_max_attempts):
             attempt_body = outbound_body
             if retry_index > 0 and policy.fallback_providers:
                 remaining = list(policy.fallback_providers[retry_index - 1 :])
                 if remaining:
-                    attempt_payload = dict(request_payload)
+                    attempt_payload = (
+                        _empty_response_recovery_payload(request_payload)
+                        if empty_response_seen
+                        else dict(request_payload)
+                    )
                     attempt_payload["provider"] = {
                         "order": remaining,
                         "only": remaining,
@@ -1927,14 +1955,17 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             )
             if response is None:
                 return
-            empty_response_retry = (
+            empty_response = (
                 response.status == 200
                 and _is_empty_model_response(response.body)
-                and bool(policy.fallback_providers)
-                and retry_index + 1 < policy.rate_limit_max_attempts
-                and retry_index < len(policy.fallback_providers)
             )
-            if empty_response_retry:
+            if empty_response:
+                can_retry_empty = (
+                    not empty_response_seen
+                    and bool(policy.fallback_providers)
+                    and retry_index + 1 < policy.rate_limit_max_attempts
+                    and retry_index < len(policy.fallback_providers)
+                )
                 self._audit(
                     request_identity_sha256=request_identity,
                     retry_index=retry_index,
@@ -1949,10 +1980,14 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
                     total_tokens=response.total_tokens,
                     provider_cost_usd=response.provider_cost_usd,
                     failure_class="empty_model_response",
-                    terminal_for_handler=False,
+                    terminal_for_handler=not can_retry_empty,
                     audit_schema_version=2,
                 )
-                continue
+                if can_retry_empty:
+                    empty_response_seen = True
+                    continue
+                self._reject(502, "empty_model_response_after_fallback")
+                return
             if response.status != 429:
                 self._deliver_buffered_response(
                     response=response,
