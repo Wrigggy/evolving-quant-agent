@@ -519,6 +519,7 @@ class QFBenchSandboxEvaluator:
         verifier_concurrency: int | None = None,
         max_workers: int | None = None,
         worker_launch_interval_seconds: int = 0,
+        maximum_worker_replacements: int = 3,
     ) -> None:
         if not re.fullmatch(r"[0-9a-f]{40}", benchmark_commit):
             raise EvolutionConfigError("benchmark_commit must be a full SHA")
@@ -546,6 +547,7 @@ class QFBenchSandboxEvaluator:
         for name, value in (
             ("worker_concurrency", resolved_worker_concurrency),
             ("verifier_concurrency", resolved_verifier_concurrency),
+            ("maximum_worker_replacements", maximum_worker_replacements),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
                 raise EvolutionConfigError(f"{name} must be positive")
@@ -561,6 +563,7 @@ class QFBenchSandboxEvaluator:
             worker_launch_interval_seconds
         )
         self.worker_launch_interval_seconds = worker_launch_interval_seconds
+        self.maximum_worker_replacements = maximum_worker_replacements
 
     @staticmethod
     def _completed_score_path(run_dir: Path, attempt: TaskAttempt) -> Path:
@@ -688,6 +691,14 @@ class QFBenchSandboxEvaluator:
                     model_env=self.model_env,
                 )
             except WorkerArtifactContractError as exc:
+                resolved_attempt = resolve_worker_attempt(
+                    logical_attempt,
+                    run_dir,
+                    maximum_replacements=self.maximum_worker_replacements,
+                )
+                if resolved_attempt != attempt:
+                    attempt = resolved_attempt
+                    continue
                 score = OfficialTaskScore(
                     task_id=task.task_id,
                     domain=task.domain,
@@ -709,6 +720,16 @@ class QFBenchSandboxEvaluator:
                 )
                 _atomic_json(self._completed_score_path(run_dir, attempt), asdict(score))
                 return score
+            except Exception:
+                resolved_attempt = resolve_worker_attempt(
+                    logical_attempt,
+                    run_dir,
+                    maximum_replacements=self.maximum_worker_replacements,
+                )
+                if resolved_attempt != attempt:
+                    attempt = resolved_attempt
+                    continue
+                raise
             if not isinstance(execution, WorkerExecution):
                 raise EvolutionConfigError(
                     f"executor returned an invalid worker execution for {task.task_id}"

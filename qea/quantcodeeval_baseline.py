@@ -444,6 +444,7 @@ def prepare_quantcodeeval_h0(
         model_env={},
         worker_concurrency=1,
         verifier_concurrency=1,
+        maximum_worker_replacements=1,
     )
     frozen_worker = run_root / "workers" / "H0"
     worker_digest = _snapshot_worker(Path(worker_dir).resolve(), frozen_worker)

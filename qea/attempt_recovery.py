@@ -64,6 +64,11 @@ _WORKER_THREAD_EXHAUSTION_SIGNATURES = (
     "RuntimeError: can't start new thread",
     "RuntimeError: Error in agent execution: can't start new thread",
 )
+_EMPTY_MODEL_RESPONSE_SIGNATURES = (
+    "Empty model response received:",
+    "No response content or tool calls",
+    "Error in agent execution: No response content or tool calls",
+)
 _RECOVERABLE_WORKER_INFRASTRUCTURE_SIGNATURES = (
     _WORKER_TRANSPORT_SIGNATURES,
     _WORKER_THREAD_EXHAUSTION_SIGNATURES,
@@ -137,17 +142,27 @@ def _completed_audit_transport_command(attempt_dir: Path) -> str | None:
     if not isinstance(command, dict) or set(command) != _COMMAND_FIELDS:
         raise AttemptRecoveryError("attempt recovery worker command schema is invalid")
     if (
-        command.get("exit_code") != 1
+        command.get("exit_code") not in {0, 1}
         or command.get("timed_out") is not False
         or not isinstance(command.get("stdout"), str)
         or not isinstance(command.get("stderr"), str)
     ):
         return None
     stderr = command["stderr"]
-    if not any(
+    recognized_infrastructure = any(
         all(signature in stderr for signature in signatures)
         for signatures in _RECOVERABLE_WORKER_INFRASTRUCTURE_SIGNATURES
-    ):
+    )
+    empty_model_delivery = all(
+        signature in stderr for signature in _EMPTY_MODEL_RESPONSE_SIGNATURES
+    )
+    if command["exit_code"] == 0 and empty_model_delivery:
+        contract_path = attempt_dir / "worker-artifact-contract.json"
+        if not contract_path.is_file():
+            return None
+        contract = _read_json(contract_path)
+        empty_model_delivery = contract.get("found_paths") == []
+    if not recognized_infrastructure and not empty_model_delivery:
         return None
     return hashlib.sha256(raw).hexdigest()
 

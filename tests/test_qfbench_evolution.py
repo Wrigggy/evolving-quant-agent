@@ -768,6 +768,134 @@ def test_sandbox_evaluator_replaces_worker_infrastructure_failure_after_complete
     assert command_path.read_bytes() == original_command
 
 
+@pytest.mark.parametrize("failure_kind", ("network", "empty-model"))
+def test_sandbox_evaluator_replaces_observed_delivery_failure_inline(
+    tmp_path,
+    failure_kind,
+):
+    """A live panel should not need an external resume to use one replacement."""
+
+    from qea.executors.execution_record import WorkerArtifactContractError
+    from qea.loop_benchmark import QFBenchSandboxEvaluator
+
+    task = SimpleNamespace(
+        task_id="quant-delivery",
+        domain="quant",
+        lineage="quant-delivery",
+    )
+    worker = _seed_worker(tmp_path)
+    run_dir = tmp_path / f"inline-{failure_kind}"
+    completed = {
+        "schema_version": 1,
+        "request_identity_sha256": "a" * 64,
+        "model": "deepseek/deepseek-v4-flash-0731",
+        "started_at": "2026-08-17T01:00:00+00:00",
+        "finished_at": "2026-08-17T01:01:00+00:00",
+        "latency_ms": 60000,
+        "request_state": "completed",
+        "upstream_status_code": 200,
+        "provider_request_id": "request-1",
+        "input_tokens": 100,
+        "output_tokens": 32000 if failure_kind == "empty-model" else 20,
+        "total_tokens": 32100 if failure_kind == "empty-model" else 120,
+        "provider_cost_usd": "0.01",
+        "failure_class": None,
+    }
+
+    class FailingThenSuccessfulExecutor:
+        def __init__(self):
+            self.attempt_ids = []
+
+        def execute(self, *, attempt, task, worker_dir, run_dir, model_env):
+            self.attempt_ids.append(attempt.attempt_id)
+            if len(self.attempt_ids) > 1:
+                return _execution_for(attempt, run_dir, task)
+            attempt_dir = run_dir / "attempts" / attempt.attempt_id
+            (attempt_dir / "proxy-audit.jsonl").write_text(
+                json.dumps(completed, sort_keys=True) + "\n"
+            )
+            if failure_kind == "network":
+                command = {
+                    "exit_code": 1,
+                    "stdout": "",
+                    "stderr": (
+                        "openai.APIError: Network connection lost.\n"
+                        "RuntimeError: Error in agent execution: "
+                        "Network connection lost.\n"
+                    ),
+                    "timed_out": False,
+                }
+                error = RuntimeError("worker command lost its model stream")
+            else:
+                command = {
+                    "exit_code": 0,
+                    "stdout": "",
+                    "stderr": (
+                        "Empty model response received: "
+                        "usage={'reasoning_tokens': 32000}\n"
+                        "No response content or tool calls\n"
+                        "Error in agent execution: "
+                        "No response content or tool calls\n"
+                    ),
+                    "timed_out": False,
+                }
+                (attempt_dir / "worker-artifact-contract.json").write_text(
+                    json.dumps(
+                        {
+                            "expected_paths": ["strategy.py"],
+                            "found_paths": [],
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
+                error = WorkerArtifactContractError(
+                    "empty model delivery produced no strategy.py"
+                )
+            (attempt_dir / "worker-command.json").write_text(
+                json.dumps(command, sort_keys=True) + "\n"
+            )
+            raise error
+
+    class SuccessfulVerifier:
+        def verify(self, *, attempt, task, execution, run_dir):
+            return OfficialTaskScore(
+                task_id=task.task_id,
+                domain=task.domain,
+                reward=1.0,
+            )
+
+    executor = FailingThenSuccessfulExecutor()
+    evaluator = QFBenchSandboxEvaluator(
+        benchmark_commit="0" * 40,
+        run_id=run_dir.name,
+        executor=executor,
+        verifier=SuccessfulVerifier(),
+        model_env={},
+        worker_concurrency=1,
+        verifier_concurrency=1,
+        maximum_worker_replacements=1,
+    )
+
+    summary = evaluator.evaluate(
+        worker_dir=worker,
+        tasks=(task,),
+        split="engineering_canary_optimize",
+        checkpoint="quantcodeeval-v2-iteration-0001",
+        run_dir=run_dir,
+    )
+
+    assert summary.overall == 1.0
+    assert len(executor.attempt_ids) == 2
+    assert executor.attempt_ids[0] != executor.attempt_ids[1]
+    first_attempt = run_dir / "attempts" / executor.attempt_ids[0]
+    replacement = json.loads(
+        (first_attempt / "worker-attempt-replacement.json").read_text()
+    )
+    assert replacement["replacement_ordinal"] == 1
+    assert replacement["replacement_attempt_id"] == executor.attempt_ids[1]
+
+
 def test_attempt_recovery_rejects_unrecognized_completed_audit_worker_failure(
     tmp_path,
 ):
