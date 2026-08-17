@@ -32,13 +32,15 @@ _IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _IMAGE_DIGEST = re.compile(
     r"[A-Za-z0-9][A-Za-z0-9._:/-]*@sha256:[0-9a-f]{64}\Z"
 )
-_TASK_ID = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
+_TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _METADATA_NAMES = frozenset(
     {
         "MANIFEST.json",
         ".qfbench-revision",
         ".qfbench-sparse-tasks.json",
         ".qfbench-cache",
+        ".quantcodeeval-revision",
+        ".quantcodeeval-task-ids.json",
     }
 )
 _SUPERVISOR_PATH = "/usr/local/bin/qea-sandbox-supervisor"

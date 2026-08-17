@@ -146,6 +146,29 @@ def _role_roots(tmp_path: Path) -> tuple[Path, Path]:
     return public, trusted
 
 
+def test_public_role_accepts_quantcodeeval_task_names_and_metadata(tmp_path) -> None:
+    from qea.rootless_images import verify_role_root
+
+    public, _ = _role_roots(tmp_path)
+    (public / "tasks" / "task-a").rename(public / "tasks" / "T26")
+    manifest_path = public / "MANIFEST.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["task_ids"] = ["T26"]
+    for record in manifest["files"]:
+        if record["path"].startswith("tasks/task-a/"):
+            record["path"] = record["path"].replace(
+                "tasks/task-a/", "tasks/T26/", 1
+            )
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+    (public / ".qfbench-revision").unlink()
+    (public / ".quantcodeeval-revision").write_text(COMMIT + "\n")
+    (public / ".quantcodeeval-task-ids.json").write_text('["T26"]\n')
+
+    verified = verify_role_root(public, "public")
+
+    assert verified.task_ids == ("T26",)
+
+
 def test_base_plan_pins_from_and_contains_only_public_base_inputs(tmp_path) -> None:
     from qea.rootless_images import prepare_rootless_image_plan
 
