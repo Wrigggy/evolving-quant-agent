@@ -69,6 +69,11 @@ def main() -> int:
     parser.add_argument("--source-run", type=Path, required=True, action="append")
     parser.add_argument("--output-run", type=Path, required=True)
     parser.add_argument("--verifier-image", required=True)
+    parser.add_argument(
+        "--task",
+        action="append",
+        help="Replay only the named task(s) from the bound panel.",
+    )
     args = parser.parse_args()
 
     output = args.output_run.resolve()
@@ -117,6 +122,16 @@ def main() -> int:
     )
     sources = tuple(path.resolve() for path in args.source_run)
     tasks = {task.task_id: task for task in snapshot.optimize.tasks}
+    if args.task:
+        requested = set(args.task)
+        unknown = sorted(requested - set(tasks))
+        if unknown:
+            raise SystemExit(f"task panel has no optimize tasks {unknown}")
+        tasks = {
+            task_id: task
+            for task_id, task in tasks.items()
+            if task_id in requested
+        }
     rows = []
     seen = set()
     for source in sources:
