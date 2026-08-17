@@ -1,0 +1,10 @@
+{
+  "diagnostic_tags": [],
+  "domain": "machine_learning_asset_pricing",
+  "log_uri": "/data/qea-julius-storage/runs/qce-t26-cv-semantics-verifier-replay-20260817-r4/attempts/10e17d9fa550a077392693e8a6fc870a431f53b866fc1801ee0fd54814437b42/verifier/verifier-command.trusted.json",
+  "reward": 1.0,
+  "task_id": "T26",
+  "tests_failed": 0,
+  "tests_passed": 17,
+  "verifier_exit_code": 0
+}

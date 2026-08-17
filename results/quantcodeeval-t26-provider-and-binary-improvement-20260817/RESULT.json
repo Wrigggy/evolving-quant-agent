@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-17",
+  "benchmark": "QuantCodeEval",
+  "task": "T26",
+  "result_class": "engineering_canary",
+  "headline": {
+    "rate_limit_transport_repaired": true,
+    "best_prior_official_properties": "16/17",
+    "final_official_properties": "17/17",
+    "final_official_reward": 1.0
+  },
+  "claim_boundary": {
+    "measured": [
+      "The fallback-enabled OpenRouter route completed all 251 model requests across five post-repair runs with upstream HTTP 200 and no proxy retry.",
+      "A zero-model causal ablation of the retained 16/17 Worker artifact passed all 17 official T26 properties in the isolated verifier.",
+      "The successful repair removed held-out-fold leakage from complement moments, used fold-local regularization scaling, population covariance, and a 50-point log kappa grid."
+    ],
+    "not_measured": [
+      "This is not yet a fresh shell-only to Evolver to blind-Worker 17/17 lineage.",
+      "The OpenRouter audit proves successful requests but does not identify which upstream provider served each request.",
+      "Repeat stability and cross-task transfer of the final binary-success mechanism are not yet measured."
+    ]
+  },
+  "model_route": {
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "preferred_provider": "deepseek",
+    "fallback_providers": [
+      "baseten",
+      "gmicloud",
+      "deepinfra"
+    ],
+    "post_repair_requests": 251,
+    "completed_http_200": 251,
+    "proxy_retries": 0,
+    "largest_observed_request_latency_seconds": 254.329198
+  },
+  "paid_runs": [
+    {
+      "run_id": "qce-t26-binary-gate-fallback-candidate-20260817-r1",
+      "role": "blind_worker",
+      "requests": 59,
+      "tokens": 2677999,
+      "cost_usd": 0.154200756,
+      "official_properties": "9/17"
+    },
+    {
+      "run_id": "qce-t26-binary-gate-fallback-candidate-20260817-r2",
+      "role": "blind_worker_repeat",
+      "requests": 38,
+      "tokens": 1482969,
+      "cost_usd": 0.10205442,
+      "official_properties": "14/17"
+    },
+    {
+      "run_id": "qce-t26-runtime-convergence-evolver-20260817-r2",
+      "role": "evolver",
+      "requests": 58,
+      "tokens": 4143100,
+      "cost_usd": 0.096463328,
+      "outcome": "admitted completion-middleware candidate; no Worker score"
+    },
+    {
+      "run_id": "qce-t26-grid-resolution-evolver-20260817-r1",
+      "role": "evolver",
+      "requests": 37,
+      "tokens": 2276653,
+      "cost_usd": 0.082239308,
+      "outcome": "admitted grid-resolution component candidate"
+    },
+    {
+      "run_id": "qce-t26-grid-resolution-candidate-20260817-r2",
+      "role": "blind_worker",
+      "requests": 59,
+      "tokens": 2867826,
+      "cost_usd": 0.114992344,
+      "official_properties": "13/17"
+    }
+  ],
+  "paid_totals": {
+    "requests": 251,
+    "tokens": 13448547,
+    "cost_usd": 0.549950156
+  },
+  "zero_model_ablations": [
+    {
+      "name": "retained_16_of_17_parent",
+      "kappa_star": 0.1211527659,
+      "gamma_star": 0.0187564313,
+      "oos_monthly_mean": 0.00698731,
+      "official_properties": "16/17"
+    },
+    {
+      "name": "grid_50_only",
+      "outcome": "falsified",
+      "official_properties": "16/17",
+      "note": "A10 remained failed and the metric difference slightly worsened."
+    },
+    {
+      "name": "complement_and_fold_local_scaling",
+      "kappa_star": 0.1,
+      "gamma_star": 0.02748,
+      "oos_monthly_mean": 0.007525
+    },
+    {
+      "name": "complement_fold_local_population_covariance_and_grid_50",
+      "kappa_star": 0.0954095476,
+      "gamma_star": 0.0301837672,
+      "oos_monthly_mean": 0.007649,
+      "official_properties": "17/17",
+      "official_reward": 1.0
+    }
+  ],
+  "final_verifier": {
+    "run_id": "qce-t26-cv-semantics-verifier-replay-20260817-r4",
+    "zero_model_requests": true,
+    "type_a": "7/7",
+    "type_b": "10/10",
+    "tests_failed": 0,
+    "verifier_exit_code": 0,
+    "evidence_dir": "verifier-replay",
+    "candidate_path": "candidate/strategy.py",
+    "trusted_full_evidence_remote": "/data/qea-julius-storage/runs/qce-t26-cv-semantics-verifier-replay-20260817-r4"
+  },
+  "code_changes": [
+    "The model proxy now preserves a completed successful response even when the retry-start budget has elapsed.",
+    "The proxy allows an ordered provider fallback route while keeping the model fixed.",
+    "QuantCodeEval trusted diagnostics can retain analysis-only causal observations without inventing a scored attempt.",
+    "Verifier-only replay can select one task from a bound multi-task panel."
+  ],
+  "next_gate": "Encode the fold-complement and fold-local regularization checks as a reusable public-semantics component, then run a fresh blind Worker. Only that result can establish autonomous harness-produced binary improvement."
+}

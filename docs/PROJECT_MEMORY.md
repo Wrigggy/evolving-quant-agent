@@ -2240,6 +2240,39 @@ See
 `docs/reports/2026-08-17-quantcodeeval-t26-binary-gate-continuation.md` and
 `results/quantcodeeval-t26-binary-gate-20260817/RESULT.json`.
 
+**Provider repair and T26 binary engineering success later on 2026-08-17:**
+the route/transport blocker is resolved for the engineering track. The model
+remained `deepseek/deepseek-v4-flash-0731`, while the OpenRouter route now
+prefers DeepSeek and permits Baseten, GMI Cloud, and DeepInfra fallbacks. A
+completed upstream 200 response is no longer discarded merely because the
+budget for starting another retry has expired. Across five post-repair real
+Evolver/Worker runs, all 251 requests completed with HTTP 200, proxy retry was
+zero, and the longest observed request took about 254 seconds. The audit does
+not identify which upstream provider served a request, so do not claim that a
+specific fallback was exercised. This provider-flexible engineering track must
+not be pooled with older fixed-DeepSeek formal comparisons.
+
+The same continuation reached the first official T26 binary success. A
+zero-model causal ablation began from the retained 16/17 blind-Worker artifact,
+falsified the Evolver's grid-resolution-only hypothesis, and localized A10 to
+CV state semantics: a non-contiguous two-fold complement had been converted to
+its first/last-month bounding interval, which silently reintroduced the
+held-out fold into moment estimation. Using exact selected-month membership,
+fold-local regularization scaling, population covariance, and the 50-point log
+grid produced 17/17, Type A 7/7, Type B 10/10, and official reward 1. The final
+verifier replay made zero model requests. Paid post-route work totaled 251
+requests, 13,448,547 tokens, and $0.549950156.
+
+This is a measured binary solution-mechanism result, not yet an autonomous
+fresh-lineage harness gain: the successful strategy was produced by trusted
+answer-rich causal ablation of an Evolver-assisted artifact. The next gate is
+to encode the general estimator-scope rule as a reusable public-semantics
+component, obtain 17/17 from a fresh blind Worker, repeat it, and only then run
+protection/matched transfer. Detailed evidence is in
+`docs/reports/2026-08-17-quantcodeeval-provider-repair-and-t26-binary-improvement.md`
+and
+`results/quantcodeeval-t26-provider-and-binary-improvement-20260817/RESULT.json`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.
