@@ -615,7 +615,7 @@ def build_breadth_evolver_view(
             " This is a declared answer-rich optimization task. Read the Evolver-only "
             "optimization diagnostic, compare all retained attempts item by item, and "
             "separate the task-specific answer from a reusable missing capability. "
-            "Choose REFINE, SPLIT, SYNTHESIZE, or ABSTAIN. For ACT, record a compact "
+            "Choose REFINE, SPLIT, SYNTHESIZE, COMPOSE, or ABSTAIN. For ACT, record a compact "
             "failure signature naming the mechanism family, semantic state, pipeline "
             "phase, and observable that an unchanged component could test elsewhere. "
             "Never copy task answers, expected constants, or fixed task-only assertions "

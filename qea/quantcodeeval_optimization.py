@@ -9,6 +9,7 @@ signatures after a blind H0 run.
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -208,8 +209,18 @@ def build_quantcodeeval_optimization_diagnostic(
                 "label": label,
                 "role": role,
                 "score": {
-                    "passed": ctrf.get("pass", ctrf.get("summary", {}).get("passed") if isinstance(ctrf.get("summary"), Mapping) else None),
-                    "failed": ctrf.get("fail", ctrf.get("summary", {}).get("failed") if isinstance(ctrf.get("summary"), Mapping) else None),
+                    "passed": ctrf.get(
+                        "pass",
+                        ctrf.get("summary", {}).get("passed")
+                        if isinstance(ctrf.get("summary"), Mapping)
+                        else None,
+                    ),
+                    "failed": ctrf.get(
+                        "fail",
+                        ctrf.get("summary", {}).get("failed")
+                        if isinstance(ctrf.get("summary"), Mapping)
+                        else None,
+                    ),
                     "total": ctrf.get("total"),
                 },
                 "candidate_change": raw.get("candidate_change"),
@@ -236,7 +247,13 @@ def build_quantcodeeval_optimization_diagnostic(
         "observed_failure_signatures": signature_rows,
         "evolver_assignment": {
             "separate_task_specific_evidence_from_reusable_capability": True,
-            "choose": ["REFINE", "SPLIT", "SYNTHESIZE", "ABSTAIN"],
+            "choose": [
+                "REFINE",
+                "SPLIT",
+                "SYNTHESIZE",
+                "COMPOSE",
+                "ABSTAIN",
+            ],
             "full_harness_mutation_allowed": True,
             "task_answers_must_not_enter_reusable_candidate": True,
             "failure_signature_required_for_act": True,
@@ -250,6 +267,221 @@ def build_quantcodeeval_optimization_diagnostic(
         "attempt_count": len(attempt_rows),
         "rubric_item_count": len(rubric),
         "failure_signature_count": len(signature_rows),
+    }
+
+
+def extend_quantcodeeval_optimization_diagnostic(
+    *,
+    destination: str | Path,
+    base_diagnostic_path: str | Path,
+    attempts: Iterable[Mapping[str, object]],
+    candidate_changes: Iterable[Mapping[str, object]] = (),
+    failure_signatures: Iterable[Mapping[str, object]] = (),
+) -> dict[str, object]:
+    """Append newly scored optimize attempts to an existing diagnostic.
+
+    This is the multi-round counterpart to
+    :func:`build_quantcodeeval_optimization_diagnostic`.  It keeps the prior
+    item timeline intact, adds the new official observations, and writes a new
+    Evolver-only packet.  The original diagnostic is never modified.
+    """
+
+    target = Path(destination).expanduser().resolve()
+    if target.exists():
+        raise QuantCodeEvalOptimizationError(
+            f"diagnostic destination already exists: {target}"
+        )
+    base = _json(
+        Path(base_diagnostic_path).expanduser().resolve(),
+        label="base optimization diagnostic",
+    )
+    task = _text(base.get("task_id"), label="base diagnostic.task_id")
+    if (
+        base.get("feedback_mode") != "answer_rich_evolver"
+        or base.get("visibility") != "evolver_only"
+        or base.get("worker_visible") is not False
+    ):
+        raise QuantCodeEvalOptimizationError(
+            "base diagnostic is not Evolver-only answer-rich evidence"
+        )
+    raw_rubric = base.get("rubric_items")
+    if not isinstance(raw_rubric, list) or not raw_rubric:
+        raise QuantCodeEvalOptimizationError("base diagnostic has no rubric items")
+    rubric: dict[str, dict[str, object]] = {}
+    for index, raw in enumerate(raw_rubric):
+        if not isinstance(raw, Mapping):
+            raise QuantCodeEvalOptimizationError(
+                f"base rubric item {index} must be an object"
+            )
+        item = deepcopy(dict(raw))
+        property_id = _text(
+            item.get("property_id"), label=f"base rubric item {index}.property_id"
+        )
+        if property_id in rubric:
+            raise QuantCodeEvalOptimizationError(
+                f"duplicate base rubric property: {property_id}"
+            )
+        observations = item.get("observations")
+        if not isinstance(observations, list):
+            raise QuantCodeEvalOptimizationError(
+                f"base rubric property {property_id} has invalid observations"
+            )
+        rubric[property_id] = item
+
+    existing_attempts = base.get("attempts")
+    if not isinstance(existing_attempts, list):
+        raise QuantCodeEvalOptimizationError("base diagnostic attempts are invalid")
+    attempt_rows = [
+        deepcopy(dict(row))
+        for row in existing_attempts
+        if isinstance(row, Mapping)
+    ]
+    if len(attempt_rows) != len(existing_attempts):
+        raise QuantCodeEvalOptimizationError("base diagnostic attempt row is invalid")
+    labels = {
+        _text(row.get("label"), label="base diagnostic attempt.label")
+        for row in attempt_rows
+    }
+
+    added = 0
+    for index, raw in enumerate(attempts):
+        label = _text(raw.get("label"), label=f"attempt {index}.label")
+        if label in labels:
+            raise QuantCodeEvalOptimizationError(f"duplicate attempt label: {label}")
+        labels.add(label)
+        role = _text(raw.get("role"), label=f"attempt {label}.role")
+        ctrf_path = Path(
+            _text(raw.get("ctrf_path"), label=f"attempt {label}.ctrf_path")
+        ).expanduser().resolve()
+        ctrf = _json(ctrf_path, label=f"attempt {label} checker result")
+        results = ctrf.get("results")
+        if not isinstance(results, list):
+            raise QuantCodeEvalOptimizationError(
+                f"attempt {label} checker result has no result list"
+            )
+        seen: set[str] = set()
+        for result_index, result in enumerate(results):
+            if not isinstance(result, Mapping):
+                raise QuantCodeEvalOptimizationError(
+                    f"attempt {label} result {result_index} is invalid"
+                )
+            property_id = _text(
+                result.get("property_id"),
+                label=f"attempt {label} result {result_index}.property_id",
+            )
+            if property_id not in rubric:
+                raise QuantCodeEvalOptimizationError(
+                    f"attempt {label} has unknown property {property_id}"
+                )
+            if property_id in seen:
+                raise QuantCodeEvalOptimizationError(
+                    f"attempt {label} repeats property {property_id}"
+                )
+            seen.add(property_id)
+            verdict = _text(
+                result.get("verdict"), label=f"attempt {label}.{property_id}.verdict"
+            ).upper()
+            if verdict not in {"PASS", "FAIL", "SKIP", "ERROR"}:
+                raise QuantCodeEvalOptimizationError(
+                    f"attempt {label}.{property_id} has invalid verdict"
+                )
+            rubric[property_id]["observations"].append(
+                {
+                    "attempt": label,
+                    "role": role,
+                    "verdict": verdict,
+                    "observed_behavior": result.get("detail"),
+                    "checker_evidence": result.get("evidence"),
+                }
+            )
+        attempt_rows.append(
+            {
+                "label": label,
+                "role": role,
+                "score": {
+                    "passed": ctrf.get(
+                        "pass",
+                        ctrf.get("summary", {}).get("passed")
+                        if isinstance(ctrf.get("summary"), Mapping)
+                        else None,
+                    ),
+                    "failed": ctrf.get(
+                        "fail",
+                        ctrf.get("summary", {}).get("failed")
+                        if isinstance(ctrf.get("summary"), Mapping)
+                        else None,
+                    ),
+                    "total": ctrf.get("total"),
+                },
+                "candidate_change": raw.get("candidate_change"),
+            }
+        )
+        added += 1
+    if added == 0:
+        raise QuantCodeEvalOptimizationError(
+            "at least one new optimize attempt is required"
+        )
+
+    raw_changes = base.get("candidate_changes", [])
+    if not isinstance(raw_changes, list) or any(
+        not isinstance(value, Mapping) for value in raw_changes
+    ):
+        raise QuantCodeEvalOptimizationError(
+            "base diagnostic candidate changes are invalid"
+        )
+    raw_signatures = base.get("observed_failure_signatures", [])
+    if not isinstance(raw_signatures, list) or any(
+        not isinstance(value, Mapping) for value in raw_signatures
+    ):
+        raise QuantCodeEvalOptimizationError(
+            "base diagnostic failure signatures are invalid"
+        )
+    assignment = deepcopy(dict(base.get("evolver_assignment", {})))
+    assignment.update(
+        {
+            "separate_task_specific_evidence_from_reusable_capability": True,
+            "choose": [
+                "REFINE",
+                "SPLIT",
+                "SYNTHESIZE",
+                "COMPOSE",
+                "ABSTAIN",
+            ],
+            "full_harness_mutation_allowed": True,
+            "task_answers_must_not_enter_reusable_candidate": True,
+            "failure_signature_required_for_act": True,
+            "compare_all_retained_attempts": True,
+        }
+    )
+    payload = {
+        **deepcopy(base),
+        "schema_version": max(int(base.get("schema_version", 1)), 1),
+        "task_id": task,
+        "attempts": attempt_rows,
+        "rubric_items": list(rubric.values()),
+        "candidate_changes": [
+            *(deepcopy(dict(value)) for value in raw_changes),
+            *(dict(value) for value in candidate_changes),
+        ],
+        "observed_failure_signatures": [
+            *(deepcopy(dict(value)) for value in raw_signatures),
+            *(
+                _signature(value, label=f"failure_signatures[{index}]")
+                for index, value in enumerate(failure_signatures)
+                if isinstance(value, Mapping)
+            ),
+        ],
+        "evolver_assignment": assignment,
+    }
+    _write_json(target, payload)
+    return {
+        "schema_version": 1,
+        "destination": str(target),
+        "task_id": task,
+        "prior_attempt_count": len(existing_attempts),
+        "added_attempt_count": added,
+        "attempt_count": len(attempt_rows),
+        "rubric_item_count": len(rubric),
     }
 
 
@@ -304,4 +536,5 @@ __all__ = [
     "QuantCodeEvalOptimizationError",
     "assess_transfer_eligibility",
     "build_quantcodeeval_optimization_diagnostic",
+    "extend_quantcodeeval_optimization_diagnostic",
 ]

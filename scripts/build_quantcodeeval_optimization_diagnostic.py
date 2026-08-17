@@ -13,6 +13,7 @@ if __package__ in {None, ""}:
 
 from qea.quantcodeeval_optimization import (  # noqa: E402
     build_quantcodeeval_optimization_diagnostic,
+    extend_quantcodeeval_optimization_diagnostic,
 )
 
 
@@ -22,15 +23,25 @@ def main() -> int:
     parser.add_argument("--destination", type=Path, required=True)
     args = parser.parse_args()
     plan = json.loads(args.plan.read_text(encoding="utf-8"))
-    result = build_quantcodeeval_optimization_diagnostic(
-        destination=args.destination,
-        task_id=plan["task_id"],
-        attempts=plan["attempts"],
-        rubric_manifest_path=plan["rubric_manifest_path"],
-        rubric_overrides=plan.get("rubric_overrides", {}),
-        candidate_changes=plan.get("candidate_changes", []),
-        failure_signatures=plan.get("failure_signatures", []),
-    )
+    base = plan.get("base_diagnostic_path")
+    if base is not None:
+        result = extend_quantcodeeval_optimization_diagnostic(
+            destination=args.destination,
+            base_diagnostic_path=base,
+            attempts=plan["attempts"],
+            candidate_changes=plan.get("candidate_changes", []),
+            failure_signatures=plan.get("failure_signatures", []),
+        )
+    else:
+        result = build_quantcodeeval_optimization_diagnostic(
+            destination=args.destination,
+            task_id=plan["task_id"],
+            attempts=plan["attempts"],
+            rubric_manifest_path=plan["rubric_manifest_path"],
+            rubric_overrides=plan.get("rubric_overrides", {}),
+            candidate_changes=plan.get("candidate_changes", []),
+            failure_signatures=plan.get("failure_signatures", []),
+        )
     print(json.dumps(result, sort_keys=True))
     return 0
 

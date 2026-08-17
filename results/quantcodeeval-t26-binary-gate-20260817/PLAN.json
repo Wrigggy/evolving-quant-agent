@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "status": "prepared_not_run",
+  "objective": "Use accumulated answer-rich T26 evidence to evolve the current admitted harness from repeated 16/17 to official 17/17 with a fresh blind Worker.",
+  "task_id": "T26",
+  "feedback_mode": "answer_rich_evolver",
+  "worker_feedback_mode": "blind_public_task",
+  "base_diagnostic_path": "results/bc-mirror/qce-t26-answer-rich-evolver-20260816-r2/authorized-evidence/benchmarks/quantcodeeval/tasks/T26/optimization-diagnostic.json",
+  "parent_candidate_path": "results/bc-mirror/qce-t26-answer-rich-evolver-20260816-r2/evolutions/iteration-0001/candidate",
+  "attempts": [
+    {
+      "label": "answer-rich-candidate-r2-16-of-17",
+      "role": "candidate",
+      "ctrf_path": "results/bc-mirror/qce-t26-answer-rich-candidate-20260817-r2/attempts/858ab7379f2af23f6266e6ac201e5e42387d884033e738e8900e0cdbe4b99940/verifier/ctrf.json",
+      "candidate_change": "Evolver-produced quant-contract auditor in tools, tool descriptions, agent configuration, and system prompt."
+    },
+    {
+      "label": "answer-rich-candidate-r4-repeat-16-of-17",
+      "role": "independent_repeat",
+      "ctrf_path": "results/bc-mirror/qce-t26-answer-rich-candidate-20260817-r4/attempts/10e17d9fa550a077392693e8a6fc870a431f53b866fc1801ee0fd54814437b42/verifier/ctrf.json",
+      "candidate_change": "Unchanged admitted harness evaluated by a second fresh blind Worker."
+    }
+  ],
+  "candidate_changes": [
+    {
+      "label": "quant-contract-auditor",
+      "source_evolver_run": "qce-t26-answer-rich-evolver-20260816-r2",
+      "components": [
+        "tools",
+        "tool_descriptions",
+        "agent_config",
+        "systemprompt"
+      ],
+      "repeated_effect": "B5 and B9 passed in both valid blind Workers; all Type-B properties passed.",
+      "unresolved_effect": "A10 end-to-end numeric identity remained the only failure."
+    }
+  ],
+  "failure_signatures": [
+    {
+      "mechanism_family": "end_to_end_numeric_reconciliation",
+      "semantic_state": "quantity, frequency, scaling, estimator, and final metric state across the complete strategy pipeline",
+      "pipeline_phase": "monthly moments through covariance scaling, coefficient fitting, volatility rescaling, and final metrics",
+      "observable": "declared formula properties pass while final Sharpe, annual return, and drawdown remain directionally correct but numerically mis-scaled",
+      "observed_failure": true,
+      "property_ids": [
+        "A10"
+      ]
+    }
+  ],
+  "mutation_surface": "full_harness",
+  "evolver_choices": [
+    "REFINE",
+    "SPLIT",
+    "SYNTHESIZE",
+    "COMPOSE",
+    "ABSTAIN"
+  ],
+  "initial_live_round_limit": 1,
+  "worker_concurrency": 1,
+  "verifier_concurrency": 1,
+  "single_round_cost_cap_usd": 0.30,
+  "initial_phase_cost_cap_usd": 0.75,
+  "success_gate": "A fresh blind T26 Worker scores 17/17 and official reward 1 after an Evolver-produced reachable harness change.",
+  "repeat_gate": "Freeze the first 17/17 candidate and run one independent blind T26 repeat before protection or transfer.",
+  "stop_conditions": [
+    "Evolver records calibrated ABSTAIN.",
+    "No admitted candidate is produced.",
+    "The initial live round reaches its cost cap.",
+    "A first 17/17 result is reached; stop revision and move to repeat."
+  ],
+  "deferred": [
+    "progressive asynchronous scheduler",
+    "full benchmark evaluation",
+    "sealed test evaluation"
+  ]
+}

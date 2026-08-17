@@ -345,6 +345,7 @@ def test_quantcodeeval_answer_rich_view_is_evolver_only(tmp_path):
     assert contract["failure_signature_required_for_act"] is True
     assert contract["optimization_answers_exposed_to_evolver"] is True
     assert contract["optimization_answers_exposed_to_worker"] is False
+    assert "COMPOSE" in contract["evolver_instruction"]
     assert catalog["tasks"][0]["feedback_mode"] == "answer_rich_evolver"
     assert diagnostic_path.is_file()
     assert not list(corpus.rglob("optimization-diagnostic.json"))
