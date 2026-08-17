@@ -2213,6 +2213,33 @@ adaptive evidence, retain the accepted Level B label: closed-benchmark
 optimization, not unseen-test generalization. See
 `docs/decisions/2026-08-17-mechanism-first-binary-gate-and-deferred-adaptive-evaluation.md`.
 
+**T26 binary-gate continuation later on 2026-08-17:** the coordinator can now
+extend the answer-rich diagnostic across rounds, and the candidate evaluator
+can preserve multiple Evolver-selected primary components, reuse their final
+component tests, and measure an incremental mutation against its immediate
+parent. Focused validation passed locally and on `bc-server`. The T26 packet
+contained five retained attempts, while the Worker remained blind to all
+answer-rich property details.
+
+One valid replacement Evolver autonomously refined the existing quant-contract
+auditor with a second-moment scale-consistency check. The admitted candidate
+changed `tools`, `tool_descriptions`, and `systemprompt`, and passed component
+smoke and no-model candidate preflight. It has no official performance result:
+two fresh blind Workers both reached the provider rate-limit retry deadline
+before writing `strategy.py`, so the verifier never ran and neither attempt is
+a zero-reward sample. Stop further redraws. This phase used 66 completed
+requests, 2,906,594 recorded tokens, and $0.440088144. The binary gate remains
+open.
+
+The next mechanism priority is resumable checkpointing at completed model/tool
+boundaries. Preserve the candidate workspace and sufficient conversation/tool
+state so a provider delivery failure continues the same Evolver or Worker
+sample instead of discarding a long trajectory. After a focused continuation
+test, evaluate the frozen admitted T26 candidate without rerunning the Evolver.
+See
+`docs/reports/2026-08-17-quantcodeeval-t26-binary-gate-continuation.md` and
+`results/quantcodeeval-t26-binary-gate-20260817/RESULT.json`.
+
 ## Memory Maintenance Rules
 
 - Update this file when a decision is accepted, superseded, or invalidated.

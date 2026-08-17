@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "status": "mechanism_implemented_candidate_admitted_official_score_unavailable",
+  "benchmark": "QuantCodeEval",
+  "optimization_task": "T26",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "provider": "deepseek",
+  "worker_answer_visibility": "blind_public_task_only",
+  "evolver_feedback": "answer_rich_optimization_v1",
+  "implemented": {
+    "diagnostic_attempt_count": 5,
+    "diagnostic_extension": true,
+    "search_choices": [
+      "REFINE",
+      "SPLIT",
+      "SYNTHESIZE",
+      "COMPOSE",
+      "ABSTAIN"
+    ],
+    "reuse_evolver_component_tests": true,
+    "incremental_parent_measurement": true,
+    "scheduler_implemented": false
+  },
+  "validation": {
+    "focused_local_tests_passed": 50,
+    "focused_remote_tests_passed": 17,
+    "python_compile": "passed",
+    "diff_check": "passed",
+    "rootless_evolver_preflight": "passed",
+    "candidate_preflight": "passed"
+  },
+  "evolver_attempts": [
+    {
+      "run_id": "qce-t26-binary-gate-evolver-20260817-r1",
+      "outcome": "provider_failure_before_terminal_candidate",
+      "completed_requests": 21,
+      "recorded_tokens": 1184207,
+      "provider_cost_usd": 0.15700708,
+      "benchmark_result": false
+    },
+    {
+      "run_id": "qce-t26-binary-gate-evolver-20260817-r2",
+      "outcome": "admitted_act",
+      "decision": "ACT",
+      "search_operator": "REFINE",
+      "primary_components": ["tools"],
+      "changed_components": [
+        "tools",
+        "tool_descriptions",
+        "systemprompt"
+      ],
+      "component_state_target": "uniform second-moment scale across model selection and final coefficient fit",
+      "completed_requests": 22,
+      "recorded_tokens": 1200530,
+      "provider_cost_usd": 0.165047632,
+      "wall_seconds": 880.138,
+      "admission": "passed",
+      "component_smoke": "passed"
+    }
+  ],
+  "worker_attempts": [
+    {
+      "run_id": "qce-t26-binary-gate-candidate-20260817-r1",
+      "outcome": "provider_failure_before_strategy_artifact",
+      "completed_requests": 15,
+      "recorded_tokens": 388717,
+      "provider_cost_usd": 0.105720504,
+      "official_evaluated": false
+    },
+    {
+      "run_id": "qce-t26-binary-gate-candidate-20260817-r2",
+      "outcome": "provider_failure_before_strategy_artifact",
+      "completed_requests": 8,
+      "recorded_tokens": 133140,
+      "provider_cost_usd": 0.012312928,
+      "official_evaluated": false
+    }
+  ],
+  "official_reward": null,
+  "claim_boundary": {
+    "multi_round_evolver_history": "supported",
+    "answer_rich_evolver_worker_blind_split": "supported",
+    "autonomous_executable_component_refinement": "supported",
+    "candidate_admission_and_preflight": "supported",
+    "new_component_task_benefit": "not_measured",
+    "official_binary_reward_gain": "not_measured",
+    "cross_task_transfer": "not_tested"
+  },
+  "phase_accounting": {
+    "completed_requests": 66,
+    "recorded_tokens": 2906594,
+    "provider_cost_usd": 0.440088144
+  },
+  "stop_reason": "one Evolver replacement and one Worker replacement were exhausted after provider delivery failures; no further redraw",
+  "next_gate": "add resumable model-tool checkpoints, then evaluate the frozen admitted candidate without rerunning the Evolver"
+}
+
