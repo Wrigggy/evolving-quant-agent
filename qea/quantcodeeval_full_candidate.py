@@ -16,6 +16,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from .attempt_recovery import resolve_worker_attempt
 from .candidate_admission import AdmissionPolicy, admit_candidate
 from .evaluation import TaskAttempt
 from .loop_benchmark import hash_worker_directory
@@ -50,6 +51,21 @@ def _answer_free_attempt_evidence(attempt_dir: Path) -> dict[str, object]:
         "diagnostic_tags": list(completed.get("diagnostic_tags") or []),
         "tests_passed": completed.get("tests_passed"),
         "tests_failed": completed.get("tests_failed"),
+    }
+
+
+def _answer_free_attempt_row(
+    logical_attempt: TaskAttempt, run_dir: Path
+) -> dict[str, object]:
+    """Read score evidence from the terminal attempt after one replacement."""
+
+    terminal_attempt = resolve_worker_attempt(logical_attempt, run_dir)
+    return {
+        "task_id": logical_attempt.task_id,
+        "attempt_id": terminal_attempt.attempt_id,
+        "answer_free_evidence": _answer_free_attempt_evidence(
+            run_dir / "attempts" / terminal_attempt.attempt_id
+        ),
     }
 
 
@@ -667,15 +683,7 @@ def run_quantcodeeval_full_candidate(
             checkpoint=checkpoint,
             worker_digest=candidate_digest,
         )
-        attempt_rows.append(
-            {
-                "task_id": task.task_id,
-                "attempt_id": attempt.attempt_id,
-                "answer_free_evidence": _answer_free_attempt_evidence(
-                    root / "attempts" / attempt.attempt_id
-                ),
-            }
-        )
+        attempt_rows.append(_answer_free_attempt_row(attempt, root))
     evaluation_identity = _canonical_sha256(
         {
             "checkpoint": checkpoint,

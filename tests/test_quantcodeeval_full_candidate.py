@@ -9,9 +9,11 @@ import pytest
 from qea.loop_benchmark import hash_worker_directory
 from qea.quantcodeeval_full_candidate import (
     QuantCodeEvalFullCandidateError,
+    _answer_free_attempt_row,
     materialize_quantcodeeval_full_candidate_failure_result,
     run_quantcodeeval_full_candidate,
 )
+from qea.evaluation import TaskAttempt
 
 
 def _worker(root: Path) -> Path:
@@ -136,6 +138,41 @@ def test_component_smoke_requires_executable_primary_not_prompt_binding():
     )
 
     assert tests[0]["component"] == "tools"
+
+
+def test_answer_free_row_uses_completed_replacement_attempt(tmp_path, monkeypatch):
+    logical = TaskAttempt.create(
+        run_id="replacement-run",
+        benchmark_commit="9" * 40,
+        task_id="T26",
+        split="engineering_canary_optimize",
+        checkpoint="iteration-1",
+        worker_digest="a" * 64,
+    )
+    replacement = TaskAttempt.create(
+        run_id="replacement-run",
+        benchmark_commit="9" * 40,
+        task_id="T26",
+        split="engineering_canary_optimize",
+        checkpoint="iteration-1+infra-replacement-01",
+        worker_digest="a" * 64,
+    )
+    verifier = tmp_path / "attempts" / replacement.attempt_id / "verifier"
+    verifier.mkdir(parents=True)
+    evidence = {"benchmark": "quantcodeeval", "official_reward": 0.0}
+    (verifier / "answer-free-evidence.json").write_text(json.dumps(evidence))
+    monkeypatch.setattr(
+        "qea.quantcodeeval_full_candidate.resolve_worker_attempt",
+        lambda attempt, run_dir: replacement,
+    )
+
+    row = _answer_free_attempt_row(logical, tmp_path)
+
+    assert row == {
+        "task_id": "T26",
+        "attempt_id": replacement.attempt_id,
+        "answer_free_evidence": evidence,
+    }
 
 
 def test_full_candidate_rejects_failed_smoke_and_role_mismatch(tmp_path, monkeypatch):
