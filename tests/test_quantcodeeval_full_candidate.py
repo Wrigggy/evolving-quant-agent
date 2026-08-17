@@ -387,3 +387,48 @@ def test_legacy_failure_recovery_requires_worker_evidence_and_never_scores(tmp_p
     assert result["benchmark_score_claimed"] is False
     assert result["attempts"][0]["failure_class"] == "missing_submission_artifact"
     assert "score_summary" not in result
+
+
+def test_failed_replacement_cost_includes_both_worker_attempts(tmp_path):
+    from qea.quantcodeeval_full_candidate import _answer_free_failed_attempts
+
+    root = tmp_path / "run"
+    first = root / "attempts/first"
+    second = root / "attempts/second"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+    for directory, cost, tokens in (
+        (first, 0.02, 40),
+        (second, 0.03, 60),
+    ):
+        (directory / "attempt.json").write_text(
+            json.dumps({"attempt_id": directory.name, "task_id": "T26"})
+        )
+        (directory / "worker-artifact-contract.json").write_text(
+            json.dumps({"expected_paths": ["strategy.py"], "found_paths": []})
+        )
+        (directory / "proxy-audit.jsonl").write_text(
+            json.dumps({
+                "request_state": "completed",
+                "failure_class": None,
+                "upstream_status_code": 200,
+                "input_tokens": tokens - 10,
+                "output_tokens": 10,
+                "total_tokens": tokens,
+                "provider_cost_usd": cost,
+            }) + "\n"
+        )
+    (first / "worker-attempt-replacement.json").write_text(
+        json.dumps({
+            "superseded_attempt_id": "first",
+            "replacement_attempt_id": "second",
+        })
+    )
+
+    attempts, cost = _answer_free_failed_attempts(root, ["T26"])
+
+    assert attempts[0]["attempt_id"] == "second"
+    assert attempts[0]["provider_audit"]["attempt_count"] == 2
+    assert cost["request_count"] == 2
+    assert cost["total_tokens"] == 100
+    assert cost["provider_cost_usd"] == pytest.approx(0.05)

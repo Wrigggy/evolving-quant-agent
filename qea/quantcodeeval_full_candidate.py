@@ -192,7 +192,7 @@ def _proxy_attempt_audit(path: Path) -> dict[str, object]:
         row
         for row in rows
         if row.get("request_state") == "completed"
-        and row.get("failure_class") is None
+        and row.get("failure_class") in {None, "empty_model_response"}
         and row.get("upstream_status_code") == 200
     ]
     costs = [row.get("provider_cost_usd") for row in completed]
@@ -242,13 +242,12 @@ def _answer_free_failed_attempts(
         task_id = str(task if isinstance(task, str) else getattr(task, "task_id"))
         # Attempt identity also binds checkpoint and worker digest, so locate
         # the directory through its public attempt metadata rather than guessing.
-        attempt_dir = None
+        attempt_dirs = []
         for metadata_path in sorted((root / "attempts").glob("*/attempt.json")):
             metadata = _read_json_mapping(metadata_path)
             if metadata is not None and metadata.get("task_id") == task_id:
-                attempt_dir = metadata_path.parent
-                break
-        if attempt_dir is None:
+                attempt_dirs.append(metadata_path.parent)
+        if not attempt_dirs:
             attempts.append(
                 {
                     "task_id": task_id,
@@ -259,6 +258,21 @@ def _answer_free_failed_attempts(
                 }
             )
             continue
+        superseded_ids = set()
+        for directory in attempt_dirs:
+            replacement = _read_json_mapping(
+                directory / "worker-attempt-replacement.json"
+            )
+            if replacement is not None and isinstance(
+                replacement.get("superseded_attempt_id"), str
+            ):
+                superseded_ids.add(str(replacement["superseded_attempt_id"]))
+        terminal_dirs = [
+            directory
+            for directory in attempt_dirs
+            if directory.name not in superseded_ids
+        ]
+        attempt_dir = terminal_dirs[-1] if terminal_dirs else attempt_dirs[-1]
         metadata = _read_json_mapping(attempt_dir / "attempt.json") or {}
         contract = _read_json_mapping(
             attempt_dir / "worker-artifact-contract.json"
@@ -276,7 +290,47 @@ def _answer_free_failed_attempts(
                 if isinstance(value.get("failure"), str) and value["failure"]
             }
         )
-        proxy = _proxy_attempt_audit(attempt_dir / "proxy-audit.jsonl")
+        proxy_rows = [
+            _proxy_attempt_audit(directory / "proxy-audit.jsonl")
+            for directory in attempt_dirs
+        ]
+        numeric_costs = [
+            value.get("provider_cost_usd") for value in proxy_rows
+        ]
+        proxy = {
+            "audit_present": all(
+                value.get("audit_present") is True for value in proxy_rows
+            ),
+            "audit_complete": all(
+                value.get("audit_complete") is True for value in proxy_rows
+            ),
+            "attempt_count": len(attempt_dirs),
+            "request_count": sum(
+                int(value.get("request_count") or 0) for value in proxy_rows
+            ),
+            "completed_request_count": sum(
+                int(value.get("completed_request_count") or 0)
+                for value in proxy_rows
+            ),
+            "input_tokens": sum(
+                int(value.get("input_tokens") or 0) for value in proxy_rows
+            ),
+            "output_tokens": sum(
+                int(value.get("output_tokens") or 0) for value in proxy_rows
+            ),
+            "total_tokens": sum(
+                int(value.get("total_tokens") or 0) for value in proxy_rows
+            ),
+            "provider_cost_usd": (
+                sum(float(value) for value in numeric_costs)
+                if all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    for value in numeric_costs
+                )
+                else None
+            ),
+        }
         total_requests += int(proxy.get("request_count") or 0)
         total_input += int(proxy.get("input_tokens") or 0)
         total_output += int(proxy.get("output_tokens") or 0)

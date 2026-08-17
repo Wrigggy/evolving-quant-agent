@@ -1057,6 +1057,33 @@ def _response_usage(
     return latest
 
 
+def _is_empty_model_response(payload: bytes) -> bool:
+    """Whether a completed chat response has neither content nor tool calls."""
+
+    try:
+        decoded = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        return False
+    if not isinstance(decoded, dict):
+        return False
+    choices = decoded.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return False
+    for choice in choices:
+        if not isinstance(choice, dict):
+            return False
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            return False
+        content = message.get("content")
+        if isinstance(content, str) and content.strip():
+            return False
+        tool_calls = message.get("tool_calls")
+        if isinstance(tool_calls, list) and tool_calls:
+            return False
+    return True
+
+
 def _provider_request_id(headers, *, forbidden: str) -> str | None:
     for name in (
         "X-Generation-Id",
@@ -1834,15 +1861,32 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             )
             self._reject(409, "request_replay_forbidden")
             return
-        headers = _filtered_request_headers(
-            self.headers, policy, len(outbound_body)
-        )
         retry_deadline: float | None = None
         for retry_index in range(policy.rate_limit_max_attempts):
+            attempt_body = outbound_body
+            if retry_index > 0 and policy.fallback_providers:
+                remaining = list(policy.fallback_providers[retry_index - 1 :])
+                if remaining:
+                    attempt_payload = dict(request_payload)
+                    attempt_payload["provider"] = {
+                        "order": remaining,
+                        "only": remaining,
+                        "allow_fallbacks": len(remaining) > 1,
+                        "require_parameters": True,
+                    }
+                    attempt_body = json.dumps(
+                        attempt_payload,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+            headers = _filtered_request_headers(
+                self.headers, policy, len(attempt_body)
+            )
             response = self._read_upstream_attempt(
                 policy=policy,
                 target=target,
-                outbound_body=outbound_body,
+                outbound_body=attempt_body,
                 headers=headers,
                 logical_request_identity_sha256=request_identity,
                 retry_index=retry_index,
@@ -1852,6 +1896,32 @@ class _ModelProxyHandler(BaseHTTPRequestHandler):
             )
             if response is None:
                 return
+            empty_response_retry = (
+                response.status == 200
+                and _is_empty_model_response(response.body)
+                and bool(policy.fallback_providers)
+                and retry_index + 1 < policy.rate_limit_max_attempts
+                and retry_index < len(policy.fallback_providers)
+            )
+            if empty_response_retry:
+                self._audit(
+                    request_identity_sha256=request_identity,
+                    retry_index=retry_index,
+                    model=policy.allowed_model,
+                    started_at=started_at,
+                    started_monotonic=started_monotonic,
+                    request_state="completed",
+                    upstream_status_code=200,
+                    provider_request_id=response.provider_request_id,
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                    total_tokens=response.total_tokens,
+                    provider_cost_usd=response.provider_cost_usd,
+                    failure_class="empty_model_response",
+                    terminal_for_handler=False,
+                    audit_schema_version=2,
+                )
+                continue
             if response.status != 429:
                 self._deliver_buffered_response(
                     response=response,

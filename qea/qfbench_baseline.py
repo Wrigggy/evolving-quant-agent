@@ -623,8 +623,21 @@ def _validate_v2_retry_groups(
         completed = [
             item for item in ordered if item.get("request_state") == "completed"
         ]
-        if rate_limited and (
-            ordered[:-1] != rate_limited
+        retryable_prefix = [
+            item
+            for item in ordered[:-1]
+            if (
+                item.get("request_state") == "not_accepted"
+                and item.get("failure_class") == "rate_limited"
+            )
+            or (
+                item.get("request_state") == "completed"
+                and item.get("upstream_status_code") == 200
+                and item.get("failure_class") == "empty_model_response"
+            )
+        ]
+        if retryable_prefix and (
+            ordered[:-1] != retryable_prefix
             or ordered[-1].get("request_state") != "completed"
             or ordered[-1].get("failure_class") is not None
             or ordered[-1].get("upstream_status_code") != 200
@@ -632,7 +645,7 @@ def _validate_v2_retry_groups(
             raise BaselineConfigError(
                 f"cost audit incomplete rate-limit retry group: {source}"
             )
-        if not rate_limited and completed and not (
+        if not retryable_prefix and completed and not (
             len(ordered) == 1
             and len(completed) == 1
             and completed[0].get("retry_index") == 0
