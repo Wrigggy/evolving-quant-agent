@@ -2434,3 +2434,27 @@ success.  One success is a T26 canary, a fresh-start repeat supports initial
 stability, and a second different task is required before a broader H0-autonomy
 claim.  Full details are in
 `docs/decisions/2026-08-18-ap3-h0-autonomous-bootstrap-canary.md`.
+
+## 2026-08-18 seven-day mechanism-validation report structure
+
+The concise synthesis covering 2026-08-11 through 2026-08-18 is organized as
+a linear mechanism-validation route, not as a chronological run diary.  Its
+nodes are: honest terminal ACT/ABSTAIN; full-harness mutation and cumulative
+history; runtime-experience localization; feedback-driven component
+refinement and interaction; cross-benchmark navigation; answer-rich Evolver
+with blind Worker; quant estimator-state semantics; and the AP-1 paired repair
+plus fresh T26 binary result.  Every node states the mechanism, validation
+question, observable evidence, measured result, current status, and next
+dependency.  Minor infrastructure outcomes remain attached only where they
+change a mechanism conclusion.
+
+The report's headline boundary is that a R3 Evolver-produced candidate harness
+has one fresh T26 17/17 Worker result, while complete autonomous experiment
+choice and H0 bootstrap remain unmeasured.  The next plan is therefore written
+separately from the historical route: implement and run AP-2M first, using two
+Evolver decisions and one self-authored Worker probe; if that loop is
+feedback-driven, reuse it for AP-3 starting only from shell-only H0 and one
+run-local H0 Worker.  Repeat and cross-task/QFBench breadth follow only after a
+positive AP-3 result; the asynchronous cost-aware scheduler remains deferred.
+The synthesis is in
+`docs/reports/2026-08-18-qea-seven-day-mechanism-validation-route-report.md`.
