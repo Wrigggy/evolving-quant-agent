@@ -2310,3 +2310,32 @@ and
 - Never silently rewrite historical result files. Record an explicit superseding decision instead.
 - Record the setup, benchmark version, verifier version, model/provider, and run ID needed to interpret each publishable experiment; do not add new content-hash gates.
 - Distinguish `measured`, `source-audited`, `proposed`, and `not yet tested` claims.
+# 2026-08-18 AP-1 paired runtime-repair probe
+
+The next QuantCodeEval validation is now implemented as
+`quantcodeeval-paired-runtime-repair-probe-v1`.  It gives a parent harness and
+an autonomous Evolver candidate the same real failed T26 artifact, public data,
+answer-free runtime symptom, and 12-iteration repair budget.  Worker inputs do
+not include checker answers; trusted property scoring happens only after each
+Worker exits.  The implementation is in `qea/quantcodeeval_repair_probe.py`
+and the protocol decision is
+`docs/decisions/2026-08-18-autonomous-component-paired-repair-probe.md`.
+
+Measured AP-1 result on bc-server: the common seed was 3/17.  The shell-only
+parent repaired it to 12/17 using 11 requests, 202,942 tokens, $0.025572696,
+and 262.334 Worker seconds.  The R3 autonomous component candidate repaired it
+to 14/17 using 11 requests, 207,523 tokens, $0.040720820, and 481.553 Worker
+seconds.  The candidate is therefore `score-helpful` (+2 properties over the
+paired parent), but not `efficiency-helpful` and not `binary-helpful`; both
+official rewards remain zero.  This is seeded-repair evidence, not a
+from-scratch benchmark result.
+
+The artifact diffs show that the parent already fixed the multi-output OLS and
+monthly-vs-daily fold-index bugs.  The candidate made broader repairs,
+including date parsing, data resolution, and calendar-month fold mapping.
+However, the candidate's static auditor still reports false negatives on its
+own 14/17 artifact.  Attribute AP-1 to the candidate harness bundle/workflow,
+not to proven auditor correctness.  The predeclared promotion rule was met, so
+a fresh blind T26 candidate run was launched at
+`/data/qea-julius-storage/runs/qce-t26-ap1-candidate-blind-20260818-r1`.
+Do not claim binary improvement until that run reaches 17/17 and repeats.

@@ -1,0 +1,36 @@
+{
+  "date": "2026-08-18",
+  "protocol": "quantcodeeval-paired-runtime-repair-probe-v1",
+  "status": "complete",
+  "task": "T26",
+  "seed_score": "3/17",
+  "parent": {
+    "score": "12/17",
+    "reward": 0,
+    "model_requests": 11,
+    "total_tokens": 202942,
+    "cost_usd": 0.025572696,
+    "worker_seconds": 262.334
+  },
+  "candidate": {
+    "score": "14/17",
+    "reward": 0,
+    "model_requests": 11,
+    "total_tokens": 207523,
+    "cost_usd": 0.04072082,
+    "worker_seconds": 481.553
+  },
+  "comparison": {
+    "property_delta_candidate_vs_parent": 2,
+    "classification": "score-helpful",
+    "efficiency_helpful": false,
+    "binary_helpful": false
+  },
+  "claim_boundary": "Seeded repair probe, not a from-scratch benchmark result.",
+  "remote_evidence": "/data/qea-julius-storage/runs/qce-t26-ap1-paired-repair-20260818-r1",
+  "promoted_blind_run": {
+    "status": "running_at_record_time",
+    "remote_evidence": "/data/qea-julius-storage/runs/qce-t26-ap1-candidate-blind-20260818-r1"
+  },
+  "negative_observation": "The autonomous static auditor still reports false-negative failures on the 14/17 artifact, so the +2 result belongs to the candidate harness bundle/workflow and cannot yet be attributed to auditor accuracy."
+}
