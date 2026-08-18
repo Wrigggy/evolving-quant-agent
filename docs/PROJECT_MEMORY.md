@@ -1,7 +1,7 @@
 # QEA Repository Memory
 
 > Canonical research and architecture memory for future contributors and agents.
-> Last updated: 2026-08-17. This file records current decisions, not merely historical discussion.
+> Last updated: 2026-08-18. This file records current decisions, not merely historical discussion.
 
 ## How to Use This Memory
 
@@ -2339,3 +2339,51 @@ not to proven auditor correctness.  The predeclared promotion rule was met, so
 a fresh blind T26 candidate run was launched at
 `/data/qea-julius-storage/runs/qce-t26-ap1-candidate-blind-20260818-r1`.
 Do not claim binary improvement until that run reaches 17/17 and repeats.
+
+## 2026-08-18 AP-2 autonomous runtime-experience search order
+
+AP-1 is a measured component-utility experiment under an experimenter-designed
+repair probe; it does not establish complete autonomous exploration.  The next
+mechanism experiment is AP-2A, a cold-history autonomous runtime-experience
+search.  Human control is limited to the optimize task, evidence cutoff,
+resource budget, generic experiment interfaces, and independent final scoring.
+The Evolver owns history retrieval, artifact or from-scratch selection, probe
+design, component choice, Worker invocation, result interpretation,
+retain/refine/compose/rollback decisions, and final candidate submission or
+ABSTAIN.
+
+Execute in this order: (1) finish and freeze the already-running fresh T26
+confirmation without using it to hand-author the AP-2 prompt; (2) build a
+run-based experience index containing historical artifacts, traces, candidate
+changes, scores, costs, and prior Evolver decisions; (3) expose generic
+`search`, `inspect`, candidate-edit, component-smoke, Worker-experiment,
+optimize-evaluation, comparison, submission, and ABSTAIN actions, with no
+T26-specific repair template; (4) persist an Evolver-readable experiment
+notebook across iterations; (5) verify the plumbing with deterministic fakes,
+including a second iteration that can observe and react to the first; (6) run
+a no-model preflight; (7) execute one paid AP-2A T26 canary for at most three
+Evolver iterations and three bounded Worker experiments; (8) independently
+evaluate the submitted candidate with a fresh Worker; (9) repeat from a fresh
+Evolver start only after a 17/17 result; and (10) defer runtime-search ablation,
+matched transfer, QFBench expansion, and asynchronous scheduling until the
+single-task autonomous loop is positive.
+
+AP-2A uses a pre-AP-1 evidence cutoff so the Evolver cannot simply copy the
+experimenter's paired-repair instruction.  It may inspect raw optimize
+runtime evidence and answer-rich optimize diagnostics, while the Worker remains
+answer-blind.  Domain specialization uses an extensible runtime-state record
+(`observed_symptom`, `pipeline_stage`, `quant_state_variable`,
+`suspected_component`, `competing_explanation`, `confidence`, and
+`experiment_needed`) rather than an exhaustive fixed failure enumeration.
+The initial engineering budget is one task, concurrency one, at most three
+Worker experiments of 8--12 iterations each, a normal-budget final Worker,
+and a total paid cap of $0.40.
+
+Interpret results in layers.  A complete legal search-and-update trajectory is
+autonomy feasibility; a later decision that explicitly responds to a real
+earlier runtime observation is feedback-driven exploration; a repaired failure,
+property improvement, or efficiency gain is component utility; and only an
+independently scored final candidate is benchmark benefit.  A single AP-2A
+success demonstrates one T26 feasibility canary, not stable general autonomous
+ability.  The full accepted order and claim boundaries are recorded in
+`docs/decisions/2026-08-18-ap2-autonomous-runtime-experience-search.md`.
