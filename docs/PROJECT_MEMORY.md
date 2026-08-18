@@ -2437,16 +2437,16 @@ claim.  Full details are in
 
 ## 2026-08-18 seven-day mechanism-validation report structure
 
-The concise synthesis covering 2026-08-11 through 2026-08-18 is organized as
-a linear mechanism-validation route, not as a chronological run diary.  Its
-nodes are: honest terminal ACT/ABSTAIN; full-harness mutation and cumulative
-history; runtime-experience localization; feedback-driven component
-refinement and interaction; cross-benchmark navigation; answer-rich Evolver
-with blind Worker; quant estimator-state semantics; and the AP-1 paired repair
-plus fresh T26 binary result.  Every node states the mechanism, validation
-question, observable evidence, measured result, current status, and next
-dependency.  Minor infrastructure outcomes remain attached only where they
-change a mechanism conclusion.
+The concise synthesis covering 2026-08-11 through 2026-08-18 begins with one
+linear progress graph.  The left side shows the actual project sequence from
+terminal ACT/ABSTAIN through full-harness mutation, retained runtime history,
+cross-benchmark execution, rich-evidence T26 search, and fresh 17/17; the right
+side says what mechanism each step validates.  The remaining prose uses
+concrete statements about what was run, what the Worker or Evolver actually
+did, and what that result does or does not establish.  It avoids repeating an
+abstract Mechanism/Question/Signal/Status template for every node.  Minor
+infrastructure outcomes remain attached only where they change a mechanism
+conclusion.
 
 The report's headline boundary is that a R3 Evolver-produced candidate harness
 has one fresh T26 17/17 Worker result, while complete autonomous experiment
