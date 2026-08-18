@@ -29,8 +29,24 @@
   "claim_boundary": "Seeded repair probe, not a from-scratch benchmark result.",
   "remote_evidence": "/data/qea-julius-storage/runs/qce-t26-ap1-paired-repair-20260818-r1",
   "promoted_blind_run": {
-    "status": "running_at_record_time",
-    "remote_evidence": "/data/qea-julius-storage/runs/qce-t26-ap1-candidate-blind-20260818-r1"
+    "status": "complete",
+    "remote_evidence": "/data/qea-julius-storage/runs/qce-t26-ap1-candidate-blind-20260818-r1",
+    "score": "17/17",
+    "type_a": "7/7",
+    "type_b": "10/10",
+    "reward": 1,
+    "model_requests": 59,
+    "input_tokens": 3162048,
+    "output_tokens": 122443,
+    "total_tokens": 3284491,
+    "cost_usd": 0.12062742,
+    "worker_seconds": 1766.607,
+    "worker_turns": 59,
+    "worker_tool_calls": 76,
+    "worker_tool_errors": 13,
+    "provider": "DeepSeek",
+    "provider_fallback_exercised": false,
+    "claim_boundary": "Fresh Worker binary success with the R3 Evolver-produced harness candidate; independently repeat before claiming stable autonomous harness gain."
   },
   "negative_observation": "The autonomous static auditor still reports false-negative failures on the 14/17 artifact, so the +2 result belongs to the candidate harness bundle/workflow and cannot yet be attributed to auditor accuracy."
 }
