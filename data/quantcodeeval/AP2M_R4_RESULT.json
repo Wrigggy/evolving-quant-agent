@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "experiment": "AP-2M-r4",
+  "date": "2026-08-19",
+  "task_ids": [
+    "T26"
+  ],
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "result": {
+    "status": "complete_without_final",
+    "autonomy_feasible": true,
+    "feedback_driven": true,
+    "worker_probe_run": true,
+    "second_evolver_decision_run": true,
+    "fresh_worker_run": false,
+    "official_candidate_evaluation_run": false,
+    "benchmark_helpful": false,
+    "binary_helpful": false
+  },
+  "round_one": {
+    "decision": "ACT",
+    "search_operator": "REFINE",
+    "selected_failure_class": "formula_parameterization",
+    "selected_mechanism": "executable_semantic_invariant_checker",
+    "primary_components": [
+      "tools"
+    ],
+    "admission": "passed",
+    "model_requests": 47,
+    "provider_cost_usd": 0.2200706084
+  },
+  "worker_probe": {
+    "max_iterations": 8,
+    "model_requests": 7,
+    "provider_cost_usd": 0.0060602752,
+    "result": "missing_artifact",
+    "reward": 0.0,
+    "observed_process": "The Worker inspected the public data, paper, and seed module, copied the seed only to a temporary path, never wrote /app/output/strategy.py, and never invoked the semantic checker before the iteration limit."
+  },
+  "round_two": {
+    "probe_summary_read": true,
+    "decision": "ACT",
+    "search_operator": "REFINE",
+    "selected_failure_class": "formula_parameterization",
+    "selected_mechanism": "semantic_audit_satisfiability",
+    "counterevidence_recorded": true,
+    "open_delivery_failure_recorded": true,
+    "new_information": "The Evolver found that the round-one audit fixed gamma and used synthetic windows inconsistent with the public CV and sample-window clauses.",
+    "model_requests": 32,
+    "provider_cost_usd": 0.1093122532,
+    "admission": {
+      "status": "rejected",
+      "reason": "The final tools component lacked a passed final-version smoke because the model ended before terminal reserve activation."
+    }
+  },
+  "usage": {
+    "evolver_cost_usd": 0.3293828616,
+    "worker_probe_cost_usd": 0.0060602752,
+    "end_to_end_provider_cost_usd": 0.3354431368,
+    "cost_cap_usd": 0.4,
+    "rate_limit_events": 0
+  },
+  "claim_boundary": "Measured warm-history feedback-driven autonomy feasibility: the Evolver built a component, scheduled a Worker probe, read its negative outcome, and made a distinct second decision. The component was not behaviorally activated by the Worker, no official candidate score was produced, and no benchmark or binary improvement is claimed.",
+  "post_run_fix": {
+    "change": "An early final ACT with a missing primary-component smoke is redirected once into the bounded component-smoke phase.",
+    "verification": "83 focused tests passed, including middleware-manager force-continue propagation.",
+    "live_rerun_status": "not yet rerun"
+  },
+  "evidence": {
+    "local_mirror": "results/bc-mirror/qce-t26-ap2m-20260819-r4",
+    "remote_run": "/data/qea-julius-storage/runs/qce-t26-ap2m-20260819-r4",
+    "result_file": "AP2M-RESULT.json"
+  }
+}
