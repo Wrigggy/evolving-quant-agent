@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "experiment": "AP-2M",
+  "date": "2026-08-19",
+  "task_ids": [
+    "T26"
+  ],
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "provider_policy": {
+    "preferred": "deepseek",
+    "fallbacks": [
+      "baseten",
+      "gmicloud",
+      "deepinfra"
+    ]
+  },
+  "result": {
+    "status": "round_one_terminal",
+    "autonomy_feasible": false,
+    "feedback_driven": false,
+    "worker_probe_run": false,
+    "second_evolver_decision_run": false,
+    "fresh_worker_run": false,
+    "official_candidate_evaluation_run": false
+  },
+  "round_one": {
+    "decision": "ACT",
+    "selected_failure_class": "formula_parameterization",
+    "selected_mechanism": "executable_public_clause_invariant",
+    "search_operator": "REFINE",
+    "selected_seed": "candidate12_t26",
+    "requested_worker_iterations": 8,
+    "candidate_components": [
+      "tools",
+      "agent_config",
+      "tool_descriptions",
+      "systemprompt"
+    ],
+    "primary_components": [
+      "tools"
+    ],
+    "candidate_files": [
+      "agent.yaml",
+      "systemprompt.md",
+      "tool_descriptions/check_strategy_contract.tool.yaml",
+      "tools/strategy_contract.py"
+    ],
+    "autonomous_probe_design_recorded": true,
+    "prediction_recorded": true,
+    "decision_changing_observation_recorded": true,
+    "paired_local_fixtures_exercised": true,
+    "admission": {
+      "status": "failed",
+      "stage": "candidate_contract",
+      "reason": "The final tools component state lacked a final passed smoke after temporary fixture cleanup."
+    }
+  },
+  "usage": {
+    "model_requests": 35,
+    "input_tokens": 2740716,
+    "output_tokens": 133517,
+    "total_tokens": 2874233,
+    "provider_cost_usd": 0.1652724772,
+    "rate_limit_events": 0
+  },
+  "setup_observations": [
+    "The original proxy image did not accept provider fallback configuration.",
+    "A lightweight proxy refresh fixed the setup mismatch before the measured run.",
+    "The measured run completed with no provider rate limit and no residual managed containers."
+  ],
+  "claim_boundary": "Measured autonomous component construction and experiment design; not an AP-2M autonomy success, Worker improvement, or benchmark improvement.",
+  "evidence": {
+    "local_mirror": "results/bc-mirror/qce-t26-ap2m-20260819-r3",
+    "remote_run": "/data/qea-julius-storage/runs/qce-t26-ap2m-20260819-r3",
+    "result_file": "AP2M-RESULT.json"
+  },
+  "next_engineering_step": "Let the Evolver run final primary-component smokes during bounded completion, then rerun AP-2M under a fresh budget."
+}
