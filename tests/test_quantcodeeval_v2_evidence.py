@@ -141,6 +141,11 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
     )
     worker_artifact = tmp_path / "t18-strategy.py"
     worker_artifact.write_text("def strategy():\n    return None\n", encoding="utf-8")
+    observation = tmp_path / "round1-probe.json"
+    observation.write_text(
+        json.dumps({"score": {"tests_passed": 14, "tests_failed": 3}}),
+        encoding="utf-8",
+    )
 
     record = build_quantcodeeval_v2_evidence(
         destination=tmp_path / "v2-evidence",
@@ -154,6 +159,8 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
         ),
         component_sources={"semantic_bound_invariant": component_source},
         worker_artifact_sources={"t18_h0": worker_artifact},
+        experiment_observation_sources={"round1_probe": observation},
+        autonomous_probe_required=True,
         iteration_summaries=({"iteration": 1, "selection": "rejected"},),
     )
 
@@ -178,6 +185,11 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
     }
     assert contract["worker_artifacts_are_scored_runtime_experience"] is True
     assert contract["worker_artifacts_are_reference_answers"] is False
+    assert contract["experiment_observations"] == {
+        "round1_probe": "guidance/experiment_observations/round1_probe.json"
+    }
+    assert contract["experiment_observations_are_runtime_feedback"] is True
+    assert contract["autonomous_probe_required"] is True
     assert contract["quant_failure_classification_required_for_act"] is False
     assert contract["domain_guidance_is_advisory"] is True
     assert contract["domain_tags_are_extensible"] is True

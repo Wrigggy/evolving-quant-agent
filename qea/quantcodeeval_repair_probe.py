@@ -52,24 +52,31 @@ def materialize_probe_public_root(
     destination: str | Path,
     *,
     task_id: str,
-    seed_strategy: str | Path,
+    seed_strategy: str | Path | None,
+    worker_instruction: str | None = None,
 ) -> Path:
-    """Create a minimal public-only task overlay containing one failed artifact."""
+    """Create a public-only task overlay for a bounded Worker experiment."""
 
     source = Path(public_root).resolve() / "tasks" / task_id
     target_root = Path(destination).resolve()
     target = target_root / "tasks" / task_id
-    seed = Path(seed_strategy).resolve()
+    seed = Path(seed_strategy).resolve() if seed_strategy is not None else None
     if target_root.exists():
         raise QuantCodeEvalRepairProbeError("probe public overlay already exists")
-    if not source.is_dir() or not seed.is_file() or seed.is_symlink():
+    if not source.is_dir() or (
+        seed is not None and (not seed.is_file() or seed.is_symlink())
+    ):
         raise QuantCodeEvalRepairProbeError("probe public inputs are missing")
     data_source = source / "environment" / "data"
     data_target = target / "environment" / "data"
     data_target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(data_source, data_target)
-    shutil.copy2(seed, data_target / "probe_seed_strategy.py")
-    (target / "instruction.md").write_text(_PROBE_INSTRUCTION, encoding="utf-8")
+    if seed is not None:
+        shutil.copy2(seed, data_target / "probe_seed_strategy.py")
+    instruction = worker_instruction if worker_instruction is not None else _PROBE_INSTRUCTION
+    if not isinstance(instruction, str) or not instruction.strip():
+        raise QuantCodeEvalRepairProbeError("probe Worker instruction is empty")
+    (target / "instruction.md").write_text(instruction.strip() + "\n", encoding="utf-8")
     return target_root
 
 
@@ -122,7 +129,8 @@ def run_probe_arm(
     trusted_root: str | Path,
     run_dir: str | Path,
     worker_dir: str | Path,
-    seed_strategy: str | Path,
+    seed_strategy: str | Path | None,
+    worker_instruction: str | None = None,
     worker_image_ref: str,
     verifier_image_ref: str,
     proxy_image_ref: str,
@@ -155,6 +163,7 @@ def run_probe_arm(
         root / "probe-public",
         task_id=task_id,
         seed_strategy=seed_strategy,
+        worker_instruction=worker_instruction,
     )
     evaluator.executor.public_task_root = overlay
     task = snapshot.task(task_id)

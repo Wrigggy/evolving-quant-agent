@@ -100,6 +100,8 @@ def build_quantcodeeval_v2_evidence(
     component_ledger_path: str | Path | None = None,
     component_sources: Mapping[str, str | Path] | None = None,
     worker_artifact_sources: Mapping[str, str | Path] | None = None,
+    experiment_observation_sources: Mapping[str, str | Path] | None = None,
+    autonomous_probe_required: bool = False,
     iteration_summaries: Iterable[Mapping[str, object]] = (),
     current_parent: str | None = None,
     max_primary_components: int = 2,
@@ -246,6 +248,32 @@ def build_quantcodeeval_v2_evidence(
             destination_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination_path)
             exposed_worker_artifacts[name] = relative
+        exposed_experiment_observations = {}
+        for name, raw_source in sorted(
+            (experiment_observation_sources or {}).items()
+        ):
+            if _COMPONENT_SOURCE_NAME.fullmatch(name) is None:
+                raise QuantCodeEvalV2EvidenceError(
+                    f"experiment observation name is invalid: {name}"
+                )
+            source = Path(raw_source).expanduser().resolve()
+            if not source.is_file():
+                raise QuantCodeEvalV2EvidenceError(
+                    f"experiment observation is not a file: {source}"
+                )
+            try:
+                observation = json.loads(source.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                raise QuantCodeEvalV2EvidenceError(
+                    f"experiment observation is not valid JSON: {source}"
+                ) from exc
+            if not isinstance(observation, Mapping):
+                raise QuantCodeEvalV2EvidenceError(
+                    "experiment observation must contain a JSON object"
+                )
+            relative = f"guidance/experiment_observations/{name}.json"
+            _write_json(staging / relative, dict(observation))
+            exposed_experiment_observations[name] = relative
         _write_json(
             staging / "contract.json",
             {
@@ -291,6 +319,9 @@ def build_quantcodeeval_v2_evidence(
                 "worker_artifacts": exposed_worker_artifacts,
                 "worker_artifacts_are_scored_runtime_experience": True,
                 "worker_artifacts_are_reference_answers": False,
+                "experiment_observations": exposed_experiment_observations,
+                "experiment_observations_are_runtime_feedback": True,
+                "autonomous_probe_required": bool(autonomous_probe_required),
                 "quant_failure_classification_required_for_act": False,
                 "domain_guidance_is_advisory": True,
                 "domain_tags_are_extensible": True,

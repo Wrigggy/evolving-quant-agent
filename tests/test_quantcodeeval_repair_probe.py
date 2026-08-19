@@ -43,6 +43,27 @@ def test_rejects_missing_iteration_field(tmp_path: Path):
         materialize_probe_worker(worker, tmp_path / "out", max_iterations=4)
 
 
+def test_materializes_evolver_authored_from_scratch_probe(tmp_path: Path):
+    public = tmp_path / "public"
+    data = public / "tasks/T26/environment/data"
+    data.mkdir(parents=True)
+    (data / "paper.md").write_text("public\n")
+
+    overlay = materialize_probe_public_root(
+        public,
+        tmp_path / "overlay",
+        task_id="T26",
+        seed_strategy=None,
+        worker_instruction="Build strategy.py from the public task and run a smoke.",
+    )
+
+    task = overlay / "tasks/T26"
+    assert not (task / "environment/data/probe_seed_strategy.py").exists()
+    assert (task / "instruction.md").read_text() == (
+        "Build strategy.py from the public task and run a smoke.\n"
+    )
+
+
 def test_comparison_separates_probe_benefit_from_benchmark_claim():
     parent = {"score": {"tests_passed": 3, "tests_failed": 14, "reward": 0.0}}
     candidate = {"score": {"tests_passed": 16, "tests_failed": 1, "reward": 0.0}}

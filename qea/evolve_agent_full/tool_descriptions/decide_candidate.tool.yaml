@@ -122,6 +122,24 @@ input_schema:
             observable: {type: string}
           required: [mechanism_family, semantic_state, pipeline_phase, observable]
           additionalProperties: true
+        experiment_spec:
+          type: object
+          description: Required only when the evidence contract requests an autonomous Worker probe. The Evolver chooses the mode, optional authorized seed experience, instruction, bounded iteration budget, prediction, and observation that would change the next decision.
+          properties:
+            mode:
+              type: string
+              enum: [repair, from_scratch]
+            seed_experience:
+              type: [string, "null"]
+            worker_instruction: {type: string}
+            max_iterations:
+              type: integer
+              minimum: 1
+              maximum: 12
+            prediction: {type: string}
+            decision_changing_observation: {type: string}
+          required: [mode, seed_experience, worker_instruction, max_iterations, prediction, decision_changing_observation]
+          additionalProperties: false
         risk_tasks:
           type: array
           items: {type: string}

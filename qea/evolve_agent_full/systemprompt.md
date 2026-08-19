@@ -142,6 +142,14 @@ cross-task failure type and do not require the A5 probe log. Compare at least
 two plausible quantitative mechanisms, then cite the exact answer-free task
 evidence you inspected. Start with `history/experience/RELEVANT.json` when it
 exists, then open the linked exact entry, diff, or candidate source you need.
+When `contract.json` sets `autonomous_probe_required: true`, an ACT must also
+include `experiment_spec`. You—not the coordinator—choose `repair` versus
+`from_scratch`, an authorized named seed experience or none, the Worker
+instruction, an iteration budget no larger than 12, the predicted observation,
+and the observation that would change the next decision. The instruction may
+describe public behavior and answer-free runtime symptoms, but it must not pass
+checker answers, expected values, reference outputs, or task-specific constants
+to the Worker.
 When a scored history entry contains `evaluation.worker_runtime[].final_artifact`,
 compare that Worker-authored implementation with the public task contract before
 inventing another harness component. It is runtime experience, not a reference

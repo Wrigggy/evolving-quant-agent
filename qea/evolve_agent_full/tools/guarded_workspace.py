@@ -1764,6 +1764,55 @@ def _decide_quant_property_candidate(
                     raw_signature.get(field), label=f"failure_signature.{field}"
                 )
             normalized["failure_signature"] = signature
+        if contract.get("autonomous_probe_required") is True:
+            raw_experiment = discovery.get("experiment_spec")
+            if not isinstance(raw_experiment, Mapping):
+                raise GuardedWorkspaceError(
+                    "ACT requires an Evolver-authored experiment_spec"
+                )
+            mode = _text(
+                raw_experiment.get("mode"), label="experiment_spec.mode"
+            ).casefold()
+            if mode not in {"repair", "from_scratch"}:
+                raise GuardedWorkspaceError(
+                    "experiment_spec.mode must be repair or from_scratch"
+                )
+            raw_seed = raw_experiment.get("seed_experience")
+            seed = (
+                _text(raw_seed, label="experiment_spec.seed_experience")
+                if raw_seed is not None
+                else None
+            )
+            if mode == "repair" and seed is None:
+                raise GuardedWorkspaceError(
+                    "repair experiment_spec requires seed_experience"
+                )
+            if mode == "from_scratch" and seed is not None:
+                raise GuardedWorkspaceError(
+                    "from_scratch experiment_spec must not select a seed"
+                )
+            max_iterations = raw_experiment.get("max_iterations")
+            if type(max_iterations) is not int or not 1 <= max_iterations <= 12:
+                raise GuardedWorkspaceError(
+                    "experiment_spec.max_iterations must be in [1, 12]"
+                )
+            normalized["experiment_spec"] = {
+                "mode": mode,
+                "seed_experience": seed,
+                "worker_instruction": _text(
+                    raw_experiment.get("worker_instruction"),
+                    label="experiment_spec.worker_instruction",
+                ),
+                "max_iterations": max_iterations,
+                "prediction": _text(
+                    raw_experiment.get("prediction"),
+                    label="experiment_spec.prediction",
+                ),
+                "decision_changing_observation": _text(
+                    raw_experiment.get("decision_changing_observation"),
+                    label="experiment_spec.decision_changing_observation",
+                ),
+            }
         normalized["risk_tasks"] = _text_list(
             discovery.get("risk_tasks", []), label="risk_tasks"
         )

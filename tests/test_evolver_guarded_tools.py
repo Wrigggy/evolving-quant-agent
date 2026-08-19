@@ -867,6 +867,46 @@ def test_quant_v2_uses_exact_history_and_unlocks_binding_components(guarded_root
     assert (candidate / "tools/estimator.py").is_file()
 
 
+def test_quant_v2_autonomous_probe_contract_requires_experiment_spec(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, access_log = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["autonomous_probe_required"] = True
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+
+    with pytest.raises(GuardedWorkspaceError, match="experiment_spec"):
+        decide_candidate(discovery=decision)
+
+    decision["experiment_spec"] = {
+        "mode": "repair",
+        "seed_experience": "t26_h0",
+        "worker_instruction": "Repair the public artifact and run a smoke.",
+        "max_iterations": 8,
+        "prediction": "The estimator failure should disappear.",
+        "decision_changing_observation": "If unchanged, roll back the component.",
+    }
+    result = decide_candidate(discovery=decision)
+    state = json.loads(
+        (access_log.parent / "discovery-hypothesis.json").read_text()
+    )
+
+    assert result["decision"] == "ACT"
+    assert state["hypothesis"]["experiment_spec"]["seed_experience"] == "t26_h0"
+
+
 def test_quant_v2_forbids_legacy_unlock_and_schema_uses_prediction(guarded_roots):
     from qea.evolve_agent_full.tools.guarded_workspace import (
         GuardedWorkspaceError,
