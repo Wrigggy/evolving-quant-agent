@@ -36,6 +36,7 @@ _FORBIDDEN_KEY_PARTS = (
     "reference_solution",
     "raw_verdict",
 )
+_PUBLIC_RESEARCH_STATE_KEYS = frozenset({"expected_state"})
 _FORBIDDEN_PATH_PARTS = frozenset(
     {
         ".env",
@@ -98,7 +99,10 @@ def _reject_oracle_keys(value: object, *, label: str) -> None:
     if isinstance(value, Mapping):
         for key, child in value.items():
             normalized = str(key).casefold()
-            if any(part in normalized for part in _FORBIDDEN_KEY_PARTS):
+            if (
+                normalized not in _PUBLIC_RESEARCH_STATE_KEYS
+                and any(part in normalized for part in _FORBIDDEN_KEY_PARTS)
+            ):
                 raise QuantCodeEvalHistoryError(
                     f"{label} contains forbidden oracle-like key {key!r}"
                 )

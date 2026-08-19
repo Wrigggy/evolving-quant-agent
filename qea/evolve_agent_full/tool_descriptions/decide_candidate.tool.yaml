@@ -41,6 +41,27 @@ input_schema:
         component_state_target:
           type: string
           description: Concrete finance or execution state the selected harness mechanism should change or preserve.
+        research_state_transition:
+          type: object
+          description: Required for Research-State-guided QuantCodeEval ACT. Reconstruct one task-conditioned state mismatch and predict the observable state transition that the selected harness component should cause. The six states are general research states, not a fixed strategy pipeline.
+          properties:
+            state_id:
+              type: string
+              enum: [research_mandate_contract, research_evidence_data, quantitative_representation, research_operation, evaluation_reconciliation, research_artifact_completion]
+            expected_state:
+              type: string
+              description: State implied by the public task and permitted optimization evidence.
+            observed_state:
+              type: string
+              description: State realized in the inspected Worker trajectory or artifact.
+            target_state:
+              type: string
+              description: State the harness intervention should produce in a fresh Worker.
+            transition_observable:
+              type: string
+              description: Concrete trajectory, component-use, invariant, artifact, or official observation showing whether the transition occurred.
+          required: [state_id, expected_state, observed_state, target_state, transition_observable]
+          additionalProperties: false
         failure_types:
           type: array
           minItems: 1

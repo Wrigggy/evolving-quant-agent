@@ -760,6 +760,7 @@ def _write_quant_v2_contract(evidence: Path, *, history_required: bool = True):
                 "preferred_primary_components": {
                     "formula_parameterization": ["tools", "skills", "memory"]
                 },
+                "research_state_transition_required_for_act": True,
                 "quant_failure_classification_required_for_act": True,
                 "oracle_fields_exposed": False,
             },
@@ -814,6 +815,16 @@ def _quant_v2_decision():
         "component_state_target": (
             "the executable mapping from the paper identity to library arguments"
         ),
+        "research_state_transition": {
+            "state_id": "research_operation",
+            "expected_state": "the stated estimator is realized by the implementation",
+            "observed_state": "the library mapping realizes a different estimator",
+            "target_state": "a fresh Worker realizes the stated estimator",
+            "transition_observable": (
+                "the selected tool activates and the resulting implementation passes "
+                "the public estimator fixture"
+            ),
+        },
         "hypotheses_considered": [
             {
                 "hypothesis_id": "h_operation",
@@ -860,11 +871,31 @@ def test_quant_v2_uses_exact_history_and_unlocks_binding_components(guarded_root
     assert result["decision"] == "ACT"
     assert result["primary_components"] == ["tools"]
     assert result["components"] == ["agent_config", "tool_descriptions", "tools"]
+    assert result["research_state_transition"]["state_id"] == "research_operation"
     write_candidate("tools/estimator.py", "def estimate(values):\n    return sum(values)\n")
     write_candidate("tool_descriptions/estimator.tool.yaml", "type: tool\n")
     with pytest.raises(GuardedWorkspaceError, match="undeclared component"):
         write_candidate("systemprompt.md", "unrelated broad rewrite\n")
     assert (candidate / "tools/estimator.py").is_file()
+
+
+def test_quant_v2_act_requires_research_state_transition(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    decision.pop("research_state_transition")
+
+    with pytest.raises(GuardedWorkspaceError, match="research_state_transition"):
+        decide_candidate(discovery=decision)
 
 
 def test_quant_v2_autonomous_probe_contract_requires_experiment_spec(

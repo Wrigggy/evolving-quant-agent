@@ -886,6 +886,10 @@ def test_quant_failure_map_middleware_injects_only_for_quant_v2(
     assert injected is not None
     assert len(injected) == len(messages) + 1
     guidance = injected[-1].get_text_content()
+    assert "QUANT RESEARCH STATE SEARCH" in guidance
+    assert "Research Mandate & Contract" in guidance
+    assert "research_operation" in guidance
+    assert "not the fixed stages of one strategy pipeline" in guidance
     assert "optional domain vocabulary" in guidance
     assert "free-form domain_tags" in guidance
     assert "specification_preservation" in guidance

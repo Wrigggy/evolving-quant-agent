@@ -77,11 +77,17 @@ def _cost(value: Mapping[str, object] | None) -> float:
     if not isinstance(value, Mapping):
         return 0.0
     raw = value.get("provider_cost_usd")
-    return (
-        float(raw)
-        if isinstance(raw, (int, float)) and not isinstance(raw, bool)
-        else 0.0
-    )
+    if isinstance(raw, bool):
+        return 0.0
+    if isinstance(raw, (int, float)):
+        return float(raw) if raw >= 0 else 0.0
+    if isinstance(raw, str):
+        try:
+            parsed = float(raw)
+        except ValueError:
+            return 0.0
+        return parsed if parsed >= 0 else 0.0
+    return 0.0
 
 
 def _write_result(path: Path, value: Mapping[str, object]) -> None:

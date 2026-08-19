@@ -34,6 +34,7 @@ class SearchSelection(str, Enum):
     REJECTED = "rejected"
     ARCHIVED = "archived"
     DIAGNOSTIC_PROMOTED = "diagnostic_promoted"
+    RESEARCH_STATE_PROMOTED = "research_state_promoted"
     OFFICIAL_PROMOTED = "official_promoted"
     ABSTAINED = "abstained"
 
@@ -256,10 +257,11 @@ def _bounded_archive(
     values.append(entry)
     priority = {
         SearchSelection.OFFICIAL_PROMOTED: 0,
-        SearchSelection.DIAGNOSTIC_PROMOTED: 1,
-        SearchSelection.ARCHIVED: 2,
-        SearchSelection.REJECTED: 3,
-        SearchSelection.ABSTAINED: 4,
+        SearchSelection.RESEARCH_STATE_PROMOTED: 1,
+        SearchSelection.DIAGNOSTIC_PROMOTED: 2,
+        SearchSelection.ARCHIVED: 3,
+        SearchSelection.REJECTED: 4,
+        SearchSelection.ABSTAINED: 5,
     }
     values.sort(
         key=lambda value: (
@@ -345,7 +347,10 @@ def record_quantcodeeval_search_round(
             official = rewards
             search_digest = candidate_digest
             search_rewards = rewards
-        elif normalized_selection is SearchSelection.DIAGNOSTIC_PROMOTED:
+        elif normalized_selection in {
+            SearchSelection.DIAGNOSTIC_PROMOTED,
+            SearchSelection.RESEARCH_STATE_PROMOTED,
+        }:
             if any(rewards[key] < official[key] for key in rewards):
                 raise QuantCodeEvalSearchError(
                     "diagnostic promotion cannot regress official incumbent tasks"

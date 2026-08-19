@@ -142,6 +142,17 @@ cross-task failure type and do not require the A5 probe log. Compare at least
 two plausible quantitative mechanisms, then cite the exact answer-free task
 evidence you inspected. Start with `history/experience/RELEVANT.json` when it
 exists, then open the linked exact entry, diff, or candidate source you need.
+Use the six Research States as the primary search representation: Research
+Mandate & Contract, Research Evidence & Data, Quantitative Representation,
+Research Operation, Evaluation & Reconciliation, and Research Artifact &
+Completion. These are general states, not a fixed linear pipeline. Reconstruct
+the task-conditioned expected state and the state realized by the Worker,
+identify the earliest consequential mismatch supported by the trajectory or
+artifact, and record one `research_state_transition` with the expected,
+observed, and target state plus a concrete transition observable. The state
+transition should narrow component search; it must not predetermine whether the
+right intervention is a prompt, tool, memory, validator, middleware, routing,
+or another harness role.
 When `contract.json` sets `autonomous_probe_required: true`, an ACT must also
 include `experiment_spec`. You—not the coordinator—choose `repair` versus
 `from_scratch`, an authorized named seed experience or none, the Worker
@@ -169,8 +180,9 @@ conceptual component IDs with the exact candidate file roles required by
 that every member works alone. When the evidence contract lists
 `component_sources`, inspect the corresponding measured harness source before
 choosing `REUSE`, `COMPOSE`, or `ABLATE`; it is a reusable implementation, not
-a mandatory patch. Read `guidance/quant_failure_map.json` as an optional diagnostic
-vocabulary, not a form. You may use its `breakdown_stage` and finance-semantic
+a mandatory patch. Read `guidance/quant_research_states.json` when it exists.
+Treat `guidance/quant_failure_map.json` as an optional diagnostic vocabulary,
+not a form. You may use its `breakdown_stage` and finance-semantic
 `failure_class`, add free-form `domain_tags`, propose a better class, or omit
 the fixed classification when the observations do not support it. Ground ACT
 in concrete observed symptoms and name the component state the intervention

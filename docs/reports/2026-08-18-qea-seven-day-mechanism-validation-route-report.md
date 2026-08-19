@@ -97,6 +97,12 @@ T26 已经给了两个很清楚的教训。第一，grid resolution 看起来像
 
 所以 domain specialization 仍然有用，但应该表现为 Evolver 可以检查的 state，例如 sample membership、moment scope、unit state、temporal endpoint、runtime shape；它不能变成一份越来越长的答案枚举。更重要的是，Evolver 要能自己选择一个 executable observation 来区分这些解释。
 
+### 2.4 后续方向：更自由的 self-evolve
+
+这是当前 AP-2M/AP-3 之外的后续 scenario。未来可以不再规定每个 candidate 必须按固定轮次跑同一组 task，而是给 Evolver 一个总预算，让它自己决定何时调用 Worker、测试哪个 component 或 candidate、看到结果后是否继续修改，以及何时提交 incumbent。Candidate version 用来记录每次实质 harness 更新，RAG 则保存跨版本的正向、负向和矛盾经验。
+
+这个方法的好处是能把调用资源集中到最有信息量的实验上，也给 Evolver 足够空间在多个 component 之间做更深、更长的搜索。问题是它可能反复拟合 optimize task，偶然的 Worker 高分也可能影响 candidate 选择；同时没有固定轮次以后，何时停止、什么算 final candidate 都需要额外规则。因此当前先用 AP-2M 验证“一次自主 probe 后能否根据反馈更新”，再考虑把它扩成真正的 long-horizon self-evolve。
+
 ## 3. 当前问题与结论边界 / Problems and Open Questions
 
 1. **自主 experiment choice 未验证。** 这是 AP-2M 要解决的问题，也是当前离“完整自主搜索”最近的 gap。
@@ -116,7 +122,7 @@ T26 已经给了两个很清楚的教训。第一，grid resolution 看起来像
 - 自己写 Worker instruction、选择 component 和 10–12 iteration probe budget；
 - 写清 prediction，以及看到什么结果会改变当前判断；
 - coordinator 只执行这一条合法 probe；
-- Round 2 收到 artifact、trace、official optimize properties、runtime、requests、tokens 和 cost；
+- Round 2 收到 artifact、trace、official optimize properties、runtime 和 cost；
 - Round 2 再选择 retain、refine、rollback、compose、submit 或 `ABSTAIN`；
 - final candidate 用一个独立 T26 Worker 和 unchanged official verifier 评分。
 
@@ -143,10 +149,4 @@ AP-3 只提供 shell-only H0、public T26 task，以及 AP-3 内部 fresh H0 Wor
 
 ### P4 — 最后才做 repeat、第二个 task 和 scheduler
 
-如果 AP-3 positive，再按顺序做：
-
-1. fresh Evolver repeat；
-2. 一个 failure mechanism 不同的 QuantCodeEval task；
-3. 一个 QFBench canary；
-4. 渐进式、异步、成本感知 scheduler；
-5. 冻结 candidate 后运行较大 test set。
+AP-3 positive 后，依次做 fresh Evolver repeat、不同 failure mechanism 的 QuantCodeEval task、QFBench canary 与渐进式异步成本 scheduler；最后冻结 candidate，再运行较大 test set。

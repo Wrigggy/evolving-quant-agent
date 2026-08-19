@@ -170,6 +170,10 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
     assert contract["protection_task_ids"] == ["T16"]
     assert contract["history_required"] is True
     assert contract["history_entry_ids"] == [entry_id]
+    assert contract["research_state_definitions"] == (
+        "guidance/quant_research_states.json"
+    )
+    assert contract["research_state_transition_required_for_act"] is True
     assert contract["quant_failure_map"] == "guidance/quant_failure_map.json"
     assert contract["component_stability"] == "guidance/component_stability.json"
     assert contract["component_stability_is_answer_free"] is True
@@ -219,6 +223,17 @@ def test_v2_evidence_exposes_exact_rejected_diff_and_candidate_source(tmp_path):
     failure_map = json.loads(
         (record.root / "guidance/quant_failure_map.json").read_text()
     )
+    research_states = json.loads(
+        (record.root / "guidance/quant_research_states.json").read_text()
+    )
+    assert [state["state_id"] for state in research_states["states"]] == [
+        "research_mandate_contract",
+        "research_evidence_data",
+        "quantitative_representation",
+        "research_operation",
+        "evaluation_reconciliation",
+        "research_artifact_completion",
+    ]
     assert failure_map["schema_version"] == 2
     assert {item["breakdown_stage"] for item in failure_map["breakdown_stages"]} >= {
         "requirement_comprehension",

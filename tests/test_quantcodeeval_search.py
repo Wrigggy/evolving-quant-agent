@@ -81,6 +81,20 @@ def test_variable_length_search_retains_rejections_and_promotes_parents():
     )
 
 
+def test_research_state_promotion_advances_only_the_search_parent():
+    state = _act(
+        _state(max_rounds=2),
+        1,
+        SearchSelection.RESEARCH_STATE_PROMOTED,
+        {"T16": 1.0, "T24": 0.0},
+    )
+
+    assert state.search_parent_digest == "1" * 64
+    assert state.official_incumbent_digest == H0
+    assert state.official_rewards == {"T16": 1.0, "T24": 0.0}
+    assert state.archive[0].selection is SearchSelection.RESEARCH_STATE_PROMOTED
+
+
 def test_search_stops_on_repeated_no_information_not_fixed_five_rounds():
     state = _state(max_rounds=20, max_no_information_rounds=2)
     state = _act(
@@ -144,7 +158,7 @@ def test_search_checkpoint_round_trips_and_rejects_tamper(tmp_path):
     state = _act(
         _state(max_rounds=12),
         1,
-        SearchSelection.DIAGNOSTIC_PROMOTED,
+        SearchSelection.RESEARCH_STATE_PROMOTED,
         {"T16": 1.0, "T24": 0.0},
     )
     path = tmp_path / "SEARCH-STATE.json"

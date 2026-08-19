@@ -1,0 +1,77 @@
+[
+  {
+    "case_id": "rate-scale-vs-formula",
+    "state_id": "quantitative_representation",
+    "public_contract": "The coupon input is quoted as 5 percent. The cash coupon must equal notional multiplied by the decimal coupon rate. The public notional is 100.",
+    "runtime_evidence": [
+      "artifact parses the quoted coupon token as the floating value 5.0",
+      "artifact computes coupon_cash = notional * coupon_rate",
+      "replayed coupon_cash is 500"
+    ],
+    "audits": {
+      "normalize-rate-and-replay": {
+        "description": "Normalize the public percent quote to decimal form while leaving the multiplication formula unchanged, then replay coupon_cash.",
+        "observation": "With coupon_rate normalized from 5.0 to 0.05, the unchanged formula produces coupon_cash 5.0, exactly satisfying the public relation."
+      },
+      "double-notional": {
+        "description": "Double notional while leaving the parsed rate and formula unchanged, then replay coupon_cash.",
+        "observation": "Doubling notional doubles coupon_cash from 500 to 1000; this does not separate quote scale from the multiplication formula."
+      }
+    },
+    "true_mechanism": "percent_scale_mismatch",
+    "adjacent_mechanism": "cashflow_formula_error",
+    "true_mechanism_markers": ["percent-to-decimal", "rate representation/conversion"],
+    "adjacent_mechanism_markers": ["formula"],
+    "discriminating_audit_id": "normalize-rate-and-replay"
+  },
+  {
+    "case_id": "cost-vs-holdings-timing",
+    "state_id": "evaluation_reconciliation",
+    "public_contract": "Net P&L must reconcile as gross P&L minus transaction cost. Transaction cost equals turnover times the public cost rate. The holdings path and prices are held fixed for a cost-only replay.",
+    "runtime_evidence": [
+      "artifact reports gross P&L 12 and net P&L 12",
+      "replayed turnover is 4 and public cost rate is 0.25",
+      "the execution trace contains both prior and current holdings arrays"
+    ],
+    "audits": {
+      "cost-only-replay": {
+        "description": "Double only the public cost rate while holding prices and both holdings arrays fixed, then replay reported net P&L.",
+        "observation": "The expected cost changes from 1 to 2, but artifact net P&L remains 12 in both replays; the cost term is absent from reported net P&L."
+      },
+      "shift-holdings-one-period": {
+        "description": "Shift holdings by one period while leaving the cost rate fixed, then replay gross and net P&L.",
+        "observation": "Both gross and net P&L change together and remain equal; this does not explain why the public cost term is missing from their bridge."
+      }
+    },
+    "true_mechanism": "missing_transaction_cost",
+    "adjacent_mechanism": "holdings_timing_mismatch",
+    "true_mechanism_markers": ["does not subtract", "omits", "absent from", "ignored"],
+    "adjacent_mechanism_markers": ["holdings timing", "timing mismatch", "shift holdings"],
+    "discriminating_audit_id": "cost-only-replay"
+  },
+  {
+    "case_id": "ambiguous-pnl-summary",
+    "state_id": "evaluation_reconciliation",
+    "public_contract": "The final report must state net P&L. The retained summary does not include holdings, turnover, trade timestamps, or a gross-to-net bridge.",
+    "runtime_evidence": [
+      "retained report contains only final net P&L 8.1",
+      "the Worker trace ended before persisting intermediate portfolio state",
+      "no replayable holdings or transaction-cost series is available"
+    ],
+    "audits": {
+      "inspect-retained-summary": {
+        "description": "Inspect the retained report and trace again for holdings, turnover, timestamps, or cost fields.",
+        "observation": "No additional holdings, turnover, timestamps, cost fields, or replayable state are present. Missing cost and timing mismatch remain observationally equivalent."
+      },
+      "compare-final-scalar": {
+        "description": "Compare the reported final scalar with the same retained scalar.",
+        "observation": "The two copies of the final scalar agree, but this supplies no evidence about cost treatment or holdings timing."
+      }
+    },
+    "true_mechanism": null,
+    "adjacent_mechanism": null,
+    "true_mechanism_markers": [],
+    "adjacent_mechanism_markers": [],
+    "discriminating_audit_id": null
+  }
+]

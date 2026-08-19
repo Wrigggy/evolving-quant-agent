@@ -1,6 +1,6 @@
 # QFBench A6 Standing Operational Authorization
 
-Date: 2026-08-10  
+Date: 2026-08-10
 Status: accepted; supersedes per-replacement confirmation requirements within the frozen scope
 
 ## Decision

@@ -1,6 +1,6 @@
 # QFBench V4 Flash 0731 Model Correction
 
-Date: 2026-08-04  
+Date: 2026-08-04
 Status: accepted; supersedes every prior decision that names the moving
 `deepseek/deepseek-v4-flash` alias as the formal model. Scheduling, scoring,
 isolation, no-replay, and five-independent-repetition requirements remain.

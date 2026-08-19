@@ -1187,6 +1187,20 @@ def run_quantcodeeval_v2_activation_canary(
             official_evaluated=False,
             new_information=True,
             reason="activation canary retained candidate without running its task panel",
+            research_state_verdict=(
+                {
+                    "state_id": decision["research_state_transition"]["state_id"],
+                    "component_activation": "unknown",
+                    "transition_outcome": "unknown",
+                    "observation": (
+                        "the activation-only canary did not run a fresh Worker task "
+                        "panel, so neither runtime activation nor the predicted "
+                        "Research State transition was observed"
+                    ),
+                }
+                if isinstance(decision.get("research_state_transition"), Mapping)
+                else None
+            ),
             # The outer loop already counts one proposer call.  A NexAU
             # proposal may contain many provider turns, so add the remainder
             # from the finalized exact proxy audit.

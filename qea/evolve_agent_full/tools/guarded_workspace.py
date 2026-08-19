@@ -114,6 +114,16 @@ _QUANT_BREAKDOWN_STAGES = frozenset(
         "unable_to_decide",
     }
 )
+_QUANT_RESEARCH_STATES = frozenset(
+    {
+        "research_mandate_contract",
+        "research_evidence_data",
+        "quantitative_representation",
+        "research_operation",
+        "evaluation_reconciliation",
+        "research_artifact_completion",
+    }
+)
 
 
 class GuardedWorkspaceError(ValueError):
@@ -1646,6 +1656,39 @@ def _decide_quant_property_candidate(
             )
         if selected_id is None:
             raise GuardedWorkspaceError("ACT requires selected_hypothesis_id")
+        if contract.get("research_state_transition_required_for_act") is True:
+            raw_transition = discovery.get("research_state_transition")
+            if not isinstance(raw_transition, Mapping):
+                raise GuardedWorkspaceError(
+                    "ACT requires a research_state_transition"
+                )
+            state_id = _text(
+                raw_transition.get("state_id"),
+                label="research_state_transition.state_id",
+            ).casefold()
+            if state_id not in _QUANT_RESEARCH_STATES:
+                raise GuardedWorkspaceError(
+                    "research_state_transition.state_id is unsupported"
+                )
+            normalized["research_state_transition"] = {
+                "state_id": state_id,
+                "expected_state": _text(
+                    raw_transition.get("expected_state"),
+                    label="research_state_transition.expected_state",
+                ),
+                "observed_state": _text(
+                    raw_transition.get("observed_state"),
+                    label="research_state_transition.observed_state",
+                ),
+                "target_state": _text(
+                    raw_transition.get("target_state"),
+                    label="research_state_transition.target_state",
+                ),
+                "transition_observable": _text(
+                    raw_transition.get("transition_observable"),
+                    label="research_state_transition.transition_observable",
+                ),
+            }
         if classification_required:
             breakdown_stage = _text(
                 discovery.get("breakdown_stage"), label="breakdown_stage"
@@ -1849,6 +1892,9 @@ def _decide_quant_property_candidate(
         "contract_requirements": {
             "feedback_tier": contract.get("feedback_tier"),
             "history_required": contract.get("history_required"),
+            "research_state_transition_required_for_act": contract.get(
+                "research_state_transition_required_for_act"
+            ),
             "max_primary_components": contract.get("max_primary_components"),
             "max_declared_components": contract.get("max_declared_components"),
             "preferred_primary_components": contract.get(
@@ -1877,6 +1923,7 @@ def _decide_quant_property_candidate(
         "primary_components": primary_components,
         "components": components,
         "failure_signature": normalized.get("failure_signature"),
+        "research_state_transition": normalized.get("research_state_transition"),
     }
 
 

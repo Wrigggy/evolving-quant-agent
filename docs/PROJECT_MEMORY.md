@@ -2458,3 +2458,356 @@ run-local H0 Worker.  Repeat and cross-task/QFBench breadth follow only after a
 positive AP-3 result; the asynchronous cost-aware scheduler remains deferred.
 The synthesis is in
 `docs/reports/2026-08-18-qea-seven-day-mechanism-validation-route-report.md`.
+
+## 2026-08-18 future self-evolve scenario and evidence split
+
+The training-like optimization view is a future, more open-ended self-evolve
+scenario; it is not the current AP-2M/AP-3 evolution protocol. In that future
+scenario, the Evolver receives a resource budget and generic experiment
+interfaces, then autonomously chooses when to call Workers, which candidate or
+component to test, whether to branch or revise, and when to submit an incumbent.
+Candidate versions record material harness changes, while multiple Worker calls
+may be experiment events attached to one version.
+
+The expected benefit is more efficient and flexible search: the Evolver need
+not run every candidate on every task, can test component reachability before
+broad evaluation, and can accumulate positive, negative, and contradictory
+runtime experience for long-horizon retrieval. The main problems are adaptive
+overfitting to repeatedly observed optimize tasks, lucky-sample selection,
+unclear stopping and final-candidate rules, and biased or unwieldy history.
+
+Any task whose result changes search or candidate selection is `optimize` or
+development evidence rather than out-of-sample evidence. A `sealed_final`
+surface is run only after the incumbent is frozen and never returns to the
+Evolver or retrieval index. RAG can reduce context and navigation cost, but it
+does not remove adaptive selection overfitting.
+
+AP-2M remains only the bounded prerequisite canary: two Evolver decisions and
+one self-selected Worker experiment. AP-3 tests that bounded mechanism from H0.
+Variable Worker calls, candidate branching, long-horizon RAG, autonomous
+submission, and multi-task scheduling remain later extensions. Full rationale:
+`docs/decisions/2026-08-18-candidate-version-optimization-and-evidence-split.md`.
+
+## 2026-08-19 ICLR 2027 research and writing direction
+
+For the ICLR 2027 submission sprint, defer the open-ended scenario in which the
+Evolver autonomously schedules Worker calls, branches experiments, and decides
+when to stop. Restore the fixed outer evolution loop as the submission-critical
+method: the coordinator runs a declared task panel, collects trajectories,
+gives accumulated evidence to the Evolver, evaluates one proposed harness
+candidate under a fixed protocol, and accepts or rolls it back. The earlier
+self-evolve records remain valid future directions, not the immediate paper
+scope.
+
+Name the task-solving agent the **Quant Research Worker Agent**, shortened to
+**Worker**. Treat a Worker Agent version as a frozen base model instantiated
+under one versioned harness. The high-level research object is the effective
+capability of this Agent system: unlike quantitative-agent methods that
+primarily evolve factors, strategies, models, or generated programs while
+holding the agent scaffold fixed, QEA evolves the prompt, tools, memory,
+middleware, validation, routing, and workflow that shape future quantitative
+research behavior. State explicitly that this is harness-space adaptation, not
+base-model weight training.
+
+Use **Quant Research Trajectory** for one observable Worker execution of a
+**Quant Research Task**; do not equate the task with its trajectory. The
+Evolver converts accumulated trajectories into an open **Quant Research State**
+covering relevant data, time, quantity, estimator, portfolio/execution, and
+artifact states, then maps the diagnosed mismatch to a missing capability and
+target harness component. Attribute the harness-evolution concept to AHE and
+the evaluated-attempt discovery intuition to TTT-Discover. The intended
+distinction is agent-capability evolution for quantitative research rather than
+another alpha-, factor-, or strategy-evolution method.
+
+The working paper title is **Evolving Quantitative Research Agents through
+Harness Adaptation**. The writing outline centers on idea construction,
+terminology, conceptual formulation, related-work positioning, method
+narrative, and claim boundaries. It deliberately leaves the main experiment
+matrix for a separate decision. Full outline:
+`docs/decisions/2026-08-19-iclr-quant-research-agent-evolution-writing-direction.md`.
+
+## 2026-08-19 adversarial novelty and verification revision
+
+The same-day Quant Research Agent story remains useful motivation but is not a
+sufficient novelty claim. AHE already evolves the full harness from layered
+trajectories, records predicted fixes and regressions, verifies them against
+task-level deltas, rolls back edits, ablates components, and evaluates frozen
+transfer. AQuA already recursively updates quantitative research state to
+improve later factors and model configurations. Do not distinguish QEA through
+renaming, a finance failure taxonomy, or the inaccurate claim that AHE observes
+only a scalar score.
+
+The provisional method contribution is instead a quant research-state
+intervention loop. The Evolver must connect competing explanations of a Worker
+trajectory to a predicted capability deficit, a reachable harness component,
+and a predicted research-state transition. Candidate evidence then separates
+component reach and activation, behavioral state correction, fixed official
+artifact outcome, and repeat or matched-mechanism scope. These intervention
+verdicts feed later evolution; official verifier outcomes alone support
+benchmark-performance claims.
+
+The final study should include a faithful AHE-on-quant reproduction with the
+same seed, editable surface, model routes, optimize split, official verifier,
+answer policy, and model-token or verifier-call budget. The primary method
+comparison is generic AHE trajectory summaries plus task-delta attribution
+versus QEA's competing quant-state hypotheses plus component-mediated
+intervention verification. H0, prompt-only, no-quant-state, and task-score-only
+promotion are supporting ablations. This is a proposed method and experiment
+boundary, not a measured result. Full record:
+`docs/decisions/2026-08-19-adversarial-novelty-and-verification-positioning.md`.
+
+## 2026-08-19 post-AP-2M Quant Research Reviewer path
+
+The next research-state identification mechanism is now placed after AP-2M and
+before AP-3. The discussion used `MP-2`; the repository has no such prior name,
+so this record interprets it as the existing AP-2M warm-history autonomy
+canary. AP-2M keeps its original contract and is not modified to include the
+Reviewer.
+
+QR-1 first tests whether a Quant Research Reviewer can reconstruct a task-
+conditioned expected research process, align it with the Worker artifact and
+trajectory, maintain competing causes, and choose an executable audit that
+changes the diagnosis. Its small controlled panel includes temporal or fit-
+scope leakage, quantity or estimator semantics, portfolio timing or accounting,
+artifact or workflow state, and an ambiguous abstention case. The old failure
+map is a comparison and retrieval prior, not the answer.
+
+Only after that identification gate passes, run one matched live intervention
+canary comparing generic evidence with Reviewer evidence under the same
+harness, models, budget, and official verifier. Keep component activation,
+predicted research-state correction, official outcome, repeat or protection,
+and cost separate. The Evolver still chooses and implements the component. If
+the Reviewer adds no discrimination or does not influence an activated
+intervention, preserve the negative and run AP-3 through its previous generic
+evidence path. Full decision:
+`docs/decisions/2026-08-19-post-ap2m-quant-research-reviewer-canary.md`.
+
+## 2026-08-19 invariant-guided quant harness evolution route
+
+The research route has rolled back from making broad Research State
+identification, causal mediation, and a large Reviewer benchmark immediate
+requirements. AHE and Meta-Harness already establish closely related outer
+harness-evolution loops. The immediate relative novelty hypothesis is instead
+whether public, executable quantitative-research invariants can provide a
+domain-specific feedback, component-search, routing, and cumulative-experience
+signal beyond generic trajectories and sparse official task outcomes.
+
+This continues rather than replaces earlier public-definition and quant-
+invariant work. Prior probes already exercised quantity semantics, temporal
+windows, sign, portfolio relations, and artifact behavior; the T12 continuation
+showed that a free-form green probe could be self-confirming, while binding the
+public quantity definition produced the intended property behavior in repeated
+Workers. The next method should synthesize task-applicable invariants and record
+an executable `PASS`/`FAIL`/`N-A`/`UNKNOWN` signature, rather than equate a broad
+failure label with a cause.
+
+Keep improvement levels separate. A predicted invariant transition in a fresh
+Worker with real component activation is `mechanism_helpful`; an official
+property or reward gain is `benchmark_helpful`; repeat, protection, or matched-
+mechanism transfer supports `stable_or_reusable`. The first is meaningful
+harness evidence even when the complete answer remains wrong, but it must not
+be reported as an official benchmark gain. An unexplained official gain remains
+performance evidence with unresolved attribution.
+
+The revised path keeps AP-2M unchanged, then runs QI-1 task-conditioned
+invariant synthesis and QI-2 invariant-guided component search before AP-3. A
+Quant Research Reviewer may synthesize invariants and select audits, but it is
+supporting machinery rather than the immediate novelty claim. AP-3 adopts the
+invariant feedback only if the bounded canaries add grounded search value;
+otherwise it retains the generic evidence path. Full decision:
+`docs/decisions/2026-08-19-invariant-guided-quant-harness-evolution-route.md`.
+
+## 2026-08-19 AP-2M first live attempt
+
+The first paid AP-2M run is retained at
+`results/bc-mirror/qce-t26-ap2m-20260819-r3/`. It completed 35 Evolver model
+requests at a provider cost of `$0.1652724772`; all requests completed, no rate
+limit occurred, and all managed containers were cleaned. An initial no-cost
+launch exposed that the previous proxy image did not understand provider
+fallback configuration. A lightweight proxy refresh fixed that observed setup
+failure before the measured run.
+
+Round one produced a legal `ACT` and a non-prompt-only candidate. The Evolver
+diagnosed a `formula_parameterization` / executed-semantics gap, created an
+executable `check_strategy_contract` tool, modified its registration and
+activation prompt, exercised paired positive and negative fixtures, selected
+`candidate12_t26` for an eight-iteration repair experiment, and recorded both a
+prediction and a decision-changing counter-observation. This is measured
+autonomous component construction and experiment design.
+
+The candidate was rejected before any Worker probe. The final candidate state
+lacked a passed smoke for the primary `tools` component because the Evolver's
+tool smokes occurred before it deleted temporary fixture files; the admission
+rule treated that cleanup as making the earlier whole-candidate-bound smoke
+stale. AP-2M therefore ended at `round_one_terminal`: no Worker probe, second
+Evolver decision, fresh Worker, or official candidate evaluation occurred.
+Classify this as an informative negative AP-2M result and an observed
+completion-orchestration gap, not autonomy success or benchmark improvement.
+The next bounded repair should let the Evolver perform final primary-component
+smokes during completion, then rerun AP-2M under a fresh budget.
+
+## 2026-08-19 AP-2M feedback-driven r4 result
+
+The AP-2M r4 rerun is retained at
+`results/bc-mirror/qce-t26-ap2m-20260819-r4/`. It completed normally with no
+rate-limit event. The two Evolver rounds cost `$0.3293828616`; the intervening
+Worker probe cost `$0.0060602752`, for `$0.3354431368` end to end. All managed
+containers were cleaned.
+
+The r3 completion repair worked in the live protocol. Round one autonomously
+selected an executable semantic-invariant checker, implemented it as a real
+tool plus registration and prompt changes, ran positive and negative fixture
+checks, passed final component and full-harness admission, and launched the
+selected Worker repair probe. The probe nevertheless produced no artifact:
+within its eight-iteration budget the Worker inspected the public data, paper,
+and seed, copied the seed only to a temporary path, never wrote
+`/app/output/strategy.py`, and never invoked the checker. This is not component
+activation, official evaluation, or benchmark improvement.
+
+Round two read the retained `missing_artifact` observation before deciding. It
+submitted a distinct `ACT/REFINE`, preserved the unobservability of the direct
+delivery cause from the exposed summary, and independently found that the
+round-one audit fixed gamma and used synthetic windows inconsistent with the
+public CV and sample-window clauses. This is measured warm-history,
+feedback-driven autonomy feasibility: a component was built, a Worker probe
+was scheduled, its negative outcome entered the next decision, and the second
+candidate contained new quant-specific information. It is not evidence that
+the component helped the Worker or benchmark.
+
+The second candidate passed ordinary full-harness admission but was rejected
+because its final `tools` version lacked a passed final-version component
+smoke. The model ended voluntarily before the token-triggered terminal reserve,
+so the r3 repair did not cover this adjacent early-final branch. The observed
+branch is now repaired: a valid early-final `ACT` with a changed candidate and
+missing primary smoke is forced into one bounded component-smoke continuation.
+The middleware-manager propagation and focused suites pass 83 tests. This
+post-run repair has not yet been verified by another paid live AP-2M run.
+
+The Worker probe also exposed a direct setup mismatch. Its Evolver-authored
+instruction said that an existing strategy was already at the designated
+output path, but the coordinator supplied the seed only as
+`/app/data/probe_seed_strategy.py` and left `/app/output` empty. The probe
+runtime now pre-stages that optional repair seed as `/app/output/strategy.py`
+while retaining the data copy as a public backup. This makes a no-op or early
+stop preserve the starting artifact and lets the limited Worker budget focus
+on repair. The combined focused suite now passes 102 tests; no paid live rerun
+has yet exercised both post-r4 repairs.
+
+## 2026-08-19 Quant-H0 and Research-State-guided search revision
+
+The historical shell-only H0 remains unchanged. A separate
+`qea/worker_quant_h0` now defines the future common seed with only the Quant
+Research Worker Agent identity, six short Research State descriptions, one
+shell tool, and basic input/code/deliverable behavior. It omits additional
+finance-discipline hints, prior history, diagnosis, component selection, and
+task-specific content. Historical H0 results retain their old identity; future
+matched AHE-on-quant and QEA comparisons should start from the same Quant-H0.
+
+The six states are Research Mandate & Contract, Research Evidence & Data,
+Quantitative Representation, Research Operation, Evaluation & Reconciliation,
+and Research Artifact & Completion. They are general, revisitable research
+states rather than QuantCodeEval's fixed strategy stages. QuantCodeEval and
+QFBench ground the abstraction through stage-aware integrity, heterogeneous
+quant operations, multi-step state construction, financial verification, and
+complete artifact contracts, but neither benchmark is claimed to define this
+same method.
+
+The existing `quant_property_v2` search contract is now Research-State-guided.
+For enabled contracts, an `ACT` records one task-conditioned expected state,
+the state observed in the Worker trajectory or artifact, the target state after
+intervention, and a concrete transition observable. The former finance failure
+map remains optional vocabulary, and the Evolver still selects from the full
+harness mutation surface. Task-conditioned invariants are possible executable
+observations of a predicted state transition. Component activation, state
+correction, official outcome, and repeat/protection/transfer remain separate.
+
+The local focused implementation suite passed 18 tests. This is a mechanism
+and story update, not a benchmark result. An AHE-author-style story-only review
+found that the proposed real distinction is the independently observed chain
+`component activation -> predicted Research State transition -> official
+outcome`, not the six labels or outer loop. It also identified the remaining
+gap: the implementation now binds transition fields into proposal admission,
+but has not yet made the observed transition an independent retain/rollback
+signal. Full decision and current story:
+`docs/decisions/2026-08-19-quant-h0-and-research-state-search.md` and
+`docs/2026-08-19-iclr-quant-research-agent-story-mainline.md`.
+
+## 2026-08-19 outcome-side Research State control and callable Reviewer idea
+
+The reviewer-identified outcome-control gap is now closed at the local
+mechanism level. QuantCodeEval v2 candidate evaluation can return a structured
+Research State verdict containing `state_id`, component activation, transition
+outcome, and the observed runtime evidence. A new
+`research_state_promoted` selection advances only the search parent when the
+component activated, the predeclared transition is supported, the official
+panel was evaluated, and no official incumbent task regressed. Official binary
+reward Pareto improvement remains the only route to official-incumbent
+promotion. Inactive, unsupported, and unknown transitions are archived as
+experience without search-parent promotion. The focused search, loop, and
+history suite passed 19 tests; the combined Quant-H0, Evolver contract,
+middleware, evidence, component-experience, search, loop, and history suite
+plus the live-runner compatibility suite passed 108 tests. No live Worker or
+benchmark was run.
+
+A future Evolver-callable Quant Research Reviewer is also recorded. When the
+Evolver cannot locate a mismatch from ordinary evidence inspection, it may call
+`investigate_research_state` over the already authorized public task, Worker
+trajectory, artifact, component-use, candidate-history, and runtime-evidence
+surfaces. The Reviewer should return the expected and observed state, exact
+evidence locations, competing explanations, and a discriminating observation,
+or `insufficient_evidence`. It investigates but does not edit the harness,
+select the final component, submit `ACT`, or promote the candidate. Reviewer
+calls and outcomes become searchable Evolver experience. This callable is a
+proposed next capability, not implemented or measured.
+
+## 2026-08-20 Quant Evidence Certificate canary
+
+The immediate Reviewer mechanism test is now QEC-1, a paired generic-versus-
+certificate canary that refines QR-1/QI-1. An optional
+`quant_evidence_certificate` attaches to the existing Research State transition
+and may express task-conditioned quantitative semantic coordinates, an
+economic reconciliation bridge, or a residual-and-sensitivity fingerprint.
+It is not a seventh Research State, a closed failure taxonomy, or an official
+reward.
+
+Both arms receive the same public contract, runtime evidence, audit choices,
+model route, and call budget. The first controlled panel distinguishes a
+percentage-scale error from a formula error, a missing transaction-cost term
+from a holdings-timing error, and includes one deliberately ambiguous case.
+The certificate is useful only if it improves mechanism discrimination or
+calibrated insufficiency beyond generic structured diagnosis. A positive
+QEC-1 advances to one live QI-2/QR-1B intervention before AP-3; a neutral or
+negative result is retained and AP-3 uses the existing generic evidence path.
+
+Prior-art language is also narrowed: RHI already evolves prompt-level harnesses
+on a quantitative-finance task family, and AQuA-like systems adapt persistent
+quant research state or memory. The candidate contribution is therefore the
+identifiable intervention chain, not the first use of harness evolution in
+quant. Full decision:
+`docs/decisions/2026-08-20-quant-evidence-certificate-canary.md`.
+
+### 2026-08-20 measured QEC-1 and AP-3 r3
+
+QEC-1 r1 completed the planned three-case, two-arm, two-stage Reviewer panel.
+Generic and certificate arms both chose 3/3 audits, resolved 2/3 cases, and
+calibrated the ambiguous case. There were no improved or regressed paired
+cases, so the certificate gate is `not_positive`; QI-2/QR-1B was skipped and
+AP-3 used the generic Research-State evidence path. The retained result is
+`results/quant-evidence-certificate-qec1-20260820-r1/RESULT.json`.
+
+The retained AP-3 run is
+`results/bc-mirror/qce-t26-ap3-20260820-r3/`. Fresh Quant-H0 scored T26 12/17,
+reward zero. Round one autonomously created and smoked an artifact-check tool
+and selected a from-scratch twelve-iteration probe. The probe used eleven
+requests but returned `missing_artifact`. Round two cited that observation,
+changed the located mismatch from Evaluation and Reconciliation to Research
+Artifact and Completion, and made a calibrated `ABSTAIN`; no final Worker ran.
+Thus `bootstrap_loop_feasible` is true, while component activation/help,
+official candidate gain, and binary gain are not established.
+
+The run used 48 H0, 22 round-one Evolver, 11 probe Worker, and 18 round-two
+Evolver requests. Corrected total provider cost is $0.259885044. The first
+result total omitted H0 and probe numeric-string costs; the parser was repaired
+without changing the run outcome. Round two also lacked the round-one
+prediction record, so it could react to the observation but not explicitly
+compare prediction with outcome. Repair that handoff before an AP-3 repeat.

@@ -128,6 +128,13 @@ def test_history_rejects_oracle_keys_and_role_mismatch(tmp_path):
             candidate,
             evaluation={"checker_message": "hidden"},
         )
+    with pytest.raises(QuantCodeEvalHistoryError, match="oracle-like"):
+        _append(
+            tmp_path / "expected-value-history",
+            parent,
+            candidate,
+            evaluation={"expected_value": 42},
+        )
     with pytest.raises(QuantCodeEvalHistoryError, match="declared roles"):
         _append(
             tmp_path / "role-history",

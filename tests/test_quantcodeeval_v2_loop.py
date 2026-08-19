@@ -17,6 +17,7 @@ from qea.quantcodeeval_search import (
 from qea.quantcodeeval_v2_loop import (
     QuantCandidateEvaluation,
     run_quantcodeeval_v2_loop,
+    select_quantcodeeval_candidate,
 )
 
 
@@ -192,6 +193,22 @@ class FakeProposer:
         )
 
 
+class ResearchStateProposer(FakeProposer):
+    def propose(self, **kwargs):
+        proposal = super().propose(**kwargs)
+        summary = json.loads(proposal.summary_uri.read_text(encoding="utf-8"))
+        decision = summary["discovery_hypothesis"]["hypothesis"]
+        decision["research_state_transition"] = {
+            "state_id": "evaluation_reconciliation",
+            "expected_state": "the result is checked against the task relation",
+            "observed_state": "the Worker completes without that reconciliation",
+            "target_state": "the fresh Worker performs the reconciliation",
+            "transition_observable": "the component activates and the check is observed",
+        }
+        proposal.summary_uri.write_text(json.dumps(summary), encoding="utf-8")
+        return proposal
+
+
 def test_no_model_loop_reuses_rejected_round_and_promotes_full_component(tmp_path):
     source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
     seed = tmp_path / "seed"
@@ -293,6 +310,105 @@ def test_no_model_loop_reuses_rejected_round_and_promotes_full_component(tmp_pat
     second = json.loads((run / "rounds/iteration-0002.json").read_text())
     assert second["decision"]["primary_components"] == ["tools"]
     assert second["component_tests"][0]["status"] == "passed"
+
+
+def test_research_state_transition_promotes_search_parent_without_official_gain(
+    tmp_path,
+):
+    source = Path(__file__).resolve().parents[1] / "qea/worker_gdpval_weak"
+    seed = tmp_path / "seed"
+    shutil.copytree(source, seed)
+    evolver = tmp_path / "evolver"
+    evolver.mkdir()
+    (evolver / "agent.yaml").write_text("name: fake\n", encoding="utf-8")
+    run = tmp_path / "run"
+    state = initialize_quantcodeeval_search(
+        run_id="qce-research-state-parent",
+        h0_digest=hash_worker_directory(seed),
+        h0_official_rewards={"T16": 1.0, "T24": 0.0},
+        limits=QuantSearchLimits(max_rounds=1),
+    )
+
+    def evidence_builder(current, iteration, history_root):
+        root = run / "evidence" / f"round-{iteration}"
+        root.mkdir(parents=True)
+        (root / "access_log.jsonl").write_text("", encoding="utf-8")
+        (root / "contract.json").write_text("{}", encoding="utf-8")
+        (root / "history").mkdir()
+        (root / "history/SUMMARY.json").write_text("{}", encoding="utf-8")
+        return _record(root)
+
+    final = run_quantcodeeval_v2_loop(
+        state=state,
+        run_dir=run,
+        seed_worker_dir=seed,
+        evolver_dir=evolver,
+        proposer=ResearchStateProposer(),
+        evidence_builder=evidence_builder,
+        activation_runner=lambda candidate, decision, tests, iteration: {
+            "status": "passed",
+            "activated_primary_components": decision["primary_components"],
+        },
+        candidate_evaluator=lambda *args: QuantCandidateEvaluation(
+            official_rewards={"T16": 1.0, "T24": 0.0},
+            answer_free_evaluation={"official_evaluated": True},
+            official_evaluated=True,
+            new_information=True,
+            reason="predicted reconciliation appeared without a binary gain",
+            research_state_verdict={
+                "state_id": "evaluation_reconciliation",
+                "component_activation": "activated",
+                "transition_outcome": "supported",
+                "observation": "the fresh Worker invoked the check before completion",
+            },
+        ),
+        diagnosis_builder=lambda current, iteration: "state transition canary",
+    )
+
+    assert final.rounds[0].selection is SearchSelection.RESEARCH_STATE_PROMOTED
+    assert final.search_parent_digest == final.rounds[0].candidate_digest
+    assert final.official_incumbent_digest == final.h0_digest
+    round_payload = json.loads((run / "rounds/iteration-0001.json").read_text())
+    assert round_payload["evaluation"]["research_state_verdict"] == {
+        "state_id": "evaluation_reconciliation",
+        "component_activation": "activated",
+        "transition_outcome": "supported",
+        "observation": "the fresh Worker invoked the check before completion",
+    }
+
+
+def test_research_state_selection_does_not_promote_inactive_or_unsupported_change():
+    state = initialize_quantcodeeval_search(
+        run_id="qce-research-state-selection",
+        h0_digest="0" * 64,
+        h0_official_rewards={"T16": 1.0, "T24": 0.0},
+    )
+    decision = {
+        "research_state_transition": {"state_id": "research_operation"}
+    }
+
+    for activation, outcome in (
+        ("not_activated", "unknown"),
+        ("activated", "not_supported"),
+        ("unknown", "unknown"),
+    ):
+        evaluation = QuantCandidateEvaluation(
+            official_rewards={"T16": 1.0, "T24": 0.0},
+            answer_free_evaluation={},
+            official_evaluated=True,
+            new_information=True,
+            reason="state observation retained for later search",
+            research_state_verdict={
+                "state_id": "research_operation",
+                "component_activation": activation,
+                "transition_outcome": outcome,
+                "observation": "the predeclared transition was not established",
+            },
+        )
+        assert (
+            select_quantcodeeval_candidate(state, evaluation, decision)
+            is SearchSelection.ARCHIVED
+        )
 
 
 def test_loop_archives_component_smoke_from_stale_candidate_digest(tmp_path):

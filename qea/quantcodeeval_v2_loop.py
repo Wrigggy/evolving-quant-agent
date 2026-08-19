@@ -39,6 +39,7 @@ class QuantCandidateEvaluation:
     official_evaluated: bool
     new_information: bool
     reason: str
+    research_state_verdict: Mapping[str, object] | None = None
     model_requests: int = 0
     cost_usd: float = 0.0
 
@@ -59,6 +60,8 @@ class QuantCandidateEvaluation:
         if not isinstance(self.reason, str) or not self.reason.strip():
             raise QuantCodeEvalV2LoopError("candidate evaluation reason is required")
         json.dumps(self.answer_free_evaluation, sort_keys=True)
+        if self.research_state_verdict is not None:
+            json.dumps(self.research_state_verdict, sort_keys=True)
 
 
 class EvolverProposal(Protocol):
@@ -205,9 +208,10 @@ def _selected_mechanism(decision: Mapping[str, object]) -> str:
     )
 
 
-def _selection(
+def select_quantcodeeval_candidate(
     state: QuantCodeEvalSearchState,
     evaluation: QuantCandidateEvaluation,
+    decision: Mapping[str, object],
 ) -> SearchSelection:
     rewards = evaluation.official_rewards
     official = state.official_rewards
@@ -217,6 +221,43 @@ def _selection(
     if evaluation.official_evaluated and improves:
         return SearchSelection.OFFICIAL_PROMOTED
     non_regressing = all(rewards[key] >= official[key] for key in state.task_ids)
+    transition = decision.get("research_state_transition")
+    if isinstance(transition, Mapping):
+        verdict = evaluation.research_state_verdict
+        if not isinstance(verdict, Mapping):
+            raise QuantCodeEvalV2LoopError(
+                "Research-State-guided evaluation requires a transition verdict"
+            )
+        state_id = str(transition.get("state_id", ""))
+        if verdict.get("state_id") != state_id:
+            raise QuantCodeEvalV2LoopError(
+                "transition verdict state differs from the Evolver prediction"
+            )
+        activation = verdict.get("component_activation")
+        if activation not in {"activated", "not_activated", "unknown"}:
+            raise QuantCodeEvalV2LoopError(
+                "transition verdict component activation is invalid"
+            )
+        outcome = verdict.get("transition_outcome")
+        if outcome not in {"supported", "not_supported", "unknown"}:
+            raise QuantCodeEvalV2LoopError(
+                "transition verdict outcome is invalid"
+            )
+        observation = verdict.get("observation")
+        if not isinstance(observation, str) or not observation.strip():
+            raise QuantCodeEvalV2LoopError(
+                "transition verdict observation is required"
+            )
+        if (
+            evaluation.official_evaluated
+            and non_regressing
+            and activation == "activated"
+            and outcome == "supported"
+        ):
+            return SearchSelection.RESEARCH_STATE_PROMOTED
+        if evaluation.new_information:
+            return SearchSelection.ARCHIVED
+        return SearchSelection.REJECTED
     if evaluation.official_evaluated and non_regressing and evaluation.new_information:
         return SearchSelection.DIAGNOSTIC_PROMOTED
     if evaluation.new_information:
@@ -465,16 +506,32 @@ def run_quantcodeeval_v2_loop(
                     contract_rejection_reason
                     or "component activation failed before official evaluation"
                 ),
+                research_state_verdict=(
+                    {
+                        "state_id": decision["research_state_transition"]["state_id"],
+                        "component_activation": "not_activated",
+                        "transition_outcome": "unknown",
+                        "observation": str(
+                            activation.get(
+                                "reason",
+                                "component activation failed before state observation",
+                            )
+                        ),
+                    }
+                    if isinstance(decision.get("research_state_transition"), Mapping)
+                    else None
+                ),
             )
         if set(evaluation.official_rewards) != set(state.task_ids):
             raise QuantCodeEvalV2LoopError("candidate reward panel differs")
         selection = (
             SearchSelection.REJECTED
             if contract_rejection_reason is not None
-            else _selection(state, evaluation)
+            else select_quantcodeeval_candidate(state, evaluation, decision)
         )
         history_selection = {
             SearchSelection.OFFICIAL_PROMOTED: "accepted",
+            SearchSelection.RESEARCH_STATE_PROMOTED: "accepted",
             SearchSelection.DIAGNOSTIC_PROMOTED: "accepted",
             SearchSelection.ARCHIVED: "archived",
             SearchSelection.REJECTED: "rejected",
@@ -496,6 +553,11 @@ def run_quantcodeeval_v2_loop(
                 "official_evaluated": evaluation.official_evaluated,
                 "official_rewards": dict(evaluation.official_rewards),
                 "answer_free": dict(evaluation.answer_free_evaluation),
+                "research_state_verdict": (
+                    dict(evaluation.research_state_verdict)
+                    if evaluation.research_state_verdict is not None
+                    else None
+                ),
                 "new_information": evaluation.new_information,
                 "reason": evaluation.reason,
             },
@@ -547,4 +609,5 @@ __all__ = [
     "QuantCandidateEvaluation",
     "QuantCodeEvalV2LoopError",
     "run_quantcodeeval_v2_loop",
+    "select_quantcodeeval_candidate",
 ]

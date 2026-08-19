@@ -342,6 +342,7 @@ def test_quantcodeeval_answer_rich_view_is_evolver_only(tmp_path):
     assert result["evolver_feedback_mode"] == "answer_rich_evolver"
     assert contract["decision_protocol"] == "quant_property_v2"
     assert contract["feedback_tier"] == "answer_rich_optimization_v1"
+    assert contract["research_state_transition_required_for_act"] is True
     assert contract["failure_signature_required_for_act"] is True
     assert contract["optimization_answers_exposed_to_evolver"] is True
     assert contract["optimization_answers_exposed_to_worker"] is False

@@ -61,6 +61,19 @@ def _quant_failure_map() -> dict[str, object]:
     return value
 
 
+def _quant_research_states() -> dict[str, object]:
+    path = Path(__file__).resolve().parent / "evolve_agent_full/quant_research_states.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise QuantCodeEvalV2EvidenceError(
+            f"cannot read quant research states: {exc}"
+        ) from exc
+    if not isinstance(value, dict):
+        raise QuantCodeEvalV2EvidenceError("quant research states must be an object")
+    return value
+
+
 def _write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -209,6 +222,10 @@ def build_quantcodeeval_v2_evidence(
             staging / "guidance" / "quant_failure_map.json",
             _quant_failure_map(),
         )
+        _write_json(
+            staging / "guidance" / "quant_research_states.json",
+            _quant_research_states(),
+        )
         component_stability = None
         if component_ledger_path is not None:
             component_stability = "guidance/component_stability.json"
@@ -310,6 +327,8 @@ def build_quantcodeeval_v2_evidence(
                 "max_declared_components": max_declared_components,
                 "preferred_primary_components": _PREFERRED_PRIMARY_COMPONENTS,
                 "component_priors_are_advisory": True,
+                "research_state_definitions": "guidance/quant_research_states.json",
+                "research_state_transition_required_for_act": True,
                 "quant_failure_map": "guidance/quant_failure_map.json",
                 "component_stability": component_stability,
                 "component_stability_is_answer_free": True,

@@ -1,0 +1,51 @@
+\section{Experimental Design}
+
+We organize the study around four questions.
+
+\begin{description}
+    \item[RQ1: Synthesis.] Can the system derive applicable, executable
+    quantitative invariants from public task contracts without encoding hidden
+    answers?
+    \item[RQ2: Search.] Does an invariant signature help the Evolver select or
+    synthesize more useful harness components than matched generic trajectory
+    evidence alone?
+    \item[RQ3: Improvement.] Do the resulting candidates improve official task
+    outcomes, and which gains repeat or transfer under matched invariant
+    failures?
+    \item[RQ4: Efficiency.] Does invariant-guided search reach useful
+    candidates with fewer Worker/verifier calls or lower total model cost?
+\end{description}
+
+\subsection{Benchmarks and Evidence Splits}
+
+The planned evaluation uses QuantCodeEval and QFBench. Any task whose feedback
+affects candidate generation or selection is optimization/development evidence.
+The final task panel is evaluated only after the harness and method are frozen,
+and its results do not return to the Evolver.
+
+\subsection{Baselines}
+
+The planned comparison includes:
+
+\begin{itemize}
+    \item the frozen minimal Worker harness $H_0$;
+    \item prompt-only evolution;
+    \item matched generic full-harness evolution using trajectories and official
+    outcomes but no invariant signature;
+    \item a faithful AHE- or Meta-Harness-style quant adaptation under matched
+    model, evidence, mutation surface, and budget;
+    \item the full invariant-guided method.
+\end{itemize}
+
+Where practical, we also compare a fixed-harness research-state baseline and a
+compute-matched repeated-Worker baseline. We report model calls, tokens, audit
+calls, official verifier calls, runtime, and cost rather than matching only one
+resource axis.
+
+\subsection{Ordered Mechanism Route}
+
+The current prospective order is AP-2M (feedback-driven autonomous probe), QI-1
+(task-conditioned invariant synthesis), QI-2 (invariant-guided component
+search), and AP-3 (bootstrap from the minimal harness using invariant evidence
+only if QI-1/QI-2 help). These are mechanism canaries; the paper-level result
+requires repeated campaigns and frozen evaluation.

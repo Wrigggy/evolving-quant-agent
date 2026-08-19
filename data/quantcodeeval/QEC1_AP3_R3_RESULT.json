@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-20",
+  "qec1": {
+    "artifact": "results/quant-evidence-certificate-qec1-20260820-r1/RESULT.json",
+    "model": "deepseek/deepseek-v4-pro",
+    "generic": {
+      "audit_choice_correct": 3,
+      "diagnosis_correct": 2,
+      "case_count": 3,
+      "model_calls": 6
+    },
+    "certificate": {
+      "audit_choice_correct": 3,
+      "diagnosis_correct": 2,
+      "case_count": 3,
+      "model_calls": 6
+    },
+    "improved_cases": [],
+    "regressed_cases": [],
+    "mechanism_gate": "not_positive",
+    "claim_boundary": "controlled Reviewer representation canary; no Worker or benchmark outcome"
+  },
+  "ap3": {
+    "artifact": "results/bc-mirror/qce-t26-ap3-20260820-r3/AP3-RESULT.json",
+    "evidence_path": "generic_research_state_evidence",
+    "fresh_quant_h0": {
+      "task_id": "T26",
+      "tests_passed": 12,
+      "tests_total": 17,
+      "reward": 0
+    },
+    "round_one": {
+      "decision": "ACT",
+      "primary_component": "tools",
+      "located_state": "evaluation_reconciliation",
+      "model_requests": 22
+    },
+    "probe": {
+      "mode": "from_scratch",
+      "max_iterations": 12,
+      "model_requests": 11,
+      "outcome": "missing_artifact"
+    },
+    "round_two": {
+      "decision": "ABSTAIN",
+      "located_state": "research_artifact_completion",
+      "model_requests": 18
+    },
+    "bootstrap_loop_feasible": true,
+    "component_activated": false,
+    "bootstrap_helpful": false,
+    "binary_helpful": false,
+    "final_worker_run": false,
+    "total_model_requests": 99,
+    "provider_cost_usd": 0.259885044,
+    "claim_boundary": "fresh Quant-H0 feedback-driven bootstrap feasibility only; no component or benchmark benefit"
+  },
+  "observed_setup_failures": [
+    "AP-3 r2 used a mistyped verifier image argument and stopped in no-model preflight",
+    "AP-3 r3 round two lacked the persisted round-one prediction record",
+    "the first AP-3 cost total omitted numeric-string H0 and probe costs"
+  ]
+}

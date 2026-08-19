@@ -592,8 +592,10 @@ def build_breadth_evolver_view(
     )
     instruction = (
         "Use only the authorized public and answer-free evidence for the selected "
-        "task. Localize the earliest observable harness breakdown and compare at "
-        "least two plausible component hypotheses. You may modify any coherent "
+        "task. Reconstruct the expected and Worker-observed Quant Research State, "
+        "localize the earliest consequential mismatch, and compare at least two "
+        "plausible component hypotheses. Predict the state transition that the "
+        "selected component should make observable. You may modify any coherent "
         "harness component, not only the prompt. Do not assume a listed component "
         "is correct. If ACT, implement one bounded component hypothesis and run a "
         "discriminating component smoke after the final edit. Otherwise record a "
@@ -637,6 +639,7 @@ def build_breadth_evolver_view(
             "history_required": False,
             "max_primary_components": 2,
             "max_declared_components": 9,
+            "research_state_transition_required_for_act": True,
             "quant_failure_classification_required_for_act": False,
             "domain_tags_are_extensible": True,
             "failure_signature_required_for_act": diagnostic is not None,

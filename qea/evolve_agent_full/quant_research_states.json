@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "purpose": "A general state representation for quantitative-research work. These states are not a fixed strategy pipeline and do not prescribe a task answer or harness component.",
+  "states": [
+    {
+      "state_id": "research_mandate_contract",
+      "name": "Research Mandate & Contract",
+      "short_explanation": "The research objective and required deliverable are represented correctly.",
+      "diagnostic_question": "What does the public task require, and where does the Worker representation of that mandate first differ?"
+    },
+    {
+      "state_id": "research_evidence_data",
+      "name": "Research Evidence & Data",
+      "short_explanation": "The evidence and data needed for the research are identified and available to later work.",
+      "diagnostic_question": "What evidence or data state did the task require, what did the Worker actually construct, and what difference matters downstream?"
+    },
+    {
+      "state_id": "quantitative_representation",
+      "name": "Quantitative Representation",
+      "short_explanation": "The relevant quantitative objects, assumptions, and relationships represent the problem faithfully.",
+      "diagnostic_question": "Which quantitative object or relation is represented incorrectly or incompletely before execution?"
+    },
+    {
+      "state_id": "research_operation",
+      "name": "Research Operation",
+      "short_explanation": "The task-appropriate quantitative operation is selected and carried out.",
+      "diagnostic_question": "Which operation did the task require, which operation did the Worker realize, and how can their difference be observed?"
+    },
+    {
+      "state_id": "evaluation_reconciliation",
+      "name": "Evaluation & Reconciliation",
+      "short_explanation": "Intermediate and final results are checked and reconciled against the research objective.",
+      "diagnostic_question": "What result should have been checked or reconciled, and what observable check was absent or ineffective?"
+    },
+    {
+      "state_id": "research_artifact_completion",
+      "name": "Research Artifact & Completion",
+      "short_explanation": "The requested executable artifact or other deliverable is assembled and completed.",
+      "diagnostic_question": "What final artifact state was required, what was actually delivered, and what prevents completion?"
+    }
+  ]
+}

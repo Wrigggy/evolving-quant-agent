@@ -1,0 +1,105 @@
+\section{Method}
+
+\subsection{Worker, Quant-H0, and Evolvable Harness}
+
+Let $M$ be a frozen base model and $H_i$ the harness at candidate version $i$.
+The resulting Worker Agent is
+\begin{equation}
+    A_i = \operatorname{Agent}(M,H_i), \qquad M_i=M_0.
+\end{equation}
+The harness may contain prompts, executable tools, memory, middleware,
+validators, routing, and research workflow. One execution of task $q$ produces
+a trajectory $\tau_{i,q}$ and artifact $a_{i,q}$.
+
+All compared evolution methods start from a minimal Quant-H0 containing only
+the Quant Research Worker identity, the names and short explanations of the six
+Research States below, one shell tool, and basic task execution. It contains no
+evolved component library, candidate history, failure classifier, or
+component-selection policy.
+
+\subsection{Quant Research State Representation}
+
+We use the general state set
+\begin{equation}
+    \mathcal{S}=\{S_{\mathrm{mandate}},S_{\mathrm{evidence}},
+    S_{\mathrm{representation}},S_{\mathrm{operation}},
+    S_{\mathrm{evaluation}},S_{\mathrm{artifact}}\}.
+\end{equation}
+The states denote Research Mandate \& Contract, Research Evidence \& Data,
+Quantitative Representation, Research Operation, Evaluation \& Reconciliation,
+and Research Artifact \& Completion. They are not a fixed linear pipeline. A
+task may revisit or omit a state, and Research Operation may instantiate as
+estimation, pricing, calibration, risk analysis, backtesting, execution, or
+another operation.
+
+For the relevant part of a failed trajectory, the Evolver reconstructs a
+task-conditioned expected state $s^*_q$ and observed state
+$\tilde{s}_{i,q}$, then predicts a target state $\hat{s}_{i+1,q}$. It compares
+at least two plausible explanations before selecting the earliest consequential
+mismatch supported by the available trajectory and artifact evidence.
+
+\subsection{Task-Conditioned Transition Observations}
+
+From the public task contract, the system may select a small set
+$\mathcal{I}(q)$ of applicable executable relations. Each invariant returns
+\begin{equation}
+    v_k(q,\tau,a) \in
+    \{\Pass,\Fail,\NA,\Unknown\}.
+\end{equation}
+Candidate families include temporal prefix consistency, estimator fit scope,
+quantity relations, portfolio and execution identities, cost monotonicity,
+universe perturbations, and fresh artifact replay. Applicability is
+task-conditioned. An invariant is one possible observation of a Research State
+transition; it is not the complete state representation or a replacement for
+the official benchmark verifier.
+
+\subsection{Research-State-Guided Component Search}
+
+An evolution proposal records
+\begin{equation}
+    h_i = (s^*_q,\tilde{s}_{i,q},c_i,\hat{s}_{i+1,q},o_i,
+    \widehat{\Delta r}_i),
+\end{equation}
+where $c_i$ is a selected or synthesized harness component, $o_i$ is a concrete
+trajectory, component-use, invariant, artifact, or official observation of the
+predicted transition, and $\widehat{\Delta r}_i$ is the predicted official
+outcome or protected behavior. The mutation surface remains open; a Research
+State mismatch narrows the search question without forcing a fixed component
+mapping.
+
+Component experience retains positive, negative, inactive, and unstable
+episodes. Retrieval is conditioned on the Research State, attempted component,
+observed transition, and official outcome rather than only task identity or a
+broad language failure class.
+
+When the available runtime evidence does not locate a state mismatch, the
+planned system exposes a callable Quant Research Reviewer to the Evolver. The
+Reviewer investigates authorized trajectory, artifact, component-use, and
+history evidence and returns competing state explanations plus a discriminating
+observation. It neither edits the harness nor promotes a candidate; the call and
+its result become ordinary Evolver experience.
+
+\subsection{Intervention Verdicts}
+
+We keep four observations separate:
+
+\begin{enumerate}
+    \item \textbf{Component activation}: the fresh Worker reaches and uses the
+    selected component.
+    \item \textbf{Research-State correction}: the predeclared transition
+    observation changes as predicted.
+    \item \textbf{Official task improvement}: the unchanged benchmark verifier
+    reports a property or task gain.
+    \item \textbf{Stable or reusable benefit}: the effect repeats, preserves a
+    protection task, or appears under a matched state mismatch.
+\end{enumerate}
+
+State correction can provide useful harness evidence before a complete solve,
+but it is not reported as benchmark improvement. An official gain without the
+predicted transition remains performance evidence with unresolved mechanism
+attribution. We maintain separate official and search parents: binary-reward
+Pareto improvement updates the official incumbent, while a non-regressing
+candidate with observed component activation and a supported predeclared state
+transition may advance only the search parent. \Proposed{This dual-parent rule
+is implemented and locally tested; its effect on live autonomous search remains
+to be measured.}

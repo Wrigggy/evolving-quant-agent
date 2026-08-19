@@ -49,6 +49,31 @@ engineering into defensive infrastructure work.
   Never expose credentials, fabricate results, or treat an obviously invalid
   run as a benchmark result.
 
+## ICLR Manuscript Synchronization
+
+Treat [`paper/iclr2027/`](paper/iclr2027/) as the continuously updated paper
+workspace, not as a separate end-of-project write-up. After an experiment has a
+retained result and interpretation, update the manuscript in the same work
+cycle:
+
+1. put reusable measured values in
+   `paper/iclr2027/experiment_data/experiment_values.tex`;
+2. add or revise its concise row in
+   `paper/iclr2027/tables/experiment_claim_ledger.tex`;
+3. update the relevant result and analysis paragraphs in
+   `paper/iclr2027/sections/05_results.tex` and `06_analysis.tex`;
+4. keep setup, candidate change, score, cost, failure, and artifact location in
+   the appendix or referenced experiment record when they are needed to
+   reconstruct the result.
+
+Keep `\Measured{}`, `\Proposed{}`, `\Pending{}`, and `\Boundary{}` distinct.
+Record useful negative and superseded outcomes instead of silently replacing
+them. Do not turn a smoke test, invariant transition, or experimenter-arranged
+probe into an official benchmark claim. Run `git diff --check` after manuscript
+updates and compile with `make -C paper/iclr2027` when a LaTeX toolchain is
+available; lack of a local PDF build should not block a time-sensitive
+experiment if the source-level preflight passes.
+
 ## Commit & Pull Request Guidelines
 
 Use concise history-aligned messages such as `feat(levelb): ...`, `fix(verifier): ...`, `docs: ...`, or `results(fab-weak): ...`. Keep commits scoped. Pull requests should explain the hypothesis/bug, commands, run configuration, metric changes, and relevant specs/issues. Include artifact paths for experiments and screenshots only for rendered-output changes.

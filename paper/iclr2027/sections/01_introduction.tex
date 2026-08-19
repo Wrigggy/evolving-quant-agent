@@ -1,0 +1,53 @@
+\section{Introduction}
+
+Language-model agents increasingly execute quantitative research workflows that
+combine data inspection, statistical estimation, strategy implementation,
+portfolio construction, and executable validation. Existing quantitative
+self-improvement systems primarily retain validated experiments to improve later
+hypotheses, factors, or model configurations. This improves the research output,
+but generally leaves the research-agent scaffold fixed.
+
+In parallel, harness optimizers such as AHE and Meta-Harness demonstrate that
+the prompts, tools, memory, middleware, and workflows surrounding a frozen model
+can themselves be optimized from execution histories and task outcomes
+\citep{lin2026ahe,lee2026metaharness}. We adopt this harness-level evolutionary
+object but ask a domain-specific question: what feedback should guide harness
+evolution for quantitative research?
+
+Sparse task outcomes are often insufficient. The same wrong return, failed
+property, or implausible backtest can reflect a mismatch in the task mandate,
+evidence and data, quantitative representation, research operation, result
+reconciliation, or artifact completion. We use these six general Research
+States as an open representation rather than a fixed strategy pipeline. The
+Evolver reconstructs a task-conditioned expected state and the state realized
+by the Worker trajectory, maintains competing explanations of the earliest
+consequential mismatch, then selects a harness component intended to mediate a
+specific expected-to-observed-to-target state transition.
+
+Many predicted transitions admit executable observations without revealing the
+final answer. Changing future observations should not alter earlier decisions;
+estimators should respect the declared fitting window; transaction costs should
+not improve net performance; portfolio weights should satisfy the stated
+exposure convention; and the submitted artifact should replay in a fresh
+process. We use these task-conditioned quantitative invariants as transition
+observations when applicable. Later trajectories update component experience
+using actual activation, state transitions, official outcomes, and repeat or
+protection evidence.
+
+Our intended contributions are:
+
+\begin{itemize}
+    \item \Proposed{An open six-state representation that maps a quantitative
+    Worker trajectory into task-conditioned expected, observed, and target
+    Research States.}
+    \item \Proposed{A full-harness search loop that connects a state mismatch
+    to a selected component and a falsifiable state-transition observation,
+    including executable quantitative invariants when applicable.}
+    \item \Proposed{An evaluation that separates component activation,
+    Research State correction, official benchmark improvement, and repeated or
+    transferred harness benefit under a matched AHE-on-quant baseline.}
+\end{itemize}
+
+\Boundary{The current draft contains mechanism-localization evidence and one
+fresh task solve, but not yet the prospective invariant-guided campaign or the
+frozen final evaluation required for the paper-level claims.}

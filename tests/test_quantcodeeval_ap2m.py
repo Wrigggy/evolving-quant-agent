@@ -1,4 +1,4 @@
-from qea.quantcodeeval_ap2m import AP2MExperimentSpec
+from qea.quantcodeeval_ap2m import AP2MExperimentSpec, _cost
 
 
 def test_ap2m_experiment_spec_accepts_evolver_authored_repair():
@@ -38,3 +38,7 @@ def test_ap2m_experiment_spec_accepts_from_scratch_without_seed():
 
     assert spec.mode == "from_scratch"
     assert spec.seed_experience is None
+
+
+def test_ap2m_cost_accepts_provider_numeric_string():
+    assert _cost({"provider_cost_usd": "0.106404344"}) == 0.106404344

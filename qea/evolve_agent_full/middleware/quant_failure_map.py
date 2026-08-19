@@ -1,4 +1,4 @@
-"""Inject a compact finance-specific diagnostic map for QuantCodeEval search."""
+"""Inject Quant Research States and optional finance diagnostics for search."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from nexau.core.messages import Message, Role, TextBlock
 
 
 class QuantFailureMapMiddleware(Middleware):
-    """Give the Evolver a finance failure map without choosing its mechanism."""
+    """Give the Evolver a state vocabulary without choosing its mechanism."""
 
     @staticmethod
     def _contract() -> Mapping[str, object] | None:
@@ -40,10 +40,34 @@ class QuantFailureMapMiddleware(Middleware):
             raise ValueError("quant failure map must be a JSON object")
         return value
 
+    @staticmethod
+    def _research_states() -> Mapping[str, object]:
+        path = Path(__file__).resolve().parents[1] / "quant_research_states.json"
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(value, Mapping):
+            raise ValueError("quant research states must be a JSON object")
+        return value
+
     def before_agent(self, hook_input: BeforeAgentHookInput) -> HookResult:
         contract = self._contract()
         if contract is None or contract.get("decision_protocol") != "quant_property_v2":
             return HookResult.no_changes()
+        research_states = self._research_states()
+        raw_states = research_states.get("states")
+        if not isinstance(raw_states, list):
+            raise ValueError("quant research states are unavailable")
+        compact_states = []
+        for item in raw_states:
+            if not isinstance(item, Mapping):
+                continue
+            compact_states.append(
+                {
+                    "state_id": item.get("state_id"),
+                    "name": item.get("name"),
+                    "short_explanation": item.get("short_explanation"),
+                    "diagnostic_question": item.get("diagnostic_question"),
+                }
+            )
         failure_map = self._map()
         stages = failure_map.get("breakdown_stages")
         classes = failure_map.get("semantic_classes")
@@ -74,7 +98,19 @@ class QuantFailureMapMiddleware(Middleware):
                 }
             )
         guidance = (
-            "QUANT/FINANCE DIAGNOSTIC MAP\n"
+            "QUANT RESEARCH STATE SEARCH\n"
+            "The six Research States are a general representation of quantitative-"
+            "research work, not the fixed stages of one strategy pipeline. Reconstruct "
+            "the task-conditioned expected state and the Worker-observed state, locate "
+            "the earliest consequential mismatch, then predict an observable state "
+            "transition that a harness component should cause. The state names do not "
+            "choose the component and do not supply a task answer.\n"
+            + json.dumps(
+                {"research_states": compact_states},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            + "\nOPTIONAL QUANT/FINANCE DIAGNOSTIC MAP\n"
             "Use this as optional domain vocabulary, not a required form or answer. "
             "Use a listed stage/class only when runtime evidence supports it; add "
             "free-form domain_tags or propose a new concise class when it does not. "

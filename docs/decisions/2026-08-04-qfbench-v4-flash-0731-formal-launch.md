@@ -1,6 +1,6 @@
 # QFBench V4 Flash 0731 Formal Launch
 
-Date: 2026-08-04  
+Date: 2026-08-04
 Status: formal repetition 01 active under an explicit operator override
 
 ## Accepted Evidence
