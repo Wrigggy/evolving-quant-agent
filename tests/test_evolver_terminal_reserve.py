@@ -525,6 +525,65 @@ def test_recorded_quant_act_gets_one_bounded_final_component_smoke(
     )
 
 
+def test_early_final_act_redirects_once_to_missing_component_smoke(terminal_root):
+    middleware = DiscoveryTerminalReserve()
+    state = _State()
+    messages = _boundary_messages(100)
+    middleware.before_agent(SimpleNamespace(agent_state=state, messages=messages))
+    decision = {
+        "schema_version": 4,
+        "protocol": "quant_property_v2",
+        "decision": "ACT",
+        "unlocked": True,
+        "hypothesis": {"primary_components": ["tools"]},
+    }
+    (terminal_root / "discovery-hypothesis.json").write_text(
+        json.dumps(decision, sort_keys=True) + "\n"
+    )
+    candidate = Path(os.environ["QEA_CANDIDATE_ROOT"])
+    (candidate / "tools").mkdir(exist_ok=True)
+    (candidate / "tools" / "public_behavior_probe.py").write_text(
+        "def probe():\n    return True\n"
+    )
+
+    hook_input = AfterModelHookInput(
+        agent_state=state,
+        max_iterations=60,
+        current_iteration=31,
+        messages=messages,
+        original_response="The candidate is ready.",
+        parsed_response=SimpleNamespace(has_calls=lambda: False),
+        model_response=None,
+    )
+    manager = MiddlewareManager([middleware])
+    _, redirected_messages, force_continue = manager.run_after_model(hook_input)
+
+    assert force_continue is True
+    assert redirected_messages is not None
+    assert "passed primary-component smoke for: tools" in (
+        redirected_messages[-1].get_text_content()
+    )
+    compacted = middleware.before_model(
+        _before(state, redirected_messages, iteration=32)
+    ).messages
+    assert compacted is not None
+    captured = {}
+    middleware.wrap_model_call(
+        _model_params(state, compacted),
+        lambda params: captured.setdefault("params", params) or "smoke",
+    )
+    assert [tool["function"]["name"] for tool in captured["params"].tools] == [
+        "smoke_candidate_component"
+    ]
+    audit = json.loads((terminal_root / "terminal-reserve.json").read_text())
+    assert audit["phase"] == "component_smoke"
+    assert audit["trigger"]["reason"] == "early_final_missing_component_smoke"
+    assert any(
+        event["kind"] == "early_final_redirected_to_component_smoke"
+        for event in audit["events"]
+    )
+
+
 def test_unimplemented_preterminal_act_must_be_superseded_by_abstain(terminal_root):
     middleware = DiscoveryTerminalReserve()
     state = _State()

@@ -1115,6 +1115,47 @@ class DiscoveryTerminalReserve(Middleware):
                 reported_output_tokens=usage["output_tokens"],
                 reported_total_tokens=usage["total_tokens"],
             )
+            parsed = hook_input.parsed_response
+            has_calls = bool(parsed is not None and parsed.has_calls())
+            decision = self._decision_state()
+            missing = self._missing_final_component_smokes(decision)
+            candidate_changed = self._candidate_snapshot()["changed"] is True
+            if (
+                self._phase == "explore"
+                and not has_calls
+                and decision is not None
+                and decision.get("decision") == "ACT"
+                and candidate_changed
+                and missing
+            ):
+                self._phase = "component_smoke"
+                self._trigger = {
+                    "iteration": hook_input.current_iteration,
+                    "reason": "early_final_missing_component_smoke",
+                }
+                feedback = Message(
+                    role=Role.USER,
+                    content=[
+                        TextBlock(
+                            text=(
+                                "The ACT candidate is implemented, but its final version "
+                                "still needs a passed primary-component smoke for: "
+                                f"{', '.join(missing)}. Continue once and call only "
+                                "smoke_candidate_component for a missing component."
+                            )
+                        )
+                    ],
+                )
+                continued_messages = [*hook_input.messages, feedback]
+                self._event(
+                    "early_final_redirected_to_component_smoke",
+                    iteration=hook_input.current_iteration,
+                    components=list(missing),
+                )
+                return HookResult.with_modifications(
+                    messages=continued_messages,
+                    force_continue=True,
+                )
             return HookResult.no_changes()
 
     def after_agent(self, hook_input: AfterAgentHookInput) -> HookResult:
