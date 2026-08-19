@@ -51,6 +51,7 @@ class _State:
                 _tool("probe_evidence"),
                 _tool("decide_candidate"),
                 _tool("write_candidate"),
+                _tool("smoke_candidate_component"),
             ],
         )
 
@@ -71,6 +72,7 @@ def _real_agent_state(executor=None):
                 _tool("probe_evidence"),
                 _tool("decide_candidate"),
                 _tool("write_candidate"),
+                _tool("smoke_candidate_component"),
             ],
         )
     return AgentState(
@@ -144,6 +146,23 @@ def _model_params(state, messages):
         tools=tools,
         api_params={"tools": tools, "tool_choice": "auto", "max_tokens": 32_000},
     )
+
+
+def _record_component_smoke(result_root, middleware, component="tools"):
+    record = {
+        "schema_version": 1,
+        "test_index": 1,
+        "candidate_digest": middleware._candidate_sha256(),
+        "component": component,
+        "operation": "import",
+        "target": "tools.public_behavior_probe",
+        "status": "passed",
+        "exit_code": 0,
+    }
+    (result_root / "component-tests.jsonl").write_text(
+        json.dumps(record, sort_keys=True) + "\n"
+    )
+    return record
 
 
 @pytest.mark.parametrize("arm", ["A6-R", "A6-E", "A6-EC"])
@@ -390,17 +409,120 @@ def test_recorded_quant_act_with_candidate_change_enters_final_turn(terminal_roo
     (candidate / "tools" / "public_behavior_probe.py").write_text(
         "def probe():\n    return True\n"
     )
+    _record_component_smoke(terminal_root, middleware)
 
     compacted = middleware.before_model(
         _before(state, _boundary_messages(550_000))
     ).messages
 
     assert compacted is not None
-    assert "A valid decision is already durably recorded" in compacted[-1].get_text_content()
+    assert (
+        "A valid decision and all required final component smokes are already "
+        "durably recorded"
+        in compacted[-1].get_text_content()
+    )
     audit = json.loads((terminal_root / "terminal-reserve.json").read_text())
     assert audit["phase"] == "final"
     assert audit["decision_state_present"] is True
     assert audit["requires_terminal_abstain"] is False
+
+
+def test_recorded_quant_act_gets_one_bounded_final_component_smoke(
+    terminal_root,
+):
+    middleware = DiscoveryTerminalReserve()
+    state = _State()
+    initial = _boundary_messages(100)
+    middleware.before_agent(SimpleNamespace(agent_state=state, messages=initial))
+    decision = {
+        "schema_version": 4,
+        "protocol": "quant_property_v2",
+        "decision": "ACT",
+        "unlocked": True,
+        "hypothesis": {"primary_components": ["tools"]},
+    }
+    (terminal_root / "discovery-hypothesis.json").write_text(
+        json.dumps(decision, sort_keys=True) + "\n"
+    )
+    candidate = Path(os.environ["QEA_CANDIDATE_ROOT"])
+    (candidate / "tools").mkdir(exist_ok=True)
+    (candidate / "tools" / "public_behavior_probe.py").write_text(
+        "def probe():\n    return True\n"
+    )
+    fixture = candidate / "tools" / "_temporary_fixture.py"
+    fixture.write_text("VALUE = 1\n")
+    _record_component_smoke(terminal_root, middleware)
+    fixture.unlink()
+
+    compacted = middleware.before_model(
+        _before(state, _boundary_messages(550_000))
+    ).messages
+    assert compacted is not None
+    terminal = compacted[-1].get_text_content()
+    assert "still lacks a passed primary-component smoke for: tools" in terminal
+    captured = {}
+    assert middleware.wrap_model_call(
+        _model_params(state, compacted),
+        lambda params: captured.setdefault("params", params) or "smoke",
+    ) == captured["params"]
+    assert [tool["function"]["name"] for tool in captured["params"].tools] == [
+        "smoke_candidate_component"
+    ]
+
+    tool_params = ToolCallParams(
+        agent_state=state,
+        sandbox=None,
+        tool_name="smoke_candidate_component",
+        parameters={
+            "component": "tools",
+            "target": "tools.public_behavior_probe",
+            "operation": "import",
+        },
+        tool_call_id="smoke-1",
+        execution_params={},
+    )
+
+    def smoke_call(_params):
+        return _record_component_smoke(terminal_root, middleware)
+
+    smoke_result = middleware.wrap_tool_call(tool_params, smoke_call)
+    assert smoke_result["status"] == "passed"
+    middleware.after_tool(
+        AfterToolHookInput(
+            agent_state=state,
+            sandbox=None,
+            tool_name="smoke_candidate_component",
+            tool_call_id="smoke-1",
+            tool_input=tool_params.parameters,
+            tool_output=smoke_result,
+        )
+    )
+
+    final_messages = middleware.before_model(
+        _before(state, compacted, iteration=18)
+    ).messages
+    assert final_messages is not None
+    final_call = {}
+    middleware.wrap_model_call(
+        _model_params(state, final_messages),
+        lambda params: final_call.setdefault("params", params) or "final",
+    )
+    assert final_call["params"].tools == []
+    middleware.after_agent(
+        AfterAgentHookInput(
+            agent_state=state,
+            messages=final_messages,
+            agent_response='{"decision":"ACT"}',
+            stop_reason=None,
+        )
+    )
+    audit = json.loads((terminal_root / "terminal-reserve.json").read_text())
+    assert audit["phase"] == "complete"
+    assert audit["decision_state_present"] is True
+    assert any(
+        event["kind"] == "final_component_smokes_recorded"
+        for event in audit["events"]
+    )
 
 
 def test_unimplemented_preterminal_act_must_be_superseded_by_abstain(terminal_root):

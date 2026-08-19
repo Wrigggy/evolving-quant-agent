@@ -2,11 +2,13 @@
 
 The NexAU executor normally stops only after the prompt has already crossed its
 context limit.  A long evidence investigation can therefore consume the space
-needed for the required ACT/ABSTAIN decision.  This middleware uses the exact
-executor token counter and structured-tool payload before every model call.  At
-a hard pre-limit threshold it replaces the execution history with a bounded,
-deterministic decision state and removes every tool except ``decide_candidate``.
-After a decision is durably recorded, no tools are exposed.
+needed for the required ACT/ABSTAIN decision and final component checks.  This
+middleware uses the exact executor token counter and structured-tool payload
+before every model call.  At a hard pre-limit threshold it replaces the
+execution history with a bounded, deterministic state.  It exposes only
+``decide_candidate`` when no usable decision exists, or only
+``smoke_candidate_component`` when a recorded ACT still lacks a final primary
+component smoke.  After those obligations are complete, no tools are exposed.
 
 The middleware never manufactures a decision.  An invalid or missing terminal
 response remains invalid and is rejected by the ordinary discovery/admission
@@ -43,10 +45,15 @@ from nexau.core.messages import Message, Role, TextBlock, ToolResultBlock, ToolU
 _AUDIT_NAME = "terminal-reserve.json"
 _DISCOVERY_STATE_NAME = "discovery-hypothesis.json"
 _PROBE_LOG_NAME = "probe-log.jsonl"
+_COMPONENT_TEST_LOG_NAME = "component-tests.jsonl"
 _FULL_TRACE_MESSAGES_KEY = "__nexau_full_trace_messages__"
 _FULL_TRACE_SEEN_IDS_KEY = "__nexau_full_trace_seen_ids__"
 _ALLOWED_TERMINAL_TOOL = "decide_candidate"
+_COMPONENT_SMOKE_TOOL = "smoke_candidate_component"
 _VALID_DECISIONS = frozenset({"ACT", "ABSTAIN"})
+_EXECUTABLE_COMPONENTS = frozenset(
+    {"agent_config", "tools", "validator", "skills", "memory", "middleware", "routing"}
+)
 _PROBE_COMPACT_MAX_BYTES = 32_768
 
 
@@ -273,6 +280,10 @@ class DiscoveryTerminalReserve(Middleware):
         return cls._result_root() / _PROBE_LOG_NAME
 
     @classmethod
+    def _component_test_path(cls) -> Path:
+        return cls._result_root() / _COMPONENT_TEST_LOG_NAME
+
+    @classmethod
     def _access_path(cls) -> Path:
         return cls._result_root() / "access_log.jsonl"
 
@@ -346,6 +357,48 @@ class DiscoveryTerminalReserve(Middleware):
             ),
         }
 
+    @classmethod
+    def _missing_final_component_smokes(
+        cls, decision: Mapping[str, object] | None = None
+    ) -> tuple[str, ...]:
+        state = decision if decision is not None else cls._decision_state()
+        if state is None or state.get("decision") != "ACT":
+            return ()
+        hypothesis = state.get("hypothesis")
+        if not isinstance(hypothesis, Mapping):
+            return ()
+        raw_primary = hypothesis.get("primary_components")
+        if not isinstance(raw_primary, list):
+            return ()
+        primary = tuple(
+            str(value)
+            for value in raw_primary
+            if isinstance(value, str) and value in _EXECUTABLE_COMPONENTS
+        )
+        if not primary:
+            return ()
+
+        latest: dict[str, Mapping[str, object]] = {}
+        path = cls._component_test_path()
+        if path.is_file() and not path.is_symlink():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, Mapping):
+                    continue
+                component = record.get("component")
+                if isinstance(component, str):
+                    latest[component] = record
+        current = cls._candidate_sha256()
+        return tuple(
+            component
+            for component in primary
+            if latest.get(component, {}).get("status") != "passed"
+            or latest.get(component, {}).get("candidate_digest") != current
+        )
+
     def _terminal_phase(self) -> str:
         decision = self._decision_state()
         if decision is None:
@@ -356,6 +409,9 @@ class DiscoveryTerminalReserve(Middleware):
             if candidate["changed"] is not True:
                 self._requires_terminal_abstain = True
                 return "decision"
+            if self._missing_final_component_smokes(decision):
+                self._requires_terminal_abstain = False
+                return "component_smoke"
         self._requires_terminal_abstain = False
         return "final"
 
@@ -564,6 +620,9 @@ class DiscoveryTerminalReserve(Middleware):
             "decision_state": decision,
             "access": self._access_snapshot(),
             "probes": self._probe_snapshot(),
+            "missing_final_component_smokes": list(
+                self._missing_final_component_smokes(decision)
+            ),
         }
         fixed_bytes = len(_canonical_bytes(fixed))
         tail_budget = max(0, self.compact_state_max_bytes - fixed_bytes - 256)
@@ -605,15 +664,28 @@ class DiscoveryTerminalReserve(Middleware):
             messages, phase=phase, prompt_tokens=prompt_tokens
         )
         encoded = _canonical_bytes(payload)
-        allowed = (
-            "Call decide_candidate exactly once with a contract-valid ABSTAIN object. "
-            "The intervention window has closed, so ACT is forbidden: there is no "
-            "remaining mutation or validation phase. No evidence, inspection, probe, "
-            "mutation, or candidate-write tool is available. Do not invent missing evidence."
-            if phase == "decision"
-            else "A valid decision is already durably recorded. Call no tools and return "
-            "the compact final JSON report required by the system contract."
-        )
+        if phase == "decision":
+            allowed = (
+                "Call decide_candidate exactly once with a contract-valid ABSTAIN object. "
+                "The intervention window has closed, so ACT is forbidden: there is no "
+                "remaining mutation or validation phase. No evidence, inspection, probe, "
+                "mutation, or candidate-write tool is available. Do not invent missing evidence."
+            )
+        elif phase == "component_smoke":
+            missing = ", ".join(self._missing_final_component_smokes())
+            allowed = (
+                "A valid ACT is already recorded, but its final candidate state still lacks "
+                f"a passed primary-component smoke for: {missing}. Call only "
+                "smoke_candidate_component for those missing components. Do not inspect, "
+                "mutate, delete, probe, or replace the recorded decision. After the final "
+                "smoke passes, the next terminal call will be tool-free."
+            )
+        else:
+            allowed = (
+                "A valid decision and all required final component smokes are already "
+                "durably recorded. Call no tools and return the compact final JSON report "
+                "required by the system contract."
+            )
         instruction = (
             "TERMINAL RESERVE (hard, fail-closed):\n"
             f"{allowed}\n"
@@ -880,13 +952,22 @@ class DiscoveryTerminalReserve(Middleware):
                 return call_next(params)
             if self._terminal_model_calls >= self.max_terminal_model_calls:
                 raise TerminalReserveError("terminal model-call budget exhausted")
-            allowed_tools = (
-                [tool for tool in all_tools if _tool_name(tool) == _ALLOWED_TERMINAL_TOOL]
+            allowed_name = (
+                _ALLOWED_TERMINAL_TOOL
                 if self._phase == "decision"
+                else _COMPONENT_SMOKE_TOOL
+                if self._phase == "component_smoke"
+                else None
+            )
+            allowed_tools = (
+                [tool for tool in all_tools if _tool_name(tool) == allowed_name]
+                if allowed_name is not None
                 else []
             )
-            if self._phase == "decision" and len(allowed_tools) != 1:
-                raise TerminalReserveError("exact decide_candidate tool is unavailable")
+            if allowed_name is not None and len(allowed_tools) != 1:
+                raise TerminalReserveError(
+                    f"exact {allowed_name} tool is unavailable"
+                )
             api_params = dict(params.api_params)
             api_params["max_tokens"] = self.terminal_output_tokens
             if params.tool_call_mode == "openai":
@@ -925,6 +1006,24 @@ class DiscoveryTerminalReserve(Middleware):
         with self._lock:
             if self._phase == "explore":
                 return call_next(params)
+            if (
+                self._phase == "component_smoke"
+                and params.tool_name == _COMPONENT_SMOKE_TOOL
+            ):
+                component = params.parameters.get("component")
+                if component in self._missing_final_component_smokes():
+                    return call_next(params)
+                self._blocked_tool_calls[f"{params.tool_name}:not_missing"] += 1
+                self._event(
+                    "blocked_terminal_component_smoke",
+                    phase=self._phase,
+                    requested_component=component,
+                    missing_components=list(self._missing_final_component_smokes()),
+                )
+                return {
+                    "error": "terminal reserve permits smoke only for a missing primary component",
+                    "tool_blocked": True,
+                }
             if self._phase == "decision" and params.tool_name == _ALLOWED_TERMINAL_TOOL:
                 discovery = params.parameters.get("discovery")
                 decision = (
@@ -972,6 +1071,20 @@ class DiscoveryTerminalReserve(Middleware):
                 tool_name=hook_input.tool_name,
                 output_bytes=len(rendered.encode("utf-8")),
             )
+            if (
+                self._phase == "component_smoke"
+                and hook_input.tool_name == _COMPONENT_SMOKE_TOOL
+            ):
+                missing = self._missing_final_component_smokes()
+                if not missing:
+                    self._phase = "final"
+                    self._event("final_component_smokes_recorded")
+                else:
+                    self._event(
+                        "final_component_smokes_missing",
+                        components=list(missing),
+                    )
+                return HookResult.no_changes()
             if self._phase != "decision" or hook_input.tool_name != _ALLOWED_TERMINAL_TOOL:
                 return HookResult.no_changes()
             state = self._decision_state()
@@ -1013,6 +1126,11 @@ class DiscoveryTerminalReserve(Middleware):
                     not self._requires_terminal_abstain
                     or decision.get("decision") == "ABSTAIN"
                 )
+                if decision is not None and decision.get("decision") == "ACT":
+                    valid_terminal_decision = (
+                        valid_terminal_decision
+                        and not self._missing_final_component_smokes(decision)
+                    )
                 self._phase = "complete" if valid_terminal_decision else "invalid"
             self._event(
                 "after_agent",
