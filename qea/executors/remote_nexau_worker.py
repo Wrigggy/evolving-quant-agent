@@ -6,6 +6,7 @@ import argparse
 import json
 import math
 import os
+import shutil
 import sys
 import time
 from collections.abc import Mapping
@@ -15,6 +16,17 @@ from pathlib import Path
 _MIN_MODEL_CLIENT_TIMEOUT_SECONDS = 360.0
 _EMPTY_MODEL_RESPONSE = "No response content or tool calls"
 _EMPTY_MODEL_EXECUTION_ERROR = f"Error in agent execution: {_EMPTY_MODEL_RESPONSE}"
+
+
+def _stage_repair_seed(work_dir: Path, output_dir: Path) -> bool:
+    """Prestage the optional repair-probe seed at the promised output path."""
+
+    source = work_dir / "data" / "probe_seed_strategy.py"
+    target = output_dir / "strategy.py"
+    if not source.is_file() or target.exists():
+        return False
+    shutil.copy2(source, target)
+    return True
 
 
 def _pin_no_replay_policy(config) -> None:
@@ -139,6 +151,7 @@ def run(task_dir: Path, worker_dir: Path, work_dir: Path, output_dir: Path, resu
     started = time.time()
     output_dir.mkdir(parents=True, exist_ok=True)
     result_dir.mkdir(parents=True, exist_ok=True)
+    _stage_repair_seed(work_dir, output_dir)
     worker_dir = worker_dir.resolve()
     if str(worker_dir) not in sys.path:
         sys.path.insert(0, str(worker_dir))

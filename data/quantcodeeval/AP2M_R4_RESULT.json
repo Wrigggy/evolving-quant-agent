@@ -62,8 +62,8 @@
   },
   "claim_boundary": "Measured warm-history feedback-driven autonomy feasibility: the Evolver built a component, scheduled a Worker probe, read its negative outcome, and made a distinct second decision. The component was not behaviorally activated by the Worker, no official candidate score was produced, and no benchmark or binary improvement is claimed.",
   "post_run_fix": {
-    "change": "An early final ACT with a missing primary-component smoke is redirected once into the bounded component-smoke phase.",
-    "verification": "83 focused tests passed, including middleware-manager force-continue propagation.",
+    "change": "An early final ACT with a missing primary-component smoke is redirected once into the bounded component-smoke phase. Repair-probe seeds are now pre-staged at /app/output/strategy.py so the runtime matches the Evolver-authored instruction, while the public data backup remains available.",
+    "verification": "102 focused tests passed, including middleware-manager force-continue propagation and repair-seed staging.",
     "live_rerun_status": "not yet rerun"
   },
   "evidence": {

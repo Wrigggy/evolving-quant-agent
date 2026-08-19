@@ -31,6 +31,7 @@ def test_materializes_same_budget_worker_and_public_seed(tmp_path: Path):
     assert "max_iterations: 9" in (copied / "agent.yaml").read_text()
     assert (overlay / "tasks/T26/environment/data/probe_seed_strategy.py").read_text() == "VALUE = 1\n"
     instruction = (overlay / "tasks/T26/instruction.md").read_text()
+    assert "pre-staged at\n`/app/output/strategy.py`" in instruction
     assert "matrix/row-shape mismatch" in instruction
     assert "checker code" in instruction
 

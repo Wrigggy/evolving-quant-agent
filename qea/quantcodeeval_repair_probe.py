@@ -28,12 +28,13 @@ class QuantCodeEvalRepairProbeError(ValueError):
 
 _PROBE_INSTRUCTION = """\
 You are repairing an existing QuantCodeEval strategy implementation, not
-starting from an empty solution.  The current implementation is available at
-`/app/data/probe_seed_strategy.py` and the ordinary public task inputs are in
+starting from an empty solution.  The current implementation is pre-staged at
+`/app/output/strategy.py`; a read-only backup is available at
+`/app/data/probe_seed_strategy.py`, and the ordinary public task inputs are in
 `/app/data`.
 
-Copy the seed to `/app/output/strategy.py`, preserve work that is already
-correct, and reproduce the observed runtime failure before changing it.  The
+Preserve work that is already correct and reproduce the observed runtime
+failure before changing it.  The
 answer-free symptom is a matrix/row-shape mismatch in the estimator pipeline
 after monthly-mean and daily-second-moment semantics were introduced.  Trace
 the shape and indexing assumptions through the estimator and cross-validation

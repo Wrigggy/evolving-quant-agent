@@ -6,6 +6,21 @@ from types import SimpleNamespace
 import pytest
 
 
+def test_stages_optional_repair_seed_at_output_path(tmp_path):
+    from qea.executors import remote_nexau_worker
+
+    work = tmp_path / "app"
+    data = work / "data"
+    output = work / "output"
+    data.mkdir(parents=True)
+    output.mkdir()
+    (data / "probe_seed_strategy.py").write_text("VALUE = 1\n")
+
+    assert remote_nexau_worker._stage_repair_seed(work, output) is True
+    assert (output / "strategy.py").read_text() == "VALUE = 1\n"
+    assert remote_nexau_worker._stage_repair_seed(work, output) is False
+
+
 def test_no_replay_policy_overrides_nested_nexau_and_sdk_retries():
     from qea.executors import remote_nexau_worker
 
