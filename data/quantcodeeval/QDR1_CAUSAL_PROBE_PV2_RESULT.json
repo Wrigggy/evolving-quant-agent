@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "protocol": "quantcodeeval-bounded-causal-probe-v2",
+  "date": "2026-08-20",
+  "task_id": "T26",
+  "source": {
+    "candidate": "retained QDR-1 component-impact r2 harness",
+    "artifact": "retained blind 12/17 seed strategy",
+    "worker_visibility": "public task, current artifact, and candidate tools only"
+  },
+  "phase_design": {
+    "completed_request_budget": 12,
+    "configured_max_iterations": 13,
+    "inventory_assistant_turns": 2,
+    "checkpoint_action": "call the candidate component or state an evidence-grounded skip",
+    "minimum_post_observation_assistant_turns": 3
+  },
+  "measured": {
+    "completed_model_requests": 12,
+    "worker_seconds": 220.235,
+    "component_calls": 2,
+    "first_component_call_assistant_turn": 3,
+    "first_audit_errors": 2,
+    "first_audit_warnings": 4,
+    "artifact_changed": true,
+    "focused_real_data_smoke": true,
+    "component_reaudit": true,
+    "reaudit_relations_realized": 6,
+    "reaudit_errors": 0,
+    "reaudit_warnings": 0,
+    "baseline_tests_passed": 12,
+    "candidate_tests_passed": 14,
+    "tests_total": 17,
+    "property_delta": 2,
+    "baseline_reward": 0.0,
+    "candidate_reward": 0.0,
+    "cost_usd": 0.063367496,
+    "rate_limited_retries": 0
+  },
+  "causal_sequence": [
+    "bounded public-contract and artifact inventory",
+    "candidate component called at the phase checkpoint",
+    "actionable relation-observability errors returned",
+    "Worker revised the artifact and ran a focused real-data smoke",
+    "Worker called the same component again and cleared all declared relations",
+    "official verifier improved two properties"
+  ],
+  "interpretation": "The phase-aware probe restored the intended low-cost causal test: it changed a late, non-actionable component call into an early call followed by edit, smoke, re-audit, and official property gain. The middleware scheduled the decision and preserved post-observation work; it did not author relation arguments, execute the audit automatically, edit the artifact, or expose official answers to the Worker.",
+  "claim_boundary": "Positive seeded causal-probe result and property-level gain. It is not a fresh-Worker result, binary reward gain, repeat, protection, transfer, sealed evaluation, or end-to-end autonomous search result.",
+  "evidence": "results/bc-mirror/qce-t26-qdr1-causal-probe-pv2-20260820-r1/"
+}

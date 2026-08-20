@@ -2981,3 +2981,29 @@ checkpoint or a simpler component call surface, holding component, seed, and
 task fixed. Do not add the deferred multi-task scheduler yet. Full result and
 boundary:
 `docs/decisions/2026-08-20-qdr1-component-impact-result.md`.
+
+### 2026-08-20 QDR-1 bounded causal probe P-v2
+
+P-v2 restored the probe's original role as a short causal experiment over a
+retained artifact, rather than a miniature fresh Worker run. It held the T26
+task, retained QDR-1 r2 component harness, blind 12/17 seed, model route, and
+official verifier fixed. Generic middleware limited public-contract and
+artifact inventory to two assistant turns, required an applicability decision
+at the next turn, and preserved at least three post-observation responses. It
+did not author relation declarations, run the component automatically, edit
+the artifact, or expose checker answers.
+
+The Worker called `check_quant_relations` on assistant turn three. Its first
+call returned two errors and four warnings. The Worker then revised the target
+function, ran syntax and real-data smokes, and called the component again on
+turn six; the second call realized 6/6 relations with zero errors and zero
+warnings. The artifact changed and the official T26 score improved from 12/17
+to 14/17, with A3 and B3 changing from fail to pass and no observed property
+regression. Binary reward remained zero. The 12-request run took 220.235
+seconds, cost $0.063367496, had no rate-limit retry, and left no scoped
+container or network.
+
+This measures the full seeded causal chain from early activation through
+official property gain. It is not a fresh-Worker, repeat, protection, transfer,
+sealed-test, binary-gain, or end-to-end-autonomous-search result. Full record:
+`docs/decisions/2026-08-20-qdr1-causal-probe-pv2-result.md`.
