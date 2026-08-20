@@ -527,6 +527,7 @@ class RootlessVerifierRouter(_RootlessTaskRouter):
         catalog: RootlessRuntimeCatalog,
         backend: SandboxBackend,
         lifecycle_root: str | Path,
+        public_task_root: str | Path,
         trusted_task_root: str | Path,
         resource_pool: HostResourceLeasePool,
         lease_timeout_seconds: float = 120.0,
@@ -539,6 +540,7 @@ class RootlessVerifierRouter(_RootlessTaskRouter):
             lease_timeout_seconds=lease_timeout_seconds,
         )
         self.trusted_task_root = Path(trusted_task_root).expanduser().resolve()
+        self.public_task_root = Path(public_task_root).expanduser().resolve()
 
     def verify(
         self,
@@ -561,6 +563,7 @@ class RootlessVerifierRouter(_RootlessTaskRouter):
                 lifecycle_root=self.lifecycle_root,
                 verifier_image_ref=runtime.verifier_image_ref,
                 trusted_task_root=self.trusted_task_root,
+                public_task_root=self.public_task_root,
                 resource_contract=runtime.verifier_resources,
             )
             return verifier.verify(

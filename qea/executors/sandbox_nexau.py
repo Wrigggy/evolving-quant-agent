@@ -529,7 +529,8 @@ class SandboxNexAUExecutor:
                     "sh",
                     "-c",
                     "if [ -d /qea/task/environment/data ]; then "
-                    "cp -R /qea/task/environment/data/. /app/data/; fi",
+                    "cp -R /qea/task/environment/data/. /app/data/; "
+                    "cp -R /qea/task/environment/data/. /app/; fi",
                 ),
             ):
                 _run_required(
@@ -747,6 +748,7 @@ class SandboxQFBenchVerifier:
         lifecycle_root: str | Path,
         verifier_image_ref: str,
         trusted_task_root: str | Path,
+        public_task_root: str | Path | None = None,
         resource_contract: SandboxResourceContract,
         clock: Callable[[], datetime] = _utc_now,
         score_parser: Callable[..., OfficialTaskScore] = parse_official_qfbench_score,
@@ -761,6 +763,11 @@ class SandboxQFBenchVerifier:
         self.lifecycle_root = Path(lifecycle_root).expanduser().resolve()
         self.verifier_image_ref = verifier_image_ref
         self.trusted_task_root = Path(trusted_task_root).expanduser().resolve()
+        self.public_task_root = (
+            Path(public_task_root).expanduser().resolve()
+            if public_task_root is not None
+            else None
+        )
         self.resource_contract = resource_contract
         self.clock = clock
         if not callable(score_parser):
@@ -803,11 +810,17 @@ class SandboxQFBenchVerifier:
         verifier_dir.mkdir(parents=True, exist_ok=True)
         records = _artifact_records(execution)
         task_view = _verifier_task_view(self.trusted_task_root, task.task_id)
+        public_task_view = (
+            _worker_task_view(self.public_task_root, task.task_id)
+            if self.public_task_root is not None
+            else None
+        )
         try:
             bundle = build_verifier_bundle(
                 task_view,
                 execution.artifact_dir,
                 verifier_dir / "verifier-input.tar",
+                public_task=public_task_view,
             )
             official_script = (Path(task_view.root) / "tests" / "test.sh").read_text()
             executed_script = prepare_offline_verifier_script(official_script)
@@ -912,6 +925,7 @@ class SandboxQFBenchVerifier:
                     "-p",
                     "/qea/tests",
                     "/qea/artifacts",
+                    "/app/data",
                     "/tests",
                     "/app/output",
                     "/logs/verifier",
@@ -919,6 +933,13 @@ class SandboxQFBenchVerifier:
                 ("tar", "-xf", "/qea/verifier-input.tar", "-C", "/qea"),
                 ("cp", "-R", "/qea/tests/.", "/tests/"),
                 ("cp", "-R", "/qea/artifacts/.", "/app/output/"),
+                (
+                    "sh",
+                    "-c",
+                    "if [ -d /qea/task/environment/data ]; then "
+                    "cp -R /qea/task/environment/data/. /app/data/; "
+                    "cp -R /qea/task/environment/data/. /app/; fi",
+                ),
                 ("python3", "-c", _VERIFIER_CACHE_OVERLAY_CODE),
             ):
                 _run_required(

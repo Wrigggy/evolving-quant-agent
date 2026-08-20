@@ -1129,6 +1129,7 @@ def build_rootless_full_harness_runtime(
             catalog=catalog,
             backend=backend,
             lifecycle_root=run_root / "lifecycles",
+            public_task_root=config.public_root,
             trusted_task_root=config.trusted_root,
             resource_pool=pool,
             lease_timeout_seconds=config.lease_timeout_seconds,

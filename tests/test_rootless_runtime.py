@@ -612,6 +612,7 @@ def test_verifier_router_leases_only_exact_offline_task_runtime(
         catalog=_catalog(),
         backend=backend,
         lifecycle_root=tmp_path / "lifecycles",
+        public_task_root=tmp_path / "public",
         trusted_task_root=tmp_path / "trusted",
         resource_pool=pool,
     )
@@ -843,6 +844,7 @@ def test_actual_rootless_routers_resume_completed_score_without_acquisition(
         catalog=_catalog(),
         backend=backend,
         lifecycle_root=tmp_path / "lifecycles",
+        public_task_root=tmp_path / "public",
         trusted_task_root=tmp_path / "trusted",
         resource_pool=pool,
     )
@@ -949,6 +951,7 @@ def test_actual_rootless_routers_resume_worker_execution_without_worker_acquisit
             catalog=_catalog(),
             backend=backend,
             lifecycle_root=tmp_path / "lifecycles",
+            public_task_root=tmp_path / "public",
             trusted_task_root=tmp_path / "trusted",
             resource_pool=pool,
         ),
@@ -1101,6 +1104,7 @@ def test_actual_rootless_routers_overlap_verifier_only_with_weighted_capacity(
             catalog=catalog,
             backend=backend,
             lifecycle_root=tmp_path / "lifecycles",
+            public_task_root=tmp_path / "public",
             trusted_task_root=tmp_path / "trusted",
             resource_pool=pool,
             lease_timeout_seconds=2,

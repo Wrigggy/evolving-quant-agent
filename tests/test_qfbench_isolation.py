@@ -83,6 +83,25 @@ def test_verifier_bundle_contains_artifacts_and_tests_but_no_worker_or_solution(
     assert not any("worker" in member or "solution" in member for member in bundle.members)
 
 
+def test_verifier_bundle_can_include_public_task_data(tmp_path):
+    from qea.executors.bundles import build_verifier_bundle
+
+    task = _task_fixture(tmp_path)
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    (artifacts / "results.json").write_text('{"answer": 1}\n')
+
+    bundle = build_verifier_bundle(
+        task,
+        artifacts,
+        tmp_path / "verifier-with-data.tar",
+        public_task=task,
+    )
+
+    assert "task/environment/data/input.csv" in bundle.members
+    assert "task/instruction.md" not in bundle.members
+
+
 def test_verifier_bundle_preserves_declared_python_cache_artifact(tmp_path):
     from qea.executors.bundles import build_verifier_bundle
 

@@ -344,7 +344,8 @@ def test_worker_setup_accepts_official_task_without_data_directory(tmp_path):
         "sh",
         "-c",
         "if [ -d /qea/task/environment/data ]; then "
-        "cp -R /qea/task/environment/data/. /app/data/; fi",
+        "cp -R /qea/task/environment/data/. /app/data/; "
+        "cp -R /qea/task/environment/data/. /app/; fi",
     ) in setup_commands
 
 
@@ -622,7 +623,7 @@ def test_verifier_is_independent_offline_and_rehashes_artifacts(tmp_path):
         model_env={},
     )
 
-    _, trusted_root = _roots(tmp_path / "verifier-roots")
+    public_root, trusted_root = _roots(tmp_path / "verifier-roots")
     verifier_backend = FakeBackend()
     lifecycle_root = tmp_path / "verifier-lifecycles"
     verifier_backend.lifecycle_root = lifecycle_root
@@ -631,6 +632,7 @@ def test_verifier_is_independent_offline_and_rehashes_artifacts(tmp_path):
         lifecycle_root=lifecycle_root,
         verifier_image_ref="sha256:" + "b" * 64,
         trusted_task_root=trusted_root,
+        public_task_root=public_root,
         resource_contract=_resources(verifier=True),
     )
     score = verifier.verify(
@@ -661,10 +663,22 @@ def test_verifier_is_independent_offline_and_rehashes_artifacts(tmp_path):
     )
     assert members == (
         "artifacts/answer.txt",
+        "task/environment/data/input.csv",
         "tests/test.sh",
         "tests/test_outputs.py",
     )
     assert not any("solution" in member or "instruction" in member for member in members)
+    assert (
+        "sh",
+        "-c",
+        "if [ -d /qea/task/environment/data ]; then "
+        "cp -R /qea/task/environment/data/. /app/data/; "
+        "cp -R /qea/task/environment/data/. /app/; fi",
+    ) in [
+        event[1]
+        for event in verifier_backend.events
+        if isinstance(event, tuple) and event[0] == "run:verifier:setup"
+    ]
     assert any(
         isinstance(event, tuple) and event[0] == "run:verifier:artifact-integrity"
         for event in verifier_backend.events

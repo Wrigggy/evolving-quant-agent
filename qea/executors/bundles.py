@@ -155,10 +155,11 @@ def build_verifier_bundle(
     artifacts_dir: str | Path,
     destination: str | Path,
     *,
+    public_task=None,
     max_files: int = DEFAULT_MAX_FILES,
     max_bytes: int = DEFAULT_MAX_BYTES,
 ) -> BundleRecord:
-    """Archive hidden official tests with immutable worker-produced artifacts."""
+    """Archive official tests, public task data, and worker-produced artifacts."""
 
     task_root = Path(task.root).resolve()
     artifact_root = Path(artifacts_dir).resolve()
@@ -168,6 +169,13 @@ def build_verifier_bundle(
         if not relative.parts or relative.parts[0] != "tests":
             raise BundleError(f"verifier file must live below tests/: {relative}")
         entries.append((Path(source).resolve(), relative.as_posix()))
+    if public_task is not None:
+        public_root = Path(public_task.root).resolve()
+        for source in public_task.worker_files:
+            relative = _relative_to(Path(source), public_root, "public verifier task")
+            if relative.parts[:2] != ("environment", "data"):
+                continue
+            entries.append((Path(source).resolve(), f"task/{relative.as_posix()}"))
     for source in _tree_files(artifact_root, skip_cache=False):
         relative = source.relative_to(artifact_root)
         entries.append((source, f"artifacts/{relative.as_posix()}"))
