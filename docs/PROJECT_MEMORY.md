@@ -3047,3 +3047,26 @@ result. Remove the sidecars from the remote deploy, disable macOS metadata in
 future archive syncs, preflight the Quant-H0 worker tree, and rerun under a new
 ID. Full record:
 `docs/decisions/2026-08-20-ap3-r4-appledouble-setup-failure.md`.
+
+### 2026-08-20 AP-3 r5 complete Quant-H0 feedback loop
+
+After removing the observed AppleDouble sync pollution, AP-3 r5 ran a
+cold-history campaign from a fresh answer-blind Quant-H0 T26 attempt. H0 scored
+13/17 with reward zero. Round one autonomously selected a
+`quantitative_representation` hypothesis, created and admitted a new
+`convention-reconciliation` skill plus system-prompt and agent-graph changes,
+and chose a six-iteration repair probe.
+
+The probe Worker loaded the skill on assistant turn one, but completed after
+five requests with an unchanged artifact and unchanged 13/17 score. Round two
+read the persisted prediction and actual probe observation, reclassified skill
+activation as insufficient, retained the beta-frequency, CV-output, and
+signature hypotheses as untested, and returned calibrated ABSTAIN. No final
+Worker ran because no candidate was submitted.
+
+This measures a complete autonomous bounded feedback loop from H0 through
+component activation and runtime-experience-conditioned updating. It does not
+measure a helpful candidate, benchmark gain, repeat, transfer, or multi-task
+coordination. The campaign used 69 completed requests and $0.228217836 with no
+rate-limit retry or coordinator restart. Full record:
+`docs/decisions/2026-08-20-ap3-r5-h0-autonomy-result.md`.

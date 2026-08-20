@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-20",
+  "run_id": "qce-t26-ap3-20260820-r5",
+  "protocol": "quantcodeeval-ap3-v2",
+  "status": "complete_without_final",
+  "h0": {
+    "tests_passed": 13,
+    "tests_total": 17,
+    "reward": 0,
+    "completed_requests": 29,
+    "cost_usd": 0.097305552
+  },
+  "round_one": {
+    "decision": "ACT",
+    "selected_hypothesis": "H1_beta_frequency",
+    "research_state": "quantitative_representation",
+    "candidate_components": [
+      "systemprompt",
+      "skills",
+      "agent_config"
+    ],
+    "primary_components": [
+      "systemprompt",
+      "skills"
+    ],
+    "new_skill": "convention-reconciliation",
+    "candidate_admitted": true,
+    "completed_requests": 22,
+    "cost_usd": 0.09128706
+  },
+  "worker_probe": {
+    "max_iterations": 6,
+    "completed_requests": 5,
+    "skill_loaded_on_assistant_turn": 1,
+    "artifact_changed": false,
+    "tests_passed": 13,
+    "tests_total": 17,
+    "reward": 0,
+    "cost_usd": 0.004599284
+  },
+  "round_two": {
+    "decision": "ABSTAIN",
+    "status": "CALIBRATED_ABSTAIN",
+    "prediction_and_observation_cited": true,
+    "updated_conclusion": "Skill activation was not sufficient; the beta-frequency, CV-output, and signature hypotheses remain untested because the probe made no edit.",
+    "completed_requests": 13,
+    "cost_usd": 0.03502594
+  },
+  "final_worker": {
+    "run": false,
+    "reason": "round two did not submit an admitted ACT candidate"
+  },
+  "total": {
+    "completed_requests": 69,
+    "cost_usd": 0.228217836,
+    "rate_limit_retries": 0
+  },
+  "mechanism_results": {
+    "h0_bootstrap": true,
+    "autonomous_component_discovery": true,
+    "worker_component_activation": true,
+    "runtime_observation_indexed": true,
+    "hypothesis_updated_from_observation": true,
+    "candidate_helpful": false,
+    "benchmark_gain": false,
+    "binary_gain": false
+  },
+  "interpretation": "The complete bounded H0 feedback loop operated autonomously through a calibrated stop. It discovered and activated a new quant-research skill, but the Worker probe made no edit and produced no score gain, so the Evolver correctly refused to promote a final candidate.",
+  "claim_boundary": "Autonomous Quant-H0 bootstrap and runtime-experience update feasibility on one optimize task; no helpful candidate, final Worker, repeat, transfer, multi-task coordination, or benchmark improvement.",
+  "artifact_location": "results/bc-mirror/qce-t26-ap3-20260820-r5/"
+}
