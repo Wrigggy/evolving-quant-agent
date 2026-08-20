@@ -645,7 +645,7 @@ class E2BQFBenchVerifier:
             "executed_sha256": hashlib.sha256(executed_script.encode()).hexdigest(),
             "offline_transformed": not self.config.verifier_allow_internet,
             "transformation": (
-                "remove-known-pinned-uv-bootstrap-only"
+                "remove-known-pinned-uv-bootstrap-and-set-output-dir"
                 if not self.config.verifier_allow_internet
                 else "none"
             ),

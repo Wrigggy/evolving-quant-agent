@@ -29,7 +29,7 @@ _KNOWN_UV_BOOTSTRAP_LINES = frozenset({
 
 
 def prepare_offline_verifier_script(official_script: str) -> str:
-    """Remove only QFBench's pinned uv bootstrap; preserve its test/reward body."""
+    """Prepare QFBench's official script for the offline verifier runtime."""
 
     retained: list[str] = []
     for line in official_script.splitlines():
@@ -51,6 +51,7 @@ def prepare_offline_verifier_script(official_script: str) -> str:
         'export UV_TOOL_DIR="/opt/qea/uv-tools"',
         'export UV_TOOL_BIN_DIR="/opt/qea/uv-bin"',
         'export PATH="/opt/qea/uv-bin:/root/.local/bin:/usr/local/bin:${PATH}"',
+        'export OUTPUT_DIR="/app/output"',
     ]
     if retained and retained[0].startswith("#!"):
         lines = [retained[0], *exports, *retained[1:]]

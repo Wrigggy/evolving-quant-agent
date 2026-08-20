@@ -291,10 +291,23 @@ echo 1 > /logs/verifier/reward.txt
     assert 'export UV_CACHE_DIR="/opt/qea/uv-cache"' in offline
     assert 'export UV_TOOL_DIR="/opt/qea/uv-tools"' in offline
     assert 'export UV_TOOL_BIN_DIR="/opt/qea/uv-bin"' in offline
+    assert 'export OUTPUT_DIR="/app/output"' in offline
     assert "astral.sh" not in offline
     assert "install-uv.sh" not in offline
     assert "uvx -p 3.11 -w pytest==8.4.1 pytest /tests/test_outputs.py" in offline
     assert "echo 1 > /logs/verifier/reward.txt" in offline
+
+
+def test_offline_verifier_script_normalizes_legacy_output_directory():
+    from qea.verifiers.qfbench import prepare_offline_verifier_script
+
+    official = '''#!/bin/bash
+uvx -p 3.11 -w pytest==8.4.1 pytest /tests/test_outputs.py
+'''
+
+    offline = prepare_offline_verifier_script(official)
+
+    assert 'export OUTPUT_DIR="/app/output"' in offline
 
 
 def test_offline_verifier_script_rejects_unknown_installer_rewrite():

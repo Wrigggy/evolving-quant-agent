@@ -1029,7 +1029,9 @@ class SandboxQFBenchVerifier:
                     "official_sha256": official_sha256,
                     "executed_sha256": executed_sha256,
                     "offline_transformed": True,
-                    "transformation": "remove-known-pinned-uv-bootstrap-only",
+                    "transformation": (
+                        "remove-known-pinned-uv-bootstrap-and-set-output-dir"
+                    ),
                     "dependency_lock_sha256": dependency_sha256,
                 },
             )
