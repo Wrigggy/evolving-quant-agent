@@ -68,6 +68,9 @@ def materialize_probe_public_root(
         seed is not None and (not seed.is_file() or seed.is_symlink())
     ):
         raise QuantCodeEvalRepairProbeError("probe public inputs are missing")
+    source_instruction = source / "instruction.md"
+    if not source_instruction.is_file():
+        raise QuantCodeEvalRepairProbeError("probe public task instruction is missing")
     data_source = source / "environment" / "data"
     data_target = target / "environment" / "data"
     data_target.parent.mkdir(parents=True, exist_ok=True)
@@ -77,7 +80,16 @@ def materialize_probe_public_root(
     instruction = worker_instruction if worker_instruction is not None else _PROBE_INSTRUCTION
     if not isinstance(instruction, str) or not instruction.strip():
         raise QuantCodeEvalRepairProbeError("probe Worker instruction is empty")
-    (target / "instruction.md").write_text(instruction.strip() + "\n", encoding="utf-8")
+    public_instruction = source_instruction.read_text(encoding="utf-8").strip()
+    if not public_instruction:
+        raise QuantCodeEvalRepairProbeError("probe public task instruction is empty")
+    combined = (
+        public_instruction
+        + "\n\n## Evolver-authored Worker experiment directive\n\n"
+        + instruction.strip()
+        + "\n"
+    )
+    (target / "instruction.md").write_text(combined, encoding="utf-8")
     return target_root
 
 

@@ -17,9 +17,11 @@ def test_materializes_same_budget_worker_and_public_seed(tmp_path: Path):
     (worker / "agent.yaml").write_text("type: agent\nmax_iterations: 60\n")
     (worker / "systemprompt.md").write_text("work\n")
     public = tmp_path / "public"
-    data = public / "tasks/T26/environment/data"
+    task = public / "tasks/T26"
+    data = task / "environment/data"
     data.mkdir(parents=True)
     (data / "paper.md").write_text("public\n")
+    (task / "instruction.md").write_text("# Official T26 contract\n\nKeep this.\n")
     seed = tmp_path / "strategy.py"
     seed.write_text("VALUE = 1\n")
 
@@ -31,6 +33,8 @@ def test_materializes_same_budget_worker_and_public_seed(tmp_path: Path):
     assert "max_iterations: 9" in (copied / "agent.yaml").read_text()
     assert (overlay / "tasks/T26/environment/data/probe_seed_strategy.py").read_text() == "VALUE = 1\n"
     instruction = (overlay / "tasks/T26/instruction.md").read_text()
+    assert instruction.startswith("# Official T26 contract\n\nKeep this.")
+    assert "## Evolver-authored Worker experiment directive" in instruction
     assert "pre-staged at\n`/app/output/strategy.py`" in instruction
     assert "matrix/row-shape mismatch" in instruction
     assert "checker code" in instruction
@@ -46,9 +50,13 @@ def test_rejects_missing_iteration_field(tmp_path: Path):
 
 def test_materializes_evolver_authored_from_scratch_probe(tmp_path: Path):
     public = tmp_path / "public"
-    data = public / "tasks/T26/environment/data"
+    source_task = public / "tasks/T26"
+    data = source_task / "environment/data"
     data.mkdir(parents=True)
     (data / "paper.md").write_text("public\n")
+    (source_task / "instruction.md").write_text(
+        "# Official interface\n\n- Save seven required functions.\n"
+    )
 
     overlay = materialize_probe_public_root(
         public,
@@ -60,9 +68,27 @@ def test_materializes_evolver_authored_from_scratch_probe(tmp_path: Path):
 
     task = overlay / "tasks/T26"
     assert not (task / "environment/data/probe_seed_strategy.py").exists()
-    assert (task / "instruction.md").read_text() == (
+    instruction = (task / "instruction.md").read_text()
+    assert instruction.startswith(
+        "# Official interface\n\n- Save seven required functions.\n\n"
+    )
+    assert instruction.endswith(
         "Build strategy.py from the public task and run a smoke.\n"
     )
+
+
+def test_rejects_probe_overlay_without_official_instruction(tmp_path: Path):
+    public = tmp_path / "public"
+    (public / "tasks/T26/environment/data").mkdir(parents=True)
+
+    with pytest.raises(QuantCodeEvalRepairProbeError, match="instruction is missing"):
+        materialize_probe_public_root(
+            public,
+            tmp_path / "overlay",
+            task_id="T26",
+            seed_strategy=None,
+            worker_instruction="Run the bounded probe.",
+        )
 
 
 def test_comparison_separates_probe_benefit_from_benchmark_claim():

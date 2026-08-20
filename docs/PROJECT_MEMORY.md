@@ -2811,3 +2811,26 @@ result total omitted H0 and probe numeric-string costs; the parser was repaired
 without changing the run outcome. Round two also lacked the round-one
 prediction record, so it could react to the observation but not explicitly
 compare prediction with outcome. Repair that handoff before an AP-3 repeat.
+
+### 2026-08-20 AP-3 run-local activation-probe repair
+
+AP-3 r3's missing artifact is now source-localized more precisely. The candidate
+registered and advertised its artifact checker, but the probe overlay replaced
+the complete public T26 instruction with the Evolver's short directive. The
+twelve-iteration from-scratch Worker consequently spent its eleven requests
+reconstructing the task from paper and data, produced no artifact, and never
+reached the checker's near-completion activation state.
+
+The superseding `quantcodeeval-ap3-v2` intermediate experiment is a short
+run-local activation/repair probe. It preserves the complete official public
+instruction, appends the Evolver directive, and pre-stages only the fresh H0
+artifact produced inside the same AP-3 run. Round two receives the original H0
+artifact, the probe output when delivered, the round-one prediction, and the
+actual observation. Historical artifacts and answers remain excluded.
+
+The normal-budget no-seed Worker remains a separate formal final candidate
+evaluation after admission and the cost gate. Seeded probe behavior cannot be
+reported as a fresh benchmark result. Focused local validation passed 27 tests;
+no paid/model/official evaluation has yet exercised v2. Full rationale and
+claim boundary:
+`docs/decisions/2026-08-20-ap3-run-local-activation-probe.md`.
