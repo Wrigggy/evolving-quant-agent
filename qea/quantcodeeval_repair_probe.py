@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 from typing import Mapping
@@ -134,6 +135,45 @@ def _read_answer_free(attempt_dir: Path) -> dict[str, object]:
     return {"evidence_status": "missing"}
 
 
+def _trace_tool_usage(attempt_dir: Path) -> dict[str, object]:
+    """Summarize observable Worker tool selection without evaluator details."""
+
+    trace = attempt_dir / "raw-trace.jsonl"
+    counts: Counter[str] = Counter()
+    first_turn: dict[str, int] = {}
+    sequence: list[dict[str, object]] = []
+    assistant_turn = 0
+    if not trace.is_file():
+        return {"counts": {}, "first_assistant_turn": {}, "sequence": []}
+    for raw_line in trace.read_text(encoding="utf-8").splitlines():
+        try:
+            message = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(message, Mapping) or message.get("role") != "assistant":
+            continue
+        assistant_turn += 1
+        content = message.get("content")
+        if not isinstance(content, str):
+            continue
+        for raw_call in re.findall(r"<ToolUse>(.*?)</ToolUse>", content, re.DOTALL):
+            try:
+                call = json.loads(raw_call)
+            except json.JSONDecodeError:
+                continue
+            name = call.get("name") if isinstance(call, Mapping) else None
+            if not isinstance(name, str) or not name:
+                continue
+            counts[name] += 1
+            first_turn.setdefault(name, assistant_turn)
+            sequence.append({"assistant_turn": assistant_turn, "tool_name": name})
+    return {
+        "counts": dict(sorted(counts.items())),
+        "first_assistant_turn": dict(sorted(first_turn.items())),
+        "sequence": sequence,
+    }
+
+
 def run_probe_arm(
     *,
     label: str,
@@ -226,6 +266,7 @@ def run_probe_arm(
         "terminal_attempt_id": attempt_dir.name,
         "score": asdict(score),
         "worker_summary": dict(worker_summary),
+        "tool_usage": _trace_tool_usage(attempt_dir),
         "answer_free_evidence": _read_answer_free(attempt_dir),
         "cost": cost,
         "artifact": str(attempt_dir / "artifacts" / "strategy.py"),

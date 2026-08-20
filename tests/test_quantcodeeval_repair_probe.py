@@ -5,10 +5,38 @@ import pytest
 
 from qea.quantcodeeval_repair_probe import (
     QuantCodeEvalRepairProbeError,
+    _trace_tool_usage,
     compare_probe_arms,
     materialize_probe_public_root,
     materialize_probe_worker,
 )
+
+
+def test_summarizes_named_worker_tool_calls(tmp_path: Path):
+    attempt = tmp_path / "attempt"
+    attempt.mkdir()
+    messages = [
+        {"role": "assistant", "content": '<ToolUse>{"input":{},"name":"run_shell_command"}</ToolUse>'},
+        {"role": "tool", "content": "ok"},
+        {
+            "role": "assistant",
+            "content": (
+                '<ToolUse>{"input":{"relations":[]},"name":"check_quant_relations"}</ToolUse>'
+                '<ToolUse>{"input":{},"name":"run_shell_command"}</ToolUse>'
+            ),
+        },
+    ]
+    (attempt / "raw-trace.jsonl").write_text(
+        "\n".join(json.dumps(message) for message in messages) + "\n"
+    )
+
+    usage = _trace_tool_usage(attempt)
+
+    assert usage["counts"] == {
+        "check_quant_relations": 1,
+        "run_shell_command": 2,
+    }
+    assert usage["first_assistant_turn"]["check_quant_relations"] == 2
 
 
 def test_materializes_same_budget_worker_and_public_seed(tmp_path: Path):
