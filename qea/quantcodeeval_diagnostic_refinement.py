@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Mapping
 
-from .quantcodeeval_ap2m import _cost, _write_result
+from .quantcodeeval_ap2m import _write_result
 from .quantcodeeval_ap3 import require_ap3_run_local_probe
 from .quantcodeeval_repair_probe import run_probe_arm
 from .quantcodeeval_v2_live import run_quantcodeeval_v2_activation_canary
@@ -14,6 +14,19 @@ from .quantcodeeval_v2_live import run_quantcodeeval_v2_activation_canary
 
 class QuantDiagnosticRefinementError(ValueError):
     """The diagnostic-refinement canary setup or decision is incomplete."""
+
+
+def _cost(value: Mapping[str, object] | None) -> float:
+    if not isinstance(value, Mapping):
+        return 0.0
+    raw = value.get("provider_cost_usd")
+    if isinstance(raw, bool):
+        return 0.0
+    try:
+        parsed = float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+    return parsed if parsed >= 0 else 0.0
 
 
 def _json_object(path: str | Path, *, label: str) -> dict[str, object]:
