@@ -153,6 +153,20 @@ observed, and target state plus a concrete transition observable. The state
 transition should narrow component search; it must not predetermine whether the
 right intervention is a prompt, tool, memory, validator, middleware, routing,
 or another harness role.
+Treat activation as part of the intervention whenever a callable component
+depends on the Worker choosing it. Registration and a finalization reminder do
+not by themselves establish an activation path. Use the observed trajectory to
+choose a task-conditioned trigger. In a repair experiment where an artifact is
+already present, make the Worker decide applicability and, when applicable,
+invoke the component after a bounded contract-and-artifact inventory and before
+broad background research; do not defer the first possible call only to
+"before finalizing." Predict the first observable component call and whether
+its output should change the Worker's next action. If prompt or tool-description
+routing has already failed, a one-shot middleware or routing checkpoint may
+surface the applicable component, but it must not manufacture task-specific
+arguments or force an inapplicable operation. An explicit evidence-grounded
+skip is valid. Include `systemprompt`, `middleware`, or `routing` in
+`components` whenever that activation surface actually changes.
 When `contract.json` sets `autonomous_probe_required: true`, an ACT must also
 include `experiment_spec`. You—not the coordinator—choose `repair` versus
 `from_scratch`, an authorized named seed experience or none, the Worker

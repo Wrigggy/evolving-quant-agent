@@ -2931,3 +2931,26 @@ $0.005077364 and $0.013176676. Corrected total cost was $0.205036752. Retain the
 candidate and negative trajectories as experience, but do not label the
 component Worker-helpful or benchmark-helpful. Full result and boundary:
 `docs/decisions/2026-08-20-qdr1-quant-diagnostic-refinement-result.md`.
+
+### 2026-08-20 activation-first route before selective scheduling
+
+The complete progressive/selective multi-task scheduler remains deferred. The
+next bounded mechanism changes activation timing and tool selection only. QDR-1
+already registered the quant-relations tool and mentioned it in both the Worker
+prompt and the Evolver-authored directive, but both framed the first call as a
+late "before finalizing" action. The retained six- and ten-iteration Workers
+spent their turns on the public contract, paper, and existing artifact and
+never reached that checkpoint. Late timing and call complexity are therefore
+leading, not yet proven, causes.
+
+For the next candidate, the Evolver must treat activation as part of the same
+component intervention. With an existing repair artifact, it should provide an
+early task-conditioned trigger after a bounded contract/artifact inventory and
+before broad background research, and predict both the first component call
+and the Worker's next action. Do not hard-code the T26 tool or relation payload
+in the coordinator. If prompt/tool-description routing fails again, test one
+generic one-shot middleware or routing reminder before considering automatic
+audit execution. Measure registration, actual call, decision-changing output,
+artifact change, and official outcome separately. Full rationale and the later
+scheduler boundary are in
+`docs/decisions/2026-08-20-activation-first-before-selective-scheduler.md`.

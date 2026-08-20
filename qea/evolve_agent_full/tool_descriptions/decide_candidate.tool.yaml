@@ -145,7 +145,7 @@ input_schema:
           additionalProperties: true
         experiment_spec:
           type: object
-          description: Required only when the evidence contract requests an autonomous Worker probe. The Evolver chooses the mode, optional authorized seed experience, instruction, bounded iteration budget, prediction, and observation that would change the next decision.
+          description: Required only when the evidence contract requests an autonomous Worker probe. The Evolver chooses the mode, optional authorized seed experience, instruction, bounded iteration budget, prediction, and observation that would change the next decision. When the candidate adds a callable component, make the instruction and prediction identify its task-conditioned activation timing and observable; a repair with an existing artifact should not defer the first applicable call only to finalization.
           properties:
             mode:
               type: string
