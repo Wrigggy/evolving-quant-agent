@@ -72,9 +72,11 @@ AP-3 r5 & Cold Quant-$H_0$ feedback loop & H0
 ABSTAIN & \APThreeRfiveStatus{} & Full bounded autonomy feasibility; no
 artifact change, helpful candidate, final Worker, or benchmark gain \\
 
-MT-1 & Two-task state/mechanism coordination & Two real QFBench trajectories;
-one-probe contract; zero model calls & \MTOneStatus{} & Evidence-routing
-preflight only; no autonomous selection, Worker, or benchmark claim \\
+MT-1 & Two-task state/mechanism coordination & Evolver REFINE; fresh target
+\MTOneTargetComparator{} $\rightarrow$ \MTOneTargetCandidate{}; protection
+\MTOneProtectionComparator{} $\rightarrow$ \MTOneProtectionCandidate{} &
+\MTOneStatus{} & Local activated-component existence result; protection failed,
+so no promotion, stable-transfer, or benchmark-wide claim \\
 
 Frozen final & Sealed benchmark outcome & No feedback to Evolver &
 \FrozenFinalStatus{} & Required for paper-level performance claim \\

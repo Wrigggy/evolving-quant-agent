@@ -1,22 +1,32 @@
 # QEA Repository Memory
 
-## 2026-08-21 parallel multi-task pair canary
+## 2026-08-21 coordinated local-vol result
 
-The next bounded breadth experiment is a fixed three-pair panel, not an
-open-ended scheduler. Each isolated Evolver sees two answer-free QFBench
-trajectories, must cite both, name a concrete shared quant mechanism, and may
-dispatch exactly one seedless target Worker probe. The fixed pairs cover rates
-curve/repricing, adjusted-price event timing, and forward-consistent option
-surfaces. All three outcomes remain in the denominator and the result is
-reported as `x/3`; a winner is selected on this pilot and is not an unbiased
-performance estimate.
+The bounded multi-task route now has one local binary target gain, but the
+candidate failed protection and is not promoted. Corrected evaluator replay
+invalidated the original rates and corporate-action low-score screens, then
+identified a nearby derivatives pair: `dupire-local-vol` at 67/68, reward 0,
+and `localvol-barrier` at 38/39, reward 0.96.
 
-The no-model preflight materialized all three views from retained evidence and
-passed 181 focused tests. Live Evolver selection, candidate admission,
-activation, target improvement, Fresh Quant-H0 comparison, and conditional
-protection remain pending. See the
-[parallel-pair decision](decisions/2026-08-21-parallel-multi-task-pair-canary.md)
-and [preflight record](../data/breadth/MT_PARALLEL_PAIR_PREFLIGHT_RESULT.json).
+The Evolver autonomously synthesized `validate_surface_artifacts`, then used a
+failed short probe as persisted runtime feedback to select `REFINE` and modify
+the system prompt, tool description, and executable validator. Both bounded
+10/12-request probes ended before artifact delivery or component activation.
+An experimenter-arranged normal-budget fresh confirmation of the frozen r3
+candidate subsequently called the component five times and improved
+`dupire-local-vol` to 68/68, reward 1. The unchanged candidate called the
+component three times on `localvol-barrier` but regressed to 36/39, reward
+0.92. This establishes a bounded local chain from autonomous component
+refinement to fresh activation and official binary gain; it does not establish
+stable transfer, pair-level promotion, or benchmark-wide improvement.
+
+The normal-budget target needed 50 Worker turns, while the short probes never
+reached delivery. The next mechanism problem is therefore joint completion and
+stopping efficiency plus protection-aware scope refinement, not immediate
+full-panel scheduling. See the
+[measured decision](decisions/2026-08-21-qfbench-coordinated-localvol-result.md),
+[compact result](../data/breadth/MT_LOCALVOL_R3_RESULT.json), and the earlier
+[parallel-pair design](decisions/2026-08-21-parallel-multi-task-pair-canary.md).
 
 > Canonical research and architecture memory for future contributors and agents.
 > Last updated: 2026-08-21. This file records current decisions, not merely historical discussion.
@@ -3089,19 +3099,19 @@ coordination. The campaign used 69 completed requests and $0.228217836 with no
 rate-limit retry or coordinator restart. Full record:
 `docs/decisions/2026-08-20-ap3-r5-h0-autonomy-result.md`.
 
-### 2026-08-20 MT-1 bounded multi-task coordination preflight
+### 2026-08-21 MT-1 coordinated local-vol result
 
-The next breadth step is a two-task coordination canary, not the deferred full
-scheduler. The initial pair is QFBench `zero-coupon-bootstrapping` (target,
-retained 1/6) and `swap-curve-bootstrap-ois` (protection, retained 17/19).
-Both share a concrete curve-construction and repricing object. T26 remains a
-cross-benchmark reserve because a broad Research-State overlap does not prove
-the same failure mechanism.
+The original curve pair was superseded after evaluator repairs and zero-model
+replay showed that its low scores were integration artifacts. On the corrected
+`dupire-local-vol`/`localvol-barrier` pair, the Evolver autonomously built and
+then feedback-refined an executable surface-artifact validator. A normal-budget
+fresh target Worker invoked it five times and improved from 67/68, reward 0 to
+68/68, reward 1. The unchanged candidate invoked it three times on protection
+but regressed from 38/39, reward 0.96 to 36/39, reward 0.92.
 
-The coordinated view requires a concrete shared-mechanism assessment and
-exactly one selected Worker probe. Other tasks remain contrast trajectories
-until an official target improvement. A no-model preflight materialized both
-real answer-free trajectories and six advisory component cards, with all
-focused tests passing and zero provider cost. Live Evolver selection and
-benchmark dispatch remain pending. Full design:
-`docs/decisions/2026-08-20-mt1-two-task-coordination-canary.md`.
+This is a measured local activated-component and binary-gain result, not a
+promoted pair or stable-transfer result. The short autonomous probes ended
+before artifact delivery; the successful confirmation needed 50 turns. Next
+work should refine completion/stopping and component scope before broad
+scheduling. Full result:
+`docs/decisions/2026-08-21-qfbench-coordinated-localvol-result.md`.

@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-21",
+  "status": "complete_with_protection_regression",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "task_pair": [
+    "dupire-local-vol",
+    "localvol-barrier"
+  ],
+  "corrected_comparators": {
+    "dupire-local-vol": {
+      "tests_passed": 67,
+      "tests_failed": 1,
+      "reward": 0.0
+    },
+    "localvol-barrier": {
+      "tests_passed": 38,
+      "tests_failed": 1,
+      "reward": 0.96
+    }
+  },
+  "autonomous_refinement": {
+    "run_id": "mtpair-localvol-calibration-feedback-20260821-r3",
+    "decision": "ACT",
+    "search_operator": "REFINE",
+    "history_used": true,
+    "changed_files": [
+      "systemprompt.md",
+      "tool_descriptions/validate_surface_artifacts.tool.yaml",
+      "tools/validate_surface_artifacts.py"
+    ],
+    "probe": {
+      "task_id": "dupire-local-vol",
+      "max_iterations": 12,
+      "completed_requests": 11,
+      "component_calls": 0,
+      "artifact_count": 0,
+      "tests_passed": 0,
+      "tests_failed": 7,
+      "reward": 0.0
+    },
+    "campaign_cost": {
+      "completed_requests": 35,
+      "known_tokens": 1924715,
+      "known_cost_usd": 0.096348284,
+      "missing_usage_records": 1
+    },
+    "interpretation": "The Evolver used the prior probe failure to change execution-completion behavior and the executable validator. The bounded 12-request probe still ended before artifact delivery or component activation."
+  },
+  "fresh_target_confirmation": {
+    "run_id": "qfbench-localvol-r3-full-confirm-20260821-r1",
+    "arrangement": "experimenter-dispatched frozen candidate at its normal Worker budget",
+    "tests_passed": 68,
+    "tests_failed": 0,
+    "reward": 1.0,
+    "worker_turns": 50,
+    "worker_tool_calls": 50,
+    "component_calls": 5,
+    "artifacts": 8,
+    "seconds": 1947.288,
+    "cost": {
+      "completed_requests": 60,
+      "total_tokens": 3578594,
+      "known_cost_usd": 0.096793984,
+      "provider_cost_is_lower_bound": true,
+      "infrastructure_replacements": 2,
+      "replacement_reason": "post_accept_transport"
+    }
+  },
+  "protection": {
+    "run_id": "qfbench-localvol-r3-protection-20260821-r1",
+    "arrangement": "experimenter-dispatched unchanged frozen candidate at its normal Worker budget",
+    "tests_passed": 36,
+    "tests_failed": 3,
+    "reward": 0.92,
+    "component_calls": 3,
+    "failure_areas": [
+      "two interior local-vol values",
+      "local-vol Monte Carlo vanilla-price consistency"
+    ],
+    "cost": {
+      "completed_requests": 52,
+      "total_tokens": 5686821,
+      "cost_usd": 0.1513993,
+      "cost_complete": true
+    }
+  },
+  "conclusion": {
+    "autonomous_component_refinement_observed": true,
+    "fresh_worker_component_activation_observed": true,
+    "official_binary_target_gain_observed": true,
+    "protection_floor_passed": false,
+    "candidate_promoted": false,
+    "claim": "The run establishes a bounded local existence result: autonomous runtime-conditioned harness refinement can produce an activated component and an official binary gain on a fresh target Worker. The protection regression rejects stable matched-task reuse for this candidate."
+  },
+  "artifact_roots": [
+    "/data/qea-julius-storage/runs/mtpair-localvol-calibration-feedback-20260821-r3",
+    "/data/qea-julius-storage/runs/qfbench-localvol-r3-full-confirm-20260821-r1",
+    "/data/qea-julius-storage/runs/qfbench-localvol-r3-protection-20260821-r1"
+  ]
+}
