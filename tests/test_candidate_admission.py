@@ -232,6 +232,21 @@ def test_rejects_protected_config_changes(tmp_path, old, new, field):
         admit_candidate(seed, candidate, AdmissionPolicy.qfbench_full())
 
 
+def test_allows_agent_name_to_track_the_evolved_worker_role(tmp_path):
+    from qea.candidate_admission import AdmissionPolicy, admit_candidate
+
+    seed, candidate = _seed_candidate(tmp_path)
+    path = candidate / "agent.yaml"
+    path.write_text(path.read_text().replace(
+        "name: qea_gdpval_worker_weak",
+        "name: qea_quant_research_worker",
+    ))
+
+    record = admit_candidate(seed, candidate, AdmissionPolicy.qfbench_full())
+
+    assert record.admitted is True
+
+
 def test_rejects_symlink_and_secret_like_file(tmp_path):
     from qea.candidate_admission import (
         AdmissionPolicy,

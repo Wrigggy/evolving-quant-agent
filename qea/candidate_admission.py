@@ -22,7 +22,6 @@ _LOCAL_PYTHON_ROOTS = frozenset({
 })
 _PROTECTED_FIELDS = (
     "type",
-    "name",
     "max_context_tokens",
     "system_prompt",
     "system_prompt_type",
