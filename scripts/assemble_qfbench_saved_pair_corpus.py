@@ -25,7 +25,22 @@ def _write_json(path: Path, payload: object) -> None:
     )
 
 
-def _saved_attempt(source_run: Path, task_id: str) -> Path:
+def _saved_attempt(
+    source_run: Path,
+    task_id: str,
+    *,
+    attempt_id: str | None = None,
+) -> Path:
+    if attempt_id is not None:
+        attempt = source_run / "attempts" / attempt_id
+        attempt_payload = _json(attempt / "attempt.json")
+        if attempt_payload.get("task_id") != task_id:
+            raise ValueError(
+                f"saved attempt {attempt_id} does not belong to {task_id}"
+            )
+        if not (attempt / "worker-execution.json").is_file():
+            raise ValueError(f"saved attempt {attempt_id} has no Worker trajectory")
+        return attempt
     for attempt_path in sorted((source_run / "attempts").glob("*/attempt.json")):
         if _json(attempt_path).get("task_id") != task_id:
             continue
@@ -38,6 +53,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-corpus", type=Path, required=True)
     parser.add_argument("--source-run", type=Path, required=True)
+    parser.add_argument(
+        "--attempt-id",
+        help="Select a previously reviewed attempt instead of the first saved trajectory.",
+    )
     parser.add_argument("--public-root", type=Path, required=True)
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--add-task", required=True)
@@ -86,7 +105,11 @@ def main(argv: list[str] | None = None) -> int:
         existing_card,
     )
 
-    attempt = _saved_attempt(args.source_run.expanduser().resolve(), args.add_task)
+    attempt = _saved_attempt(
+        args.source_run.expanduser().resolve(),
+        args.add_task,
+        attempt_id=args.attempt_id,
+    )
     execution = _json(attempt / "worker-execution.json")
     artifact_dir = attempt / str(execution.get("artifact_dir", "artifacts"))
     trace = attempt / str(execution.get("trace_uri", "raw-trace.jsonl"))
@@ -159,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
             "protocol": "saved_qfbench_pair_corpus",
             "base_corpus": str(args.base_corpus),
             "source_run": str(args.source_run),
+            "attempt_id": attempt.name,
             "added_task": args.add_task,
             "existing_task": args.existing_task,
             "worker_model_requests": 0,

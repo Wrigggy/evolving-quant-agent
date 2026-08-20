@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "task_id": "fx-forward-cross-rate",
+  "tests_passed": 36,
+  "tests_failed": 1,
+  "official_reward": 0.0,
+  "verifier_exit_code": 0,
+  "diagnostic_tags": ["tests_failed"],
+  "provenance": "official score from zero-model replay with the corrected QFBench runtime"
+}

@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "stage": "COORDINATED_BREADTH",
+  "purpose": "three independent bounded Evolver searches over corrected quant-research trajectories",
+  "tasks": [
+    {
+      "benchmark": "qfbench",
+      "task_id": "fx-forward-cross-rate",
+      "role": "target",
+      "domain": "fx_research",
+      "state_tags": ["market_convention", "carry_basis", "pnl_reconciliation"],
+      "baseline": {"tests_passed": 36, "tests_failed": 1, "reward": 0.0}
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "crypto-funding-rate-basis-carry",
+      "role": "protection",
+      "domain": "fx_research",
+      "state_tags": ["market_convention", "carry_basis", "pnl_reconciliation"],
+      "baseline": {"tests_passed": 63, "tests_failed": 0, "reward": 1.0}
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "13f-amendment-aware-crowding",
+      "role": "target",
+      "domain": "point_in_time_data",
+      "state_tags": ["effective_state", "entity_lineage", "summary_reconciliation"],
+      "baseline": {"tests_passed": 46, "tests_failed": 5, "reward": 0.0}
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "fomc-tone-event-study",
+      "role": "protection",
+      "domain": "point_in_time_data",
+      "state_tags": ["effective_state", "event_time", "lookahead_control"],
+      "baseline": {"tests_passed": 20, "tests_failed": 0, "reward": 1.0}
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "dupire-local-vol",
+      "role": "target",
+      "domain": "derivatives",
+      "state_tags": ["option_surface", "parameter_admissibility", "numerical_consistency"],
+      "baseline": {"tests_passed": 67, "tests_failed": 1, "reward": 0.0}
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "variance-swap-replication",
+      "role": "protection",
+      "domain": "derivatives",
+      "state_tags": ["option_surface", "strike_integration", "numerical_consistency"],
+      "baseline": {"tests_passed": 17, "tests_failed": 0, "reward": 1.0}
+    }
+  ],
+  "pairs": [
+    {
+      "pair_id": "carry_basis_reconciliation",
+      "target_task_key": "qfbench:fx-forward-cross-rate",
+      "protection_task_key": "qfbench:crypto-funding-rate-basis-carry",
+      "predeclared_shared_object": "signed carry and basis quantities reconciled across quote convention, tenor, trade PnL, and portfolio exposure",
+      "target_screen": {"tests_passed_strictly_greater_than": 36},
+      "protection_floor": {"tests_passed_at_least": 63}
+    },
+    {
+      "pair_id": "point_in_time_state_lineage",
+      "target_task_key": "qfbench:13f-amendment-aware-crowding",
+      "protection_task_key": "qfbench:fomc-tone-event-study",
+      "predeclared_shared_object": "effective-dated research state propagated without lookahead into downstream tables and summaries",
+      "target_screen": {"tests_passed_strictly_greater_than": 46},
+      "protection_floor": {"tests_passed_at_least": 20}
+    },
+    {
+      "pair_id": "option_surface_contract",
+      "target_task_key": "qfbench:dupire-local-vol",
+      "protection_task_key": "qfbench:variance-swap-replication",
+      "predeclared_shared_object": "an admissible option surface reconciled across quote cleaning, implied volatility, differentiation, and strike integration",
+      "target_screen": {"tests_passed_strictly_greater_than": 67},
+      "protection_floor": {"tests_passed_at_least": 17}
+    }
+  ],
+  "limits": {
+    "max_worker_probes_per_pair_before_target_screen": 1,
+    "max_evolver_rounds_per_pair": 1,
+    "max_provider_cost_usd": 0.30,
+    "max_relevant_components_per_task": 4
+  },
+  "claim_boundary": "Bounded multi-task mechanism canary; not a benchmark-wide or stability result."
+}
