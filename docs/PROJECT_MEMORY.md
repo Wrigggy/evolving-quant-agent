@@ -3007,3 +3007,27 @@ This measures the full seeded causal chain from early activation through
 official property gain. It is not a fresh-Worker, repeat, protection, transfer,
 sealed-test, binary-gain, or end-to-end-autonomous-search result. Full record:
 `docs/decisions/2026-08-20-qdr1-causal-probe-pv2-result.md`.
+
+### 2026-08-20 QDR-1 fresh T26 confirmation
+
+The retained QDR-1 r2 harness was next tested with one answer-blind T26 Worker
+starting only from the public task, data, and paper text; no strategy seed was
+staged. The Worker wrote a parsable draft on assistant turn ten and called
+`check_quant_relations` on turn twelve, before the generic middleware fallback
+configured for turn twenty-four. The first audit realized 2/6 declared
+relations and returned four errors and four warnings. After revising the
+artifact, the Worker re-audited on turn fifteen with 6/6 relations realized,
+zero errors or warnings, and zero measured truncation residual.
+
+The fresh artifact scored 15/17 with reward zero versus the retained fresh
+Quant-H0 comparison at 12/17. A3, B3, B5, and B9 became passing, while B7
+regressed, for a net gain of three properties. This is measured fresh-trajectory
+and property-gain evidence, not monotone improvement, a repeat, transfer,
+sealed-test result, binary gain, or end-to-end H0 Evolver result.
+
+The run used 40 completed requests, 2,619,722 tokens, 767.525 Worker seconds,
+and $0.182935552 with no rate-limit retry. The Worker first declared completion
+on turn twenty-seven, but completion middleware continued through turn forty.
+Treat that terminal overrun as a measured efficiency defect before multi-task
+scaling. Full record:
+`docs/decisions/2026-08-20-qdr1-fresh-t26-confirmation-result.md`.

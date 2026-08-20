@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-20",
+  "run_id": "qce-t26-qdr1-fresh-confirmation-20260820-r1",
+  "task_id": "T26",
+  "protocol": "quantcodeeval-fresh-harness-confirmation-v1",
+  "source_candidate": "retained QDR-1 component-impact r2 harness with generic phase fallback",
+  "seed_strategy_present": false,
+  "worker_visibility": "public task, public data, paper text, shell, and candidate component; no checker answers",
+  "baseline": {
+    "name": "fresh Quant-H0 from AP-3 r3",
+    "tests_passed": 12,
+    "tests_total": 17,
+    "reward": 0
+  },
+  "fresh_result": {
+    "tests_passed": 15,
+    "tests_total": 17,
+    "reward": 0,
+    "net_property_delta": 3,
+    "newly_passing": [
+      "A3",
+      "B3",
+      "B5",
+      "B9"
+    ],
+    "newly_failing": [
+      "B7"
+    ]
+  },
+  "trajectory": {
+    "completed_requests": 40,
+    "first_draft_assistant_turn": 10,
+    "first_component_call_assistant_turn": 12,
+    "configured_fallback_turn": 24,
+    "component_calls": 6,
+    "first_audit": {
+      "relations": 6,
+      "realized": 2,
+      "errors": 4,
+      "warnings": 4
+    },
+    "first_clean_reaudit_assistant_turn": 15,
+    "clean_reaudit": {
+      "relations": 6,
+      "realized": 6,
+      "errors": 0,
+      "warnings": 0,
+      "max_truncation_residual": 0
+    },
+    "artifact_delivered": true,
+    "terminal_overrun_observed": true,
+    "terminal_overrun_note": "The Worker declared completion at turn 27, but completion middleware requested additional post-observation transitions through turn 40. These calls were not needed to establish the first clean re-audit or initial completion."
+  },
+  "cost": {
+    "usd": 0.182935552,
+    "input_tokens": 2536895,
+    "output_tokens": 82827,
+    "total_tokens": 2619722,
+    "rate_limit_retries": 0,
+    "worker_seconds": 767.525
+  },
+  "status": "fresh_property_gain_with_one_regression",
+  "interpretation": "The retained harness changed a no-seed, answer-blind Worker trajectory and produced a net official property gain. Component activation occurred before the middleware fallback, and the Worker used the first audit to edit and cleanly re-audit the artifact.",
+  "claim_boundary": "Single fresh optimize-task run. It is not a repeat, transfer, sealed evaluation, binary reward gain, or end-to-end Quant-H0 Evolver search.",
+  "artifact_location": "results/bc-mirror/qce-t26-qdr1-fresh-confirmation-20260820-r1/"
+}
