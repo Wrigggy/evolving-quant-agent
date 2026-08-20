@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "run_id": "qce-t26-ap3-v2-intermediate-activation-20260820-r1",
+  "protocol": "quantcodeeval-paired-runtime-repair-probe-v1",
+  "task_id": "T26",
+  "experiment_role": "bounded_intermediate_component_activation",
+  "source_commits": {
+    "ap3_probe_repair": "dbb5db8",
+    "single_probe_runner": "3a742c1"
+  },
+  "inputs": {
+    "seed_run": "qce-t26-ap3-20260820-r3",
+    "seed_kind": "same_run_fresh_quant_h0_artifact",
+    "seed_score": {
+      "tests_passed": 12,
+      "tests_failed": 5,
+      "reward": 0.0
+    },
+    "worker_candidate": "round-1/evolutions/iteration-0001/candidate",
+    "max_iterations": 8
+  },
+  "worker": {
+    "outcome": "completed",
+    "artifact_delivered": true,
+    "seconds": 40.996,
+    "turns": 7,
+    "tool_calls": 10,
+    "tool_errors": 3,
+    "component_invoked": true,
+    "component_invocation_count": 1,
+    "component_result_ok": true,
+    "component_findings": {
+      "errors": 0,
+      "warnings": 7,
+      "infos": 1
+    },
+    "component_called_on_last_model_request": true,
+    "post_component_reconciliation_turn": false,
+    "artifact_changed_from_seed": false,
+    "terminal_text": "Maximum iteration limit reached."
+  },
+  "official_result": {
+    "tests_passed": 12,
+    "tests_failed": 5,
+    "reward": 0.0,
+    "type_a_passed": 5,
+    "type_a_failed": 2,
+    "type_b_passed": 7,
+    "type_b_failed": 3
+  },
+  "cost": {
+    "completed_requests": 7,
+    "input_tokens": 109851,
+    "output_tokens": 3259,
+    "total_tokens": 113110,
+    "provider_cost_usd": 0.015230112,
+    "rate_limited_retries": 0
+  },
+  "interpretation": {
+    "component_reach": "observed",
+    "component_activation": "observed",
+    "post_audit_state_transition": "not_observed_budget_exhausted",
+    "seeded_repair": "not_observed",
+    "official_gain_over_seed": "none",
+    "next_mechanism_localization": "reserve_at_least_one_model_turn_after_component_audit"
+  },
+  "claim_boundary": "Experimenter-arranged seeded intermediate probe. It establishes component reach and one successful invocation only; it is not autonomous AP-3, a fresh Worker result, a helpful-component result, or a benchmark improvement.",
+  "artifact_location": "results/bc-mirror/qce-t26-ap3-v2-intermediate-activation-20260820-r1/"
+}

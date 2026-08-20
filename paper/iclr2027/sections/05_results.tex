@@ -53,3 +53,12 @@ supports bootstrap-loop feasibility but not component or benchmark benefit.
 
 \Pending{A repaired AP-3 repeat with the round-one prediction handed to round
 two, followed by frozen cross-task/cross-benchmark results.}
+
+\Measured{A separate bounded AP-3 intermediate probe reused the same-run
+Quant-$H_0$ artifact and the round-one candidate. The Worker delivered the
+artifact and invoked the candidate checker once, but did so on its final model
+request. The checker returned normally; the runtime then exhausted its
+iteration budget before a reconciliation or edit turn. The unchanged artifact
+remained \APThreeActivationScore{} with reward zero.} The seven-request probe
+cost \APThreeActivationCost{}. It establishes component reach, not component
+helpfulness or a fresh candidate-harness result.

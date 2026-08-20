@@ -2831,6 +2831,33 @@ actual observation. Historical artifacts and answers remain excluded.
 The normal-budget no-seed Worker remains a separate formal final candidate
 evaluation after admission and the cost gate. Seeded probe behavior cannot be
 reported as a fresh benchmark result. Focused local validation passed 27 tests;
-no paid/model/official evaluation has yet exercised v2. Full rationale and
-claim boundary:
+the bounded intermediate probe described below subsequently exercised v2.
+Full rationale and claim boundary:
 `docs/decisions/2026-08-20-ap3-run-local-activation-probe.md`.
+
+### 2026-08-20 AP-3 v2 intermediate activation r1
+
+The experimenter-arranged, candidate-only T26 probe reused the 12/17 artifact
+from AP-3 r3's fresh Quant-H0 Worker and the autonomous round-one candidate. It
+did not rerun Quant-H0, the Evolver, or the formal no-seed Worker. The complete
+public instruction was preserved and the same-run seed was staged for repair.
+
+The Worker completed seven model requests in 40.996 seconds, delivered
+`strategy.py`, and invoked the candidate's `check_strategy_artifact` once. The
+component returned `ok=true` with zero errors, seven warnings, and one info.
+However, the invocation occurred on the final model request. The eight-
+iteration runtime then terminated before any model turn could reconcile the
+findings, edit the artifact, or invoke the component again. The delivered file
+was unchanged from the seed and the official result remained 12/17, reward
+zero. Thus component reach and invocation are measured, while post-audit state
+transition, seeded repair, component helpfulness, and benchmark gain are not.
+
+The probe used 113,110 tokens across seven completed requests, cost
+$0.015230112, had no rate-limit retry, and left no scoped Docker container or
+network. The retained evidence is
+`results/bc-mirror/qce-t26-ap3-v2-intermediate-activation-20260820-r1/`, with a
+small tracked summary at
+`data/quantcodeeval/AP3_V2_INTERMEDIATE_ACTIVATION_RESULT.json`. The next
+mechanism-localization change should reserve at least one model turn after the
+first audit result; simply lengthening the instruction did not guarantee early
+enough activation.
