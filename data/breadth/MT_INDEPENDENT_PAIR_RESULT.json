@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "experiment": "MT-2 independent quant-mechanism pair breadth canary",
+  "date": "2026-08-21",
+  "status": "complete",
+  "setup": {
+    "backbone": "Quant-H0",
+    "worker_model": "deepseek/deepseek-v4-flash-0731",
+    "evolver_model": "deepseek/deepseek-v4-flash-0731",
+    "independent_pair_count": 4,
+    "candidate_lineages_shared": false,
+    "short_target_probe_budget_max_turns": 12,
+    "normal_budget_confirmation_is_experimenter_arranged": true
+  },
+  "pairs": [
+    {
+      "pair_id": "carry_basis_reconciliation",
+      "search_run_id": "mtevo-carry-basis-20260821-r1",
+      "target": "fx-forward-cross-rate",
+      "protection": "crypto-funding-rate-basis-carry",
+      "evolver_decision": "ABSTAIN",
+      "candidate_created": false,
+      "target_worker_dispatched": false,
+      "requests": 14,
+      "tokens": 728271,
+      "cost_usd": 0.036619116,
+      "interpretation": "The answer-free 36/37 target did not distinguish rounding, valuation-convention, and isolated numeric explanations; the Evolver preserved the non-match."
+    },
+    {
+      "pair_id": "point_in_time_state_lineage",
+      "search_run_id": "mtevo-point-in-time-20260821-r1",
+      "target": "13f-amendment-aware-crowding",
+      "protection": "fomc-tone-event-study",
+      "evolver_decision": "ACT",
+      "candidate_component": "effective-state-reconciliation skill",
+      "candidate_created": true,
+      "short_probe": {
+        "component_activated": true,
+        "files_delivered": 0,
+        "tests_passed": 0,
+        "tests_failed": 11,
+        "reward": 0.0
+      },
+      "normal_budget_target": {
+        "run_id": "qfbench-pointstate-full-confirm-20260821-r2",
+        "retained_comparator_tests_passed": 46,
+        "retained_comparator_tests_failed": 5,
+        "candidate_tests_passed": 50,
+        "candidate_tests_failed": 1,
+        "candidate_reward": 0.0,
+        "property_gain": 4,
+        "component_activated": true,
+        "files_delivered": 8,
+        "turns": 25,
+        "requests": 25,
+        "tokens": 1085988,
+        "cost_usd": 0.046875424
+      },
+      "normal_budget_protection": {
+        "run_id": "qfbench-pointstate-protection-20260821-r1",
+        "retained_comparator_tests_passed": 20,
+        "candidate_tests_passed": 20,
+        "candidate_tests_failed": 0,
+        "candidate_reward": 1.0,
+        "component_activated": false,
+        "files_delivered": 4,
+        "turns": 9,
+        "requests": 9,
+        "tokens": 234621,
+        "cost_usd": 0.020838516
+      },
+      "search_and_short_probe_requests": 26,
+      "search_and_short_probe_tokens": 2185378,
+      "search_and_short_probe_cost_usd": 0.088405408,
+      "interpretation": "Fresh target activation coincided with a four-property gain and the protection task did not regress, but protection-side component reuse was not observed."
+    },
+    {
+      "pair_id": "option_surface_contract",
+      "search_run_id": "mtevo-option-surface-20260821-r1",
+      "target": "dupire-local-vol",
+      "protection": "variance-swap-replication",
+      "evolver_decision": "ACT",
+      "candidate_component": "audit_svi_params tool",
+      "candidate_created": true,
+      "short_probe": {
+        "retained_comparator_tests_passed": 67,
+        "candidate_tests_passed": 65,
+        "candidate_tests_failed": 3,
+        "candidate_reward": 0.0,
+        "component_activated": false,
+        "files_delivered": 7,
+        "turns": 11
+      },
+      "protection_dispatched": false,
+      "requests": 29,
+      "tokens": 1380382,
+      "cost_usd": 0.071459584,
+      "interpretation": "The candidate was executable but not used by the Worker; the target regressed, so the lineage stopped."
+    },
+    {
+      "pair_id": "copula_dependence_reconciliation",
+      "search_run_id": "mtevo-copula-dependence-20260821-r1",
+      "target": "copula-equity-fitting",
+      "protection": "copula-sampling-rank-correlation",
+      "evolver_decision": "ACT",
+      "candidate_component": "validate_artifacts tool with copula support-boundary guidance",
+      "candidate_created": true,
+      "short_probe": {
+        "component_activated": false,
+        "files_delivered": 0,
+        "tests_passed": 0,
+        "tests_failed": 28,
+        "reward": 0.0
+      },
+      "normal_budget_target": {
+        "run_id": "qfbench-copula-full-confirm-20260821-r1",
+        "retained_comparator_tests_passed": 27,
+        "retained_comparator_tests_failed": 1,
+        "candidate_tests_passed": 27,
+        "candidate_tests_failed": 1,
+        "candidate_reward": 0.0,
+        "property_gain": 0,
+        "component_activated": true,
+        "files_delivered": 5,
+        "turns": 11,
+        "requests": 11,
+        "tokens": 224875,
+        "cost_usd": 0.01749054
+      },
+      "protection_dispatched": false,
+      "search_and_short_probe_requests": 38,
+      "search_and_short_probe_tokens": 2443307,
+      "search_and_short_probe_cost_usd": 0.073847084,
+      "interpretation": "Normal budget converted the delivery failure into an activated completed run, but the official target score tied the retained comparator."
+    }
+  ],
+  "aggregate": {
+    "evolver_act_count": 3,
+    "evolver_abstain_count": 1,
+    "executable_candidate_count": 3,
+    "normal_budget_target_activation_count": 2,
+    "target_property_gain_pair_count": 1,
+    "target_binary_gain_pair_count": 0,
+    "protection_no_regression_count": 1,
+    "protection_component_activation_count": 0,
+    "requests": 152,
+    "tokens": 8282822,
+    "cost_usd": 0.355535672
+  },
+  "setup_failure": {
+    "run_id": "qfbench-pointstate-full-confirm-20260821-r1",
+    "cause": "The arm argument was passed as a bare label instead of LABEL=PATH.",
+    "model_requests": 0,
+    "replacement_run_id": "qfbench-pointstate-full-confirm-20260821-r2"
+  },
+  "claim": "The fixed outer loop can independently synthesize different executable quant-research components from several task-pair trajectories and obtain an activated fresh property gain on a new target family. This batch does not establish binary gain, causal superiority to a concurrent H0, repeated stability, or protection-side component transfer."
+}

@@ -1,5 +1,27 @@
 # QEA Repository Memory
 
+## 2026-08-21 independent-pair breadth result
+
+Four isolated QFBench pair Evolvers started from the same Quant-$H_0$ and did
+not share their candidates. Three returned `ACT` with executable candidates
+and one returned calibrated `ABSTAIN`. Experimenter-arranged normal-budget
+fresh confirmations produced two real component activations on two target
+families. The point-in-time `effective-state-reconciliation` skill improved
+`13f-amendment-aware-crowding` from the corrected retained 46/51 to 50/51; the
+same frozen candidate preserved `fomc-tone-event-study` at 20/20 but the
+protection Worker did not load the skill. The copula artifact validator
+activated but tied its retained comparator at 27/28. The option candidate was
+not used and regressed to 65/68; the carry/basis lineage abstained.
+
+This establishes bounded breadth of autonomous component search and one fresh
+property-gain event outside the earlier local-vol task. It does not establish
+binary gain in this batch, concurrent-H0 causal superiority, repeated
+stability, or protection-side component reuse. Short probes again
+underestimated normal-budget capability: both 13F and copula short Workers
+ended before artifact delivery, while their normal-budget Workers completed.
+See the [measured decision](decisions/2026-08-21-qfbench-independent-pair-breadth-result.md)
+and [compact result](../data/breadth/MT_INDEPENDENT_PAIR_RESULT.json).
+
 ## 2026-08-21 coordinated local-vol result
 
 The bounded multi-task route now has one local binary target gain, but the
