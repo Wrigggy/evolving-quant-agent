@@ -2840,24 +2840,30 @@ Full rationale and claim boundary:
 The experimenter-arranged, candidate-only T26 probe reused the 12/17 artifact
 from AP-3 r3's fresh Quant-H0 Worker and the autonomous round-one candidate. It
 did not rerun Quant-H0, the Evolver, or the formal no-seed Worker. The complete
-public instruction was preserved and the same-run seed was staged for repair.
+public instruction was preserved, but the live deploy had not received the
+already-committed `remote_nexau_worker` seed-prestage helper. The seed was
+available only as `/app/data/probe_seed_strategy.py` at the first Worker turn,
+despite the experiment directive promising `/app/output/strategy.py`.
 
 The Worker completed seven model requests in 40.996 seconds, delivered
 `strategy.py`, and invoked the candidate's `check_strategy_artifact` once. The
 component returned `ok=true` with zero errors, seven warnings, and one info.
-However, the invocation occurred on the final model request. The eight-
-iteration runtime then terminated before any model turn could reconcile the
-findings, edit the artifact, or invoke the component again. The delivered file
-was unchanged from the seed and the official result remained 12/17, reward
-zero. Thus component reach and invocation are measured, while post-audit state
-transition, seeded repair, component helpfulness, and benchmark gain are not.
+The Worker first failed to read the promised output, then later copied the data
+backup itself. The component invocation occurred on the final model request.
+The eight-iteration runtime then terminated before any model turn could
+reconcile the findings, edit the artifact, or invoke the component again. The
+delivered file was unchanged from the seed and the official result remained
+12/17, reward zero. Thus component reach and invocation are measured, while the
+complete intended pre-stage intervention, post-audit state transition, seeded
+repair, component helpfulness, and benchmark gain are not.
 
 The probe used 113,110 tokens across seven completed requests, cost
 $0.015230112, had no rate-limit retry, and left no scoped Docker container or
 network. The retained evidence is
 `results/bc-mirror/qce-t26-ap3-v2-intermediate-activation-20260820-r1/`, with a
 small tracked summary at
-`data/quantcodeeval/AP3_V2_INTERMEDIATE_ACTIVATION_RESULT.json`. The next
-mechanism-localization change should reserve at least one model turn after the
-first audit result; simply lengthening the instruction did not guarantee early
-enough activation.
+`data/quantcodeeval/AP3_V2_INTERMEDIATE_ACTIVATION_RESULT.json`. After the run,
+the committed pre-stage runner was synchronized to bc and its staging helper
+passed a no-model smoke. The next valid comparison is the same bounded probe
+with this exact deploy correction, before changing the search logic or making a
+general claim that post-audit turns must be reserved.

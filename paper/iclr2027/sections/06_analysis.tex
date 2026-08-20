@@ -48,14 +48,15 @@ evaluated. Round two also lacked the round-one prediction record, so the run
 tested observation-conditioned updating rather than the complete predeclared
 prediction-versus-outcome contract.
 
-The bounded intermediate probe localizes the next failure after fixing task
-visibility and seed staging. Component registration and reach were sufficient:
-the Worker invoked the audit successfully. The missing transition was temporal,
-because activation occurred only after the last model request and left no turn
-for interpreting findings or revising the artifact. Therefore a useful next
-mechanism test should reserve a post-audit reconciliation turn; this result does
-not support increasing all Worker budgets or claiming that the component
-improves T26.
+The bounded intermediate probe verifies the task-visibility repair and
+component reach, but not the intended seed-staging intervention. A stale remote
+Worker runner left the output empty, so the Worker spent part of the short
+probe recovering the seed from its backup before invoking the audit on the
+last request. The next valid comparison is therefore the same bounded probe
+with the committed runner synchronized. Only if activation is still too late
+under that corrected setup should the mechanism reserve a post-audit turn.
+This result does not support increasing all Worker budgets or claiming that the
+component improves T26.
 
 \Pending{Replace this paragraph with per-component activation, invariant repair,
 official gain, regression, and transfer analysis from the frozen campaigns.}

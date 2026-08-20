@@ -6,7 +6,8 @@
   "experiment_role": "bounded_intermediate_component_activation",
   "source_commits": {
     "ap3_probe_repair": "dbb5db8",
-    "single_probe_runner": "3a742c1"
+    "single_probe_runner": "3a742c1",
+    "seed_prestage_runner_present_locally_but_missing_from_live_deploy": "5a21462"
   },
   "inputs": {
     "seed_run": "qce-t26-ap3-20260820-r3",
@@ -17,7 +18,10 @@
       "reward": 0.0
     },
     "worker_candidate": "round-1/evolutions/iteration-0001/candidate",
-    "max_iterations": 8
+    "max_iterations": 8,
+    "intended_seed_location": "/app/output/strategy.py",
+    "observed_seed_location_at_first_worker_turn": "/app/data/probe_seed_strategy.py",
+    "deployment_drift": "live remote_nexau_worker lacked the committed seed-prestage helper"
   },
   "worker": {
     "outcome": "completed",
@@ -36,6 +40,7 @@
     },
     "component_called_on_last_model_request": true,
     "post_component_reconciliation_turn": false,
+    "worker_copied_seed_to_output": true,
     "artifact_changed_from_seed": false,
     "terminal_text": "Maximum iteration limit reached."
   },
@@ -59,11 +64,12 @@
   "interpretation": {
     "component_reach": "observed",
     "component_activation": "observed",
-    "post_audit_state_transition": "not_observed_budget_exhausted",
+    "intended_prestage_intervention": "not_executed_due_to_stale_remote_runner",
+    "post_audit_state_transition": "not_observed_after_worker_spent_turns_recovering_missing_prestage",
     "seeded_repair": "not_observed",
     "official_gain_over_seed": "none",
-    "next_mechanism_localization": "reserve_at_least_one_model_turn_after_component_audit"
+    "next_mechanism_localization": "repeat_the_same_bounded_probe_with_the_committed_prestage_runner_synced_before_changing_search_logic"
   },
-  "claim_boundary": "Experimenter-arranged seeded intermediate probe. It establishes component reach and one successful invocation only; it is not autonomous AP-3, a fresh Worker result, a helpful-component result, or a benchmark improvement.",
+  "claim_boundary": "Experimenter-arranged seeded intermediate probe with deployment drift in seed staging. It establishes component reach and one successful invocation only; it is not a valid test of the complete intended v2 intervention, autonomous AP-3, a fresh Worker result, a helpful-component result, or a benchmark improvement.",
   "artifact_location": "results/bc-mirror/qce-t26-ap3-v2-intermediate-activation-20260820-r1/"
 }

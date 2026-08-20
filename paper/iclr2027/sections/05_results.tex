@@ -55,10 +55,12 @@ supports bootstrap-loop feasibility but not component or benchmark benefit.
 two, followed by frozen cross-task/cross-benchmark results.}
 
 \Measured{A separate bounded AP-3 intermediate probe reused the same-run
-Quant-$H_0$ artifact and the round-one candidate. The Worker delivered the
-artifact and invoked the candidate checker once, but did so on its final model
-request. The checker returned normally; the runtime then exhausted its
+Quant-$H_0$ artifact and the round-one candidate. The complete task was visible,
+but the live deploy lacked the committed output-prestage helper. The Worker
+copied the data backup itself and invoked the candidate checker on its final
+model request. The checker returned normally; the runtime then exhausted its
 iteration budget before a reconciliation or edit turn. The unchanged artifact
 remained \APThreeActivationScore{} with reward zero.} The seven-request probe
-cost \APThreeActivationCost{}. It establishes component reach, not component
-helpfulness or a fresh candidate-harness result.
+cost \APThreeActivationCost{}. It establishes component reach, but deployment
+drift prevents a claim about the complete v2 intervention, component
+helpfulness, or a fresh candidate harness.

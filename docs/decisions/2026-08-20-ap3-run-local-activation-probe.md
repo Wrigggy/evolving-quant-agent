@@ -67,21 +67,26 @@ runtime, or official verifier was invoked by this local repair.
 Run `qce-t26-ap3-v2-intermediate-activation-20260820-r1` exercised only the
 intermediate Worker call. It reused AP-3 r3's same-run fresh Quant-H0 artifact
 (12/17) and autonomous round-one candidate; Quant-H0, Evolver round one, Evolver
-round two, and the formal no-seed Worker were not rerun.
+round two, and the formal no-seed Worker were not rerun. The complete public
+instruction was present, but the live deploy lacked the already-committed
+Worker runner helper that pre-stages the seed at `/app/output/strategy.py`.
 
-The Worker delivered the staged artifact and successfully invoked
+The Worker initially found an empty output directory, read the backup under
+`/app/data`, and copied it to the output itself. It then successfully invoked
 `check_strategy_artifact` once. The component reported zero errors, seven
 warnings, and one info. The call occurred on the final model request, so the
 iteration cap ended the run before the Worker could reconcile the findings or
 edit and recheck the artifact. The final file was unchanged and remained
-12/17, reward zero. This measures component reach and invocation, but not a
-post-audit Research-State transition, seeded repair, component helpfulness, or
-benchmark gain.
+12/17, reward zero. This measures component reach and invocation, but it is not
+a valid test of the complete intended pre-stage intervention and does not
+measure a post-audit Research-State transition, seeded repair, component
+helpfulness, or benchmark gain.
 
 The run used seven completed requests, 113,110 tokens, and $0.015230112. Its
-mechanism-localization lesson is narrower than increasing the general Worker
-budget: the orchestration must preserve at least one model turn after the
-first component result if the experiment is intended to test reconciliation.
+immediate lesson is deployment-local: repeat the same bounded probe only after
+the committed pre-stage runner is synchronized, before increasing the general
+Worker budget or changing search logic. That sync and a no-model staging smoke
+were completed after r1; no second model run was launched.
 The tracked result is
 `data/quantcodeeval/AP3_V2_INTERMEDIATE_ACTIVATION_RESULT.json`; detailed
 evidence is mirrored under
