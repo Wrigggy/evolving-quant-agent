@@ -65,6 +65,85 @@ def _non_shell_calls(probe: Mapping[str, object]) -> dict[str, int]:
     }
 
 
+def _prompt_activation_candidate_ready(evolution: Mapping[str, object]) -> bool:
+    """Accept a prompt-led treatment whose activation is the Worker probe itself."""
+
+    decision = evolution.get("decision")
+    activation = evolution.get("activation")
+    tests = evolution.get("component_tests")
+    if (
+        not isinstance(decision, Mapping)
+        or decision.get("decision") != "ACT"
+        or not isinstance(activation, Mapping)
+        or activation.get("status") != "failed"
+        or activation.get("executable_primary_components") != []
+        or not isinstance(tests, list)
+    ):
+        return False
+    primary = decision.get("primary_components")
+    admission_passed = any(
+        isinstance(item, Mapping)
+        and item.get("kind") == "independent_full_harness_admission"
+        and item.get("status") == "passed"
+        for item in tests
+    )
+    return isinstance(primary, list) and "systemprompt" in primary and admission_passed
+
+
+def _component_impact_outcome(
+    *,
+    root: Path,
+    seed: Path,
+    baseline_passed: int,
+    baseline_reward: float,
+    evolution: Mapping[str, object],
+    probe: Mapping[str, object],
+    evolver_cost: float,
+    resumed_from: str | None = None,
+) -> dict[str, object]:
+    passed = _tests_passed(probe, label="component-impact probe")
+    reward = _reward(probe)
+    changed = _artifact_changed(seed, probe)
+    component_calls = _non_shell_calls(probe)
+    if reward > baseline_reward:
+        status = "binary_gain"
+    elif passed > baseline_passed:
+        status = "property_gain"
+    elif changed:
+        status = "artifact_changed_no_score_gain"
+    elif component_calls:
+        status = "component_called_no_artifact_change"
+    else:
+        status = "component_not_called"
+    result = {
+        "schema_version": 1,
+        "protocol": "quantcodeeval-component-impact-v1",
+        "status": status,
+        "worker_probe_run": True,
+        "component_calls": component_calls,
+        "component_called": bool(component_calls),
+        "artifact_changed": changed,
+        "baseline_tests_passed": baseline_passed,
+        "candidate_tests_passed": passed,
+        "property_delta": passed - baseline_passed,
+        "baseline_reward": baseline_reward,
+        "candidate_reward": reward,
+        "experiment_spec": require_ap3_run_local_probe(evolution["decision"]).__dict__,
+        "evolution": dict(evolution),
+        "probe": dict(probe),
+        "cost_usd": evolver_cost
+        + _cost(probe.get("cost") if isinstance(probe.get("cost"), Mapping) else None),
+        "claim_boundary": (
+            "Evolver-directed seeded component-impact experiment; not a fresh "
+            "from-public-task Worker or sealed benchmark result"
+        ),
+    }
+    if resumed_from is not None:
+        result["resumed_from"] = resumed_from
+    _write_result(root / "COMPONENT-IMPACT-RESULT.json", result)
+    return result
+
+
 def run_quantcodeeval_component_impact(
     *,
     config_path: str | Path,
@@ -162,7 +241,9 @@ def run_quantcodeeval_component_impact(
         if isinstance(evolution.get("proxy_audit"), Mapping)
         else None
     )
-    if evolution.get("status") != "PASS":
+    if evolution.get("status") != "PASS" and not _prompt_activation_candidate_ready(
+        evolution
+    ):
         status = (
             "calibrated_abstain"
             if evolution.get("status") == "CALIBRATED_ABSTAIN"
@@ -201,48 +282,80 @@ def run_quantcodeeval_component_impact(
         task_id=task_id,
         max_iterations=spec.max_iterations,
     )
-    passed = _tests_passed(probe, label="component-impact probe")
-    reward = _reward(probe)
-    changed = _artifact_changed(seed, probe)
-    component_calls = _non_shell_calls(probe)
-    if reward > baseline_reward:
-        status = "binary_gain"
-    elif passed > baseline_passed:
-        status = "property_gain"
-    elif changed:
-        status = "artifact_changed_no_score_gain"
-    elif component_calls:
-        status = "component_called_no_artifact_change"
-    else:
-        status = "component_not_called"
-    result = {
-        "schema_version": 1,
-        "protocol": "quantcodeeval-component-impact-v1",
-        "status": status,
-        "worker_probe_run": True,
-        "component_calls": component_calls,
-        "component_called": bool(component_calls),
-        "artifact_changed": changed,
-        "baseline_tests_passed": baseline_passed,
-        "candidate_tests_passed": passed,
-        "property_delta": passed - baseline_passed,
-        "baseline_reward": baseline_reward,
-        "candidate_reward": reward,
-        "experiment_spec": spec.__dict__,
-        "evolution": evolution,
-        "probe": probe,
-        "cost_usd": evolver_cost
-        + _cost(probe.get("cost") if isinstance(probe.get("cost"), Mapping) else None),
-        "claim_boundary": (
-            "Evolver-directed seeded component-impact experiment; not a fresh "
-            "from-public-task Worker or sealed benchmark result"
-        ),
-    }
-    _write_result(root / "COMPONENT-IMPACT-RESULT.json", result)
-    return result
+    return _component_impact_outcome(
+        root=root,
+        seed=seed,
+        baseline_passed=baseline_passed,
+        baseline_reward=baseline_reward,
+        evolution=evolution,
+        probe=probe,
+        evolver_cost=evolver_cost,
+    )
+
+
+def resume_quantcodeeval_component_impact_worker(
+    *,
+    config_path: str | Path,
+    release_dir: str | Path,
+    source_run_dir: str | Path,
+    run_dir: str | Path,
+    seed_strategy: str | Path,
+    worker_image_ref: str,
+    verifier_image_ref: str,
+    proxy_image_ref: str,
+    task_panel_path: str | Path,
+    task_id: str = "T26",
+) -> dict[str, object]:
+    """Resume the Worker treatment after a prompt-only activation gate failure."""
+
+    source = Path(source_run_dir).expanduser().resolve()
+    root = Path(run_dir).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=False)
+    prior = _json_object(
+        source / "COMPONENT-IMPACT-RESULT.json", label="component-impact result"
+    )
+    evolution = _json_object(source / "evolver/LIVE-RESULT.json", label="evolution")
+    if prior.get("worker_probe_run") is not False or not _prompt_activation_candidate_ready(
+        evolution
+    ):
+        raise QuantCodeEvalComponentImpactError(
+            "source run is not a resumable prompt-activation candidate"
+        )
+    baseline_passed = prior.get("baseline_tests_passed")
+    if type(baseline_passed) is not int:
+        raise QuantCodeEvalComponentImpactError("source run lacks its baseline")
+    seed = Path(seed_strategy).expanduser().resolve()
+    spec = require_ap3_run_local_probe(evolution["decision"])
+    probe = run_probe_arm(
+        label="evolver-directed-component-impact-resume",
+        config_path=config_path,
+        public_root=Path(release_dir).expanduser().resolve() / "public",
+        trusted_root=Path(release_dir).expanduser().resolve() / "trusted",
+        run_dir=root / "worker-probe",
+        worker_dir=source / "evolver/evolutions/iteration-0001/candidate",
+        seed_strategy=seed,
+        worker_instruction=spec.worker_instruction,
+        worker_image_ref=worker_image_ref,
+        verifier_image_ref=verifier_image_ref,
+        proxy_image_ref=proxy_image_ref,
+        task_panel_path=task_panel_path,
+        task_id=task_id,
+        max_iterations=spec.max_iterations,
+    )
+    return _component_impact_outcome(
+        root=root,
+        seed=seed,
+        baseline_passed=baseline_passed,
+        baseline_reward=float(prior.get("baseline_reward") or 0.0),
+        evolution=evolution,
+        probe=probe,
+        evolver_cost=float(prior.get("cost_usd") or 0.0),
+        resumed_from=source.name,
+    )
 
 
 __all__ = [
     "QuantCodeEvalComponentImpactError",
+    "resume_quantcodeeval_component_impact_worker",
     "run_quantcodeeval_component_impact",
 ]

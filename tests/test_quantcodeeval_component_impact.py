@@ -125,3 +125,50 @@ def test_preflight_stops_before_worker(tmp_path, monkeypatch):
 
     assert result["status"] == "preflight_complete"
     assert result["baseline_tests_passed"] == 12
+
+
+def test_prompt_only_candidate_uses_worker_probe_as_activation_test(
+    tmp_path, monkeypatch
+):
+    kwargs = _kwargs(tmp_path)
+
+    def fake_evolution(**call):
+        candidate = Path(call["run_dir"]) / "evolutions/iteration-0001/candidate"
+        candidate.mkdir(parents=True)
+        decision = _decision()
+        decision.update({"decision": "ACT", "primary_components": ["systemprompt"]})
+        return {
+            "status": "FAIL",
+            "decision": decision,
+            "activation": {
+                "status": "failed",
+                "executable_primary_components": [],
+            },
+            "component_tests": [
+                {
+                    "kind": "independent_full_harness_admission",
+                    "status": "passed",
+                }
+            ],
+            "proxy_audit": {"provider_cost_usd": 0.02},
+        }
+
+    artifact = tmp_path / "artifact.py"
+    artifact.write_text("VALUE = 2\n")
+    monkeypatch.setattr(
+        impact_module, "run_quantcodeeval_v2_activation_canary", fake_evolution
+    )
+    monkeypatch.setattr(
+        impact_module,
+        "run_probe_arm",
+        lambda **call: {
+            "score": {"tests_passed": 12, "reward": 0},
+            "artifact": str(artifact),
+            "tool_usage": {"counts": {"check_quant_relations": 1}},
+        },
+    )
+
+    result = impact_module.run_quantcodeeval_component_impact(**kwargs)
+
+    assert result["status"] == "artifact_changed_no_score_gain"
+    assert result["component_called"] is True
