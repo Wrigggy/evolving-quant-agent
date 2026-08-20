@@ -24,6 +24,18 @@ def _write_json(path: Path, payload: object) -> None:
     )
 
 
+def _without_hashes(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            key: _without_hashes(child)
+            for key, child in value.items()
+            if "sha256" not in key.casefold() and key.casefold() != "attempt_id"
+        }
+    if isinstance(value, list):
+        return [_without_hashes(child) for child in value]
+    return value
+
+
 def _worker_attempt(source_run: Path) -> Path:
     matches = [
         path.parent
@@ -52,6 +64,18 @@ def main(argv: list[str] | None = None) -> int:
     attempt = _worker_attempt(source_run)
     execution = _json(attempt / "worker-execution.json")
     score = _json(attempt / "completed-score.json")
+    public_score = {
+        key: score.get(key)
+        for key in (
+            "task_id",
+            "domain",
+            "reward",
+            "diagnostic_tags",
+            "tests_passed",
+            "tests_failed",
+            "verifier_exit_code",
+        )
+    }
     trace_path = attempt / str(execution.get("trace_uri", "raw-trace.jsonl"))
     final_path = attempt / str(execution.get("final_text_uri", "final.txt"))
     label = args.round_label
@@ -60,11 +84,11 @@ def main(argv: list[str] | None = None) -> int:
     objects.mkdir(parents=True, exist_ok=True)
     shutil.copy2(trace_path, objects / f"{label}-worker-trace.jsonl")
     shutil.copy2(final_path, objects / f"{label}-worker-final.txt")
-    _write_json(objects / f"{label}-worker-score.json", score)
+    _write_json(objects / f"{label}-worker-score.json", public_score)
     _write_json(
         objects / f"{label}-worker-execution.json",
         {
-            "summary": execution.get("summary", {}),
+            "summary": _without_hashes(execution.get("summary", {})),
             "artifact_count": len(execution.get("artifacts", [])),
         },
     )
@@ -80,8 +104,8 @@ def main(argv: list[str] | None = None) -> int:
         "decision": proposal.get("decision"),
         "prediction": prediction,
         "worker_observation": {
-            "score": score,
-            "execution_summary": execution.get("summary", {}),
+            "score": public_score,
+            "execution_summary": _without_hashes(execution.get("summary", {})),
             "artifact_count": len(execution.get("artifacts", [])),
             "candidate_component_call_count": trace_text.count(
                 '"name": "validate_surface_artifacts"'
