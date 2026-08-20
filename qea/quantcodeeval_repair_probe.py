@@ -99,6 +99,9 @@ def materialize_probe_worker(
     destination: str | Path,
     *,
     max_iterations: int,
+    component_tool: str | None = None,
+    inventory_turns: int = 2,
+    min_post_observation_turns: int = 3,
 ) -> Path:
     """Copy a harness and apply the same small test-time budget to both arms."""
 
@@ -119,6 +122,30 @@ def materialize_probe_worker(
     )
     if count != 1:
         raise QuantCodeEvalRepairProbeError("worker agent.yaml has no max_iterations")
+    if component_tool is not None:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", component_tool):
+            raise QuantCodeEvalRepairProbeError("component tool name is invalid")
+        if "\nmiddlewares:" in replaced or "\ntracers:" not in replaced:
+            raise QuantCodeEvalRepairProbeError(
+                "phase-aware probe requires a worker without existing middlewares"
+            )
+        middleware = target / "middleware"
+        middleware.mkdir()
+        (middleware / "__init__.py").write_text("", encoding="utf-8")
+        shutil.copy2(
+            Path(__file__).with_name("probe_phase_checkpoint.py"),
+            middleware / "probe_phase_checkpoint.py",
+        )
+        declaration = (
+            "middlewares:\n"
+            "  - import: middleware.probe_phase_checkpoint:ProbePhaseCheckpoint\n"
+            "    params:\n"
+            f"      component_tool: {component_tool}\n"
+            f"      inventory_turns: {inventory_turns}\n"
+            "      min_post_observation_turns: "
+            f"{min_post_observation_turns}\n"
+        )
+        replaced = replaced.replace("tracers:\n", declaration + "tracers:\n", 1)
     config.write_text(replaced, encoding="utf-8")
     return target
 
@@ -174,6 +201,57 @@ def _trace_tool_usage(attempt_dir: Path) -> dict[str, object]:
     }
 
 
+def _trace_component_observations(
+    attempt_dir: Path, component_tool: str | None
+) -> dict[str, object]:
+    """Extract the public component's own summaries from the frozen Worker trace."""
+
+    if component_tool is None:
+        return {"tool_name": None, "observations": []}
+    trace = attempt_dir / "raw-trace.jsonl"
+    if not trace.is_file():
+        return {"tool_name": component_tool, "observations": []}
+    pending: list[str] = []
+    observations: list[dict[str, object]] = []
+    for raw_line in trace.read_text(encoding="utf-8").splitlines():
+        try:
+            message = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(message, Mapping):
+            continue
+        content = message.get("content")
+        if message.get("role") == "assistant" and isinstance(content, str):
+            for raw_call in re.findall(r"<ToolUse>(.*?)</ToolUse>", content, re.DOTALL):
+                try:
+                    call = json.loads(raw_call)
+                except json.JSONDecodeError:
+                    continue
+                name = call.get("name") if isinstance(call, Mapping) else None
+                if isinstance(name, str):
+                    pending.append(name)
+            continue
+        if message.get("role") != "tool" or not pending:
+            continue
+        name = pending.pop(0)
+        if name != component_tool:
+            continue
+        value: object = content
+        if isinstance(content, str):
+            try:
+                value = json.loads(content)
+            except json.JSONDecodeError:
+                value = {"raw_status": "unparsed"}
+        summary = value.get("summary") if isinstance(value, Mapping) else None
+        observations.append(
+            {
+                "ok": value.get("ok") if isinstance(value, Mapping) else None,
+                "summary": dict(summary) if isinstance(summary, Mapping) else None,
+            }
+        )
+    return {"tool_name": component_tool, "observations": observations}
+
+
 def run_probe_arm(
     *,
     label: str,
@@ -190,6 +268,9 @@ def run_probe_arm(
     task_panel_path: str | Path,
     task_id: str = "T26",
     max_iterations: int = 12,
+    component_tool: str | None = None,
+    inventory_turns: int = 2,
+    min_post_observation_turns: int = 3,
 ) -> dict[str, object]:
     """Run one short repair Worker and then score its artifact independently."""
 
@@ -198,6 +279,9 @@ def run_probe_arm(
         worker_dir,
         root / "probe-worker-input",
         max_iterations=max_iterations,
+        component_tool=component_tool,
+        inventory_turns=inventory_turns,
+        min_post_observation_turns=min_post_observation_turns,
     )
     snapshot, evaluator, _, frozen_worker = prepare_quantcodeeval_h0(
         config_path=config_path,
@@ -258,7 +342,11 @@ def run_probe_arm(
     score = summary.scores[0]
     result = {
         "schema_version": 1,
-        "protocol": "quantcodeeval-paired-runtime-repair-probe-v1",
+        "protocol": (
+            "quantcodeeval-bounded-causal-probe-v2"
+            if component_tool is not None
+            else "quantcodeeval-paired-runtime-repair-probe-v1"
+        ),
         "label": label,
         "task_id": task_id,
         "max_iterations": max_iterations,
@@ -267,6 +355,18 @@ def run_probe_arm(
         "score": asdict(score),
         "worker_summary": dict(worker_summary),
         "tool_usage": _trace_tool_usage(attempt_dir),
+        "component_observations": _trace_component_observations(
+            attempt_dir, component_tool
+        ),
+        "phase_checkpoint": (
+            {
+                "component_tool": component_tool,
+                "inventory_turns": inventory_turns,
+                "min_post_observation_turns": min_post_observation_turns,
+            }
+            if component_tool is not None
+            else None
+        ),
         "answer_free_evidence": _read_answer_free(attempt_dir),
         "cost": cost,
         "artifact": str(attempt_dir / "artifacts" / "strategy.py"),

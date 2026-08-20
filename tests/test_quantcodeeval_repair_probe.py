@@ -68,6 +68,30 @@ def test_materializes_same_budget_worker_and_public_seed(tmp_path: Path):
     assert "checker code" in instruction
 
 
+def test_materializes_phase_aware_probe_worker(tmp_path: Path):
+    worker = tmp_path / "worker"
+    worker.mkdir()
+    (worker / "agent.yaml").write_text(
+        "type: agent\nmax_iterations: 60\ntracers:\n"
+    )
+    (worker / "systemprompt.md").write_text("work\n")
+
+    copied = materialize_probe_worker(
+        worker,
+        tmp_path / "probe-worker",
+        max_iterations=13,
+        component_tool="check_quant_relations",
+        inventory_turns=2,
+        min_post_observation_turns=3,
+    )
+
+    config = (copied / "agent.yaml").read_text()
+    assert "max_iterations: 13" in config
+    assert "ProbePhaseCheckpoint" in config
+    assert "component_tool: check_quant_relations" in config
+    assert (copied / "middleware/probe_phase_checkpoint.py").is_file()
+
+
 def test_rejects_missing_iteration_field(tmp_path: Path):
     worker = tmp_path / "worker"
     worker.mkdir()
