@@ -91,3 +91,27 @@ The tracked result is
 `data/quantcodeeval/AP3_V2_INTERMEDIATE_ACTIVATION_RESULT.json`; detailed
 evidence is mirrored under
 `results/bc-mirror/qce-t26-ap3-v2-intermediate-activation-20260820-r1/`.
+
+## Paired intermediate r2 result
+
+R2 held the task, seed, candidate, instructions, model route, images, and
+eight-iteration cap fixed and changed only the remote deployment of the
+committed seed-prestage helper. The first Worker turn found the seed at the
+promised output path. The checker was invoked on model request five of seven,
+and two subsequent requests reconciled its findings and attempted additional
+functional checks. This validates the intended pre-stage, component reach,
+activation, and post-audit reconciliation path; no explicit post-audit reserve
+is needed on this evidence.
+
+The component returned zero errors and only period/join-key warnings. The
+artifact stayed identical to the 12/17 seed and official T26 remained 12/17,
+reward zero. Trusted optimize-only diagnostics for the five failures did not
+overlap the component findings. Therefore the next unresolved mechanism is
+diagnostic coverage rather than component availability or terminal timing.
+
+R2 used seven completed requests, 116,504 tokens, and $0.01515752 with no
+rate-limit retry. The next bounded experiment may expose the answer-rich
+optimize mismatch to the Evolver only, ask it to refine or replace the
+component, and then run one paired blind-Worker probe. Do not expose those
+diagnostics to the Worker or encode the property answers into a reusable
+candidate.

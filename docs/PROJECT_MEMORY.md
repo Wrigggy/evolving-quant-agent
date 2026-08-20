@@ -2867,3 +2867,37 @@ the committed pre-stage runner was synchronized to bc and its staging helper
 passed a no-model smoke. The next valid comparison is the same bounded probe
 with this exact deploy correction, before changing the search logic or making a
 general claim that post-audit turns must be reserved.
+
+### 2026-08-20 AP-3 v2 paired intermediate activation r2
+
+R2 repeated r1 with the same T26 seed, round-one candidate, public instruction,
+model route, images, and eight-iteration cap. The only controlled change was
+synchronizing the already-committed `remote_nexau_worker` pre-stage helper.
+The first Worker turn confirmed that the 531-line seed existed at both
+`/app/output/strategy.py` and its data backup, validating the deployment repair.
+
+The Worker invoked `check_strategy_artifact` on model request five of seven.
+The component again returned zero errors, seven warnings, and one info. Two
+later model requests explicitly reconciled those findings against R12 and
+attempted deeper functional checks. Thus pre-stage, component reach,
+activation, and post-audit reconciliation are now measured; a forced
+post-audit reserve is not justified by this result.
+
+The artifact nevertheless remained identical to the 12/17 seed and the
+official result remained 12/17, reward zero. The component warnings concerned
+temporary period/join-key patterns, while trusted optimize-only diagnostics
+identified failures involving training-cutoff evidence, the identity-L2/HJ
+solver form, and an end-to-end numerical mismatch. The diagnostic component
+therefore did not surface the distinctions that mattered for the remaining
+official failures. The Worker-authored functional probe also stopped on an
+incorrect CSV `skiprows` assumption before completing.
+
+R2 used 116,504 tokens across seven requests, cost $0.01515752, had no
+rate-limit retry, and left no scoped container or network. Detailed evidence is
+at `results/bc-mirror/qce-t26-ap3-v2-intermediate-activation-20260820-r2/` and
+the tracked summary is
+`data/quantcodeeval/AP3_V2_INTERMEDIATE_ACTIVATION_R2_RESULT.json`. The next
+bounded mechanism test should give the Evolver—not the Worker—the permitted
+answer-rich optimize mismatch and require it to refine, replace, or abstain on
+the component before one further paired probe. It should not add a generic
+budget increase or hard-code the five property answers into the Worker.

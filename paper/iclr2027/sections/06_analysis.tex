@@ -58,5 +58,13 @@ under that corrected setup should the mechanism reserve a post-audit turn.
 This result does not support increasing all Worker budgets or claiming that the
 component improves T26.
 
+The paired r2 removes that deployment ambiguity. Once pre-stage was active, the
+Worker reached the checker earlier and had two post-audit requests, so terminal
+timing is no longer the limiting explanation. The checker reported only legal
+temporary join-key warnings and did not distinguish the remaining official
+failures; the Worker therefore retained the seed. The next causal test should
+change diagnostic coverage through Evolver refinement while holding the blind
+Worker probe fixed, rather than adding a general budget increase.
+
 \Pending{Replace this paragraph with per-component activation, invariant repair,
 official gain, regression, and transfer analysis from the frozen campaigns.}

@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "run_id": "qce-t26-ap3-v2-intermediate-activation-20260820-r2",
+  "protocol": "quantcodeeval-paired-runtime-repair-probe-v1",
+  "task_id": "T26",
+  "experiment_role": "paired_prestage_repair_and_component_activation",
+  "paired_predecessor": "qce-t26-ap3-v2-intermediate-activation-20260820-r1",
+  "controlled_change": "synchronized the committed remote_nexau_worker seed-prestage helper",
+  "held_constant": [
+    "T26",
+    "AP-3 r3 same-run Quant-H0 seed",
+    "AP-3 r3 round-one candidate",
+    "public instruction and experiment directive",
+    "model and provider route",
+    "worker, verifier, and proxy images",
+    "eight-iteration cap"
+  ],
+  "inputs": {
+    "seed_run": "qce-t26-ap3-20260820-r3",
+    "seed_score": {
+      "tests_passed": 12,
+      "tests_failed": 5,
+      "reward": 0.0
+    },
+    "worker_candidate": "round-1/evolutions/iteration-0001/candidate",
+    "max_iterations": 8
+  },
+  "worker": {
+    "outcome": "completed",
+    "seconds": 64.82,
+    "model_requests": 7,
+    "artifact_delivered": true,
+    "seed_present_in_output_on_first_turn": true,
+    "component_invoked": true,
+    "component_invoked_on_model_request": 5,
+    "component_result_ok": true,
+    "component_findings": {
+      "errors": 0,
+      "warnings": 7,
+      "infos": 1
+    },
+    "post_component_model_requests": 2,
+    "post_component_reconciliation_observed": true,
+    "worker_interpretation": "period and scratch-key warnings were permitted by the public R12 contract",
+    "worker_authored_functional_probe": "attempted but stopped on an incorrect CSV skiprows assumption",
+    "artifact_changed_from_seed": false,
+    "terminal_text": "Maximum iteration limit reached."
+  },
+  "official_result": {
+    "tests_passed": 12,
+    "tests_failed": 5,
+    "reward": 0.0,
+    "type_a_passed": 5,
+    "type_a_failed": 2,
+    "type_b_passed": 7,
+    "type_b_failed": 3
+  },
+  "cost": {
+    "completed_requests": 7,
+    "input_tokens": 110749,
+    "output_tokens": 5755,
+    "total_tokens": 116504,
+    "provider_cost_usd": 0.01515752,
+    "rate_limited_retries": 0
+  },
+  "trusted_answer_rich_analysis": {
+    "visibility": "Evolver and experiment analysis only; never Worker input",
+    "failed_properties": ["A3", "A10", "B3", "B5", "B9"],
+    "failure_summary": [
+      "training-cutoff evidence not recognized",
+      "end-to-end numerical identity mismatch",
+      "identity-L2 solver evidence not recognized",
+      "HJ-metric quadratic-form evidence not recognized"
+    ],
+    "overlap_with_component_findings": "none"
+  },
+  "interpretation": {
+    "prestage_repair": "validated",
+    "component_reach": "validated",
+    "component_activation": "validated",
+    "post_audit_reconciliation": "validated",
+    "component_diagnostic_coverage": "not_demonstrated",
+    "seeded_repair": "not_observed",
+    "official_gain_over_seed": "none",
+    "post_audit_reserve_needed": false,
+    "next_mechanism_test": "give the Evolver the optimize-only answer-rich mismatch and ask it to refine or replace the diagnostic component before one further paired probe"
+  },
+  "claim_boundary": "This paired seeded probe validates the intended pre-stage and activation path. It does not establish a helpful component, fresh-Worker benefit, autonomous AP-3 completion, or benchmark improvement.",
+  "artifact_location": "results/bc-mirror/qce-t26-ap3-v2-intermediate-activation-20260820-r2/"
+}
