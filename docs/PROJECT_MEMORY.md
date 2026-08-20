@@ -2954,3 +2954,30 @@ audit execution. Measure registration, actual call, decision-changing output,
 artifact change, and official outcome separately. Full rationale and the later
 scheduler boundary are in
 `docs/decisions/2026-08-20-activation-first-before-selective-scheduler.md`.
+
+### 2026-08-20 QDR-1 directed component-impact follow-up
+
+Two Evolver runs independently selected activation timing after reading the
+retained six- and ten-iteration zero-call probes. Both authored a bounded
+eight-iteration component-impact experiment. R1 was blocked before the Worker
+because candidate admission unnecessarily froze the agent name; R2 passed
+admission but the old activation gate rejected a prompt-primary treatment for
+lacking a locally executable primary component. These observed blockers were
+repaired narrowly. R2's original result remains retained, and its unmodified
+decision/candidate was resumed into one separate blind seeded Worker probe.
+
+The resumed Worker called `check_quant_relations` once, changing the prior
+zero-call outcome, but only on assistant turn 6 after seven shell calls. The
+component returned two blocking errors and one warning. The next turn reread
+the relevant function but did not edit or re-audit; the artifact stayed
+identical to the seed and official T26 stayed 12/17, reward zero. Thus Evolver
+diagnosis and directed activation are measured, while early activation,
+decision-changing use, artifact repair, property gain, and binary gain are not.
+
+R1 cost $0.10219428, R2 cost $0.128972568, and the resumed Worker cost
+$0.0268286; the 51-request campaign total was $0.257995448 with no rate-limit
+retry. The next bounded mechanism should test one generic early Research-State
+checkpoint or a simpler component call surface, holding component, seed, and
+task fixed. Do not add the deferred multi-task scheduler yet. Full result and
+boundary:
+`docs/decisions/2026-08-20-qdr1-component-impact-result.md`.

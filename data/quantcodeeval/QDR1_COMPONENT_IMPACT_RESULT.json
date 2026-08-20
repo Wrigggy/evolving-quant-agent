@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "protocol": "quantcodeeval-component-impact-v1",
+  "date": "2026-08-20",
+  "task_id": "T26",
+  "baseline": {
+    "tests_passed": 12,
+    "tests_total": 17,
+    "reward": 0.0
+  },
+  "runs": {
+    "r1": {
+      "status": "evolver_not_admitted",
+      "evolver_decision": "ACT",
+      "worker_probe_run": false,
+      "observed_blocker": "agent name was unnecessarily frozen by candidate admission",
+      "model_requests": 22,
+      "cost_usd": 0.10219428
+    },
+    "r2": {
+      "status": "prompt_primary_activation_gate_failed",
+      "evolver_decision": "ACT",
+      "candidate_admission": "passed",
+      "worker_probe_run": false,
+      "observed_blocker": "the old local activation gate required an executable primary component even though the primary treatment was systemprompt",
+      "model_requests": 22,
+      "cost_usd": 0.128972568
+    },
+    "r2_worker_resume": {
+      "status": "component_called_no_artifact_change",
+      "worker_model_requests": 7,
+      "worker_seconds": 109.375,
+      "component_calls": 1,
+      "first_component_call_assistant_turn": 6,
+      "audit_errors": 2,
+      "audit_warnings": 1,
+      "artifact_changed": false,
+      "tests_passed": 12,
+      "tests_total": 17,
+      "property_delta": 0,
+      "reward": 0.0,
+      "worker_cost_usd": 0.0268286
+    }
+  },
+  "campaign": {
+    "model_requests": 51,
+    "cost_usd": 0.257995448,
+    "rate_limited_retries": 0
+  },
+  "interpretation": "The Evolver independently selected activation timing twice and authored a directed component-impact instruction. The instruction changed component use from zero calls in the two prior probes to one call, but the call remained late, its actionable findings did not lead to an edit, and the official result did not change.",
+  "claim_boundary": "Evolver-directed seeded Worker experiment with an experimenter-arranged resume after two observed orchestration blockers; not a fresh Worker, autonomous end-to-end campaign, component-helpfulness result, or benchmark gain."
+}
