@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-21",
+  "status": "live_authorized",
+  "purpose": "Parallel isolated pair canaries for bounded multi-task coordination",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "provider": "deepseek",
+  "reasoning_effort": "high",
+  "pair_count": 3,
+  "panel_gate": "at_least_one_full_chain_success_among_three_fixed_pairs",
+  "reporting_rule": "Report x/3 and retain every pair outcome, including ABSTAIN, no activation, no action, non-improvement, regression, timeout, and infrastructure failure.",
+  "selection_boundary": "A winning pair is selected on this pilot. Its pilot score is not an unbiased estimate of average or held-out performance.",
+  "tasks": [
+    {
+      "benchmark": "qfbench",
+      "task_id": "zero-coupon-bootstrapping",
+      "role": "target",
+      "domain": "rates_fx_macro",
+      "state_tags": [
+        "curve_bootstrap",
+        "discount_factor",
+        "zero_rate",
+        "forward_rate",
+        "instrument_repricing"
+      ],
+      "retained_baseline": {"tests_passed": 1, "tests_total": 6, "reward": 0}
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "swap-curve-bootstrap-ois",
+      "role": "protection",
+      "domain": "rates_fx_macro",
+      "state_tags": [
+        "curve_bootstrap",
+        "discount_factor",
+        "projection_curve",
+        "day_count",
+        "instrument_repricing"
+      ],
+      "retained_baseline": {"tests_passed": 17, "tests_total": 19, "reward": 0}
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "corporate-action-adjustment",
+      "role": "target",
+      "domain": "market_data",
+      "state_tags": [
+        "adjusted_price_state",
+        "event_effective_time",
+        "split_dividend_chain",
+        "price_volume_reconciliation",
+        "trading_calendar"
+      ],
+      "retained_baseline": {"tests_passed": 3, "tests_total": 7, "reward": 0}
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "momentum-backtest",
+      "role": "protection",
+      "domain": "portfolio_backtest",
+      "state_tags": [
+        "adjusted_price_state",
+        "signal_time",
+        "execution_lag",
+        "position_accounting",
+        "terminal_liquidation"
+      ],
+      "retained_baseline": {"tests_passed": 26, "tests_total": 26, "reward": 1}
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "localvol-barrier",
+      "role": "target",
+      "domain": "derivatives",
+      "state_tags": [
+        "option_surface",
+        "premium_unit",
+        "expiry_forward",
+        "otm_selection",
+        "surface_arbitrage"
+      ],
+      "retained_baseline": {"tests_passed": 0, "tests_total": 7, "reward": 0}
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "variance-swap-replication",
+      "role": "protection",
+      "domain": "derivatives",
+      "state_tags": [
+        "option_surface",
+        "premium_unit",
+        "expiry_forward",
+        "otm_selection",
+        "strike_grid"
+      ],
+      "retained_baseline": {"tests_passed": 17, "tests_total": 17, "reward": 1}
+    }
+  ],
+  "pairs": [
+    {
+      "pair_id": "rates_curve_repricing",
+      "target_task_key": "qfbench:zero-coupon-bootstrapping",
+      "protection_task_key": "qfbench:swap-curve-bootstrap-ois",
+      "predeclared_shared_object": "quote-to-curve construction closed by instrument repricing under consistent conventions",
+      "target_screen": {"tests_passed_strictly_greater_than": 1},
+      "protection_floor": {"tests_passed_at_least": 17},
+      "estimated_target_runtime_seconds": 90
+    },
+    {
+      "pair_id": "adjusted_price_event_time",
+      "target_task_key": "qfbench:corporate-action-adjustment",
+      "protection_task_key": "qfbench:momentum-backtest",
+      "predeclared_shared_object": "point-in-time adjusted-price state propagated through event timing, price fields, and execution timing",
+      "target_screen": {"tests_passed_strictly_greater_than": 3},
+      "protection_floor": {"tests_passed_at_least": 26},
+      "estimated_target_runtime_seconds": 180
+    },
+    {
+      "pair_id": "forward_consistent_option_surface",
+      "target_task_key": "qfbench:localvol-barrier",
+      "protection_task_key": "qfbench:variance-swap-replication",
+      "predeclared_shared_object": "unit-consistent forward-consistent OTM option surface before downstream valuation",
+      "target_screen": {"tests_passed_strictly_greater_than": 0},
+      "protection_floor": {"tests_passed_at_least": 17},
+      "estimated_target_runtime_seconds": 1800
+    }
+  ],
+  "full_chain_success": [
+    "Evolver reads evidence from both tasks and names a concrete shared mechanism",
+    "Evolver emits an admitted ACT with exactly the predeclared target probe_task_key",
+    "the candidate Worker runs on only that target and activates or acts on the proposed component",
+    "the official target test count beats both the retained screen and a fresh Quant-H0 comparator",
+    "the unchanged candidate meets the predeclared protection floor"
+  ],
+  "limits": {
+    "max_parallel_evolvers": 3,
+    "max_worker_probes_per_pair_before_target_screen": 1,
+    "max_evolver_rounds_per_pair": 1,
+    "max_provider_cost_usd_per_pair": 0.30,
+    "max_total_provider_cost_usd": 0.90,
+    "max_relevant_components_per_task": 4
+  },
+  "claim_boundary": "Existence-style bounded multi-task feasibility canary only; not a scheduler, average effect, stability estimate, or benchmark-wide result."
+}

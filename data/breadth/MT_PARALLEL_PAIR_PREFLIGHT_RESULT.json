@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-21",
+  "protocol": "mt-parallel-pair-canary-v1",
+  "status": "preflight_complete",
+  "pair_count": 3,
+  "task_count": 6,
+  "component_cards_available": 6,
+  "pairs": [
+    {
+      "pair_id": "rates_curve_repricing",
+      "target_task_key": "qfbench:zero-coupon-bootstrapping",
+      "protection_task_key": "qfbench:swap-curve-bootstrap-ois"
+    },
+    {
+      "pair_id": "adjusted_price_event_time",
+      "target_task_key": "qfbench:corporate-action-adjustment",
+      "protection_task_key": "qfbench:momentum-backtest"
+    },
+    {
+      "pair_id": "forward_consistent_option_surface",
+      "target_task_key": "qfbench:localvol-barrier",
+      "protection_task_key": "qfbench:variance-swap-replication"
+    }
+  ],
+  "contract_checks": {
+    "answer_free": true,
+    "both_task_evidence_required_for_act": true,
+    "concrete_shared_mechanism_required_for_act": true,
+    "exactly_one_predeclared_target_probe": true,
+    "from_scratch_probe_without_seed": true,
+    "protection_is_conditional": true
+  },
+  "source_evidence": "results/bc-mirror/qfbench-a6-discovery-e-flash-high-20260810-r11/authorized-evidence",
+  "focused_tests_passed": 181,
+  "model_requests": 0,
+  "worker_requests": 0,
+  "provider_cost_usd": 0,
+  "interpretation": "All three fixed pair views were materialized from real retained QFBench trajectories and the singleton dispatch path passed focused local tests.",
+  "claim_boundary": "No-model routing and control preflight only; live Evolver decisions, candidate admission, activation, target outcomes, and protection remain pending."
+}

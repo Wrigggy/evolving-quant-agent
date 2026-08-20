@@ -938,6 +938,84 @@ def test_quant_v2_autonomous_probe_contract_requires_experiment_spec(
     assert state["hypothesis"]["experiment_spec"]["seed_experience"] == "t26_h0"
 
 
+def test_quant_v2_coordinated_act_cites_both_tasks_and_selects_one_target(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, access_log = guarded_roots
+    _write_flexible_quant_v2_contract(evidence, history_required=False)
+    task_paths = {
+        "qfbench:curve-target": "benchmarks/qfbench/tasks/curve-target/trace.jsonl",
+        "qfbench:curve-protection": (
+            "benchmarks/qfbench/tasks/curve-protection/trace.jsonl"
+        ),
+    }
+    for path in task_paths.values():
+        target = evidence / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("{\"event\":\"curve construction\"}\n", encoding="utf-8")
+        read_workspace(source="evidence", file_path=path)
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract.update(
+        {
+            "stage": "COORDINATED_BREADTH",
+            "task_keys": list(task_paths),
+            "target_task_keys": ["qfbench:curve-target"],
+            "protection_task_keys": ["qfbench:curve-protection"],
+            "task_evidence_prefixes": {
+                key: [path.rsplit("/", 1)[0] + "/"]
+                for key, path in task_paths.items()
+            },
+            "coordinated_evidence_required_for_act": True,
+            "autonomous_probe_required": True,
+            "probe_seed_policy": "none",
+            "max_worker_probes_this_round": 1,
+        }
+    )
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = list(task_paths.values())
+    decision["shared_mechanism"] = (
+        "quote-to-discount-factor construction closed by instrument repricing"
+    )
+    decision["probe_task_key"] = "qfbench:curve-target"
+    decision["experiment_spec"] = {
+        "mode": "from_scratch",
+        "seed_experience": None,
+        "worker_instruction": "Build the curve and reconcile every input quote.",
+        "max_iterations": 8,
+        "prediction": "The Worker will act on a repricing residual before delivery.",
+        "decision_changing_observation": (
+            "No residual-driven artifact edit means the mechanism is unsupported."
+        ),
+    }
+
+    result = decide_candidate(discovery=decision)
+    state = json.loads(
+        (access_log.parent / "discovery-hypothesis.json").read_text()
+    )
+
+    assert result["decision"] == "ACT"
+    assert state["hypothesis"]["probe_task_key"] == "qfbench:curve-target"
+    assert state["hypothesis"]["shared_mechanism"].startswith("quote-to")
+
+    decision["probe_task_key"] = "qfbench:curve-protection"
+    with pytest.raises(GuardedWorkspaceError, match="predeclared target"):
+        decide_candidate(discovery=decision)
+
+    decision["probe_task_key"] = "qfbench:curve-target"
+    decision["evidence_refs"] = [task_paths["qfbench:curve-target"], "overview.md"]
+    read_workspace(source="evidence", file_path="overview.md")
+    with pytest.raises(GuardedWorkspaceError, match="every coordinated task"):
+        decide_candidate(discovery=decision)
+
+
 def test_quant_v2_forbids_legacy_unlock_and_schema_uses_prediction(guarded_roots):
     from qea.evolve_agent_full.tools.guarded_workspace import (
         GuardedWorkspaceError,

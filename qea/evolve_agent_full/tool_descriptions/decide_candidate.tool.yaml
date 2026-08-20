@@ -41,6 +41,12 @@ input_schema:
         component_state_target:
           type: string
           description: Concrete finance or execution state the selected harness mechanism should change or preserve.
+        shared_mechanism:
+          type: string
+          description: Required for coordinated breadth ACT. Name the concrete quantitative object, failure mechanism, or executable invariant supported by every task trajectory; a Research-State label alone is insufficient.
+        probe_task_key:
+          type: string
+          description: Required for coordinated breadth ACT. Select exactly one authorized benchmark:task_id target for the bounded Worker probe.
         research_state_transition:
           type: object
           description: Required for Research-State-guided QuantCodeEval ACT. Reconstruct one task-conditioned state mismatch and predict the observable state transition that the selected harness component should cause. The six states are general research states, not a fixed strategy pipeline.

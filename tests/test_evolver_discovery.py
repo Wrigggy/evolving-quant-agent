@@ -630,6 +630,118 @@ def test_discovery_pilot_missing_terminal_decision_never_reaches_admission(
     assert "fail-closed" in admission["reason"]
 
 
+def test_coordinated_probe_selects_only_the_admitted_target():
+    from scripts.run_qfbench_discovery_pilot import (
+        _coordinated_probe_task_key,
+    )
+
+    contract = {
+        "stage": "COORDINATED_BREADTH",
+        "max_worker_probes_this_round": 1,
+        "target_task_keys": ["qfbench:curve-target"],
+    }
+    state = {"hypothesis": {"probe_task_key": "qfbench:curve-target"}}
+
+    assert _coordinated_probe_task_key(
+        contract=contract,
+        decision="ACT",
+        admission={"admitted": True},
+        discovery_state=state,
+    ) == "qfbench:curve-target"
+    assert _coordinated_probe_task_key(
+        contract=contract,
+        decision="ABSTAIN",
+        admission={"admitted": None},
+        discovery_state={},
+    ) is None
+    assert _coordinated_probe_task_key(
+        contract=contract,
+        decision="ACT",
+        admission={"admitted": False},
+        discovery_state=state,
+    ) is None
+
+
+def test_coordinated_probe_never_falls_back_or_dispatches_protection():
+    from scripts.run_qfbench_discovery_pilot import (
+        _coordinated_probe_task_key,
+    )
+
+    contract = {
+        "stage": "COORDINATED_BREADTH",
+        "max_worker_probes_this_round": 1,
+        "target_task_keys": ["qfbench:curve-target"],
+    }
+    with pytest.raises(ValueError, match="no probe_task_key"):
+        _coordinated_probe_task_key(
+            contract=contract,
+            decision="ACT",
+            admission={"admitted": True},
+            discovery_state={"hypothesis": {}},
+        )
+    with pytest.raises(ValueError, match="non-target"):
+        _coordinated_probe_task_key(
+            contract=contract,
+            decision="ACT",
+            admission={"admitted": True},
+            discovery_state={
+                "hypothesis": {"probe_task_key": "qfbench:curve-protection"}
+            },
+        )
+
+
+def test_qfbench_probe_key_resolves_exactly_one_task():
+    from types import SimpleNamespace
+
+    from scripts.run_qfbench_discovery_pilot import _qfbench_task_for_key
+
+    target = SimpleNamespace(task_id="curve-target")
+    protection = SimpleNamespace(task_id="curve-protection")
+
+    assert _qfbench_task_for_key(
+        "qfbench:curve-target", (target, protection)
+    ) is target
+    with pytest.raises(ValueError, match="QFBench task key"):
+        _qfbench_task_for_key("quantcodeeval:T26", (target, protection))
+
+
+def test_coordinated_probe_worker_uses_evolver_directive_and_budget(tmp_path):
+    from scripts.run_qfbench_discovery_pilot import (
+        _materialize_coordinated_probe_worker,
+    )
+
+    candidate = tmp_path / "candidate"
+    candidate.mkdir()
+    (candidate / "agent.yaml").write_text(
+        "type: agent\nmax_iterations: 60\nsystem_prompt: ./systemprompt.md\n",
+        encoding="utf-8",
+    )
+    (candidate / "systemprompt.md").write_text(
+        "Solve the quantitative task.\n", encoding="utf-8"
+    )
+    worker, iterations = _materialize_coordinated_probe_worker(
+        candidate=candidate,
+        destination=tmp_path / "probe-worker",
+        hypothesis={
+            "experiment_spec": {
+                "mode": "from_scratch",
+                "seed_experience": None,
+                "max_iterations": 7,
+                "worker_instruction": (
+                    "Exercise the new curve checker before final delivery."
+                ),
+            }
+        },
+    )
+
+    assert iterations == 7
+    assert "max_iterations: 7" in (worker / "agent.yaml").read_text()
+    assert "Evolver-authored bounded experiment" in (
+        worker / "systemprompt.md"
+    ).read_text()
+    assert "curve checker" in (worker / "systemprompt.md").read_text()
+
+
 def test_discovery_cost_counts_caller_confirmed_downstream_delivery(tmp_path):
     from scripts.run_qfbench_discovery_pilot import _cost
 

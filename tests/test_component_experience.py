@@ -398,10 +398,21 @@ def test_coordinated_view_requires_mechanism_match_and_one_probe(tmp_path):
     assert contract["shared_mechanism_assessment_required"] is True
     assert contract["probe_task_selection_required_for_act"] is True
     assert contract["positive_target_before_contrast_evaluation"] is True
+    assert contract["decision_protocol"] == "quant_property_v2"
+    assert contract["autonomous_probe_required"] is True
+    assert contract["coordinated_evidence_required_for_act"] is True
+    assert contract["target_task_keys"] == [
+        "qfbench:zero-coupon-bootstrapping"
+    ]
+    assert contract["protection_task_keys"] == [
+        "qfbench:swap-curve-bootstrap-ois"
+    ]
+    assert contract["coordinator_selected_probe_evaluation_allowed"] is True
     assert "broad Research-State label alone" in contract["evolver_instruction"]
     assert "Do not request Worker evaluation on every task" in (
         contract["evolver_instruction"]
     )
+    assert "from_scratch experiment_spec" in contract["evolver_instruction"]
     assert (tmp_path / "coordinated/components/CATALOG.json").is_file()
 
 

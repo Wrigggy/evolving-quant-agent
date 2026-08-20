@@ -722,6 +722,22 @@ def build_coordinated_evolver_view(
             f"corpus has no coordinated tasks: {sorted(missing)}"
         )
     cards = [by_key[key] for key in selected_keys]
+    target_keys = [
+        str(card["task_key"]) for card in cards if card.get("role") == "target"
+    ]
+    protection_keys = [
+        str(card["task_key"])
+        for card in cards
+        if card.get("role") == "protection"
+    ]
+    if len(target_keys) != 1:
+        raise ComponentExperienceError(
+            "coordinated view requires exactly one predeclared target task"
+        )
+    if not protection_keys:
+        raise ComponentExperienceError(
+            "coordinated view requires at least one protection task"
+        )
 
     target.mkdir(parents=True)
     (target / "access_log.jsonl").write_text("", encoding="utf-8")
@@ -776,13 +792,17 @@ def build_coordinated_evolver_view(
         "failure mechanism, quantitative object, or executable invariant; a broad "
         "Research-State label alone is not evidence of a match. Preserve a "
         "non-match as a valid conclusion. If a shared mechanism is supported, "
-        "choose exactly one probe_task_key whose Worker result would best "
+        "record the predeclared target as the one probe_task_key whose Worker "
+        "result would best "
         "discriminate the leading hypothesis from a competitor. Implement one "
         "bounded reusable harness candidate and predict an observable action "
         "target: an artifact edit, a validator finding acted upon, or an "
         "evidence-grounded skip. Do not request Worker evaluation on every task. "
         "The remaining tasks are contrast trajectories and are evaluated only "
         "after a positive target result. Otherwise record calibrated ABSTAIN."
+        " For ACT, use decide_candidate, set shared_mechanism to the concrete "
+        "cross-task relation supported by both trajectories, and provide a "
+        "from_scratch experiment_spec with no seed experience."
     )
     if include_component_history:
         instruction += (
@@ -799,14 +819,53 @@ def build_coordinated_evolver_view(
                 "history-enabled" if include_component_history else "task-only"
             ),
             "task_keys": selected_keys,
+            "target_task_keys": target_keys,
+            "protection_task_keys": protection_keys,
+            "task_ids": [str(card["task_id"]) for card in cards],
+            "target_task_ids": [
+                str(card["task_id"])
+                for card in cards
+                if card.get("role") == "target"
+            ],
+            "protection_task_ids": [
+                str(card["task_id"])
+                for card in cards
+                if card.get("role") == "protection"
+            ],
+            "task_evidence_prefixes": {
+                str(card["task_key"]): [
+                    (
+                        f"benchmarks/{card['benchmark']}/tasks/"
+                        f"{card['task_id']}/"
+                    ),
+                    (
+                        f"tasks/cards/{card['benchmark']}--"
+                        f"{card['task_id']}.json"
+                    ),
+                ]
+                for card in cards
+            },
             "answer_free": True,
             "component_history_enabled": include_component_history,
             "evolver_instruction": instruction,
+            "decision_protocol": "quant_property_v2",
+            "feedback_tier": "answer_free_property_family_v2",
+            "history_required": False,
+            "max_primary_components": 2,
+            "max_declared_components": 9,
+            "research_state_transition_required_for_act": True,
+            "quant_failure_classification_required_for_act": False,
+            "domain_tags_are_extensible": True,
+            "autonomous_probe_required": True,
+            "coordinated_evidence_required_for_act": True,
+            "probe_seed_policy": "none",
             "shared_mechanism_assessment_required": True,
             "probe_task_selection_required_for_act": True,
             "max_worker_probes_this_round": 1,
             "positive_target_before_contrast_evaluation": True,
-            "worker_evaluation_in_this_stage": False,
+            "evolver_worker_evaluation_in_this_stage": False,
+            "coordinator_selected_probe_evaluation_allowed": True,
+            "worker_evaluation_in_this_stage": "conditional_singleton_dispatch",
         },
     )
     return {
@@ -814,6 +873,8 @@ def build_coordinated_evolver_view(
         "destination": str(target),
         "task_keys": selected_keys,
         "task_count": len(cards),
+        "target_task_key": target_keys[0],
+        "protection_task_keys": protection_keys,
         "component_history_enabled": include_component_history,
         "max_worker_probes_this_round": 1,
     }

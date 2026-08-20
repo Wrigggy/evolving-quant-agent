@@ -175,6 +175,13 @@ and the observation that would change the next decision. The instruction may
 describe public behavior and answer-free runtime symptoms, but it must not pass
 checker answers, expected values, reference outputs, or task-specific constants
 to the Worker.
+When the stage is `COORDINATED_BREADTH`, read and cite evidence from every task
+in the pair before ACT. State one concrete `shared_mechanism` that is narrower
+than a Research-State label, and set the single `probe_task_key` to the
+predeclared target in the contract. The other trajectory is evidence and a
+conditional protection task, not a second Worker call. Use a `from_scratch`
+experiment with no seed. If the two trajectories do not support one mechanism,
+or the target probe would not distinguish the leading explanations, ABSTAIN.
 When a scored history entry contains `evaluation.worker_runtime[].final_artifact`,
 compare that Worker-authored implementation with the public task contract before
 inventing another harness component. It is runtime experience, not a reference

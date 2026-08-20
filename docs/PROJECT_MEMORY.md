@@ -1,7 +1,25 @@
 # QEA Repository Memory
 
+## 2026-08-21 parallel multi-task pair canary
+
+The next bounded breadth experiment is a fixed three-pair panel, not an
+open-ended scheduler. Each isolated Evolver sees two answer-free QFBench
+trajectories, must cite both, name a concrete shared quant mechanism, and may
+dispatch exactly one seedless target Worker probe. The fixed pairs cover rates
+curve/repricing, adjusted-price event timing, and forward-consistent option
+surfaces. All three outcomes remain in the denominator and the result is
+reported as `x/3`; a winner is selected on this pilot and is not an unbiased
+performance estimate.
+
+The no-model preflight materialized all three views from retained evidence and
+passed 181 focused tests. Live Evolver selection, candidate admission,
+activation, target improvement, Fresh Quant-H0 comparison, and conditional
+protection remain pending. See the
+[parallel-pair decision](decisions/2026-08-21-parallel-multi-task-pair-canary.md)
+and [preflight record](../data/breadth/MT_PARALLEL_PAIR_PREFLIGHT_RESULT.json).
+
 > Canonical research and architecture memory for future contributors and agents.
-> Last updated: 2026-08-18. This file records current decisions, not merely historical discussion.
+> Last updated: 2026-08-21. This file records current decisions, not merely historical discussion.
 
 ## How to Use This Memory
 

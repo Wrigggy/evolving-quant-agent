@@ -1656,6 +1656,59 @@ def _decide_quant_property_candidate(
             )
         if selected_id is None:
             raise GuardedWorkspaceError("ACT requires selected_hypothesis_id")
+        if contract.get("coordinated_evidence_required_for_act") is True:
+            shared_mechanism = _text(
+                discovery.get("shared_mechanism"), label="shared_mechanism"
+            )
+            normalized["shared_mechanism"] = shared_mechanism
+            task_keys = _text_list(
+                contract.get("task_keys"), label="contract task_keys", minimum=2
+            )
+            target_task_keys = _text_list(
+                contract.get("target_task_keys"),
+                label="contract target_task_keys",
+                minimum=1,
+            )
+            probe_task_key = _text(
+                discovery.get("probe_task_key"), label="probe_task_key"
+            )
+            if probe_task_key not in target_task_keys:
+                raise GuardedWorkspaceError(
+                    "probe_task_key must select one predeclared target task"
+                )
+            if probe_task_key not in task_keys:
+                raise GuardedWorkspaceError(
+                    "probe_task_key is outside the coordinated task panel"
+                )
+            normalized["probe_task_key"] = probe_task_key
+
+            raw_prefixes = contract.get("task_evidence_prefixes")
+            if not isinstance(raw_prefixes, Mapping):
+                raise GuardedWorkspaceError(
+                    "coordinated contract has no task evidence prefixes"
+                )
+            missing_task_evidence: list[str] = []
+            for task_key in task_keys:
+                raw_task_prefixes = raw_prefixes.get(task_key)
+                if not isinstance(raw_task_prefixes, list) or not raw_task_prefixes:
+                    raise GuardedWorkspaceError(
+                        f"coordinated contract has no evidence prefix for {task_key}"
+                    )
+                prefixes = [
+                    _text(value, label=f"task_evidence_prefixes.{task_key}")
+                    for value in raw_task_prefixes
+                ]
+                if not any(
+                    reference == prefix or reference.startswith(prefix)
+                    for reference in normalized_refs
+                    for prefix in prefixes
+                ):
+                    missing_task_evidence.append(task_key)
+            if missing_task_evidence:
+                raise GuardedWorkspaceError(
+                    "ACT must cite inspected evidence from every coordinated task: "
+                    + ", ".join(missing_task_evidence)
+                )
         if contract.get("research_state_transition_required_for_act") is True:
             raw_transition = discovery.get("research_state_transition")
             if not isinstance(raw_transition, Mapping):
@@ -1834,6 +1887,12 @@ def _decide_quant_property_candidate(
                 raise GuardedWorkspaceError(
                     "from_scratch experiment_spec must not select a seed"
                 )
+            if contract.get("probe_seed_policy") == "none" and (
+                mode != "from_scratch" or seed is not None
+            ):
+                raise GuardedWorkspaceError(
+                    "coordinated Worker probe must run from_scratch without a seed"
+                )
             max_iterations = raw_experiment.get("max_iterations")
             if type(max_iterations) is not int or not 1 <= max_iterations <= 12:
                 raise GuardedWorkspaceError(
@@ -1862,6 +1921,8 @@ def _decide_quant_property_candidate(
     else:
         if selected_id is not None:
             raise GuardedWorkspaceError("ABSTAIN must not select a hypothesis")
+        if discovery.get("probe_task_key") is not None:
+            raise GuardedWorkspaceError("ABSTAIN must not select a probe_task_key")
         if discovery.get("components") not in (None, []):
             raise GuardedWorkspaceError("ABSTAIN must not declare components")
         if discovery.get("primary_components") not in (None, []):
@@ -1899,6 +1960,12 @@ def _decide_quant_property_candidate(
             "max_declared_components": contract.get("max_declared_components"),
             "preferred_primary_components": contract.get(
                 "preferred_primary_components"
+            ),
+            "coordinated_evidence_required_for_act": contract.get(
+                "coordinated_evidence_required_for_act"
+            ),
+            "max_worker_probes_this_round": contract.get(
+                "max_worker_probes_this_round"
             ),
         },
     }

@@ -176,6 +176,102 @@ def _candidate_admission(
         }
 
 
+def _summary_payload(summary) -> dict[str, object]:
+    return {
+        "scores": [asdict(score) for score in summary.scores],
+        "task_rewards": dict(summary.task_rewards),
+        "domain_scores": dict(summary.domain_scores),
+        "task_mean": summary.task_mean,
+        "overall": summary.overall,
+    }
+
+
+def _coordinated_probe_task_key(
+    *,
+    contract: Mapping[str, object],
+    decision: str | None,
+    admission: Mapping[str, object],
+    discovery_state: Mapping[str, object],
+) -> str | None:
+    """Return the Evolver-selected singleton target for an admitted ACT."""
+
+    if contract.get("stage") != "COORDINATED_BREADTH":
+        raise ValueError("selected-probe dispatch requires coordinated evidence")
+    if contract.get("max_worker_probes_this_round") != 1:
+        raise ValueError("coordinated evidence must permit exactly one Worker probe")
+    if decision != "ACT" or admission.get("admitted") is not True:
+        return None
+    hypothesis = discovery_state.get("hypothesis")
+    if not isinstance(hypothesis, Mapping):
+        raise ValueError("admitted coordinated ACT has no structured hypothesis")
+    probe_task_key = hypothesis.get("probe_task_key")
+    if not isinstance(probe_task_key, str) or not probe_task_key:
+        raise ValueError("admitted coordinated ACT has no probe_task_key")
+    targets = contract.get("target_task_keys")
+    if not isinstance(targets, list) or probe_task_key not in targets:
+        raise ValueError("coordinated ACT selected a non-target probe task")
+    if not probe_task_key.startswith("qfbench:"):
+        raise ValueError("this runner only dispatches QFBench probe tasks")
+    return probe_task_key
+
+
+def _qfbench_task_for_key(probe_task_key: str, tasks: tuple):
+    benchmark, separator, task_id = probe_task_key.partition(":")
+    if benchmark != "qfbench" or not separator or not task_id:
+        raise ValueError("probe_task_key is not a QFBench task key")
+    matches = [task for task in tasks if task.task_id == task_id]
+    if len(matches) != 1:
+        raise ValueError("probe_task_key does not resolve to one QFBench task")
+    return matches[0]
+
+
+def _materialize_coordinated_probe_worker(
+    *, candidate: Path, destination: Path, hypothesis: Mapping[str, object]
+) -> tuple[Path, int]:
+    """Apply only the Evolver-authored probe directive and bounded turn budget."""
+
+    experiment = hypothesis.get("experiment_spec")
+    if not isinstance(experiment, Mapping):
+        raise ValueError("coordinated ACT has no experiment_spec")
+    if experiment.get("mode") != "from_scratch" or experiment.get(
+        "seed_experience"
+    ) is not None:
+        raise ValueError("coordinated probe must run from_scratch without a seed")
+    max_iterations = experiment.get("max_iterations")
+    if type(max_iterations) is not int or not 1 <= max_iterations <= 12:
+        raise ValueError("coordinated probe max_iterations must be in [1, 12]")
+    instruction = experiment.get("worker_instruction")
+    if not isinstance(instruction, str) or not instruction.strip():
+        raise ValueError("coordinated probe has no Worker instruction")
+    if destination.exists():
+        raise ValueError("coordinated probe worker already exists")
+    shutil.copytree(
+        candidate,
+        destination,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+    agent = destination / "agent.yaml"
+    text = agent.read_text(encoding="utf-8")
+    text, count = re.subn(
+        r"(?m)^max_iterations:\s*\d+\s*$",
+        f"max_iterations: {max_iterations}",
+        text,
+        count=1,
+    )
+    if count != 1:
+        raise ValueError("coordinated candidate has no max_iterations setting")
+    agent.write_text(text, encoding="utf-8")
+    prompt = destination / "systemprompt.md"
+    prompt.write_text(
+        prompt.read_text(encoding="utf-8").rstrip()
+        + "\n\n## Evolver-authored bounded experiment directive\n\n"
+        + instruction.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    return destination, max_iterations
+
+
 def _stage_evidence(record, run_dir: Path):
     """Copy authorized evidence under the exact run root before sandbox use."""
 
@@ -280,6 +376,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Deliberation request supported by the selected model route.",
     )
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument(
+        "--dispatch-selected-probe",
+        action="store_true",
+        help=(
+            "After an admitted coordinated ACT, evaluate exactly the Evolver-"
+            "selected probe task. Protection remains a separate conditional run."
+        ),
+    )
     parser.add_argument("--approve-external-run", action="store_true")
     return parser
 
@@ -441,6 +545,12 @@ def main(argv: list[str] | None = None) -> int:
         config=config,
     )
     evidence_contract = _json(evidence.root / "contract.json")
+    if args.dispatch_selected_probe and evidence_contract.get("stage") != (
+        "COORDINATED_BREADTH"
+    ):
+        raise ValueError(
+            "selected-probe dispatch is only valid for coordinated breadth"
+        )
     if a6_identity is not None:
         validate_a6_evidence_contract(
             frozen=a6_identity["frozen"],
@@ -496,7 +606,10 @@ def main(argv: list[str] | None = None) -> int:
                 required_provider=config.required_provider,
             ),
         },
-        "worker_evaluation_in_this_run": False,
+        "selected_worker_probe_dispatch_enabled": args.dispatch_selected_probe,
+        "max_worker_probes_in_this_run": (
+            1 if args.dispatch_selected_probe else 0
+        ),
     }
     if a6_identity is not None:
         freeze_record = a6_identity["freeze_record"]
@@ -568,6 +681,9 @@ def main(argv: list[str] | None = None) -> int:
                     if a6_identity is not None
                     else None
                 ),
+                "selected_worker_probe_dispatch_enabled": (
+                    args.dispatch_selected_probe
+                ),
             }
             _atomic_json(run_dir / "pilot-preflight.json", report)
             _atomic_json(run_dir / "pilot-progress.json", report)
@@ -636,6 +752,53 @@ def main(argv: list[str] | None = None) -> int:
             backbone=backbone,
             candidate=proposal.candidate_dir,
         )
+        proposal_cost = _cost(run_dir)
+        worker_probe: dict[str, object] = {
+            "requested": args.dispatch_selected_probe,
+            "dispatched": False,
+            "probe_task_key": None,
+            "reason": "selected-probe dispatch was not enabled",
+        }
+        if args.dispatch_selected_probe:
+            probe_task_key = _coordinated_probe_task_key(
+                contract=evidence_contract,
+                decision=decision,
+                admission=admission,
+                discovery_state=discovery_state,
+            )
+            if probe_task_key is None:
+                worker_probe["reason"] = (
+                    "no admitted coordinated ACT selected a Worker probe"
+                )
+            else:
+                selected_task = _qfbench_task_for_key(
+                    probe_task_key, tuple(full_panel)
+                )
+                probe_worker, probe_max_iterations = (
+                    _materialize_coordinated_probe_worker(
+                        candidate=proposal.candidate_dir,
+                        destination=run_dir / "inputs/coordinated-probe-worker",
+                        hypothesis=hypothesis,
+                    )
+                )
+                summary = runtime.evaluator.evaluate(
+                    worker_dir=probe_worker,
+                    tasks=(selected_task,),
+                    split="coordinated-probe",
+                    checkpoint="mt-selected-probe",
+                    run_dir=run_dir,
+                )
+                worker_probe = {
+                    "requested": True,
+                    "dispatched": True,
+                    "probe_task_key": probe_task_key,
+                    "task_id": selected_task.task_id,
+                    "task_count": 1,
+                    "probe_worker_dir": str(probe_worker),
+                    "max_iterations": probe_max_iterations,
+                    "experiment_directive_applied": True,
+                    "summary": _summary_payload(summary),
+                }
         proposal_payload = {
             "decision": decision,
             "candidate_dir": str(proposal.candidate_dir),
@@ -646,6 +809,7 @@ def main(argv: list[str] | None = None) -> int:
             "access_summary": _json(proposal.access_summary_uri),
             "summary": proposal_summary,
             "mutation_metrics": mutation_metrics,
+            "worker_probe": worker_probe,
         }
     finally:
         runtime.close()
@@ -657,27 +821,27 @@ def main(argv: list[str] | None = None) -> int:
         if isinstance(wall_seconds, (int, float)) and not isinstance(wall_seconds, bool)
         else None
     )
-    requests = int(run_cost["completed_request_count"]) + int(
-        run_cost["downstream_delivery_request_count"]
+    requests = int(proposal_cost["completed_request_count"]) + int(
+        proposal_cost["downstream_delivery_request_count"]
     )
     proposal_payload["candidate_generation_throughput"] = {
         "wall_seconds": wall_seconds,
-        "completed_request_count": run_cost["completed_request_count"],
-        "downstream_delivery_request_count": run_cost[
+        "completed_request_count": proposal_cost["completed_request_count"],
+        "downstream_delivery_request_count": proposal_cost[
             "downstream_delivery_request_count"
         ],
-        "noncompleted_request_count": run_cost["noncompleted_request_count"],
+        "noncompleted_request_count": proposal_cost["noncompleted_request_count"],
         "billable_or_delivered_request_count": requests,
-        "total_tokens": run_cost["total_tokens"],
-        "provider_cost_usd": run_cost["provider_cost_usd"],
+        "total_tokens": proposal_cost["total_tokens"],
+        "provider_cost_usd": proposal_cost["provider_cost_usd"],
         "requests_per_second": (
             requests / wall_seconds if wall_seconds and wall_seconds > 0 else None
         ),
         "tokens_per_second": (
-            int(run_cost["total_tokens"]) / wall_seconds
+            int(proposal_cost["total_tokens"]) / wall_seconds
             if wall_seconds
             and wall_seconds > 0
-            and isinstance(run_cost["total_tokens"], int)
+            and isinstance(proposal_cost["total_tokens"], int)
             else None
         ),
         "measurement_only": True,
@@ -688,8 +852,11 @@ def main(argv: list[str] | None = None) -> int:
         "arm": args.arm,
         "status": "complete",
         "proposal": proposal_payload,
+        "proposal_cost": proposal_cost,
         "cost": run_cost,
-        "worker_evaluation_in_this_run": False,
+        "worker_evaluation_in_this_run": bool(
+            proposal_payload["worker_probe"]["dispatched"]
+        ),
     }
     if a6_identity is not None:
         report["a6_prelaunch_identity"] = {
