@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-20",
+  "protocol": "mt1-coordinated-breadth-view-v1",
+  "status": "preflight_complete",
+  "task_keys": [
+    "qfbench:zero-coupon-bootstrapping",
+    "qfbench:swap-curve-bootstrap-ois"
+  ],
+  "task_count": 2,
+  "component_cards_available": 6,
+  "component_history_enabled": true,
+  "shared_mechanism_assessment_required": true,
+  "probe_task_selection_required_for_act": true,
+  "max_worker_probes_this_round": 1,
+  "positive_target_before_contrast_evaluation": true,
+  "model_requests": 0,
+  "provider_cost_usd": 0,
+  "interpretation": "The real retained QFBench evidence can be materialized into one coordinated answer-free Evolver view. Live Evolver selection and benchmark dispatch remain pending.",
+  "claim_boundary": "No-model evidence-routing preflight only; not an autonomous decision, Worker experiment, scheduler, or benchmark result."
+}

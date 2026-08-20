@@ -3070,3 +3070,20 @@ measure a helpful candidate, benchmark gain, repeat, transfer, or multi-task
 coordination. The campaign used 69 completed requests and $0.228217836 with no
 rate-limit retry or coordinator restart. Full record:
 `docs/decisions/2026-08-20-ap3-r5-h0-autonomy-result.md`.
+
+### 2026-08-20 MT-1 bounded multi-task coordination preflight
+
+The next breadth step is a two-task coordination canary, not the deferred full
+scheduler. The initial pair is QFBench `zero-coupon-bootstrapping` (target,
+retained 1/6) and `swap-curve-bootstrap-ois` (protection, retained 17/19).
+Both share a concrete curve-construction and repricing object. T26 remains a
+cross-benchmark reserve because a broad Research-State overlap does not prove
+the same failure mechanism.
+
+The coordinated view requires a concrete shared-mechanism assessment and
+exactly one selected Worker probe. Other tasks remain contrast trajectories
+until an official target improvement. A no-model preflight materialized both
+real answer-free trajectories and six advisory component cards, with all
+focused tests passing and zero provider cost. Live Evolver selection and
+benchmark dispatch remain pending. Full design:
+`docs/decisions/2026-08-20-mt1-two-task-coordination-canary.md`.
