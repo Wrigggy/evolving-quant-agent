@@ -469,6 +469,12 @@ def test_coordinated_view_keeps_optimize_diagnostic_evolver_only(tmp_path):
                 "feedback_mode": "answer_rich_evolver",
                 "worker_visible": False,
                 "observed_failure_families": ["repricing"],
+                "superseding_public_evaluation": {
+                    "task_id": "zero-coupon-bootstrapping",
+                    "official_reward": 1.0,
+                    "tests_passed": 6,
+                    "tests_failed": 0,
+                },
             }
         )
     )
@@ -495,3 +501,10 @@ def test_coordinated_view_keeps_optimize_diagnostic_evolver_only(tmp_path):
         tmp_path
         / "coordinated/benchmarks/qfbench/tasks/zero-coupon-bootstrapping/optimization-diagnostic.json"
     ).is_file()
+    corrected = json.loads(
+        (
+            tmp_path
+            / "coordinated/benchmarks/qfbench/tasks/zero-coupon-bootstrapping/public_evaluation.json"
+        ).read_text()
+    )
+    assert corrected["tests_passed"] == 6

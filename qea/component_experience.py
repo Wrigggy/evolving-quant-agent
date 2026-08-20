@@ -746,6 +746,13 @@ def build_coordinated_evolver_view(
                 "optimization diagnostic must be answer-rich and Evolver-only"
             )
         diagnostics[task_key] = diagnostic
+        superseding_evaluation = diagnostic.get("superseding_public_evaluation")
+        if isinstance(superseding_evaluation, Mapping):
+            if superseding_evaluation.get("task_id") != card.get("task_id"):
+                raise ComponentExperienceError(
+                    "superseding public evaluation task does not match"
+                )
+            card["answer_free_outcome"] = dict(superseding_evaluation)
         card["feedback_mode"] = "answer_rich_evolver"
         card["evolver_only_evidence_paths"] = {
             "optimization_diagnostic": (
@@ -785,6 +792,19 @@ def build_coordinated_evolver_view(
         )
         task_key = str(card["task_key"])
         if task_key in diagnostics:
+            superseding_evaluation = diagnostics[task_key].get(
+                "superseding_public_evaluation"
+            )
+            if isinstance(superseding_evaluation, Mapping):
+                _write_json(
+                    target
+                    / "benchmarks"
+                    / benchmark
+                    / "tasks"
+                    / task_id
+                    / "public_evaluation.json",
+                    dict(superseding_evaluation),
+                )
             _write_json(
                 target
                 / "benchmarks"

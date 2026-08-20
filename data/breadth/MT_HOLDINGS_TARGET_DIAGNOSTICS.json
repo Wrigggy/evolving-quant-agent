@@ -5,10 +5,15 @@
   "worker_visible": false,
   "supersedes_source_public_evaluation": true,
   "evidence_role": "answer-rich optimize-only Evolver diagnostics after a blind Worker attempt",
-  "official_score_after_input_mount_fix": {
+  "superseding_public_evaluation": {
+    "schema_version": 1,
+    "task_id": "13f-amendment-aware-crowding",
     "tests_passed": 46,
     "tests_failed": 5,
-    "reward": 0.0
+    "official_reward": 0.0,
+    "verifier_exit_code": 0,
+    "diagnostic_tags": ["tests_failed"],
+    "provenance": "official score from zero-model verifier replay after public task data was mounted"
   },
   "observed_failure_families": [
     {
