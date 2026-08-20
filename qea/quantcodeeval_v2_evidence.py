@@ -114,6 +114,7 @@ def build_quantcodeeval_v2_evidence(
     component_sources: Mapping[str, str | Path] | None = None,
     worker_artifact_sources: Mapping[str, str | Path] | None = None,
     experiment_observation_sources: Mapping[str, str | Path] | None = None,
+    optimization_diagnostic_path: str | Path | None = None,
     autonomous_probe_required: bool = False,
     iteration_summaries: Iterable[Mapping[str, object]] = (),
     current_parent: str | None = None,
@@ -291,6 +292,35 @@ def build_quantcodeeval_v2_evidence(
             relative = f"guidance/experiment_observations/{name}.json"
             _write_json(staging / relative, dict(observation))
             exposed_experiment_observations[name] = relative
+        optimization_diagnostic = None
+        if optimization_diagnostic_path is not None:
+            source = Path(optimization_diagnostic_path).expanduser().resolve()
+            try:
+                diagnostic = json.loads(source.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                raise QuantCodeEvalV2EvidenceError(
+                    f"optimization diagnostic is not valid JSON: {source}"
+                ) from exc
+            if not isinstance(diagnostic, Mapping):
+                raise QuantCodeEvalV2EvidenceError(
+                    "optimization diagnostic must contain a JSON object"
+                )
+            if diagnostic.get("feedback_mode") != "answer_rich_evolver":
+                raise QuantCodeEvalV2EvidenceError(
+                    "optimization diagnostic has the wrong feedback mode"
+                )
+            if diagnostic.get("worker_visible") is not False:
+                raise QuantCodeEvalV2EvidenceError(
+                    "optimization diagnostic must be marked Evolver-only"
+                )
+            diagnostic_task = diagnostic.get("task_id")
+            if diagnostic_task not in current_rewards:
+                raise QuantCodeEvalV2EvidenceError(
+                    "optimization diagnostic task is outside the current panel"
+                )
+            optimization_diagnostic = "guidance/optimization-diagnostic.json"
+            _write_json(staging / optimization_diagnostic, dict(diagnostic))
+        answer_rich = optimization_diagnostic is not None
         _write_json(
             staging / "contract.json",
             {
@@ -298,7 +328,11 @@ def build_quantcodeeval_v2_evidence(
                 "stage": "PGBHS_V2",
                 "benchmark": "quantcodeeval",
                 "decision_protocol": "quant_property_v2",
-                "feedback_tier": "answer_free_property_family_v2",
+                "feedback_tier": (
+                    "answer_rich_optimization_v1"
+                    if answer_rich
+                    else "answer_free_property_family_v2"
+                ),
                 "task_ids": sorted(current_rewards),
                 "target_task_ids": sorted(
                     task_id
@@ -340,6 +374,11 @@ def build_quantcodeeval_v2_evidence(
                 "worker_artifacts_are_reference_answers": False,
                 "experiment_observations": exposed_experiment_observations,
                 "experiment_observations_are_runtime_feedback": True,
+                "optimization_diagnostic": optimization_diagnostic,
+                "optimization_answers_exposed_to_evolver": answer_rich,
+                "optimization_answers_exposed_to_worker": False,
+                "worker_feedback_mode": "blind_public_task",
+                "failure_signature_required_for_act": answer_rich,
                 "autonomous_probe_required": bool(autonomous_probe_required),
                 "quant_failure_classification_required_for_act": False,
                 "domain_guidance_is_advisory": True,
@@ -361,7 +400,7 @@ def build_quantcodeeval_v2_evidence(
                 ),
                 "declared_components_must_equal_exact_changed_file_roles": True,
                 "exact_history_content_exposed": history_summary["entry_count"] != 0,
-                "oracle_fields_exposed": False,
+                "oracle_fields_exposed": answer_rich,
             },
         )
         sha256, members = _digest_tree(staging)

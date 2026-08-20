@@ -893,6 +893,7 @@ def run_quantcodeeval_v2_activation_canary(
     component_sources: Mapping[str, str | Path] | None = None,
     worker_artifact_sources: Mapping[str, str | Path] | None = None,
     experiment_observation_sources: Mapping[str, str | Path] | None = None,
+    optimization_diagnostic_path: str | Path | None = None,
     autonomous_probe_required: bool = False,
     task_ids: Iterable[str] | None = None,
     diagnosis_note: str | None = None,
@@ -1063,6 +1064,7 @@ def run_quantcodeeval_v2_activation_canary(
         "experiment_observations": sorted(
             (experiment_observation_sources or {}).keys()
         ),
+        "optimization_diagnostic_enabled": optimization_diagnostic_path is not None,
         "autonomous_probe_required": bool(autonomous_probe_required),
         "diagnosis_note": diagnosis_note,
         "search_limits": asdict(
@@ -1158,6 +1160,7 @@ def run_quantcodeeval_v2_activation_canary(
             component_sources=component_sources,
             worker_artifact_sources=worker_artifact_sources,
             experiment_observation_sources=experiment_observation_sources,
+            optimization_diagnostic_path=optimization_diagnostic_path,
             autonomous_probe_required=autonomous_probe_required,
             current_parent=state.search_parent_digest,
             iteration_summaries=(

@@ -89,6 +89,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Require an ACT decision to include a bounded experiment_spec.",
     )
     parser.add_argument(
+        "--optimization-diagnostic",
+        type=Path,
+        help=(
+            "Optional answer-rich optimize-task diagnostic exposed only to "
+            "the Evolver; the later Worker remains blind."
+        ),
+    )
+    parser.add_argument(
         "--task",
         dest="task_ids",
         action="append",
@@ -125,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
         component_sources=dict(args.component_source),
         worker_artifact_sources=dict(args.worker_artifact),
         experiment_observation_sources=dict(args.experiment_observation),
+        optimization_diagnostic_path=args.optimization_diagnostic,
         autonomous_probe_required=args.require_autonomous_probe,
         task_ids=args.task_ids,
         diagnosis_note=args.diagnosis_note,

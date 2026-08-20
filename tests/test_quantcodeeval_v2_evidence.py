@@ -2,13 +2,18 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 from qea.quantcodeeval_evidence import (
     PropertyFamilyProgress,
     QuantAttemptEvidence,
     QuantEvidenceAttemptSource,
 )
 from qea.quantcodeeval_history import append_quantcodeeval_history
-from qea.quantcodeeval_v2_evidence import build_quantcodeeval_v2_evidence
+from qea.quantcodeeval_v2_evidence import (
+    QuantCodeEvalV2EvidenceError,
+    build_quantcodeeval_v2_evidence,
+)
 from qea.executors.sandbox_evolver import _safe_evidence_member
 
 
@@ -312,3 +317,72 @@ def test_first_v2_round_does_not_require_nonexistent_history(tmp_path):
     assert contract["worker_artifacts"] == {}
     assert summary["entry_count"] == 0
     assert not (record.root / "history/archive").exists()
+
+
+def test_v2_answer_rich_optimization_is_evolver_only(tmp_path):
+    roots = {"T26": _public_task(tmp_path, "T26")}
+    diagnostic = tmp_path / "optimization-diagnostic.json"
+    diagnostic.write_text(
+        json.dumps(
+            {
+                "task_id": "T26",
+                "feedback_mode": "answer_rich_evolver",
+                "visibility": "evolver_only",
+                "worker_visible": False,
+                "rubric_items": [{"property_id": "A1"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    record = build_quantcodeeval_v2_evidence(
+        destination=tmp_path / "answer-rich-evidence",
+        public_task_roots=roots,
+        attempts=(_attempt(tmp_path, "T26", 0.0),),
+        current_evaluation_id="eval-current",
+        history_root=None,
+        optimization_diagnostic_path=diagnostic,
+    )
+
+    contract = json.loads((record.root / "contract.json").read_text())
+    assert contract["feedback_tier"] == "answer_rich_optimization_v1"
+    assert contract["optimization_diagnostic"] == (
+        "guidance/optimization-diagnostic.json"
+    )
+    assert contract["optimization_answers_exposed_to_evolver"] is True
+    assert contract["optimization_answers_exposed_to_worker"] is False
+    assert contract["failure_signature_required_for_act"] is True
+    assert contract["oracle_fields_exposed"] is True
+    assert json.loads(
+        (record.root / "guidance/optimization-diagnostic.json").read_text()
+    )["task_id"] == "T26"
+
+
+@pytest.mark.parametrize(
+    "diagnostic",
+    [
+        {
+            "task_id": "T26",
+            "feedback_mode": "answer_rich_evolver",
+            "worker_visible": True,
+        },
+        {
+            "task_id": "T99",
+            "feedback_mode": "answer_rich_evolver",
+            "worker_visible": False,
+        },
+    ],
+)
+def test_v2_rejects_misrouted_optimization_diagnostic(tmp_path, diagnostic):
+    path = tmp_path / "optimization-diagnostic.json"
+    path.write_text(json.dumps(diagnostic), encoding="utf-8")
+
+    with pytest.raises(QuantCodeEvalV2EvidenceError):
+        build_quantcodeeval_v2_evidence(
+            destination=tmp_path / "invalid-evidence",
+            public_task_roots={"T26": _public_task(tmp_path, "T26")},
+            attempts=(_attempt(tmp_path, "T26", 0.0),),
+            current_evaluation_id="eval-current",
+            history_root=None,
+            optimization_diagnostic_path=path,
+        )
