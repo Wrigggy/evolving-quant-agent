@@ -124,7 +124,10 @@ def _activation_payload(run_dir: Path, checkpoint: str, token: str | None) -> di
                 or "Found the skill details" in trace
                 or (
                     "<ToolUse>" in trace
-                    and f'"name": "{token}"' in trace
+                    and (
+                        f'"name": "{token}"' in trace
+                        or f'\\"name\\": \\"{token}\\"' in trace
+                    )
                 )
             )
         )

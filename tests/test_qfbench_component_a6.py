@@ -300,8 +300,15 @@ def test_component_activation_follows_replacement_and_counts_tool_call(tmp_path)
             "checkpoint": "localvol-candidate+infra-replacement-02",
         },
     )
-    (replacement / "raw-trace.jsonl").write_text(
-        '<ToolUse>{"input": {}, "name": "validate_surface_artifacts"}</ToolUse>\n'
+    _write_json(
+        replacement / "raw-trace.jsonl",
+        {
+            "role": "assistant",
+            "content": (
+                '<ToolUse>{"input": {}, '
+                '"name": "validate_surface_artifacts"}</ToolUse>'
+            ),
+        },
     )
 
     activation = pilot._activation_payload(
