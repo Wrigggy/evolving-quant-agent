@@ -694,6 +694,7 @@ def build_coordinated_evolver_view(
     destination: str | Path,
     task_keys: Iterable[str],
     include_component_history: bool,
+    optimization_diagnostic_paths: Mapping[str, str | Path] | None = None,
 ) -> dict[str, object]:
     """Build one bounded multi-task view with exactly one selectable probe."""
 
@@ -722,6 +723,36 @@ def build_coordinated_evolver_view(
             f"corpus has no coordinated tasks: {sorted(missing)}"
         )
     cards = [by_key[key] for key in selected_keys]
+    diagnostics: dict[str, dict[str, object]] = {}
+    for task_key, raw_path in (optimization_diagnostic_paths or {}).items():
+        if task_key not in selected_keys:
+            raise ComponentExperienceError(
+                f"optimization diagnostic has no selected task: {task_key}"
+            )
+        diagnostic = _json(
+            Path(raw_path).expanduser().resolve(),
+            label=f"{task_key} optimization diagnostic",
+        )
+        card = by_key[task_key]
+        if diagnostic.get("task_id") != card.get("task_id"):
+            raise ComponentExperienceError(
+                "optimization diagnostic task does not match the selected task"
+            )
+        if (
+            diagnostic.get("feedback_mode") != "answer_rich_evolver"
+            or diagnostic.get("worker_visible") is not False
+        ):
+            raise ComponentExperienceError(
+                "optimization diagnostic must be answer-rich and Evolver-only"
+            )
+        diagnostics[task_key] = diagnostic
+        card["feedback_mode"] = "answer_rich_evolver"
+        card["evolver_only_evidence_paths"] = {
+            "optimization_diagnostic": (
+                f"benchmarks/{card['benchmark']}/tasks/{card['task_id']}/"
+                "optimization-diagnostic.json"
+            )
+        }
     target_keys = [
         str(card["task_key"]) for card in cards if card.get("role") == "target"
     ]
@@ -752,6 +783,17 @@ def build_coordinated_evolver_view(
             source / "benchmarks" / benchmark / "tasks" / task_id,
             target / "benchmarks" / benchmark / "tasks" / task_id,
         )
+        task_key = str(card["task_key"])
+        if task_key in diagnostics:
+            _write_json(
+                target
+                / "benchmarks"
+                / benchmark
+                / "tasks"
+                / task_id
+                / "optimization-diagnostic.json",
+                diagnostics[task_key],
+            )
     _write_json(
         target / "tasks/CATALOG.json",
         {"schema_version": 1, "task_count": len(cards), "tasks": cards},
@@ -810,6 +852,14 @@ def build_coordinated_evolver_view(
             "COMPOSE, rejection, or replacement rather than copying a component "
             "because its state tags overlap."
         )
+    if diagnostics:
+        instruction += (
+            " This declared optimize-only view includes Evolver-only answer-rich "
+            "diagnostics produced after a blind Worker attempt. Use them to separate "
+            "the observed task failure from a reusable missing capability. Never "
+            "copy expected values or task-specific answers into the candidate; the "
+            "Worker remains blind to these diagnostics."
+        )
     _write_json(
         target / "contract.json",
         {
@@ -845,11 +895,17 @@ def build_coordinated_evolver_view(
                 ]
                 for card in cards
             },
-            "answer_free": True,
+            "answer_free": not diagnostics,
             "component_history_enabled": include_component_history,
             "evolver_instruction": instruction,
             "decision_protocol": "quant_property_v2",
-            "feedback_tier": "answer_free_property_family_v2",
+            "feedback_tier": (
+                "answer_rich_optimization_v1"
+                if diagnostics
+                else "answer_free_property_family_v2"
+            ),
+            "optimization_answers_exposed_to_evolver": bool(diagnostics),
+            "optimization_answers_exposed_to_worker": False,
             "history_required": False,
             "max_primary_components": 2,
             "max_declared_components": 9,

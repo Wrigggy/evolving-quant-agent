@@ -438,3 +438,60 @@ def test_coordinated_view_rejects_one_task(tmp_path):
             task_keys=("qfbench:swap-curve-bootstrap-ois",),
             include_component_history=False,
         )
+
+
+def test_coordinated_view_keeps_optimize_diagnostic_evolver_only(tmp_path):
+    corpus = tmp_path / "breadth"
+    build_cross_benchmark_experience(
+        destination=corpus,
+        task_profiles=(
+            {
+                "benchmark": "qfbench",
+                "task_id": "zero-coupon-bootstrapping",
+                "role": "target",
+                "state_tags": ["curve_bootstrap", "repricing"],
+            },
+            {
+                "benchmark": "qfbench",
+                "task_id": "swap-curve-bootstrap-ois",
+                "role": "protection",
+                "state_tags": ["curve_bootstrap", "repricing"],
+            },
+        ),
+        component_ledger_path=LEDGER,
+        qfbench_evidence_root=_qfbench_evidence(tmp_path),
+    )
+    diagnostic = tmp_path / "diagnostic.json"
+    diagnostic.write_text(
+        json.dumps(
+            {
+                "task_id": "zero-coupon-bootstrapping",
+                "feedback_mode": "answer_rich_evolver",
+                "worker_visible": False,
+                "observed_failure_families": ["repricing"],
+            }
+        )
+    )
+
+    build_coordinated_evolver_view(
+        corpus_root=corpus,
+        destination=tmp_path / "coordinated",
+        task_keys=(
+            "qfbench:zero-coupon-bootstrapping",
+            "qfbench:swap-curve-bootstrap-ois",
+        ),
+        include_component_history=True,
+        optimization_diagnostic_paths={
+            "qfbench:zero-coupon-bootstrapping": diagnostic
+        },
+    )
+
+    contract = json.loads((tmp_path / "coordinated/contract.json").read_text())
+    assert contract["answer_free"] is False
+    assert contract["optimization_answers_exposed_to_evolver"] is True
+    assert contract["optimization_answers_exposed_to_worker"] is False
+    assert contract["feedback_tier"] == "answer_rich_optimization_v1"
+    assert (
+        tmp_path
+        / "coordinated/benchmarks/qfbench/tasks/zero-coupon-bootstrapping/optimization-diagnostic.json"
+    ).is_file()

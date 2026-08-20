@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "task_id": "13f-amendment-aware-crowding",
+  "official_reward": 0.0,
+  "tests_passed": 46,
+  "tests_failed": 5,
+  "verifier_exit_code": 0,
+  "diagnostic_tags": ["tests_failed"],
+  "provenance": "official score from zero-model verifier replay after public task data was mounted"
+}

@@ -16,6 +16,18 @@ if str(ROOT) not in sys.path:
 from qea.component_experience import build_coordinated_evolver_view  # noqa: E402
 
 
+def _diagnostic(value: str) -> tuple[str, Path]:
+    task_key, separator, raw_path = value.partition("=")
+    if not separator or ":" not in task_key:
+        raise argparse.ArgumentTypeError(
+            "optimization diagnostic must be TASK_KEY=PATH"
+        )
+    path = Path(raw_path).expanduser().resolve()
+    if not path.is_file():
+        raise argparse.ArgumentTypeError(f"diagnostic is unavailable: {path}")
+    return task_key, path
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path, required=True)
@@ -25,6 +37,13 @@ def main(argv: list[str] | None = None) -> int:
         "--arm",
         choices=("task-only", "history-enabled"),
         default="history-enabled",
+    )
+    parser.add_argument(
+        "--optimization-diagnostic",
+        action="append",
+        type=_diagnostic,
+        default=[],
+        help="Evolver-only optimize diagnostic as TASK_KEY=PATH; may repeat",
     )
     args = parser.parse_args(argv)
 
@@ -36,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     if destination.exists():
         raise ValueError(f"destination already exists: {destination}")
     destination.mkdir(parents=True)
+    diagnostics = dict(args.optimization_diagnostic)
 
     results = []
     seen_ids: set[str] = set()
@@ -55,6 +75,11 @@ def main(argv: list[str] | None = None) -> int:
             destination=destination / pair_id,
             task_keys=(target, protection),
             include_component_history=args.arm == "history-enabled",
+            optimization_diagnostic_paths={
+                key: path
+                for key, path in diagnostics.items()
+                if key in {target, protection}
+            },
         )
         results.append({"pair_id": pair_id, **result})
 

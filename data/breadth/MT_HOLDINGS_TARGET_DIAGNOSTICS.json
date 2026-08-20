@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "task_id": "13f-amendment-aware-crowding",
+  "feedback_mode": "answer_rich_evolver",
+  "worker_visible": false,
+  "supersedes_source_public_evaluation": true,
+  "evidence_role": "answer-rich optimize-only Evolver diagnostics after a blind Worker attempt",
+  "official_score_after_input_mount_fix": {
+    "tests_passed": 46,
+    "tests_failed": 5,
+    "reward": 0.0
+  },
+  "observed_failure_families": [
+    {
+      "family": "entity_name_canonicalization",
+      "observation": "one effective holding retained a trailing legal-form token that the reference canonical name removes"
+    },
+    {
+      "family": "stale_downstream_portfolio_state",
+      "observation": "reported turnover does not recompute from the final effective holdings weights"
+    },
+    {
+      "family": "summary_reconciliation",
+      "observation": "summary turnover inherits the stale value and the maximum-overlap pair is serialized as one joined label instead of a two-label sequence"
+    }
+  ],
+  "candidate_boundary": "The Evolver may use these optimize diagnostics to design a reusable component, but the Worker does not receive this file and the candidate must not encode expected task answers."
+}

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "stage": "COORDINATED_BREADTH",
+  "purpose": "bounded autonomous search over one corrected holdings-analytics target and one portfolio-reconciliation protection task",
+  "tasks": [
+    {
+      "benchmark": "qfbench",
+      "task_id": "13f-amendment-aware-crowding",
+      "role": "target",
+      "domain": "data_engineering",
+      "state_tags": [
+        "portfolio_state",
+        "entity_canonicalization",
+        "holdings_aggregation",
+        "weight_reconciliation",
+        "turnover_overlap_summary"
+      ],
+      "baseline": {"tests_passed": 46, "tests_failed": 5},
+      "setup_status": "corrected_verifier_replay_ready"
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "brinson-sector-attribution",
+      "role": "protection",
+      "domain": "systematic_strategy",
+      "state_tags": [
+        "portfolio_state",
+        "weight_reconciliation",
+        "hierarchical_aggregation",
+        "attribution_summary"
+      ],
+      "baseline": {"tests_passed": 42, "tests_failed": 0},
+      "setup_status": "corrected_verifier_replay_ready"
+    }
+  ],
+  "pairs": [
+    {
+      "pair_id": "holdings_lineage_reconciliation",
+      "target_task_key": "qfbench:13f-amendment-aware-crowding",
+      "protection_task_key": "qfbench:brinson-sector-attribution",
+      "predeclared_shared_object": "final portfolio state propagated through weights, turnover, overlap, attribution, and summary reconciliation",
+      "target_screen": {
+        "tests_passed_strictly_greater_than": 46
+      },
+      "protection_floor": {
+        "tests_passed_at_least": 42
+      },
+      "estimated_target_runtime_seconds": 1200
+    }
+  ],
+  "component_portability": {
+    "empty_response_recovery": "source_reusable_if_same_nexau_runtime",
+    "declarative_quant_invariant": "lesson_only",
+    "public_quantity_semantic_binding": "lesson_only",
+    "warmup_boundary_arbitration": "quantcodeeval_only",
+    "window_endpoint_consistency_audit": "lesson_only"
+  },
+  "limits": {
+    "max_relevant_components_per_task": 4
+  }
+}
