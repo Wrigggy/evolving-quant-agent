@@ -97,7 +97,11 @@ class ProbePhaseCheckpoint(Middleware):
 
     def after_tool(self, hook_input: AfterToolHookInput) -> HookResult:
         if hook_input.tool_name == self.component_tool:
-            self._component_iteration = self._current_iteration
+            # The reserve is measured from the first observation.  Re-audits are
+            # evidence that the transition is progressing; they must not restart
+            # the reserve and trap an otherwise complete Worker in another cycle.
+            if self._component_iteration is None:
+                self._component_iteration = self._current_iteration
             self._checkpoint_active = False
         return HookResult.no_changes()
 

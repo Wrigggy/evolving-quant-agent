@@ -78,3 +78,52 @@ def test_checkpoint_closes_inventory_and_preserves_post_observation_turns():
         parsed_response=SimpleNamespace(has_calls=lambda: False),
     ))
     assert finished.force_continue is False
+
+
+def test_reaudit_does_not_restart_post_observation_reserve():
+    middleware = ProbePhaseCheckpoint(
+        component_tool="check_quant_relations",
+        inventory_turns=2,
+        min_post_observation_turns=3,
+    )
+    state = SimpleNamespace()
+
+    middleware.before_model(BeforeModelHookInput(
+        agent_state=state,
+        max_iterations=20,
+        current_iteration=2,
+        messages=[_message()],
+    ))
+    middleware.after_tool(AfterToolHookInput(
+        agent_state=state,
+        sandbox=None,
+        tool_name="check_quant_relations",
+        tool_call_id="call-1",
+        tool_input={},
+        tool_output={"ok": False},
+    ))
+
+    middleware.before_model(BeforeModelHookInput(
+        agent_state=state,
+        max_iterations=20,
+        current_iteration=5,
+        messages=[_message()],
+    ))
+    middleware.after_tool(AfterToolHookInput(
+        agent_state=state,
+        sandbox=None,
+        tool_name="check_quant_relations",
+        tool_call_id="call-2",
+        tool_input={},
+        tool_output={"ok": True},
+    ))
+
+    finished = middleware.after_model(AfterModelHookInput(
+        agent_state=state,
+        max_iterations=20,
+        current_iteration=6,
+        messages=[_message()],
+        original_response="done",
+        parsed_response=SimpleNamespace(has_calls=lambda: False),
+    ))
+    assert finished.force_continue is False
