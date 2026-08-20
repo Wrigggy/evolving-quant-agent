@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "protocol": "quantcodeeval-diagnostic-refinement-v1",
+  "date": "2026-08-20",
+  "status": "local_discrimination_positive_worker_activation_negative",
+  "task_id": "T26",
+  "baseline": {
+    "tests_passed": 12,
+    "tests_total": 17,
+    "reward": 0
+  },
+  "evolver": {
+    "decision": "ACT",
+    "search_operator": "SYNTHESIZE",
+    "failure_class": "formula_parameterization",
+    "mechanism_family": "quantitative_consistency_residual",
+    "primary_components": [
+      "tools",
+      "tool_descriptions"
+    ],
+    "all_changed_components": [
+      "tools",
+      "tool_descriptions",
+      "agent_config",
+      "systemprompt"
+    ],
+    "model_requests": 30,
+    "total_tokens": 2840576,
+    "cost_usd": 0.186782712,
+    "local_discrimination": {
+      "correct_fixture": "3/3 relations realized; truncation and OOS-permutation residuals both zero",
+      "single_perturbation": "removing the training-boundary gate produced two localized errors and truncation residual 0.0947 while the other two relations remained realized"
+    }
+  },
+  "worker_probe_6_iterations": {
+    "model_requests": 5,
+    "total_tokens": 61907,
+    "cost_usd": 0.005077364,
+    "component_calls": 0,
+    "artifact_changed": false,
+    "tests_passed": 12,
+    "tests_total": 17,
+    "reward": 0
+  },
+  "worker_probe_10_iterations": {
+    "model_requests": 9,
+    "total_tokens": 225165,
+    "cost_usd": 0.013176676,
+    "component_calls": 0,
+    "artifact_changed": false,
+    "tests_passed": 12,
+    "tests_total": 17,
+    "reward": 0
+  },
+  "total_cost_usd": 0.205036752,
+  "measured_conclusion": "Answer-rich optimize evidence helped the Evolver autonomously synthesize a discriminating quant-specific component, but neither blind Worker entered the component-mediated Evaluation and Reconciliation state. The component is locally discriminating but not yet Worker-helpful or benchmark-helpful.",
+  "next_gate": "Change activation and tool-selection behavior before another scored probe; do not infer that a larger generic Worker budget will solve the failure.",
+  "artifacts": {
+    "main_run": "results/bc-mirror/qce-t26-qdr1-diagnostic-refinement-20260820-r1",
+    "ten_iteration_followup": "results/bc-mirror/qce-t26-qdr1-activation10-20260820-r2"
+  }
+}

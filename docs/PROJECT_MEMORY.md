@@ -2901,3 +2901,33 @@ bounded mechanism test should give the Evolver—not the Worker—the permitted
 answer-rich optimize mismatch and require it to refine, replace, or abstain on
 the component before one further paired probe. It should not add a generic
 budget increase or hard-code the five property answers into the Worker.
+
+### 2026-08-20 QDR-1 quant diagnostic refinement
+
+QDR-1 supplied the AP-3 r2 blind trajectory and permitted optimize-only
+answer-rich mismatch to the Evolver, while keeping the Worker answer-blind. The
+Evolver autonomously separated relation observability, genuine numeric
+deviation, and activation/stopping hypotheses. It synthesized a four-surface
+candidate centered on a new `check_quant_relations` tool for information-time,
+identity-ridge, and metric-weighted-residual relations.
+
+The component's local discrimination gate was positive: a correct synthetic
+fixture realized 3/3 relations with zero residuals, while removing only the
+training-boundary gate produced two localized errors and a 0.0947 truncation
+residual without breaking the other relations. This establishes quant-specific
+diagnostic synthesis and local discrimination, not Worker or benchmark benefit.
+
+The six-iteration blind seeded Worker used five requests, never called the new
+component, did not change the artifact, and remained T26 12/17, reward zero. A
+controlled ten-iteration follow-up held the candidate, seed, task, model,
+runtime, and Evolver-authored instruction fixed. It used nine requests but
+again made zero component calls, repeatedly inspected the seed and paper, left
+the artifact unchanged, and remained 12/17. The 6-versus-10 comparison rejects
+a simple small-budget explanation and localizes the next gap to Worker
+activation/tool selection before Evaluation and Reconciliation.
+
+The Evolver used 30 requests and cost $0.186782712; the two Worker probes cost
+$0.005077364 and $0.013176676. Corrected total cost was $0.205036752. Retain the
+candidate and negative trajectories as experience, but do not label the
+component Worker-helpful or benchmark-helpful. Full result and boundary:
+`docs/decisions/2026-08-20-qdr1-quant-diagnostic-refinement-result.md`.
