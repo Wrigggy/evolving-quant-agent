@@ -688,8 +688,140 @@ def build_breadth_evolver_view(
     }
 
 
+def build_coordinated_evolver_view(
+    *,
+    corpus_root: str | Path,
+    destination: str | Path,
+    task_keys: Iterable[str],
+    include_component_history: bool,
+) -> dict[str, object]:
+    """Build one bounded multi-task view with exactly one selectable probe."""
+
+    source = Path(corpus_root).expanduser().resolve()
+    target = Path(destination).expanduser().resolve()
+    selected_keys = list(dict.fromkeys(task_keys))
+    if not 2 <= len(selected_keys) <= 4:
+        raise ComponentExperienceError(
+            "coordinated view requires between two and four unique tasks"
+        )
+    if target.exists():
+        raise ComponentExperienceError(f"destination already exists: {target}")
+
+    task_catalog = _json(source / "tasks/CATALOG.json", label="task catalog")
+    raw_tasks = task_catalog.get("tasks")
+    if not isinstance(raw_tasks, list):
+        raise ComponentExperienceError("task catalog has no task list")
+    by_key = {
+        str(row.get("task_key")): dict(row)
+        for row in raw_tasks
+        if isinstance(row, Mapping) and isinstance(row.get("task_key"), str)
+    }
+    missing = [key for key in selected_keys if key not in by_key]
+    if missing:
+        raise ComponentExperienceError(
+            f"corpus has no coordinated tasks: {sorted(missing)}"
+        )
+    cards = [by_key[key] for key in selected_keys]
+
+    target.mkdir(parents=True)
+    (target / "access_log.jsonl").write_text("", encoding="utf-8")
+    for card in cards:
+        benchmark = str(card["benchmark"])
+        task_id = str(card["task_id"])
+        _write_json(
+            target / "tasks/cards" / f"{benchmark}--{task_id}.json",
+            card,
+        )
+        _copy_tree(
+            source / "benchmarks" / benchmark / "tasks" / task_id,
+            target / "benchmarks" / benchmark / "tasks" / task_id,
+        )
+    _write_json(
+        target / "tasks/CATALOG.json",
+        {"schema_version": 1, "task_count": len(cards), "tasks": cards},
+    )
+
+    relevant = _json(
+        source / "tasks/RELEVANT_COMPONENTS.json",
+        label="relevant components",
+    )
+    raw_relevant = relevant.get("tasks")
+    relevant_rows = [
+        dict(row)
+        for row in raw_relevant or []
+        if isinstance(row, Mapping) and row.get("task_key") in selected_keys
+    ]
+    if include_component_history:
+        component_source = source / "components/CATALOG.json"
+        if not component_source.is_file():
+            raise ComponentExperienceError(
+                "history-enabled coordinated view needs components"
+            )
+        _copy_text(component_source, target / "components/CATALOG.json")
+    else:
+        relevant_rows = []
+    _write_json(
+        target / "tasks/RELEVANT_COMPONENTS.json",
+        {
+            "schema_version": 1,
+            "history_enabled": include_component_history,
+            "task_keys": selected_keys,
+            "tasks": relevant_rows,
+        },
+    )
+
+    instruction = (
+        "Compare the selected Quant Research Trajectories before proposing a "
+        "component. First decide whether at least two tasks share one concrete "
+        "failure mechanism, quantitative object, or executable invariant; a broad "
+        "Research-State label alone is not evidence of a match. Preserve a "
+        "non-match as a valid conclusion. If a shared mechanism is supported, "
+        "choose exactly one probe_task_key whose Worker result would best "
+        "discriminate the leading hypothesis from a competitor. Implement one "
+        "bounded reusable harness candidate and predict an observable action "
+        "target: an artifact edit, a validator finding acted upon, or an "
+        "evidence-grounded skip. Do not request Worker evaluation on every task. "
+        "The remaining tasks are contrast trajectories and are evaluated only "
+        "after a positive target result. Otherwise record calibrated ABSTAIN."
+    )
+    if include_component_history:
+        instruction += (
+            " Prior component cards are advisory. Explain any REUSE, REFINE, "
+            "COMPOSE, rejection, or replacement rather than copying a component "
+            "because its state tags overlap."
+        )
+    _write_json(
+        target / "contract.json",
+        {
+            "schema_version": 1,
+            "stage": "COORDINATED_BREADTH",
+            "contract_arm": (
+                "history-enabled" if include_component_history else "task-only"
+            ),
+            "task_keys": selected_keys,
+            "answer_free": True,
+            "component_history_enabled": include_component_history,
+            "evolver_instruction": instruction,
+            "shared_mechanism_assessment_required": True,
+            "probe_task_selection_required_for_act": True,
+            "max_worker_probes_this_round": 1,
+            "positive_target_before_contrast_evaluation": True,
+            "worker_evaluation_in_this_stage": False,
+        },
+    )
+    return {
+        "schema_version": 1,
+        "destination": str(target),
+        "task_keys": selected_keys,
+        "task_count": len(cards),
+        "component_history_enabled": include_component_history,
+        "max_worker_probes_this_round": 1,
+    }
+
+
 __all__ = [
     "ComponentExperienceError",
     "build_breadth_evolver_view",
+    "build_coordinated_evolver_view",
     "build_cross_benchmark_experience",
 ]

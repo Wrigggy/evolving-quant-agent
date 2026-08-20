@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "status": "no_model_preflight",
+  "purpose": "Two-task Research-State coordination with one selected Worker probe",
+  "tasks": [
+    {
+      "benchmark": "qfbench",
+      "task_id": "zero-coupon-bootstrapping",
+      "role": "target",
+      "domain": "rates_fx_macro",
+      "state_tags": [
+        "quantitative_representation",
+        "curve_bootstrap",
+        "discount_factor",
+        "repricing",
+        "curve_consistency"
+      ],
+      "retained_baseline": {
+        "tests_passed": 1,
+        "tests_failed": 5,
+        "repeats": 5
+      }
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "swap-curve-bootstrap-ois",
+      "role": "protection",
+      "domain": "rates_fx_macro",
+      "state_tags": [
+        "quantitative_representation",
+        "curve_bootstrap",
+        "discount_curve",
+        "projection_curve",
+        "repricing"
+      ],
+      "retained_baseline": {
+        "tests_passed": 17,
+        "tests_failed": 2,
+        "repeats": 5
+      }
+    }
+  ],
+  "reserve_task": {
+    "benchmark": "quantcodeeval",
+    "task_id": "T26",
+    "reason": "cross-benchmark reserve only; current evidence does not establish the same concrete curve-construction failure"
+  },
+  "component_portability": {
+    "declarative_quant_invariant": "lesson_only",
+    "public_quantity_semantic_binding": "lesson_only",
+    "window_endpoint_consistency_audit": "lesson_only"
+  },
+  "limits": {
+    "max_relevant_components_per_task": 4,
+    "max_worker_probes_this_round": 1,
+    "max_evolver_rounds": 2,
+    "max_provider_cost_usd": 0.25
+  },
+  "promotion_order": [
+    "shared concrete mechanism supported",
+    "one target probe selected",
+    "observable Worker action",
+    "target official improvement",
+    "one protection evaluation"
+  ],
+  "claim_boundary": "Bounded multi-task coordination canary; not a scheduler or benchmark-wide result"
+}

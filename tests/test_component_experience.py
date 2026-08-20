@@ -6,6 +6,7 @@ import pytest
 from qea.component_experience import (
     ComponentExperienceError,
     build_breadth_evolver_view,
+    build_coordinated_evolver_view,
     build_cross_benchmark_experience,
 )
 
@@ -26,7 +27,7 @@ def _write(path: Path, value) -> None:
 
 def _qfbench_evidence(tmp_path: Path) -> Path:
     root = tmp_path / "qfbench"
-    task_id = "swap-curve-bootstrap-ois"
+    task_ids = ("swap-curve-bootstrap-ois", "zero-coupon-bootstrapping")
     _write(
         root / "debugger/task_index.json",
         {
@@ -36,54 +37,59 @@ def _qfbench_evidence(tmp_path: Path) -> Path:
                     "fresh_execution_status": "complete",
                     "fresh_evidence_completeness": "full_structured_trace",
                 }
+                for task_id in task_ids
             ]
         },
     )
-    task = root / "tasks" / task_id
-    _write(
-        task / "public_evaluation.json",
-        {
-            "task_id": task_id,
-            "official_reward": 0.0,
-            "tests_passed": 17,
-            "tests_failed": 2,
-            "source_sha256": "not-carried-forward",
-        },
-    )
-    _write(
-        task / "process_summary.json",
-        {"turns": 12, "tool_calls": 16, "dependency_lock_sha256": "old"},
-    )
-    _write(
-        task / "artifact_manifest.json",
-        {
-            "artifacts": [
-                {
-                    "path": "summary.json",
-                    "representation": "full_text",
-                    "sha256": "old",
-                }
-            ]
-        },
-    )
-    _write(task / "worker_trace.jsonl", '{"role":"assistant","content":"work"}\n')
-    _write(task / "worker_final.txt", "done\n")
-    _write(task / "artifacts/summary.json", {"max_residual": 0.1})
-    contract = root / "contracts" / task_id
-    _write(contract / "instruction.md", "Bootstrap both curves.\n")
-    _write(
-        contract / "clauses.json",
-        {
-            "clause_count": 1,
-            "clauses": [
-                {
-                    "clause_id": f"{task_id}#c1",
-                    "text": "Use the OIS curve for discounting.",
-                    "text_sha256": "old",
-                }
-            ],
-        },
-    )
+    for index, task_id in enumerate(task_ids):
+        task = root / "tasks" / task_id
+        _write(
+            task / "public_evaluation.json",
+            {
+                "task_id": task_id,
+                "official_reward": 0.0,
+                "tests_passed": 17 if index == 0 else 1,
+                "tests_failed": 2 if index == 0 else 5,
+                "source_sha256": "not-carried-forward",
+            },
+        )
+        _write(
+            task / "process_summary.json",
+            {"turns": 12, "tool_calls": 16, "dependency_lock_sha256": "old"},
+        )
+        _write(
+            task / "artifact_manifest.json",
+            {
+                "artifacts": [
+                    {
+                        "path": "summary.json",
+                        "representation": "full_text",
+                        "sha256": "old",
+                    }
+                ]
+            },
+        )
+        _write(
+            task / "worker_trace.jsonl",
+            '{"role":"assistant","content":"work"}\n',
+        )
+        _write(task / "worker_final.txt", "done\n")
+        _write(task / "artifacts/summary.json", {"max_residual": 0.1})
+        contract = root / "contracts" / task_id
+        _write(contract / "instruction.md", "Bootstrap and reprice the curve.\n")
+        _write(
+            contract / "clauses.json",
+            {
+                "clause_count": 1,
+                "clauses": [
+                    {
+                        "clause_id": f"{task_id}#c1",
+                        "text": "Reprice supplied instruments consistently.",
+                        "text_sha256": "old",
+                    }
+                ],
+            },
+        )
     return root
 
 
@@ -350,3 +356,74 @@ def test_quantcodeeval_answer_rich_view_is_evolver_only(tmp_path):
     assert catalog["tasks"][0]["feedback_mode"] == "answer_rich_evolver"
     assert diagnostic_path.is_file()
     assert not list(corpus.rglob("optimization-diagnostic.json"))
+
+
+def test_coordinated_view_requires_mechanism_match_and_one_probe(tmp_path):
+    corpus = tmp_path / "breadth"
+    build_cross_benchmark_experience(
+        destination=corpus,
+        task_profiles=(
+            {
+                "benchmark": "qfbench",
+                "task_id": "zero-coupon-bootstrapping",
+                "role": "target",
+                "state_tags": ["curve_bootstrap", "repricing"],
+            },
+            {
+                "benchmark": "qfbench",
+                "task_id": "swap-curve-bootstrap-ois",
+                "role": "protection",
+                "state_tags": ["curve_bootstrap", "repricing"],
+            },
+        ),
+        component_ledger_path=LEDGER,
+        qfbench_evidence_root=_qfbench_evidence(tmp_path),
+    )
+
+    result = build_coordinated_evolver_view(
+        corpus_root=corpus,
+        destination=tmp_path / "coordinated",
+        task_keys=(
+            "qfbench:zero-coupon-bootstrapping",
+            "qfbench:swap-curve-bootstrap-ois",
+        ),
+        include_component_history=True,
+    )
+
+    assert result["task_count"] == 2
+    assert result["max_worker_probes_this_round"] == 1
+    contract = json.loads(
+        (tmp_path / "coordinated/contract.json").read_text()
+    )
+    assert contract["shared_mechanism_assessment_required"] is True
+    assert contract["probe_task_selection_required_for_act"] is True
+    assert contract["positive_target_before_contrast_evaluation"] is True
+    assert "broad Research-State label alone" in contract["evolver_instruction"]
+    assert "Do not request Worker evaluation on every task" in (
+        contract["evolver_instruction"]
+    )
+    assert (tmp_path / "coordinated/components/CATALOG.json").is_file()
+
+
+def test_coordinated_view_rejects_one_task(tmp_path):
+    corpus = tmp_path / "breadth"
+    build_cross_benchmark_experience(
+        destination=corpus,
+        task_profiles=(
+            {
+                "benchmark": "qfbench",
+                "task_id": "swap-curve-bootstrap-ois",
+                "role": "target",
+                "state_tags": ["curve_bootstrap"],
+            },
+        ),
+        component_ledger_path=LEDGER,
+        qfbench_evidence_root=_qfbench_evidence(tmp_path),
+    )
+    with pytest.raises(ComponentExperienceError, match="two and four"):
+        build_coordinated_evolver_view(
+            corpus_root=corpus,
+            destination=tmp_path / "coordinated",
+            task_keys=("qfbench:swap-curve-bootstrap-ois",),
+            include_component_history=False,
+        )
