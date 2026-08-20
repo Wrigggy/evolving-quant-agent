@@ -3031,3 +3031,19 @@ on turn twenty-seven, but completion middleware continued through turn forty.
 Treat that terminal overrun as a measured efficiency defect before multi-task
 scaling. Full record:
 `docs/decisions/2026-08-20-qdr1-fresh-t26-confirmation-result.md`.
+
+### 2026-08-20 AP-3 r4 setup-invalid H0 rerun
+
+AP-3 r4 generated a new answer-blind Quant-H0 T26 artifact at 13/17, reward
+zero, using 27 requests and $0.121280528. Evolver round one then used 20
+requests, wrote candidate files, and cost $0.116974576. The coordinator failed
+before round-one history/admission completed because the synchronized Linux
+deploy contained macOS AppleDouble files such as `._agent.yaml`; history
+validation correctly reported the binary sidecar as non-UTF8 source.
+
+Retain r4 as setup-invalid after round-one execution, with total observed cost
+$0.238255104. It is not a candidate, feedback-loop, final-Worker, or improvement
+result. Remove the sidecars from the remote deploy, disable macOS metadata in
+future archive syncs, preflight the Quant-H0 worker tree, and rerun under a new
+ID. Full record:
+`docs/decisions/2026-08-20-ap3-r4-appledouble-setup-failure.md`.

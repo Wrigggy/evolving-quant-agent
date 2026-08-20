@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-20",
+  "run_id": "qce-t26-ap3-20260820-r4",
+  "protocol": "quantcodeeval-ap3-v2",
+  "status": "setup_invalid_after_round_one_execution",
+  "h0": {
+    "tests_passed": 13,
+    "tests_total": 17,
+    "reward": 0,
+    "completed_requests": 27,
+    "cost_usd": 0.121280528
+  },
+  "round_one": {
+    "completed_requests": 20,
+    "worker_seconds": 494.357,
+    "cost_usd": 0.116974576,
+    "candidate_files_written": true,
+    "live_result_written": false
+  },
+  "total_cost_usd": 0.238255104,
+  "failure": {
+    "stage": "round-one history ingestion",
+    "type": "macOS AppleDouble sync contamination",
+    "observed_file": "._agent.yaml",
+    "message": "worker snapshot contains non-UTF8 source",
+    "repair": "remove AppleDouble sidecars from the remote deploy and disable macOS metadata in future archive syncs"
+  },
+  "interpretation": "The H0 score is valid, but the campaign is setup-invalid after round-one execution. It provides no admitted candidate, feedback-loop, final-Worker, or improvement result.",
+  "artifact_location": "results/bc-mirror/qce-t26-ap3-20260820-r4/"
+}
