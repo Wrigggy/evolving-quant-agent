@@ -1003,10 +1003,15 @@ def audit_baseline_proxy_costs(
         for record_index, record in enumerate(audit_records):
             if is_superseded and record.get("request_state") == "quarantined":
                 manifest = superseded[attempt_id]
+                expected_keys = (
+                    _PROXY_AUDIT_V2_KEYS
+                    if record.get("schema_version") == 2
+                    else _PROXY_AUDIT_KEYS
+                )
                 if (
                     record_index != len(audit_records) - 1
-                    or set(record) != _PROXY_AUDIT_KEYS
-                    or record.get("schema_version") != 1
+                    or set(record) != expected_keys
+                    or record.get("schema_version") not in {1, 2}
                     or record.get("failure_class") != manifest["reason"]
                 ):
                     raise BaselineConfigError(

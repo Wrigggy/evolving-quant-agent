@@ -279,6 +279,42 @@ def test_component_plan_normalization_matches_persisted_json_types():
     }
 
 
+def test_component_activation_follows_replacement_and_counts_tool_call(tmp_path):
+    import scripts.run_qfbench_component_pilot as pilot
+
+    logical = tmp_path / "attempts" / "logical"
+    replacement = tmp_path / "attempts" / "replacement"
+    _write_json(
+        logical / "attempt.json",
+        {
+            "attempt_id": "logical",
+            "task_id": "dupire-local-vol",
+            "checkpoint": "localvol-candidate",
+        },
+    )
+    _write_json(
+        replacement / "attempt.json",
+        {
+            "attempt_id": "replacement",
+            "task_id": "dupire-local-vol",
+            "checkpoint": "localvol-candidate+infra-replacement-02",
+        },
+    )
+    (replacement / "raw-trace.jsonl").write_text(
+        '<ToolUse>{"input": {}, "name": "validate_surface_artifacts"}</ToolUse>\n'
+    )
+
+    activation = pilot._activation_payload(
+        tmp_path,
+        "localvol-candidate",
+        "validate_surface_artifacts",
+    )
+
+    assert activation["activation_count"] == 1
+    assert len(activation["attempts"]) == 2
+    assert activation["attempts"][1]["activated"] is True
+
+
 def test_component_preflight_validates_a6_identity_before_any_evaluator_call(
     tmp_path, monkeypatch
 ):

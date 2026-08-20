@@ -108,14 +108,25 @@ def _activation_payload(run_dir: Path, checkpoint: str, token: str | None) -> di
     attempts: list[dict[str, object]] = []
     for attempt_path in sorted(run_dir.glob("attempts/*/attempt.json")):
         attempt = json.loads(attempt_path.read_text())
-        if attempt.get("checkpoint") != checkpoint:
+        attempt_checkpoint = attempt.get("checkpoint")
+        if attempt_checkpoint != checkpoint and not (
+            isinstance(attempt_checkpoint, str)
+            and attempt_checkpoint.startswith(checkpoint + "+infra-replacement-")
+        ):
             continue
         trace_path = attempt_path.with_name("raw-trace.jsonl")
         trace = trace_path.read_text(errors="replace") if trace_path.is_file() else ""
         marker = (
             token is not None
             and token in trace
-            and ("<SkillDetails>" in trace or "Found the skill details" in trace)
+            and (
+                "<SkillDetails>" in trace
+                or "Found the skill details" in trace
+                or (
+                    "<ToolUse>" in trace
+                    and f'"name": "{token}"' in trace
+                )
+            )
         )
         attempts.append({
             "attempt_id": attempt.get("attempt_id"),

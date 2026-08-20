@@ -685,7 +685,11 @@ def test_cost_audit_counts_replacement_as_one_score_and_old_cost_as_lower_bound(
     logical_dir = tmp_path / "attempts" / logical.attempt_id
     logical_dir.mkdir(parents=True)
     (logical_dir / "attempt.json").write_text(json.dumps(asdict(logical)))
-    ambiguous = _audit_record(identity="a", cost=0.0, input_tokens=0)
+    ambiguous = _audit_v2_record(
+        logical_identity="a" * 64,
+        retry_index=0,
+        rate_limited=False,
+    )
     ambiguous.update(
         {
             "request_state": "quarantined",
