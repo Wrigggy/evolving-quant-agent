@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "stage": "COORDINATED_BREADTH",
+  "purpose": "bounded independent search over copula dependence estimation and sampling trajectories",
+  "tasks": [
+    {
+      "benchmark": "qfbench",
+      "task_id": "copula-equity-fitting",
+      "role": "target",
+      "domain": "dependence_research",
+      "state_tags": ["sample_alignment", "pseudo_observation", "tail_dependence"],
+      "baseline": {"tests_passed": 27, "tests_failed": 1, "reward": 0.0}
+    },
+    {
+      "benchmark": "qfbench",
+      "task_id": "copula-sampling-rank-correlation",
+      "role": "protection",
+      "domain": "dependence_research",
+      "state_tags": ["sample_alignment", "rank_dependence", "tail_dependence"],
+      "baseline": {"tests_passed": 51, "tests_failed": 0, "reward": 1.0}
+    }
+  ],
+  "pairs": [
+    {
+      "pair_id": "copula_dependence_reconciliation",
+      "target_task_key": "qfbench:copula-equity-fitting",
+      "protection_task_key": "qfbench:copula-sampling-rank-correlation",
+      "predeclared_shared_object": "aligned pseudo-observations propagated consistently into rank and empirical tail-dependence estimates",
+      "target_screen": {"tests_passed_strictly_greater_than": 27},
+      "protection_floor": {"tests_passed_at_least": 51}
+    }
+  ],
+  "limits": {
+    "max_worker_probes_per_pair_before_target_screen": 1,
+    "max_evolver_rounds_per_pair": 1,
+    "max_provider_cost_usd": 0.30,
+    "max_relevant_components_per_task": 4
+  },
+  "claim_boundary": "Bounded mechanism canary; one stochastic target run is not a stability result."
+}
