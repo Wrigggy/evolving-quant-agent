@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "run_id": "mtpair-localvol-calibration-20260821-r1",
+  "status": "complete",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "provider": "deepseek",
+  "task_pair": ["dupire-local-vol", "localvol-barrier"],
+  "corrected_pre_run_scores": {
+    "dupire-local-vol": {"tests_passed": 67, "tests_failed": 1, "reward": 0.0},
+    "localvol-barrier": {"tests_passed": 38, "tests_failed": 1, "reward": 0.96}
+  },
+  "evolver": {
+    "decision": "ACT",
+    "shared_mechanism": "delivered volatility-surface and calibration artifacts lack an independent strict-invariant validation and reconciliation step",
+    "component": "validate_surface_artifacts",
+    "changed_roles": ["tools", "tool_descriptions", "agent_config", "systemprompt"],
+    "probe_task": "dupire-local-vol",
+    "probe_mode": "from_scratch",
+    "probe_max_iterations": 10,
+    "requests": 30,
+    "cost_usd": 0.087049692
+  },
+  "worker_probe": {
+    "requests": 9,
+    "tool_calls": 11,
+    "seconds": 361.381,
+    "component_calls": 0,
+    "artifact_count": 0,
+    "observed_process": "The Worker completed data exploration and wrote a pipeline outside the output directory on its final request. The pipeline fitted strictly positive SVI intercepts but stopped on its own final-expiry RMSE assertion before producing deliverables or calling the validator.",
+    "official_tests_passed": 0,
+    "official_tests_failed": 7,
+    "official_reward": 0.0
+  },
+  "total": {
+    "requests": 39,
+    "tokens": 2932949,
+    "cost_usd": 0.107862004
+  },
+  "interpretation": "The run measures autonomous cross-trajectory mechanism selection, multi-file component synthesis, admission, and singleton fresh-probe dispatch. The Evolver-selected probe budget did not leave enough causal distance for artifact delivery or component activation, so it does not establish component or benchmark benefit."
+}
