@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "task_id": "localvol-barrier",
+  "tests_passed": 38,
+  "tests_failed": 1,
+  "official_reward": 0.96,
+  "verifier_exit_code": 0,
+  "diagnostic_tags": ["tests_failed"],
+  "provenance": "official score from zero-model verifier replay with the corrected QFBench runtime"
+}
