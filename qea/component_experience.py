@@ -699,9 +699,15 @@ def build_coordinated_evolver_view(
 ) -> dict[str, object]:
     """Build one bounded multi-task view with exactly one selectable probe."""
 
-    if search_treatment not in {None, "generic", "quant-state"}:
+    if search_treatment not in {
+        None,
+        "generic",
+        "quant-state",
+        "quant-state-v2",
+    }:
         raise ComponentExperienceError(
-            "search_treatment must be generic, quant-state, or null"
+            "search_treatment must be generic, quant-state, quant-state-v2, "
+            "or null"
         )
     if search_treatment is not None and not include_component_history:
         raise ComponentExperienceError(
@@ -898,6 +904,18 @@ def build_coordinated_evolver_view(
             "component episodes. Let that state/relation/component query narrow the "
             "intervention or support ABSTAIN; terminology alone is not evidence."
         )
+    elif search_treatment == "quant-state-v2":
+        instruction += (
+            " Before ACT, use materialize_quant_research_state_card to reconstruct "
+            "one task-conditioned state and select one primary quantitative "
+            "relation. Then ask whether repairing it could leave one orthogonal, "
+            "evidence-supported relation unresolved. If so, record at most one "
+            "residual-risk relation and retrieve compact experience for both "
+            "queries. Predict an answer-free observation for primary and residual "
+            "coverage; omit the residual when evidence does not support one. Let "
+            "the relations narrow component scope or support ABSTAIN rather than "
+            "turning them into a mandatory failure checklist."
+        )
     elif search_treatment == "generic":
         instruction += (
             " Use layered trajectory diagnosis and competing causal hypotheses over "
@@ -956,7 +974,10 @@ def build_coordinated_evolver_view(
             "max_declared_components": 9,
             "research_state_transition_required_for_act": True,
             "quant_research_state_card_required_for_act": (
-                search_treatment == "quant-state"
+                search_treatment in {"quant-state", "quant-state-v2"}
+            ),
+            "quant_residual_risk_relation_enabled": (
+                search_treatment == "quant-state-v2"
             ),
             "quant_failure_classification_required_for_act": False,
             "domain_tags_are_extensible": True,

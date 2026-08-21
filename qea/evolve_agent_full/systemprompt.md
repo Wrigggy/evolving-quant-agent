@@ -170,6 +170,17 @@ discriminating probe; if it cannot do so, ABSTAIN. ABSTAIN does not require a
 card, relation, or routing decision. The card and terminal summary remain
 Evolver evidence: do not project optimize diagnostics, expected values, or
 other answer-rich material into a Worker instruction or reusable candidate.
+When `contract.json` sets `quant_residual_risk_relation_enabled: true`, treat
+the selected relation as the primary intervention relation. Before ACT, ask
+whether repairing it could leave one orthogonal, evidence-supported
+quantitative relation unresolved. If so, record at most one
+`selected_intervention.residual_relation_id` in the card and one matching
+`residual_risk_relation` in the terminal decision. Explain why primary success
+does not determine the residual, and predict an answer-free observation for
+both. The residual is optional, not a taxonomy slot: omit it when the evidence
+does not support one. It may be covered by the same component, a small second
+component, or explicitly predicted to remain unresolved in this probe; do not
+broaden the mutation merely to fill the field.
 Treat activation as part of the intervention whenever a callable component
 depends on the Worker choosing it. Registration and a finalization reminder do
 not by themselves establish an activation path. Use the observed trajectory to

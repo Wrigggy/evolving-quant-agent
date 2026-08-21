@@ -40,6 +40,24 @@ def _state_card() -> dict[str, object]:
     }
 
 
+def _state_card_with_residual() -> dict[str, object]:
+    card = _state_card()
+    card["candidate_relations"] = list(card["candidate_relations"]) + [
+        {
+            "relation_id": "lagged-event-boundary",
+            "relation_family": "event-time-alignment",
+            "applicability": "public actions apply only after their event boundary",
+            "observed_evidence": ["trajectory/event-boundary.jsonl"],
+            "status": "UNKNOWN",
+            "discriminating_observation": "check one event before and after its date",
+        }
+    ]
+    card["selected_intervention"]["residual_relation_id"] = (
+        "lagged-event-boundary"
+    )
+    return card
+
+
 def test_normalizes_open_card_and_preserves_na_unknown():
     card = normalize_quant_research_state_card(_state_card(), action="ACT")
 
@@ -100,6 +118,39 @@ def test_act_rejects_missing_component_locus():
 
     with pytest.raises(QuantResearchStateCardError, match="component locus"):
         validate_quant_research_state_card(raw, action="ACT")
+
+
+def test_act_accepts_one_supported_residual_risk_relation():
+    card = validate_quant_research_state_card(
+        _state_card_with_residual(), action="ACT"
+    )
+
+    assert card["selected_intervention"]["residual_relation_id"] == (
+        "lagged-event-boundary"
+    )
+
+
+def test_act_rejects_residual_relation_that_repeats_primary():
+    raw = _state_card_with_residual()
+    raw["selected_intervention"]["residual_relation_id"] = (
+        "repricing-residual"
+    )
+
+    with pytest.raises(QuantResearchStateCardError, match="must differ"):
+        validate_quant_research_state_card(raw, action="ACT")
+
+
+def test_act_rejects_residual_relation_without_candidate_or_support():
+    missing = _state_card_with_residual()
+    missing["selected_intervention"]["residual_relation_id"] = "not-a-candidate"
+    with pytest.raises(QuantResearchStateCardError, match="not present"):
+        validate_quant_research_state_card(missing, action="ACT")
+
+    unsupported = _state_card_with_residual()
+    unsupported["candidate_relations"][1]["applicability"] = "UNKNOWN"
+    unsupported["candidate_relations"][1]["observed_evidence"] = []
+    with pytest.raises(QuantResearchStateCardError, match="has no support"):
+        validate_quant_research_state_card(unsupported, action="ACT")
 
 
 def test_state_coordinates_retrieve_one_episode_per_outcome():
@@ -179,6 +230,55 @@ def test_state_retrieval_uses_open_coordinates_not_unrelated_catalog_order():
     assert [row["component_id"] for row in result["episodes"]] == [
         "repricing-audit"
     ]
+
+
+def test_state_retrieval_keeps_primary_and_residual_queries_separate():
+    catalog = {
+        "components": [
+            {
+                "component_id": "repricing-audit",
+                "description": "curve repricing residual",
+                "relation_family": "repricing-residual",
+                "component_locus": "tools",
+                "observed_trials": [
+                    {
+                        "task_id": "curve-task",
+                        "outcome_class": "positive",
+                        "activated": True,
+                        "official_reward": 1,
+                        "observation": "public instruments reprice",
+                    }
+                ],
+            },
+            {
+                "component_id": "event-boundary-audit",
+                "description": "apply actions only after the public event date",
+                "relation_family": "event-time-alignment",
+                "component_locus": "tools",
+                "observed_trials": [
+                    {
+                        "task_id": "event-task",
+                        "outcome_class": "negative",
+                        "activated": True,
+                        "official_reward": 0,
+                        "observation": "lagged event boundary remained wrong",
+                    }
+                ],
+            },
+        ]
+    }
+
+    result = retrieve_quant_research_episodes(
+        _state_card_with_residual(), catalog
+    )
+
+    assert [row["component_id"] for row in result["episodes"]] == [
+        "repricing-audit"
+    ]
+    assert result["residual_risk"]["relation_id"] == "lagged-event-boundary"
+    assert [
+        row["component_id"] for row in result["residual_risk"]["episodes"]
+    ] == ["event-boundary-audit"]
 
 
 @pytest.mark.parametrize(

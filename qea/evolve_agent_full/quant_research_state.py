@@ -83,6 +83,13 @@ def _component_locus(card: Mapping[str, object]) -> str | None:
     return None
 
 
+def _residual_relation_id(card: Mapping[str, object]) -> str | None:
+    intervention = card.get("selected_intervention")
+    if isinstance(intervention, Mapping):
+        return _text(intervention.get("residual_relation_id"))
+    return None
+
+
 def normalize_quant_research_state_card(
     value: Mapping[str, object],
     *,
@@ -153,6 +160,31 @@ def normalize_quant_research_state_card(
         for field in ("support", "applicability", "observed_evidence")
     ):
         raise QuantResearchStateCardError("ACT selected relation has no support")
+    residual_relation_id = _residual_relation_id(card)
+    if residual_relation_id is not None:
+        if residual_relation_id == relation_id:
+            raise QuantResearchStateCardError(
+                "residual-risk relation must differ from the selected relation"
+            )
+        residual = next(
+            (
+                relation
+                for relation in relations
+                if _relation_id(relation) == residual_relation_id
+            ),
+            None,
+        )
+        if residual is None:
+            raise QuantResearchStateCardError(
+                "residual-risk relation is not present in candidate_relations"
+            )
+        if not any(
+            _has_support(residual.get(field))
+            for field in ("support", "applicability", "observed_evidence")
+        ):
+            raise QuantResearchStateCardError(
+                "residual-risk relation has no support"
+            )
     if _component_locus(card) is None:
         raise QuantResearchStateCardError("ACT requires a component locus")
     return card
@@ -223,24 +255,13 @@ def _outcome_class(
     return None
 
 
-def retrieve_quant_research_episodes(
-    state_card: Mapping[str, object],
-    component_catalog: Mapping[str, object],
+def _retrieve_relation_episodes(
     *,
-    max_per_outcome: int = 1,
+    card: Mapping[str, object],
+    relation_id: str,
+    raw_components: Sequence[object],
+    max_per_outcome: int,
 ) -> dict[str, object]:
-    """Select a tiny, state-conditioned view over an existing component catalog.
-
-    This is deliberately lexical and transparent. It is a navigation aid over
-    the same catalog available to the generic arm, not a second memory system or
-    a learned ranking model.
-    """
-
-    if type(max_per_outcome) is not int or not 1 <= max_per_outcome <= 3:
-        raise QuantResearchStateCardError("max_per_outcome must be between 1 and 3")
-    card = validate_quant_research_state_card(state_card, action="ACT")
-    relation_id = _selected_relation_id(card, None)
-    assert relation_id is not None
     relation = _selected_relation(card, relation_id)
     intervention = card.get("selected_intervention")
     intervention_map = intervention if isinstance(intervention, Mapping) else {}
@@ -252,17 +273,18 @@ def retrieve_quant_research_episodes(
         "task_mechanism": relation.get(
             "task_mechanism", relation.get("applicability")
         ),
-        "desired_observation": intervention_map.get(
+        "desired_observation": relation.get(
             "discriminating_observation",
-            intervention_map.get("predicted_transition"),
+            relation.get(
+                "expected_relation",
+                intervention_map.get(
+                    "discriminating_observation",
+                    intervention_map.get("predicted_transition"),
+                ),
+            ),
         ),
     }
     query_tokens = _tokens(query)
-
-    raw_components = component_catalog.get("components")
-    if not isinstance(raw_components, list):
-        raise QuantResearchStateCardError("component catalog requires components")
-
     ranked: dict[str, list[tuple[int, str, dict[str, object]]]] = {
         label: [] for label in sorted(_OUTCOME_CLASSES)
     }
@@ -271,6 +293,15 @@ def retrieve_quant_research_episodes(
             continue
         component_id = _text(component.get("component_id"))
         if component_id is None:
+            continue
+        query_relation_family = _text(query.get("relation_family"))
+        component_relation_family = _text(component.get("relation_family"))
+        if (
+            query_relation_family is not None
+            and component_relation_family is not None
+            and query_relation_family.casefold()
+            != component_relation_family.casefold()
+        ):
             continue
         trials = component.get("observed_trials")
         trial_rows = [row for row in trials or [] if isinstance(row, Mapping)]
@@ -334,13 +365,58 @@ def retrieve_quant_research_episodes(
         rows = sorted(ranked[outcome], key=lambda row: (-row[0], row[1]))
         selected.extend(row[2] for row in rows[:max_per_outcome])
     return {
+        "relation_id": relation_id,
         "query": query,
-        "selection_policy": (
-            "state, relation, component, mechanism, and desired-observation "
-            "overlap; at most one episode per outcome by default"
-        ),
         "episodes": selected,
     }
+
+
+def retrieve_quant_research_episodes(
+    state_card: Mapping[str, object],
+    component_catalog: Mapping[str, object],
+    *,
+    max_per_outcome: int = 1,
+) -> dict[str, object]:
+    """Select compact primary and optional residual relation experience.
+
+    This is deliberately lexical and transparent. It is a navigation aid over
+    the same catalog available to the generic arm, not a second memory system or
+    a learned ranking model.
+    """
+
+    if type(max_per_outcome) is not int or not 1 <= max_per_outcome <= 3:
+        raise QuantResearchStateCardError("max_per_outcome must be between 1 and 3")
+    card = validate_quant_research_state_card(state_card, action="ACT")
+    relation_id = _selected_relation_id(card, None)
+    assert relation_id is not None
+    raw_components = component_catalog.get("components")
+    if not isinstance(raw_components, list):
+        raise QuantResearchStateCardError("component catalog requires components")
+    primary = _retrieve_relation_episodes(
+        card=card,
+        relation_id=relation_id,
+        raw_components=raw_components,
+        max_per_outcome=max_per_outcome,
+    )
+    result = {
+        "relation_id": primary["relation_id"],
+        "query": primary["query"],
+        "selection_policy": (
+            "separate primary and residual-risk relation queries over state, "
+            "component, mechanism, and desired-observation coordinates; at "
+            "most one episode per outcome by default"
+        ),
+        "episodes": primary["episodes"],
+    }
+    residual_relation_id = _residual_relation_id(card)
+    if residual_relation_id is not None:
+        result["residual_risk"] = _retrieve_relation_episodes(
+            card=card,
+            relation_id=residual_relation_id,
+            raw_components=raw_components,
+            max_per_outcome=max_per_outcome,
+        )
+    return result
 
 
 def quant_research_intervention_verdict(

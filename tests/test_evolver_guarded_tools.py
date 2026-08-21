@@ -900,10 +900,13 @@ def test_quant_v2_act_requires_research_state_transition(guarded_roots):
         decide_candidate(discovery=decision)
 
 
-def _enable_quant_state_card_contract(evidence: Path) -> None:
+def _enable_quant_state_card_contract(
+    evidence: Path, *, residual_risk: bool = False
+) -> None:
     contract_path = evidence / "contract.json"
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
     contract["quant_research_state_card_required_for_act"] = True
+    contract["quant_residual_risk_relation_enabled"] = residual_risk
     contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
 
 
@@ -946,6 +949,44 @@ def _quant_state_card() -> dict:
             "predicted_transition": "the estimator arguments preserve the identity",
             "discriminating_observation": "run the public estimator fixture",
         },
+    }
+
+
+def _quant_state_card_with_residual() -> dict:
+    card = _quant_state_card()
+    card["candidate_relations"].append(
+        {
+            "relation_id": "event-to-execution-time-alignment",
+            "relation_family": "event-time-alignment",
+            "applicability": (
+                "the public task applies a signal or event only after its date"
+            ),
+            "observed_evidence": ["counterexample.md"],
+            "status": "UNKNOWN",
+            "discriminating_observation": (
+                "inspect one value immediately before and after the event"
+            ),
+        }
+    )
+    card["selected_intervention"]["residual_relation_id"] = (
+        "event-to-execution-time-alignment"
+    )
+    return card
+
+
+def _add_residual_risk_decision(decision: dict) -> None:
+    decision["residual_risk_relation"] = {
+        "relation_id": "event-to-execution-time-alignment",
+        "orthogonality": (
+            "parameter identity does not determine when an event takes effect"
+        ),
+        "applicability": (
+            "the public task applies a signal or event only after its date"
+        ),
+        "predicted_status_change": "UNKNOWN to PASS on a fresh Worker",
+        "discriminating_observation": (
+            "inspect one value immediately before and after the event"
+        ),
     }
 
 
@@ -1100,6 +1141,69 @@ def test_quant_v2_state_guided_act_binds_terminal_relation_and_component_to_card
         json.dumps(materialized) + "\n", encoding="utf-8"
     )
     with pytest.raises(GuardedWorkspaceError, match="must match the state card"):
+        decide_candidate(discovery=decision)
+
+
+def test_quant_state_v2_binds_one_residual_risk_relation(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        materialize_quant_research_state_card,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_quant_state_card_contract(evidence, residual_risk=True)
+    _write_quant_component_catalog(evidence)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    card_result = materialize_quant_research_state_card(
+        _quant_state_card_with_residual()
+    )
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    _add_quant_state_search_decision(decision)
+    _add_residual_risk_decision(decision)
+
+    result = decide_candidate(discovery=decision)
+
+    assert card_result["residual_risk_relation_id"] == (
+        "event-to-execution-time-alignment"
+    )
+    assert card_result["retrieval"]["residual_risk"]["relation_id"] == (
+        "event-to-execution-time-alignment"
+    )
+    assert result["residual_risk_relation"]["relation_id"] == (
+        "event-to-execution-time-alignment"
+    )
+
+
+def test_quant_state_v2_rejects_disabled_or_mismatched_residual(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        materialize_quant_research_state_card,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_quant_state_card_contract(evidence)
+    _write_quant_component_catalog(evidence)
+    with pytest.raises(GuardedWorkspaceError, match="does not enable"):
+        materialize_quant_research_state_card(_quant_state_card_with_residual())
+
+    _enable_quant_state_card_contract(evidence, residual_risk=True)
+    materialize_quant_research_state_card(_quant_state_card_with_residual())
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    _add_quant_state_search_decision(decision)
+    _add_residual_risk_decision(decision)
+    decision["residual_risk_relation"]["relation_id"] = "unrelated-risk"
+
+    with pytest.raises(GuardedWorkspaceError, match="must match"):
         decide_candidate(discovery=decision)
 
 

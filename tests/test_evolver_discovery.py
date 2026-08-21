@@ -746,6 +746,13 @@ def test_coordinated_probe_worker_uses_evolver_directive_and_budget(tmp_path):
                 "applicability": "public instruments must reprice",
                 "predicted_status_change": "FAIL to PASS",
             },
+            "residual_risk_relation": {
+                "relation_id": "event-time-alignment",
+                "orthogonality": "repricing does not determine event timing",
+                "applicability": "public events take effect on the next date",
+                "predicted_status_change": "UNKNOWN to PASS",
+                "discriminating_observation": "PRIVATE_RESIDUAL_CARD_TEXT",
+            },
             "optimize_only_diagnostic": {
                 "expected_value": "PRIVATE_EXPECTED_VALUE"
             },
@@ -769,6 +776,7 @@ def test_coordinated_probe_worker_uses_evolver_directive_and_budget(tmp_path):
     probe_prompt = (worker / "systemprompt.md").read_text()
     assert "quant-research-state-card.json" not in probe_prompt
     assert "PRIVATE_EXPECTED_VALUE" not in probe_prompt
+    assert "PRIVATE_RESIDUAL_CARD_TEXT" not in probe_prompt
 
 
 def test_discovery_cost_counts_caller_confirmed_downstream_delivery(tmp_path):

@@ -1892,6 +1892,53 @@ def _decide_quant_property_candidate(
                 "rejected_loci": rejected_loci,
             }
             selected_intervention = validated_card.get("selected_intervention")
+            card_residual_relation_id = (
+                selected_intervention.get("residual_relation_id")
+                if isinstance(selected_intervention, Mapping)
+                else None
+            )
+            raw_residual_relation = discovery.get("residual_risk_relation")
+            if isinstance(card_residual_relation_id, str):
+                if not isinstance(raw_residual_relation, Mapping):
+                    raise GuardedWorkspaceError(
+                        "ACT requires the State Card residual-risk relation in "
+                        "the terminal decision"
+                    )
+                residual_relation_id = _text(
+                    raw_residual_relation.get("relation_id"),
+                    label="residual_risk_relation.relation_id",
+                )
+                if residual_relation_id != card_residual_relation_id:
+                    raise GuardedWorkspaceError(
+                        "terminal residual-risk relation must match the State Card"
+                    )
+                normalized["residual_risk_relation"] = {
+                    "relation_id": residual_relation_id,
+                    "orthogonality": _text(
+                        raw_residual_relation.get("orthogonality"),
+                        label="residual_risk_relation.orthogonality",
+                    ),
+                    "applicability": _text(
+                        raw_residual_relation.get("applicability"),
+                        label="residual_risk_relation.applicability",
+                    ),
+                    "predicted_status_change": _text(
+                        raw_residual_relation.get("predicted_status_change"),
+                        label=(
+                            "residual_risk_relation.predicted_status_change"
+                        ),
+                    ),
+                    "discriminating_observation": _text(
+                        raw_residual_relation.get("discriminating_observation"),
+                        label=(
+                            "residual_risk_relation.discriminating_observation"
+                        ),
+                    ),
+                }
+            elif raw_residual_relation is not None:
+                raise GuardedWorkspaceError(
+                    "terminal residual-risk relation is absent from the State Card"
+                )
             card_component_locus = (
                 selected_intervention.get("component_locus")
                 if isinstance(selected_intervention, Mapping)
@@ -2130,6 +2177,9 @@ def _decide_quant_property_candidate(
             "quant_research_state_card_required_for_act": contract.get(
                 "quant_research_state_card_required_for_act"
             ),
+            "quant_residual_risk_relation_enabled": contract.get(
+                "quant_residual_risk_relation_enabled"
+            ),
             "max_primary_components": contract.get("max_primary_components"),
             "max_declared_components": contract.get("max_declared_components"),
             "preferred_primary_components": contract.get(
@@ -2167,6 +2217,7 @@ def _decide_quant_property_candidate(
         "research_state_transition": normalized.get("research_state_transition"),
         "quant_research_state_card": normalized.get("quant_research_state_card"),
         "selected_relation": normalized.get("selected_relation"),
+        "residual_risk_relation": normalized.get("residual_risk_relation"),
         "component_routing": normalized.get("component_routing"),
     }
 
@@ -2192,6 +2243,13 @@ def materialize_quant_research_state_card(
         )
     intervention = card.get("selected_intervention")
     intervention_map = intervention if isinstance(intervention, Mapping) else {}
+    if (
+        intervention_map.get("residual_relation_id") is not None
+        and contract.get("quant_residual_risk_relation_enabled") is not True
+    ):
+        raise GuardedWorkspaceError(
+            "the evidence contract does not enable a residual-risk relation"
+        )
     relation_id = intervention_map.get("relation_id")
     if relation_id is None:
         compact_relation = card.get("selected_relation")
@@ -2241,6 +2299,9 @@ def materialize_quant_research_state_card(
         "quant_research_state_card": _QUANT_RESEARCH_STATE_CARD_NAME,
         "task_key": card["task_key"],
         "selected_relation_id": relation_id,
+        "residual_risk_relation_id": intervention_map.get(
+            "residual_relation_id"
+        ),
         "state_locus": intervention_map.get("state_locus"),
         "component_locus": intervention_map.get("component_locus"),
         "exact_parent_evidence": contract.get("prior_runtime_experience"),

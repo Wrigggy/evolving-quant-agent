@@ -6,7 +6,7 @@ input_schema:
   properties:
     state_card:
       type: object
-      description: Open State Card with a task_key, candidate_relations, and selected_intervention. N-A and UNKNOWN are allowed when unsupported, but the selected ACT relation needs task-local support and a reachable component locus.
+      description: Open State Card with a task_key, candidate_relations, and selected_intervention. N-A and UNKNOWN are allowed when unsupported. The selected ACT relation needs task-local support and a reachable component locus; selected_intervention may additionally name at most one independently supported residual_relation_id.
       additionalProperties: true
   required: [state_card]
   additionalProperties: false

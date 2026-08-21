@@ -510,7 +510,7 @@ def test_coordinated_view_keeps_optimize_diagnostic_evolver_only(tmp_path):
     assert corrected["tests_passed"] == 6
 
 
-def test_coordinated_generic_and_quant_state_views_share_evidence_but_not_helper(
+def test_coordinated_search_treatments_share_evidence_but_not_relation_helpers(
     tmp_path,
 ):
     corpus = tmp_path / "breadth"
@@ -538,7 +538,7 @@ def test_coordinated_generic_and_quant_state_views_share_evidence_but_not_helper
         qfbench_evidence_root=_qfbench_evidence(tmp_path),
     )
 
-    for treatment in ("generic", "quant-state"):
+    for treatment in ("generic", "quant-state", "quant-state-v2"):
         build_coordinated_evolver_view(
             corpus_root=corpus,
             destination=tmp_path / treatment,
@@ -549,13 +549,31 @@ def test_coordinated_generic_and_quant_state_views_share_evidence_but_not_helper
 
     generic_contract = json.loads((tmp_path / "generic/contract.json").read_text())
     quant_contract = json.loads((tmp_path / "quant-state/contract.json").read_text())
+    quant_v2_contract = json.loads(
+        (tmp_path / "quant-state-v2/contract.json").read_text()
+    )
     assert generic_contract["contract_arm"] == "generic"
     assert quant_contract["contract_arm"] == "quant-state"
+    assert quant_v2_contract["contract_arm"] == "quant-state-v2"
     assert generic_contract["quant_research_state_card_required_for_act"] is False
     assert quant_contract["quant_research_state_card_required_for_act"] is True
+    assert quant_v2_contract["quant_research_state_card_required_for_act"] is True
+    assert generic_contract["quant_residual_risk_relation_enabled"] is False
+    assert quant_contract["quant_residual_risk_relation_enabled"] is False
+    assert quant_v2_contract["quant_residual_risk_relation_enabled"] is True
     assert (tmp_path / "generic/components/CATALOG.json").read_text() == (
         tmp_path / "quant-state/components/CATALOG.json"
+    ).read_text()
+    assert (tmp_path / "generic/components/CATALOG.json").read_text() == (
+        tmp_path / "quant-state-v2/components/CATALOG.json"
     ).read_text()
     assert (tmp_path / "generic/tasks/CATALOG.json").read_text() == (
         tmp_path / "quant-state/tasks/CATALOG.json"
     ).read_text()
+    assert (tmp_path / "generic/tasks/CATALOG.json").read_text() == (
+        tmp_path / "quant-state-v2/tasks/CATALOG.json"
+    ).read_text()
+    assert "at most one residual-risk relation" in quant_v2_contract[
+        "evolver_instruction"
+    ]
+    assert "residual-risk relation" not in generic_contract["evolver_instruction"]

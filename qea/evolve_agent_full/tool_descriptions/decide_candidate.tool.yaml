@@ -84,6 +84,25 @@ input_schema:
               description: Observable relation change expected from the intervention.
           required: [relation_id, applicability, predicted_status_change]
           additionalProperties: false
+        residual_risk_relation:
+          type: object
+          description: Optional second quantitative relation that may remain wrong after the primary intervention. Use at most one and only when the materialized State Card contains independent evidence for it.
+          properties:
+            relation_id: {type: string}
+            orthogonality:
+              type: string
+              description: Why fixing the primary relation does not determine this relation.
+            applicability:
+              type: string
+              description: Public-task or authorized optimize evidence showing why the residual risk applies.
+            predicted_status_change:
+              type: string
+              description: Observable residual-relation change expected from the candidate, or an explicit prediction that it remains unresolved.
+            discriminating_observation:
+              type: string
+              description: Answer-free Worker or artifact observation that tests residual coverage.
+          required: [relation_id, orthogonality, applicability, predicted_status_change, discriminating_observation]
+          additionalProperties: false
         component_routing:
           type: object
           description: Compact state-conditioned routing decision. Required for ACT only when the Quant Research State card contract flag is enabled.
