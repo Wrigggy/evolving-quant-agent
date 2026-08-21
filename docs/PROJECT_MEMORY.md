@@ -1,5 +1,24 @@
 # QEA Repository Memory
 
+## 2026-08-21 runway to stable main-experiment scale
+
+The next scale unit is a serialized candidate lineage, not a fixed five-round
+loop and not an unbounded Evolver conversation. One current parent produces one
+candidate; a normal-budget target gain triggers a repeat, then a matched
+protection check, and only a repeat-confirmed protection-safe candidate becomes
+the next parent. Short probes remain activation/completion diagnostics and are
+not numeric rejection gates for observed long-tail tasks. Parent-task outcomes
+are cached while the parent and run contract stay unchanged, so rejected
+candidates do not force every long task to rerun.
+
+Independent lineages and eligible Worker evaluations may run concurrently, but
+promotion within one lineage is serialized. Main-0 will rehearse this controller
+on four screened pairs and two lineages before a proposed 12-optimize, six-
+protection, 12-sealed-task Main-1 panel is preregistered. Sealed results never
+guide candidate selection. See the
+[scale decision](decisions/2026-08-21-candidate-lineage-main-scale-runway.md)
+and [compact protocol](../data/breadth/QF_MAIN_SCALE_RUNWAY.json).
+
 ## 2026-08-21 independent-pair breadth result
 
 Four isolated QFBench pair Evolvers started from the same Quant-$H_0$ and did

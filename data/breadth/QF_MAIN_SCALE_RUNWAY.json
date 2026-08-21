@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-21",
+  "status": "proposed_after_breadth_canary",
+  "unit_of_search": "candidate_version_transition",
+  "worker_visibility": "answer_blind",
+  "selection_surfaces": ["optimize", "development_protection"],
+  "sealed_surface_feedback_allowed": false,
+  "candidate_policy": [
+    "Evolver proposes one candidate from the current parent and names one target task",
+    "candidate passes local component smoke and admission",
+    "one normal-budget blind Worker evaluates the named target",
+    "only a target gain triggers one independent target repeat and a fresh parent comparator when the parent cache is not current",
+    "only a repeated target gain triggers one matched protection evaluation",
+    "only a protection-safe candidate becomes the next parent version"
+  ],
+  "short_probe_role": "activation and completion-distance diagnostic only; lack of artifacts is not a numeric rejection when the probe budget is shorter than the task's observed completion distance",
+  "cache_policy": {
+    "key": ["parent_version", "task_key", "worker_route", "worker_budget"],
+    "reuse": "reuse a completed parent-task comparator while the parent version and run contract are unchanged",
+    "invalidate": "invalidate only after parent promotion or a run-contract change"
+  },
+  "parallelism": {
+    "within_lineage": "parallelize eligible Worker evaluations but serialize parent promotion",
+    "across_lineages": "run independent search replicates concurrently",
+    "initial_evolver_concurrency": 2,
+    "initial_verifier_concurrency": 3
+  },
+  "main_0_rehearsal": {
+    "optimize_pairs": 4,
+    "independent_lineages": 2,
+    "max_candidate_versions_per_lineage": 6,
+    "max_feedback_refinements_per_candidate": 1,
+    "purpose": "exercise proposal, normal target, repeat, protection, promotion, rollback, resume, accounting, and freeze without manual run repair"
+  },
+  "main_1_initial_panel": {
+    "optimize_tasks": 12,
+    "matched_protection_tasks": 6,
+    "sealed_test_tasks": 12,
+    "independent_lineages": 3,
+    "task_selection": "workflow-lineage-separated quant task families after source and runtime screening",
+    "primary_result": "frozen evolved harness versus Quant-H0 on sealed official reward, with task vectors and property counts reported separately"
+  },
+  "stopping": [
+    "fixed candidate-version cap",
+    "fixed model-cost and wall-time cap",
+    "all selected optimize targets resolved or one complete pass yields no promoted candidate"
+  ],
+  "promotion_evidence": [
+    "candidate diff and declared mechanism",
+    "actual component activation or evidence-grounded skip",
+    "normal-budget target score",
+    "independent target repeat",
+    "matched protection outcome",
+    "cost and runtime"
+  ],
+  "claim_boundary": "This is a scale runway, not a completed scheduler or a main-experiment result. Exact Main-1 tasks and budgets remain to be preregistered after Main-0."
+}
