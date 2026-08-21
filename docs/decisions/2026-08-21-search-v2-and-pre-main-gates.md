@@ -68,30 +68,35 @@ Before Main-0, four gates remain:
 
 ## Search-v2 task pair
 
-Target: `corporate-action-adjustment`.
+Launch preflight rejected the initially proposed
+`corporate-action-adjustment` target. Its historical 3/7 outcome preceded two
+evaluator-integration repairs; corrected replay made that low-score screen
+invalid. It is not used as V2 search evidence.
 
-Matched second task: `momentum-backtest`.
+The superseding target is `dupire-local-vol` and the matched second task is
+`localvol-barrier`. Both public tasks propagate a fitted implied-volatility
+surface through maturity to local-volatility quantities and downstream
+pricing. They share two independently testable relations:
 
-Both public tasks require an adjusted-price state to propagate through an
-event-time boundary. They share two independently testable relations:
+- `calibration_parameter_admissibility` is the primary relation already
+  selected by the prior quant-state candidate. The fitted surface parameters
+  must remain strictly inside the public admissible region before the surface
+  is differentiated or delivered.
+- `forward_variance_maturity_consistency` is the residual-risk relation when
+  supported. Total variance must evolve consistently across maturities so that
+  forward variance and the derived at-the-money local volatility remain finite
+  and positive, including the terminal maturity row.
 
-- `adjusted_price_basis_consistency` is the primary relation. Prices, volume,
-  cash flows, signals, execution prices, valuation, and summaries must use the
-  price/share basis declared by the task. Corporate actions bind split and
-  dividend adjustment; momentum binds `adj_close` for signal/valuation and
-  `adj_open` for execution.
-- `event_to_execution_time_alignment` is the residual-risk relation when
-  supported. Corporate-action adjustments apply only before the declared
-  action boundary, including prior-trading-day handling. Momentum signals at
-  date t execute on the next trading day's adjusted open, except for the
-  declared final close.
-
-Correct basis does not imply correct event timing, and correct timing does not
-imply correct adjusted/raw price usage. The relations are therefore
-orthogonal. On the matched task, actual relation execution requires a callable
-component observation or an explicit pre-delivery workflow audit of both basis
-and event timing. Prompt presence, full score, or a grounded skip alone is not
-reuse evidence.
+An admissible parameter vector does not imply a valid maturity derivative, and
+a positive forward-variance path does not imply admissible fitted parameters.
+The prior quant-state Worker provides the discriminating observation: it fixed
+the selected admissibility relation but still delivered a terminal
+`local_vol_atm` missing value and scored 67/68. Both proposal arms receive that
+same prior candidate, trace, official score, and Evolver-only optimize
+diagnostic. On the matched task, actual relation execution requires a callable
+component observation or explicit pre-delivery audit of both parameter bounds
+and maturity propagation. Prompt presence, a full score, or a grounded skip
+alone is not reuse evidence.
 
 This is within-panel reuse evidence, not unseen-task or sealed generalization:
 both trajectories are authorized coordinated evidence for the Evolver.

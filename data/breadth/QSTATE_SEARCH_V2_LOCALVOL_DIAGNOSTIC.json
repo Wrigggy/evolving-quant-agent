@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "task_id": "dupire-local-vol",
+  "feedback_mode": "answer_rich_evolver",
+  "worker_visible": false,
+  "source_run": "qstate-confirm-localvol-20260821-r1",
+  "source_arm": "quant-state",
+  "official_outcome": {
+    "tests_passed": 67,
+    "tests_failed": 1,
+    "reward": 0.0
+  },
+  "failed_properties": [
+    {
+      "property": "forward_variance_local_vol_atm_positive",
+      "expected": "local_vol_atm is finite and positive at every maturity",
+      "observed": "the terminal maturity row has a missing local_vol_atm value",
+      "reusable_gap": "parameter admissibility alone did not close the maturity propagation from total variance to forward variance and local volatility"
+    }
+  ],
+  "claim_boundary": "Evolver-only optimize diagnostic; never project the property answer or expected value into the Worker instruction or reusable component."
+}

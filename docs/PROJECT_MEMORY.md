@@ -12,14 +12,18 @@ activation--relation--outcome evidence.
 
 Search-v2 retains one primary intervention relation and permits at most one
 independently supported residual-risk relation. This is not a mandatory slot
-or finance failure taxonomy. The first preregistered pair is
-`corporate-action-adjustment` to `momentum-backtest`, matched on adjusted-price
-basis consistency and event-to-execution time alignment. Compare a strong
-generic Evolver with quant-state-v2 under matched evidence, history, routes,
-mutation surface, explicit component-use contract, and evaluation gates. Use
-proposal-only discovery, then normal target, conditional repeat, and a matched
-second task only after a repeated gain. Hard limits are two candidates, nine
-Worker sessions, $0.75 before starting a new stage, and six hours.
+or finance failure taxonomy. Launch preflight rejected the initially proposed
+corporate-action pair because corrected evaluator replay had already
+invalidated its historical low score. The superseding pair is
+`dupire-local-vol` to `localvol-barrier`, using the observed transition from
+calibration-parameter admissibility to unresolved forward-variance maturity
+consistency. Compare a strong generic Evolver with quant-state-v2 under
+matched evidence, history, routes, mutation surface, explicit component-use
+contract, and evaluation gates. Both arms receive the same prior candidate and
+its scored runtime experience. Use proposal-only discovery, then normal
+target, conditional repeat, and a matched second task only after a repeated
+gain. Hard limits are two candidates, nine Worker sessions, $0.75 before
+starting a new stage, and six hours.
 
 Do not start Main-0 merely because V2 code or a proposal succeeds. Before
 Main-0, require a source-level coverage screen of the planned tasks, a

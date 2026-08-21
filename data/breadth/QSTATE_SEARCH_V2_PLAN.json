@@ -2,10 +2,17 @@
   "schema_version": 1,
   "date": "2026-08-21",
   "status": "preregistered_not_run",
-  "target_task": "qfbench:corporate-action-adjustment",
-  "matched_task": "qfbench:momentum-backtest",
-  "primary_relation": "adjusted_price_basis_consistency",
-  "optional_residual_risk_relation": "event_to_execution_time_alignment",
+  "target_task": "qfbench:dupire-local-vol",
+  "matched_task": "qfbench:localvol-barrier",
+  "primary_relation": "calibration_parameter_admissibility",
+  "optional_residual_risk_relation": "forward_variance_maturity_consistency",
+  "runtime_experience": {
+    "source_candidate": "qstate-localvol-quant-20260821-r3",
+    "scored_worker_run": "qstate-confirm-localvol-20260821-r1",
+    "scored_worker_arm": "quant-state",
+    "observed_score": "67/68",
+    "observed_transition": "admissibility repaired while terminal local_vol_atm remained missing"
+  },
   "arms": [
     "generic",
     "quant-state-v2"
