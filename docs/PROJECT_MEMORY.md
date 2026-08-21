@@ -3209,3 +3209,38 @@ before artifact delivery; the successful confirmation needed 50 turns. Next
 work should refine completion/stopping and component scope before broad
 scheduling. Full result:
 `docs/decisions/2026-08-21-qfbench-coordinated-localvol-result.md`.
+
+### 2026-08-21 quant-state-guided search canary
+
+The operational Quant Research State Card was compared with a strong generic
+Evolver under matched Quant-H0, evidence, model, mutation, and evaluation
+budgets on holdings and local-vol families. Both quant-state Evolvers issued
+admitted ACT decisions and selected different quantitative relations and
+component loci. Holdings improved from concurrent H0 48/51 to 50/51 and
+repeated at 50/51 against a second H0 sample of 37/51. Its unchanged candidate
+kept the matched protection task at 42/42; the component was called but made a
+grounded schema-mismatch skip, so this is safe protection rather than relation
+transfer. The generic holdings candidate regressed protection to 28/42.
+
+Local-vol first-run results were H0 66/68, generic 68/68, and quant-state
+67/68. On repeat, generic fell to 67/68 and quant-state timed out without a
+score. Do not dispatch local-vol protection or claim stable binary gain. The
+valid campaign used 515 completed requests, 26,669,461 tokens, and
+$2.087186840. Retain the redundant State Card access-gate and stale-deployment
+attempts as setup-invalid evidence outside these totals.
+
+The measured conclusion is that quant-state guidance changes retrieval,
+relation selection, component routing, and intervention prediction and can
+produce a repeatable property-level improvement. Main-0 remains no-go until a
+binary gain repeats or a second mechanism family yields a repeatable gain, the
+same selected relation actually executes on a matched second task, and
+long-tail monitoring stops treating active numerical fitting as a stalled
+Worker. The next search revision may select one primary relation plus at most
+one evidence-supported residual-risk relation; do not turn this into a closed
+failure taxonomy. Full record:
+`docs/decisions/2026-08-21-quant-state-guided-search-canary-result.md`.
+
+The observed watchdog false alert was repaired narrowly: the no-file-progress
+threshold is configurable and defaults to 60 minutes for these component
+pilots instead of 20. Worker wall-time remains the execution bound; CPU
+activity is not treated as evidence of task benefit.

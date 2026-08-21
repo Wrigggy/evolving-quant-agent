@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-21",
+  "status": "repeated_property_gain_safe_protection_no_binary_stability",
+  "treatment": "operational quant research state card plus coordinate-guided retrieval and routing",
+  "matched_boundary": {
+    "same_h0": true,
+    "same_authorized_evidence": true,
+    "same_model_and_budget": true,
+    "same_mutation_surface": true,
+    "worker_answer_blind": true
+  },
+  "families": {
+    "holdings": {
+      "target_task": "13f-amendment-aware-crowding",
+      "protection_task": "brinson-sector-attribution",
+      "selected_relation": "final_state_reconciliation",
+      "first_target": {
+        "h0": "48/51",
+        "generic": "49/51",
+        "quant_state": "50/51"
+      },
+      "repeat_target": {
+        "h0": "37/51",
+        "generic": "48/51",
+        "quant_state": "50/51"
+      },
+      "protection": {
+        "h0": "42/42",
+        "generic": "28/42",
+        "quant_state": "42/42",
+        "quant_component_called": true,
+        "quant_relation_executed": false,
+        "quant_component_observation": "grounded schema-mismatch skip"
+      }
+    },
+    "localvol": {
+      "target_task": "dupire-local-vol",
+      "protection_task": "localvol-barrier",
+      "selected_relation": "calibration_parameter_admissibility",
+      "first_target": {
+        "h0": "66/68",
+        "generic": "68/68",
+        "quant_state": "67/68"
+      },
+      "repeat_target": {
+        "h0": "66/68",
+        "generic": "67/68",
+        "quant_state": "timeout"
+      },
+      "protection_dispatched": false
+    }
+  },
+  "valid_campaign_usage": {
+    "completed_requests": 515,
+    "total_tokens": 26669461,
+    "provider_cost_usd": 2.08718684
+  },
+  "claim_boundary": {
+    "quant_state_operational": true,
+    "repeated_target_property_gain": true,
+    "safe_protection": true,
+    "stable_binary_gain": false,
+    "matched_relation_transfer": false,
+    "benchmark_gain": false,
+    "main_0_go": false
+  },
+  "valid_run_ids": [
+    "qstate-holdings-generic-20260821-r1",
+    "qstate-holdings-quant-20260821-r3",
+    "qstate-localvol-generic-20260821-r1",
+    "qstate-localvol-quant-20260821-r3",
+    "qstate-confirm-holdings-20260821-r1",
+    "qstate-confirm-localvol-20260821-r1",
+    "qstate-repeat-holdings-20260821-r1",
+    "qstate-protect-holdings-20260821-r1",
+    "qstate-repeat-localvol-20260821-r1"
+  ],
+  "evidence_root": "results/bc-mirror"
+}

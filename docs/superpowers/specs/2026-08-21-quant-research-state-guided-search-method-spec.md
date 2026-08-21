@@ -2,8 +2,9 @@
 
 **Date:** 2026-08-21
 
-**Status:** No-model implementation preflight complete. No live mechanism
-canary or main experiment is reported by this document.
+**Status:** No-model implementation preflight and the first matched live canary
+are complete. The measured result and boundaries are in
+[the quant-state-guided search canary record](../../decisions/2026-08-21-quant-state-guided-search-canary-result.md).
 
 **Story source:**
 [Evolving the Quant Researcher story backup](../../decisions/2026-08-21-evolving-the-quant-researcher-story-backup.md)
@@ -13,7 +14,8 @@ canary or main experiment is reported by this document.
 The first implementation now reuses the existing Evolver and component catalog:
 
 - one guarded tool materializes the open State Card after its selected relation
-  cites evidence the Evolver has read;
+  records authorized support; terminal `ACT` separately binds the evidence the
+  Evolver actually inspected;
 - the same component catalog available to the generic arm is filtered by state,
   relation, component, task-mechanism, and desired-observation coordinates;
 - retrieval returns at most one positive, negative, inactive, and unstable
@@ -26,9 +28,10 @@ The first implementation now reuses the existing Evolver and component catalog:
   not the State Card or optimize-only diagnostics.
 
 A 138-test relevant compatibility run passed in the repository development
-environment. This checkpoint demonstrates executable wiring only. It does not
-show that the quant-state treatment is faster or better than the generic arm;
-that remains the purpose of the four-initial-candidate live canary below.
+environment. The subsequent matched canary produced one repeated holdings
+property gain with safe protection, a first-run local-vol property gain, and a
+local-vol repeat timeout. The treatment is operational, but it is not yet
+uniformly faster, binary-stable, or reusable across a matched second task.
 
 ## Objective
 
