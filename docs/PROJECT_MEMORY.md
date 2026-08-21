@@ -1,5 +1,25 @@
 # QEA Repository Memory
 
+## 2026-08-21 point-in-time lineage refinement and rollback
+
+The first complete point-in-time feedback refinement path ended in rollback.
+After two observed setup repairs, a `LINEAGE_REFINEMENT` Evolver inspected the
+exact 50/51 parent skill and Worker observation, selected `REFINE`, changed only
+the skill's canonical-label rule, passed admission, and activated in a short
+probe and a normal-budget Worker. The short probe delivered no artifacts; the
+normal Worker delivered all eight but scored 49/51, below the 50/51 parent and
+without fully realizing the predicted label-consistency transition. No repeat
+or protection ran; the parent remains unchanged.
+
+The setup repairs are required for scale: feedback bundles now carry the exact
+tested parent source; later feedback uses a refinement contract rather than
+repeating `COORDINATED_BREADTH`; and long JSONL trace lines are excerpted around
+the match to reduce Evolver context growth. The valid r4 chain used 59 requests
+and $0.249454672; the full localization path including one calibrated ABSTAIN
+and one setup-invalid attempt used 81 requests and $0.52965072. See the
+[measured decision](decisions/2026-08-21-point-lineage-refinement-result.md)
+and [compact result](../data/breadth/MT_POINT_LINEAGE_REFINEMENT_RESULT.json).
+
 ## 2026-08-21 runway to stable main-experiment scale
 
 The next scale unit is a serialized candidate lineage, not a fixed five-round

@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-21",
+  "status": "complete_rollback",
+  "target": "qfbench:13f-amendment-aware-crowding",
+  "parent": {
+    "run_id": "qfbench-pointstate-full-confirm-20260821-r2",
+    "tests_passed": 50,
+    "tests_total": 51,
+    "reward": 0.0,
+    "component": "effective-state-reconciliation"
+  },
+  "lineage_attempts": [
+    {
+      "run_id": "mtevo-point-lineage-feedback-20260821-r2",
+      "outcome": "ABSTAIN",
+      "finding": "The Evolver saw the 50/51 observation but the feedback bundle did not expose the tested parent skill as a readable candidate source.",
+      "completed_requests": 13,
+      "total_tokens": 698882,
+      "provider_cost_usd": 0.153686864
+    },
+    {
+      "run_id": "mtevo-point-lineage-feedback-20260821-r3",
+      "outcome": "setup_invalid",
+      "finding": "The parent source was visible, but the feedback round still inherited the first-round COORDINATED_BREADTH decision contract; a terminal decision-schema failure was followed by ambiguous cleaned-lifecycle restart attempts.",
+      "completed_requests": 9,
+      "total_tokens": 396158,
+      "provider_cost_usd": 0.126509184
+    },
+    {
+      "run_id": "mtevo-point-lineage-feedback-20260821-r4",
+      "outcome": "ACT_REFINE",
+      "finding": "Under the LINEAGE_REFINEMENT contract, the Evolver inspected the parent skill, refined only its canonical-label rule, passed admission and skill smoke, and selected the 13F target.",
+      "short_probe": {
+        "skill_activated": true,
+        "turns": 7,
+        "tool_calls": 12,
+        "artifact_count": 0,
+        "tests_passed": 0,
+        "tests_total": 11
+      },
+      "completed_requests": 27,
+      "total_tokens": 1844849,
+      "provider_cost_usd": 0.145012152
+    }
+  ],
+  "normal_budget_target": {
+    "run_id": "qfbench-point-lineage-r4-full-20260821-r1",
+    "component_activated": true,
+    "turns": 32,
+    "tool_calls": 38,
+    "artifact_count": 8,
+    "tests_passed": 49,
+    "tests_total": 51,
+    "reward": 0.0,
+    "completed_requests": 32,
+    "total_tokens": 1706443,
+    "provider_cost_usd": 0.10444252,
+    "observed_failures": [
+      "summarypage_value_diff sign mismatch in filing_resolution.csv",
+      "the predicted canonical label was still not uniform for the same CUSIP"
+    ]
+  },
+  "selection": {
+    "decision": "rollback",
+    "current_parent_tests_passed": 50,
+    "candidate_tests_passed": 49,
+    "repeat_dispatched": false,
+    "protection_dispatched": false,
+    "reason": "The candidate did not beat its current parent and did not fully realize its predicted label-consistency transition."
+  },
+  "valid_r4_chain_cost": {
+    "completed_requests": 59,
+    "total_tokens": 3551292,
+    "provider_cost_usd": 0.249454672
+  },
+  "full_localization_path_cost": {
+    "completed_requests": 81,
+    "total_tokens": 4646332,
+    "provider_cost_usd": 0.52965072
+  },
+  "scale_findings": [
+    "A feedback bundle must include the exact parent component source that produced the scored Worker observation.",
+    "Lineage refinement requires a different decision contract from first-round cross-task breadth discovery.",
+    "Short probes measure activation and completion distance, not final score, on long-tail tasks.",
+    "Promotion must remain serialized and score-backed; mechanism evidence alone may justify archiving or a bounded confirm, not automatic promotion.",
+    "Large JSONL trace lines should be excerpted around matches to control Evolver context cost."
+  ],
+  "claim_boundary": "This validates one complete refine, target, and rollback path plus several observed setup repairs. It does not show an improved promoted parent, repeat stability, protection transfer, or sealed main-experiment gain.",
+  "artifact_roots": [
+    "/data/qea-julius-storage/runs/mtevo-point-lineage-feedback-20260821-r2",
+    "/data/qea-julius-storage/runs/mtevo-point-lineage-feedback-20260821-r3",
+    "/data/qea-julius-storage/runs/mtevo-point-lineage-feedback-20260821-r4",
+    "/data/qea-julius-storage/runs/qfbench-point-lineage-r4-full-20260821-r1"
+  ]
+}
