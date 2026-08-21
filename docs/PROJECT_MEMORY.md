@@ -1,5 +1,33 @@
 # QEA Repository Memory
 
+## 2026-08-21 evolving-the-quant-researcher story and search-method gate
+
+Before expanding the candidate-scale controller, freeze the proposed story as
+**Evolving the Quant Researcher, Not the Strategy**. Quant Research State is
+now treated as a task-conditioned representation of information, economic,
+convention, estimation, derived-result, and artifact state. The proposed method
+must use that representation to change evidence retrieval, component routing,
+probe selection, or intervention verdict; finance-shaped labels alone are not
+a mechanism.
+
+Candidate history, exact-parent evidence, rollback, caching, independent search
+replicates, and scheduling remain necessary infrastructure rather than
+quant-specific novelty. Point-in-time work is one relation family---
+point-in-time effective-state reconciliation---rather than the name of the
+search. The generic full-harness comparison remains strong and matched; a valid
+result may be comparable frozen official performance with fewer Worker or
+verifier calls, fewer inactive or mislocalized interventions, or fewer
+protection regressions.
+
+The immediate order is: preserve the full story, implement the compact Quant
+Research State Card and state-conditioned search on the existing Evolver, run a
+bounded two-family generic-versus-quant mechanism canary with at most four
+initial candidates, and only then return to a simplified Main-0 controller and
+the Main-1 runway. This is a proposed direction, not an implemented method or
+new benchmark result. See the
+[story backup](decisions/2026-08-21-evolving-the-quant-researcher-story-backup.md)
+and [method specification](superpowers/specs/2026-08-21-quant-research-state-guided-search-method-spec.md).
+
 ## 2026-08-21 point-in-time lineage refinement and rollback
 
 The first complete point-in-time feedback refinement path ended in rollback.

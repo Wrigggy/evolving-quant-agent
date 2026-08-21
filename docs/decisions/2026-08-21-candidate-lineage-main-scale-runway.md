@@ -5,6 +5,14 @@
 **Status:** Accepted implementation direction; point-in-time refinement is live,
 the scale controller and Main-0 rehearsal are not yet run
 
+> **Same-day sequencing update:** preserve this runway, but do not implement or
+> launch its broad Main-0 directly. The accepted next gate is to operationalize
+> Quant Research State as a search prior and run the bounded mechanism canary in
+> the [method specification](../superpowers/specs/2026-08-21-quant-research-state-guided-search-method-spec.md).
+> After that result is retained, return here with a simplified controller and
+> lineage terminology treated as infrastructure. The full rationale is in the
+> [story backup](2026-08-21-evolving-the-quant-researcher-story-backup.md).
+
 ## Current position
 
 The project is no longer blocked on whether an Evolver can produce a useful
