@@ -310,6 +310,7 @@ def test_tool_descriptions_expose_only_guarded_operations():
         "inspect_candidate",
         "list_workspace",
         "map_evidence",
+        "materialize_quant_research_state_card",
         "read_workspace",
         "replace_candidate",
         "probe_evidence",
@@ -475,6 +476,7 @@ def test_semantic_contract_probe_grounds_act_and_unlocks_only_declared_roles(
     guarded_roots, tmp_path
 ):
     from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
         decide_candidate,
         read_workspace,
         write_candidate,
@@ -513,7 +515,7 @@ def test_semantic_contract_rejects_act_without_discriminating_grounded_triple(
         read_workspace,
     )
 
-    _, evidence, _, _, _ = guarded_roots
+    _, evidence, _, _, access_log = guarded_roots
     _write_semantic_fixture(evidence, tmp_path)
     read_workspace(source="evidence", file_path="overview.md")
     read_workspace(source="evidence", file_path="counterexample.md")
@@ -896,6 +898,246 @@ def test_quant_v2_act_requires_research_state_transition(guarded_roots):
 
     with pytest.raises(GuardedWorkspaceError, match="research_state_transition"):
         decide_candidate(discovery=decision)
+
+
+def _enable_quant_state_card_contract(evidence: Path) -> None:
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["quant_research_state_card_required_for_act"] = True
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+
+
+def _add_quant_state_search_decision(decision: dict) -> None:
+    decision["quant_research_state_card"] = "quant-research-state-card.json"
+    decision["selected_relation"] = {
+        "relation_id": "estimator-parameter-identity",
+        "applicability": (
+            "the public estimator identity binds the implementation parameters"
+        ),
+        "predicted_status_change": (
+            "the public estimator fixture changes from failing to passing"
+        ),
+    }
+    decision["component_routing"] = {
+        "selected_locus": "tools",
+        "rejected_loci": [],
+    }
+
+
+def _quant_state_card() -> dict:
+    return {
+        "schema_version": 1,
+        "task_key": "quantcodeeval:T24",
+        "candidate_relations": [
+            {
+                "relation_id": "estimator-parameter-identity",
+                "relation_family": "quantity-semantics",
+                "applicability": (
+                    "the public estimator identity binds implementation parameters"
+                ),
+                "observed_evidence": ["overview.md"],
+                "status": "FAIL",
+            }
+        ],
+        "selected_intervention": {
+            "relation_id": "estimator-parameter-identity",
+            "state_locus": "estimation_scope",
+            "component_locus": "tools",
+            "predicted_transition": "the estimator arguments preserve the identity",
+            "discriminating_observation": "run the public estimator fixture",
+        },
+    }
+
+
+def _write_quant_component_catalog(evidence: Path) -> None:
+    path = evidence / "components/CATALOG.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "components": [
+                    {
+                        "component_id": "estimator-audit",
+                        "description": "check estimator parameter identity",
+                        "relation_family": "quantity-semantics",
+                        "component_locus": "tools",
+                        "observed_trials": [
+                            {
+                                "task_id": "T24",
+                                "outcome_class": "positive",
+                                "activated": True,
+                                "official_reward": 1,
+                                "observation": "estimator fixture passed",
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_quant_v2_state_guided_act_retains_only_compact_card_reference(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        materialize_quant_research_state_card,
+        read_workspace,
+        write_candidate,
+    )
+
+    _, evidence, _, _, access_log = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_quant_state_card_contract(evidence)
+    _write_quant_component_catalog(evidence)
+    with pytest.raises(GuardedWorkspaceError, match="evidence already inspected"):
+        materialize_quant_research_state_card(_quant_state_card())
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    card_result = materialize_quant_research_state_card(_quant_state_card())
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    _add_quant_state_search_decision(decision)
+
+    result = decide_candidate(discovery=decision)
+    write_candidate(
+        "tools/estimator_audit.py",
+        "def check_estimator(arguments):\n    return bool(arguments)\n",
+    )
+    state = json.loads(
+        (access_log.parent / "discovery-hypothesis.json").read_text()
+    )
+
+    assert result["quant_research_state_card"] == "quant-research-state-card.json"
+    assert card_result["retrieval"]["episodes"][0]["component_id"] == (
+        "estimator-audit"
+    )
+    assert result["selected_relation"]["relation_id"] == (
+        "estimator-parameter-identity"
+    )
+    assert result["component_routing"] == {
+        "selected_locus": "tools",
+        "rejected_loci": [],
+    }
+    assert state["hypothesis"]["quant_research_state_card"] == (
+        "quant-research-state-card.json"
+    )
+    assert "task_key" not in state["hypothesis"]
+    assert (
+        guarded_roots[0] / "tools/estimator_audit.py"
+    ).is_file()
+
+
+def test_quant_v2_state_guided_act_rejects_unmaterialized_or_label_only_routing(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        materialize_quant_research_state_card,
+        read_workspace,
+    )
+
+    _, evidence, _, _, access_log = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_quant_state_card_contract(evidence)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    _add_quant_state_search_decision(decision)
+
+    with pytest.raises(GuardedWorkspaceError, match="materialized"):
+        decide_candidate(discovery=decision)
+
+    _write_quant_component_catalog(evidence)
+    materialize_quant_research_state_card(_quant_state_card())
+    decision["component_routing"]["selected_locus"] = (
+        "evaluation_reconciliation"
+    )
+    with pytest.raises(GuardedWorkspaceError, match="harness component role"):
+        decide_candidate(discovery=decision)
+
+
+def test_quant_v2_state_guided_act_binds_terminal_relation_and_component_to_card(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        materialize_quant_research_state_card,
+        read_workspace,
+    )
+
+    _, evidence, _, _, access_log = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_quant_state_card_contract(evidence)
+    _write_quant_component_catalog(evidence)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    materialize_quant_research_state_card(_quant_state_card())
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    _add_quant_state_search_decision(decision)
+
+    decision["selected_relation"]["relation_id"] = "unrelated-relation"
+    with pytest.raises(GuardedWorkspaceError, match="does not support ACT"):
+        decide_candidate(discovery=decision)
+
+    decision["selected_relation"]["relation_id"] = (
+        "estimator-parameter-identity"
+    )
+    materialized = json.loads(
+        (access_log.parent / "quant-research-state-card.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    materialized["selected_intervention"]["component_locus"] = "skills"
+    (access_log.parent / "quant-research-state-card.json").write_text(
+        json.dumps(materialized) + "\n", encoding="utf-8"
+    )
+    with pytest.raises(GuardedWorkspaceError, match="must match the state card"):
+        decide_candidate(discovery=decision)
+
+
+def test_quant_v2_state_guided_abstain_does_not_require_a_card(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_quant_state_card_contract(evidence)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision.update(
+        {
+            "decision": "ABSTAIN",
+            "selected_hypothesis_id": None,
+            "evidence_refs": ["overview.md", "counterexample.md"],
+            "abstain_reason": "the available relation does not discriminate",
+        }
+    )
+    for field in (
+        "research_state_transition",
+        "primary_components",
+        "components",
+        "prediction",
+        "risk_tasks",
+    ):
+        decision.pop(field, None)
+
+    result = decide_candidate(discovery=decision)
+
+    assert result["decision"] == "ABSTAIN"
+    assert result["quant_research_state_card"] is None
 
 
 def test_quant_v2_autonomous_probe_contract_requires_experiment_spec(

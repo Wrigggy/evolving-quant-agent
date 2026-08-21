@@ -695,8 +695,18 @@ def build_coordinated_evolver_view(
     task_keys: Iterable[str],
     include_component_history: bool,
     optimization_diagnostic_paths: Mapping[str, str | Path] | None = None,
+    search_treatment: str | None = None,
 ) -> dict[str, object]:
     """Build one bounded multi-task view with exactly one selectable probe."""
+
+    if search_treatment not in {None, "generic", "quant-state"}:
+        raise ComponentExperienceError(
+            "search_treatment must be generic, quant-state, or null"
+        )
+    if search_treatment is not None and not include_component_history:
+        raise ComponentExperienceError(
+            "matched search treatments require the shared component catalog"
+        )
 
     source = Path(corpus_root).expanduser().resolve()
     target = Path(destination).expanduser().resolve()
@@ -880,14 +890,29 @@ def build_coordinated_evolver_view(
             "copy expected values or task-specific answers into the candidate; the "
             "Worker remains blind to these diagnostics."
         )
+    if search_treatment == "quant-state":
+        instruction += (
+            " Before ACT, use materialize_quant_research_state_card to reconstruct "
+            "one task-conditioned state, select one supported quantitative relation, "
+            "and retrieve compact positive, negative, inactive, and unstable "
+            "component episodes. Let that state/relation/component query narrow the "
+            "intervention or support ABSTAIN; terminology alone is not evidence."
+        )
+    elif search_treatment == "generic":
+        instruction += (
+            " Use layered trajectory diagnosis and competing causal hypotheses over "
+            "the complete shared component catalog. You may discover the same "
+            "relations and components as any structured search method."
+        )
+    contract_arm = search_treatment or (
+        "history-enabled" if include_component_history else "task-only"
+    )
     _write_json(
         target / "contract.json",
         {
             "schema_version": 1,
             "stage": "COORDINATED_BREADTH",
-            "contract_arm": (
-                "history-enabled" if include_component_history else "task-only"
-            ),
+            "contract_arm": contract_arm,
             "task_keys": selected_keys,
             "target_task_keys": target_keys,
             "protection_task_keys": protection_keys,
@@ -930,6 +955,9 @@ def build_coordinated_evolver_view(
             "max_primary_components": 2,
             "max_declared_components": 9,
             "research_state_transition_required_for_act": True,
+            "quant_research_state_card_required_for_act": (
+                search_treatment == "quant-state"
+            ),
             "quant_failure_classification_required_for_act": False,
             "domain_tags_are_extensible": True,
             "autonomous_probe_required": True,
@@ -952,6 +980,7 @@ def build_coordinated_evolver_view(
         "target_task_key": target_keys[0],
         "protection_task_keys": protection_keys,
         "component_history_enabled": include_component_history,
+        "search_treatment": search_treatment,
         "max_worker_probes_this_round": 1,
     }
 

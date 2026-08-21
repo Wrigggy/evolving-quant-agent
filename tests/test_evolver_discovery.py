@@ -740,6 +740,15 @@ def test_coordinated_probe_worker_uses_evolver_directive_and_budget(tmp_path):
         candidate=candidate,
         destination=tmp_path / "probe-worker",
         hypothesis={
+            "quant_research_state_card": "quant-research-state-card.json",
+            "selected_relation": {
+                "relation_id": "curve-repricing",
+                "applicability": "public instruments must reprice",
+                "predicted_status_change": "FAIL to PASS",
+            },
+            "optimize_only_diagnostic": {
+                "expected_value": "PRIVATE_EXPECTED_VALUE"
+            },
             "experiment_spec": {
                 "mode": "from_scratch",
                 "seed_experience": None,
@@ -757,6 +766,9 @@ def test_coordinated_probe_worker_uses_evolver_directive_and_budget(tmp_path):
         worker / "systemprompt.md"
     ).read_text()
     assert "curve checker" in (worker / "systemprompt.md").read_text()
+    probe_prompt = (worker / "systemprompt.md").read_text()
+    assert "quant-research-state-card.json" not in probe_prompt
+    assert "PRIVATE_EXPECTED_VALUE" not in probe_prompt
 
 
 def test_discovery_cost_counts_caller_confirmed_downstream_delivery(tmp_path):

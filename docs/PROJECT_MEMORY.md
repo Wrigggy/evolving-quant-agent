@@ -19,12 +19,17 @@ result may be comparable frozen official performance with fewer Worker or
 verifier calls, fewer inactive or mislocalized interventions, or fewer
 protection regressions.
 
-The immediate order is: preserve the full story, implement the compact Quant
-Research State Card and state-conditioned search on the existing Evolver, run a
-bounded two-family generic-versus-quant mechanism canary with at most four
-initial candidates, and only then return to a simplified Main-0 controller and
-the Main-1 runway. This is a proposed direction, not an implemented method or
-new benchmark result. See the
+The compact State Card search path now has a no-model implementation preflight:
+the Evolver can materialize a task-conditioned card after reading supporting
+evidence, query the existing component catalog by state/relation/component
+coordinates, bind an `ACT` to the selected relation and component locus, and
+retain activation, state correction, official gain, and stability as separate
+verdict levels. Generic and quant-state coordinated views share the same
+history and diagnostics; only the operational card/retrieval helper differs.
+This is an implemented mechanism fixture, not a live search result or benchmark
+gain. The next gate remains the bounded two-family generic-versus-quant canary
+with at most four initial candidates; only after that should work return to a
+simplified Main-0 controller and the Main-1 runway. See the
 [story backup](decisions/2026-08-21-evolving-the-quant-researcher-story-backup.md)
 and [method specification](superpowers/specs/2026-08-21-quant-research-state-guided-search-method-spec.md).
 

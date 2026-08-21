@@ -153,6 +153,23 @@ observed, and target state plus a concrete transition observable. The state
 transition should narrow component search; it must not predetermine whether the
 right intervention is a prompt, tool, memory, validator, middleware, routing,
 or another harness role.
+When `contract.json` sets
+`quant_research_state_card_required_for_act: true`, materialize one compact
+Quant Research State Card with `materialize_quant_research_state_card` before
+ACT. Use its compact component-experience retrieval to inspect the most relevant
+positive, negative, inactive, and unstable episodes, then open exact source or
+parent evidence when needed. Reference the card in `decide_candidate` as
+`quant_research_state_card: "quant-research-state-card.json"`; do not copy the
+card into the terminal decision. Also provide one compact `selected_relation`
+with task-local applicability and a predicted observable status change, plus
+`component_routing` with one selected primary file role and any reasoned
+rejected roles. The selected locus must agree with `primary_components`. Bare
+Research-State, relation-family, or component-role labels do not establish an
+operational search change. Use the card to narrow evidence, routing, or the
+discriminating probe; if it cannot do so, ABSTAIN. ABSTAIN does not require a
+card, relation, or routing decision. The card and terminal summary remain
+Evolver evidence: do not project optimize diagnostics, expected values, or
+other answer-rich material into a Worker instruction or reusable candidate.
 Treat activation as part of the intervention whenever a callable component
 depends on the Worker choosing it. Registration and a finalization reminder do
 not by themselves establish an activation path. Use the observed trajectory to

@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument(
         "--arm",
-        choices=("task-only", "history-enabled"),
+        choices=("task-only", "history-enabled", "generic", "quant-state"),
         default="history-enabled",
     )
     parser.add_argument(
@@ -74,7 +74,10 @@ def main(argv: list[str] | None = None) -> int:
             corpus_root=args.corpus,
             destination=destination / pair_id,
             task_keys=(target, protection),
-            include_component_history=args.arm == "history-enabled",
+            include_component_history=args.arm != "task-only",
+            search_treatment=(
+                args.arm if args.arm in {"generic", "quant-state"} else None
+            ),
             optimization_diagnostic_paths={
                 key: path
                 for key, path in diagnostics.items()

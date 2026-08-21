@@ -27,10 +27,20 @@ try:
         PublicContractEvidenceError,
         load_public_contract_clause,
     )
+    from qea.evolve_agent_full.quant_research_state import (
+        QuantResearchStateCardError,
+        retrieve_quant_research_episodes,
+        validate_quant_research_state_card,
+    )
 except ModuleNotFoundError:  # Uploaded Evolver runtime exposes qea modules flat.
     from public_contract_evidence import (  # type: ignore[no-redef]
         PublicContractEvidenceError,
         load_public_contract_clause,
+    )
+    from quant_research_state import (  # type: ignore[no-redef]
+        QuantResearchStateCardError,
+        retrieve_quant_research_episodes,
+        validate_quant_research_state_card,
     )
 
 
@@ -47,6 +57,7 @@ _MAX_SEARCH_LINE_BYTES = 8_000
 _MAX_PROCESS_OUTPUT_BYTES = 128_000
 _MAX_DISCOVERY_RETURN_BYTES = 256_000
 _DISCOVERY_STATE_NAME = "discovery-hypothesis.json"
+_QUANT_RESEARCH_STATE_CARD_NAME = "quant-research-state-card.json"
 _PROBE_LOG_NAME = "probe-log.jsonl"
 _COMPONENT_TEST_LOG_NAME = "component-tests.jsonl"
 _PROBE_ID = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
@@ -249,7 +260,14 @@ def _accessed_evidence_paths() -> set[str]:
         if (
             record.get("source") == "evidence"
             and record.get("operation")
-            in {"read", "trace_slice", "compare", "probe", "semantic_probe"}
+            in {
+                "read",
+                "trace_slice",
+                "compare",
+                "probe",
+                "semantic_probe",
+                "state_retrieval",
+            }
             and isinstance(record.get("relative_path"), str)
         ):
             paths.add(record["relative_path"])
@@ -1773,6 +1791,120 @@ def _decide_quant_property_candidate(
                     label="research_state_transition.transition_observable",
                 ),
             }
+        if contract.get("quant_research_state_card_required_for_act") is True:
+            card_path = _text(
+                discovery.get("quant_research_state_card"),
+                label="quant_research_state_card",
+            )
+            if card_path != _QUANT_RESEARCH_STATE_CARD_NAME:
+                raise GuardedWorkspaceError(
+                    "quant_research_state_card must reference the materialized "
+                    f"{_QUANT_RESEARCH_STATE_CARD_NAME} result"
+                )
+            materialized_card_path = _result_path(_QUANT_RESEARCH_STATE_CARD_NAME)
+            if not materialized_card_path.is_file():
+                raise GuardedWorkspaceError(
+                    "ACT requires a materialized quant research state card"
+                )
+
+            raw_relation = discovery.get("selected_relation")
+            if not isinstance(raw_relation, Mapping):
+                raise GuardedWorkspaceError(
+                    "ACT requires a compact selected_relation"
+                )
+            relation_id = _text(
+                raw_relation.get("relation_id"),
+                label="selected_relation.relation_id",
+            )
+            applicability = _text(
+                raw_relation.get("applicability"),
+                label="selected_relation.applicability",
+            )
+            predicted_status_change = _text(
+                raw_relation.get("predicted_status_change"),
+                label="selected_relation.predicted_status_change",
+            )
+            raw_routing = discovery.get("component_routing")
+            if not isinstance(raw_routing, Mapping):
+                raise GuardedWorkspaceError(
+                    "ACT requires compact component_routing"
+                )
+            selected_locus = _text(
+                raw_routing.get("selected_locus"),
+                label="component_routing.selected_locus",
+            ).casefold()
+            if selected_locus not in _COMPONENT_ROLES:
+                raise GuardedWorkspaceError(
+                    "component_routing.selected_locus is not a harness component role"
+                )
+            raw_rejected = raw_routing.get("rejected_loci")
+            if not isinstance(raw_rejected, list):
+                raise GuardedWorkspaceError(
+                    "component_routing.rejected_loci must be a list"
+                )
+            rejected_loci: list[dict[str, str]] = []
+            for index, raw_locus in enumerate(raw_rejected):
+                if not isinstance(raw_locus, Mapping):
+                    raise GuardedWorkspaceError(
+                        f"component_routing.rejected_loci[{index}] must be an object"
+                    )
+                rejected_loci.append(
+                    {
+                        "locus": _text(
+                            raw_locus.get("locus"),
+                            label=f"component_routing.rejected_loci[{index}].locus",
+                        ).casefold(),
+                        "reason": _text(
+                            raw_locus.get("reason"),
+                            label=(
+                                f"component_routing.rejected_loci[{index}].reason"
+                            ),
+                        ),
+                    }
+                )
+            normalized["quant_research_state_card"] = card_path
+            normalized["selected_relation"] = {
+                "relation_id": relation_id,
+                "applicability": applicability,
+                "predicted_status_change": predicted_status_change,
+            }
+
+            try:
+                materialized_card = json.loads(
+                    materialized_card_path.read_text(encoding="utf-8")
+                )
+                validated_card = validate_quant_research_state_card(
+                    materialized_card,
+                    action="ACT",
+                    selected_relation_id=relation_id,
+                )
+            except (
+                OSError,
+                UnicodeError,
+                json.JSONDecodeError,
+                QuantResearchStateCardError,
+            ) as exc:
+                raise GuardedWorkspaceError(
+                    "materialized quant research state card does not support ACT"
+                ) from exc
+            normalized["component_routing"] = {
+                "selected_locus": selected_locus,
+                "rejected_loci": rejected_loci,
+            }
+            selected_intervention = validated_card.get("selected_intervention")
+            card_component_locus = (
+                selected_intervention.get("component_locus")
+                if isinstance(selected_intervention, Mapping)
+                else None
+            )
+            if (
+                not isinstance(card_component_locus, str)
+                or card_component_locus.strip().casefold() != selected_locus
+            ):
+                raise GuardedWorkspaceError(
+                    "component_routing.selected_locus must match the state card "
+                    "component locus"
+                )
         if classification_required:
             breakdown_stage = _text(
                 discovery.get("breakdown_stage"), label="breakdown_stage"
@@ -1836,6 +1968,14 @@ def _decide_quant_property_candidate(
         if not set(primary_components) <= set(components):
             raise GuardedWorkspaceError(
                 "primary_components must be a subset of all declared components"
+            )
+        if (
+            contract.get("quant_research_state_card_required_for_act") is True
+            and normalized["component_routing"]["selected_locus"]
+            not in primary_components
+        ):
+            raise GuardedWorkspaceError(
+                "component_routing.selected_locus must be a primary component"
             )
         max_primary = contract.get("max_primary_components", 2)
         max_declared = contract.get("max_declared_components", 6)
@@ -1987,6 +2127,9 @@ def _decide_quant_property_candidate(
             "research_state_transition_required_for_act": contract.get(
                 "research_state_transition_required_for_act"
             ),
+            "quant_research_state_card_required_for_act": contract.get(
+                "quant_research_state_card_required_for_act"
+            ),
             "max_primary_components": contract.get("max_primary_components"),
             "max_declared_components": contract.get("max_declared_components"),
             "preferred_primary_components": contract.get(
@@ -2022,6 +2165,95 @@ def _decide_quant_property_candidate(
         "components": components,
         "failure_signature": normalized.get("failure_signature"),
         "research_state_transition": normalized.get("research_state_transition"),
+        "quant_research_state_card": normalized.get("quant_research_state_card"),
+        "selected_relation": normalized.get("selected_relation"),
+        "component_routing": normalized.get("component_routing"),
+    }
+
+
+def materialize_quant_research_state_card(
+    state_card: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Materialize one operational State Card and retrieve compact experience."""
+
+    contract = _contract()
+    if contract.get("quant_research_state_card_required_for_act") is not True:
+        raise GuardedWorkspaceError(
+            "the evidence contract does not enable Quant Research State guided search"
+        )
+    try:
+        card = validate_quant_research_state_card(state_card, action="ACT")
+    except QuantResearchStateCardError as exc:
+        raise GuardedWorkspaceError(str(exc)) from exc
+    task_keys = contract.get("task_keys")
+    if isinstance(task_keys, list) and card["task_key"] not in task_keys:
+        raise GuardedWorkspaceError(
+            "State Card task_key is outside the authorized task panel"
+        )
+    intervention = card.get("selected_intervention")
+    intervention_map = intervention if isinstance(intervention, Mapping) else {}
+    relation_id = intervention_map.get("relation_id")
+    if relation_id is None:
+        compact_relation = card.get("selected_relation")
+        relation_id = (
+            compact_relation.get("relation_id")
+            if isinstance(compact_relation, Mapping)
+            else compact_relation
+        )
+    selected_relation = next(
+        (
+            relation
+            for relation in card["candidate_relations"]
+            if isinstance(relation, Mapping)
+            and relation.get("relation_id") == relation_id
+        ),
+        {},
+    )
+    observed_evidence = selected_relation.get("observed_evidence")
+    if (
+        not isinstance(observed_evidence, list)
+        or not set(observed_evidence) & _accessed_evidence_paths()
+    ):
+        raise GuardedWorkspaceError(
+            "selected State Card relation must cite evidence already inspected"
+        )
+
+    catalog_path, catalog_relative = _resolve(
+        "evidence", "components/CATALOG.json", must_exist=True
+    )
+    try:
+        catalog = json.loads(_read_text(catalog_path))
+    except json.JSONDecodeError as exc:
+        raise GuardedWorkspaceError("component catalog is invalid JSON") from exc
+    if not isinstance(catalog, Mapping):
+        raise GuardedWorkspaceError("component catalog must be an object")
+    try:
+        retrieval = retrieve_quant_research_episodes(card, catalog)
+    except QuantResearchStateCardError as exc:
+        raise GuardedWorkspaceError(str(exc)) from exc
+
+    path = _result_path(_QUANT_RESEARCH_STATE_CARD_NAME)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(card, sort_keys=True, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temporary, path)
+    returned = len(json.dumps(retrieval, ensure_ascii=False).encode("utf-8"))
+    _audit(
+        operation="state_retrieval",
+        source="evidence",
+        relative_path=catalog_relative,
+        bytes_returned=returned,
+    )
+    return {
+        "quant_research_state_card": _QUANT_RESEARCH_STATE_CARD_NAME,
+        "task_key": card["task_key"],
+        "selected_relation_id": relation_id,
+        "state_locus": intervention_map.get("state_locus"),
+        "component_locus": intervention_map.get("component_locus"),
+        "exact_parent_evidence": contract.get("prior_runtime_experience"),
+        "retrieval": retrieval,
     }
 
 

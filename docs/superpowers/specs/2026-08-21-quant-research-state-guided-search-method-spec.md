@@ -2,11 +2,33 @@
 
 **Date:** 2026-08-21
 
-**Status:** Proposed implementation specification. No live mechanism canary or
-main experiment is authorized or reported by this document.
+**Status:** No-model implementation preflight complete. No live mechanism
+canary or main experiment is reported by this document.
 
 **Story source:**
 [Evolving the Quant Researcher story backup](../../decisions/2026-08-21-evolving-the-quant-researcher-story-backup.md)
+
+## Implementation checkpoint
+
+The first implementation now reuses the existing Evolver and component catalog:
+
+- one guarded tool materializes the open State Card after its selected relation
+  cites evidence the Evolver has read;
+- the same component catalog available to the generic arm is filtered by state,
+  relation, component, task-mechanism, and desired-observation coordinates;
+- retrieval returns at most one positive, negative, inactive, and unstable
+  episode per class by default;
+- `ACT` must bind the card's selected relation and component locus to the
+  terminal decision and primary harness component;
+- generic and quant-state coordinated views retain the same history and
+  diagnostics, with the operational State Card helper as the treatment; and
+- the bounded Worker receives only the Evolver-authored activation instruction,
+  not the State Card or optimize-only diagnostics.
+
+A 138-test relevant compatibility run passed in the repository development
+environment. This checkpoint demonstrates executable wiring only. It does not
+show that the quant-state treatment is faster or better than the generic arm;
+that remains the purpose of the four-initial-candidate live canary below.
 
 ## Objective
 
@@ -98,8 +120,9 @@ competing_explanations:
     support: ["evidence locations"]
     counterevidence: ["evidence locations"]
 selected_intervention:
+  relation_id: "one selected candidate relation"
   state_locus: "one primary state or transition"
-  component_locus: "prompt/tool/skill/memory/middleware/validator/routing/workflow"
+  component_locus: "one harness role such as tools, skills, middleware, or routing"
   predicted_transition: "fresh Worker behavior expected to change"
   discriminating_observation: "cheapest observation that changes the decision"
 ```

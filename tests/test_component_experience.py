@@ -508,3 +508,54 @@ def test_coordinated_view_keeps_optimize_diagnostic_evolver_only(tmp_path):
         ).read_text()
     )
     assert corrected["tests_passed"] == 6
+
+
+def test_coordinated_generic_and_quant_state_views_share_evidence_but_not_helper(
+    tmp_path,
+):
+    corpus = tmp_path / "breadth"
+    task_keys = (
+        "qfbench:zero-coupon-bootstrapping",
+        "qfbench:swap-curve-bootstrap-ois",
+    )
+    build_cross_benchmark_experience(
+        destination=corpus,
+        task_profiles=(
+            {
+                "benchmark": "qfbench",
+                "task_id": "zero-coupon-bootstrapping",
+                "role": "target",
+                "state_tags": ["curve_bootstrap", "repricing"],
+            },
+            {
+                "benchmark": "qfbench",
+                "task_id": "swap-curve-bootstrap-ois",
+                "role": "protection",
+                "state_tags": ["curve_bootstrap", "repricing"],
+            },
+        ),
+        component_ledger_path=LEDGER,
+        qfbench_evidence_root=_qfbench_evidence(tmp_path),
+    )
+
+    for treatment in ("generic", "quant-state"):
+        build_coordinated_evolver_view(
+            corpus_root=corpus,
+            destination=tmp_path / treatment,
+            task_keys=task_keys,
+            include_component_history=True,
+            search_treatment=treatment,
+        )
+
+    generic_contract = json.loads((tmp_path / "generic/contract.json").read_text())
+    quant_contract = json.loads((tmp_path / "quant-state/contract.json").read_text())
+    assert generic_contract["contract_arm"] == "generic"
+    assert quant_contract["contract_arm"] == "quant-state"
+    assert generic_contract["quant_research_state_card_required_for_act"] is False
+    assert quant_contract["quant_research_state_card_required_for_act"] is True
+    assert (tmp_path / "generic/components/CATALOG.json").read_text() == (
+        tmp_path / "quant-state/components/CATALOG.json"
+    ).read_text()
+    assert (tmp_path / "generic/tasks/CATALOG.json").read_text() == (
+        tmp_path / "quant-state/tasks/CATALOG.json"
+    ).read_text()

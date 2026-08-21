@@ -1,0 +1,12 @@
+type: tool
+name: materialize_quant_research_state_card
+description: Materialize one task-conditioned Quant Research State Card and retrieve a compact positive, negative, inactive, and unstable component-experience view from the same catalog available to the generic arm. Use only when the evidence contract enables Quant Research State guided search. This does not unlock candidate writes; ACT must still reference the returned card path, selected relation, and component routing.
+input_schema:
+  type: object
+  properties:
+    state_card:
+      type: object
+      description: Open State Card with a task_key, candidate_relations, and selected_intervention. N-A and UNKNOWN are allowed when unsupported, but the selected ACT relation needs task-local support and a reachable component locus.
+      additionalProperties: true
+  required: [state_card]
+  additionalProperties: false

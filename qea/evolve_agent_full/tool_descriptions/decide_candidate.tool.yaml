@@ -68,6 +68,43 @@ input_schema:
               description: Concrete trajectory, component-use, invariant, artifact, or official observation showing whether the transition occurred.
           required: [state_id, expected_state, observed_state, target_state, transition_observable]
           additionalProperties: false
+        quant_research_state_card:
+          type: string
+          description: Required for ACT only when the evidence contract enables Quant Research State guided search. Reference the fixed relative Evolver result path quant-research-state-card.json; do not copy the card into this payload.
+        selected_relation:
+          type: object
+          description: Compact task-local relation selected from the materialized state card. Required for ACT only when the Quant Research State card contract flag is enabled; a relation-family label alone is insufficient.
+          properties:
+            relation_id: {type: string}
+            applicability:
+              type: string
+              description: Public-task or authorized optimize evidence showing why the relation applies.
+            predicted_status_change:
+              type: string
+              description: Observable relation change expected from the intervention.
+          required: [relation_id, applicability, predicted_status_change]
+          additionalProperties: false
+        component_routing:
+          type: object
+          description: Compact state-conditioned routing decision. Required for ACT only when the Quant Research State card contract flag is enabled.
+          properties:
+            selected_locus:
+              type: string
+              enum: [systemprompt, agent_config, tool_descriptions, tools, validator, skills, memory, middleware, routing]
+              description: One selected primary harness component role.
+            rejected_loci:
+              type: array
+              items:
+                type: object
+                properties:
+                  locus:
+                    type: string
+                    enum: [systemprompt, agent_config, tool_descriptions, tools, validator, skills, memory, middleware, routing]
+                  reason: {type: string}
+                required: [locus, reason]
+                additionalProperties: false
+          required: [selected_locus, rejected_loci]
+          additionalProperties: false
         failure_types:
           type: array
           minItems: 1

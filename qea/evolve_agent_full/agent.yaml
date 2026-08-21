@@ -50,6 +50,9 @@ tools:
   - name: decide_candidate
     yaml_path: ./tool_descriptions/decide_candidate.tool.yaml
     binding: tools.guarded_workspace:decide_candidate
+  - name: materialize_quant_research_state_card
+    yaml_path: ./tool_descriptions/materialize_quant_research_state_card.tool.yaml
+    binding: tools.guarded_workspace:materialize_quant_research_state_card
   - name: write_candidate
     yaml_path: ./tool_descriptions/write_candidate.tool.yaml
     binding: tools.guarded_workspace:write_candidate
