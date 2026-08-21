@@ -1,5 +1,36 @@
 # QEA Repository Memory
 
+## 2026-08-21 Search-v2 and pre-main gates
+
+Proceed with one bounded Search-v2 canary before Main-0. The method story is
+**Evolving the Quant Researcher** by changing the persistent research
+capability substrate, not claiming a new generic harness-evolution outer loop.
+The six Research States are open coordinates; the domain contribution is a
+task-conditioned quantitative relation prior that changes experience
+retrieval, component localization, intervention scope, and
+activation--relation--outcome evidence.
+
+Search-v2 retains one primary intervention relation and permits at most one
+independently supported residual-risk relation. This is not a mandatory slot
+or finance failure taxonomy. The first preregistered pair is
+`corporate-action-adjustment` to `momentum-backtest`, matched on adjusted-price
+basis consistency and event-to-execution time alignment. Compare a strong
+generic Evolver with quant-state-v2 under matched evidence, history, routes,
+mutation surface, explicit component-use contract, and evaluation gates. Use
+proposal-only discovery, then normal target, conditional repeat, and a matched
+second task only after a repeated gain. Hard limits are two candidates, nine
+Worker sessions, $0.75 before starting a new stage, and six hours.
+
+Do not start Main-0 merely because V2 code or a proposal succeeds. Before
+Main-0, require a source-level coverage screen of the planned tasks, a
+domain-specific positive observation such as repeatable gain or genuine
+matched-relation execution, and a thin JSON-backed candidate-lineage
+controller with target, repeat, protection, promote/rollback, cost boundary,
+comparator cache, and resume tests. Main-0 should use two screened pairs, two
+lineages, and at most two candidates per lineage. Main-1 sizing remains
+proposed until Main-0 measures cost and long-tail wall time. Full decision:
+`docs/decisions/2026-08-21-search-v2-and-pre-main-gates.md`.
+
 ## 2026-08-21 evolving-the-quant-researcher story and search-method gate
 
 Before expanding the candidate-scale controller, freeze the proposed story as

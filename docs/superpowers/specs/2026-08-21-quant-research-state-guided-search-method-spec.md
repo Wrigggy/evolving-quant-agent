@@ -5,6 +5,10 @@
 **Status:** No-model implementation preflight and the first matched live canary
 are complete. The measured result and boundaries are in
 [the quant-state-guided search canary record](../../decisions/2026-08-21-quant-state-guided-search-canary-result.md).
+Search-v2, which adds at most one evidence-supported residual-risk relation,
+has passed its focused no-model preflight and is preregistered but not yet run.
+Its gates are in
+[the Search-v2 decision](../../decisions/2026-08-21-search-v2-and-pre-main-gates.md).
 
 **Story source:**
 [Evolving the Quant Researcher story backup](../../decisions/2026-08-21-evolving-the-quant-researcher-story-backup.md)
@@ -124,6 +128,7 @@ competing_explanations:
     counterevidence: ["evidence locations"]
 selected_intervention:
   relation_id: "one selected candidate relation"
+  residual_relation_id: "optional distinct supported relation"
   state_locus: "one primary state or transition"
   component_locus: "one harness role such as tools, skills, middleware, or routing"
   predicted_transition: "fresh Worker behavior expected to change"
@@ -169,11 +174,17 @@ explanation dominates or return insufficiency.
 
 ### 2. Select a relation
 
-Select one relation whose observation would materially distinguish the leading
-explanations or verify the intended intervention. The relation may be a public
-semantic fixture, temporal perturbation, fit-scope audit, dimensional or sign
-reconciliation, repricing residual, portfolio identity, sensitivity test, or
-artifact replay.
+Select one primary relation whose observation would materially distinguish the
+leading explanations or verify the intended intervention. The relation may be
+a public semantic fixture, temporal perturbation, fit-scope audit, dimensional
+or sign reconciliation, repricing residual, portfolio identity, sensitivity
+test, or artifact replay.
+
+When task-local evidence shows that repairing the primary relation could leave
+one orthogonal quantitative risk unresolved, the Evolver may select at most one
+residual-risk relation. It must be independently supported, may not duplicate
+the primary relation, and is omitted when evidence is insufficient. This is an
+open competing explanation, not a mandatory finance-failure slot.
 
 Reject self-confirming relations. A check is self-confirming when the Worker
 chooses the very definition that the check later validates and the public task
@@ -210,6 +221,10 @@ The initial implementation uses a compact retrieval query containing:
 Return at most the most relevant positive, negative, inactive, and unstable
 episodes plus the exact current parent component. Do not default to the full
 history tree. Candidate history remains available for drill-down.
+
+Search-v2 issues a separate compact query for the optional residual-risk
+relation. Primary and residual episodes retain their query role; their tokens
+are not merged into one broad history query.
 
 Retrieval must exclude sealed-final outcomes and trusted evaluator answers.
 Optimize-task expected-versus-observed diagnostics may be returned to the
@@ -256,6 +271,12 @@ selected_relation:
   relation_id: "open identifier"
   applicability: "public or optimize-evidence support"
   predicted_status_change: "FAIL/UNKNOWN -> PASS or another observable change"
+residual_risk_relation:  # optional
+  relation_id: "distinct supported identifier"
+  orthogonality: "why primary success would not settle this relation"
+  applicability: "independent support"
+  predicted_status_change: "predicted observable change"
+  discriminating_observation: "answer-free observation"
 component_routing:
   selected_locus: "one primary component locus"
   rejected_loci:
@@ -367,9 +388,12 @@ Record per arm and task family:
    support, self-confirming relation, component not activated, predicted state
    unchanged, and protection regression.
 8. Run a no-model fixture through the complete path.
-9. Run the four-candidate mechanism-localization canary.
-10. If the canary is positive, simplify and implement the pre-main controller,
-    then return to the Main-0/Main-1 runway.
+9. Run the completed first matched canary and retain its positive and negative
+   evidence separately.
+10. Run the bounded Search-v2 comparison with one primary and at most one
+    residual-risk relation.
+11. If the pre-main story gates are met, implement the thin candidate-lifecycle
+    controller, then run the reduced Main-0 rehearsal before sizing Main-1.
 
 ## Pre-main gate
 

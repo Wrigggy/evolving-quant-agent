@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-21",
+  "status": "preregistered_not_run",
+  "target_task": "qfbench:corporate-action-adjustment",
+  "matched_task": "qfbench:momentum-backtest",
+  "primary_relation": "adjusted_price_basis_consistency",
+  "optional_residual_risk_relation": "event_to_execution_time_alignment",
+  "arms": [
+    "generic",
+    "quant-state-v2"
+  ],
+  "matched_conditions": [
+    "quant_h0",
+    "authorized_evidence",
+    "component_history",
+    "evolver_and_worker_routes",
+    "mutation_surface",
+    "candidate_budget",
+    "component_use_experiment_contract",
+    "target_repeat_and_matched_task_gates"
+  ],
+  "stage_order": [
+    "proposal_only",
+    "concurrent_target",
+    "conditional_repeat",
+    "conditional_matched_task"
+  ],
+  "advance_rules": {
+    "target": "official property or binary gain plus predicted relation observation",
+    "repeat": "same directional official gain on an independent Worker",
+    "matched_task": "non_regression plus actual declared relation observation"
+  },
+  "limits": {
+    "evolver_sessions": 2,
+    "candidate_versions": 2,
+    "worker_sessions": 9,
+    "verifier_executions": 9,
+    "refinement_rounds": 0,
+    "provider_cost_usd": 0.75,
+    "wall_time_hours": 6
+  },
+  "claim_boundary": {
+    "within_panel_relation_reuse": true,
+    "unseen_task_transfer": false,
+    "sealed_generalization": false,
+    "main_0": false,
+    "main_experiment": false
+  }
+}
