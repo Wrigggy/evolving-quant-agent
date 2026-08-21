@@ -6,9 +6,11 @@
 are complete. The measured result and boundaries are in
 [the quant-state-guided search canary record](../../decisions/2026-08-21-quant-state-guided-search-canary-result.md).
 Search-v2, which adds at most one evidence-supported residual-risk relation,
-has passed its focused no-model preflight and is preregistered but not yet run.
-Its gates are in
-[the Search-v2 decision](../../decisions/2026-08-21-search-v2-and-pre-main-gates.md).
+has now produced two independent official binary target gains and actual
+relation execution on a matched second task. The matched aggregate score was
+preserved, but one previously passing property regressed, so the candidate was
+archived rather than promoted. The result and boundary are in
+[the Search-v2 result](../../decisions/2026-08-22-search-v2-localvol-result.md).
 
 **Story source:**
 [Evolving the Quant Researcher story backup](../../decisions/2026-08-21-evolving-the-quant-researcher-story-backup.md)
@@ -32,10 +34,20 @@ The first implementation now reuses the existing Evolver and component catalog:
   not the State Card or optimize-only diagnostics.
 
 A 138-test relevant compatibility run passed in the repository development
-environment. The subsequent matched canary produced one repeated holdings
+environment. The first matched canary produced one repeated holdings
 property gain with safe protection, a first-run local-vol property gain, and a
 local-vol repeat timeout. The treatment is operational, but it is not yet
 uniformly faster, binary-stable, or reusable across a matched second task.
+
+Search-v2 then compared the same local-vol runtime evidence under strong
+generic and primary-plus-residual quant-state contracts. Generic returned
+`ABSTAIN`; quant-state-v2 admitted a prompt-only refinement. The frozen
+candidate changed fresh Quant-H0 from 65/68 to 68/68 and, independently, from
+66/68 to 68/68, in both cases changing reward from zero to one while realizing
+the predeclared maturity-completeness observations. On matched
+`localvol-barrier`, both arms scored 38/39 and the candidate executed the
+relation audit, but the failed-property identity changed. This is repeated
+target benefit and matched relation execution, not property-wise safe reuse.
 
 ## Objective
 
@@ -391,8 +403,11 @@ Record per arm and task family:
 9. Run the completed first matched canary and retain its positive and negative
    evidence separately.
 10. Run the bounded Search-v2 comparison with one primary and at most one
-    residual-risk relation.
-11. If the pre-main story gates are met, implement the thin candidate-lifecycle
+    residual-risk relation. **Completed with repeated binary target gain and a
+    matched-task property swap.**
+11. Freeze a public-relation applicability table for the proposed Main-0 tasks
+    and the matched generic/quant contract audit.
+12. If the pre-main story gates are met, implement the thin candidate-lifecycle
     controller, then run the reduced Main-0 rehearsal before sizing Main-1.
 
 ## Pre-main gate

@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-22",
+  "status": "repeated_binary_gain_with_matched_relation_execution_and_property_swap",
+  "research_question": "Can one primary quantitative relation plus one independently supported residual-risk relation guide a useful and better-scoped harness refinement?",
+  "proposal_comparison": {
+    "matched_setup": {
+      "same_quant_h0": true,
+      "same_authorized_runtime_evidence": true,
+      "same_component_history": true,
+      "same_model_and_reasoning_route": true,
+      "same_full_harness_mutation_surface": true,
+      "same_answer_access": true,
+      "worker_answer_blind": true,
+      "only_evidence_tree_difference": "arm contract and operational quant-state-v2 helpers"
+    },
+    "generic": {
+      "decision": "ABSTAIN",
+      "candidate_admitted": false,
+      "completed_requests": 9,
+      "total_tokens": 455895,
+      "provider_cost_usd": 0.046818996
+    },
+    "quant_state_v2": {
+      "decision": "ACT",
+      "candidate_admitted": true,
+      "search_operator": "REFINE",
+      "components_changed": [
+        "systemprompt"
+      ],
+      "primary_relation": "maturity_propagation_terminal_completeness",
+      "residual_risk_relation": "local_vol_surface_terminal_coverage",
+      "completed_requests": 18,
+      "total_tokens": 1770267,
+      "provider_cost_usd": 0.067801596
+    }
+  },
+  "official_evaluations": {
+    "target": {
+      "task_id": "dupire-local-vol",
+      "fresh_h0": {
+        "properties": "65/68",
+        "reward": 0.0
+      },
+      "frozen_candidate": {
+        "properties": "68/68",
+        "reward": 1.0
+      },
+      "declared_relation_observed": true,
+      "observations": [
+        "finite positive terminal maturity values",
+        "defined one-sided terminal derivative",
+        "every selected maturity represented on the delivered surface",
+        "no NaN or blank numeric cells"
+      ]
+    },
+    "repeat": {
+      "task_id": "dupire-local-vol",
+      "fresh_h0": {
+        "properties": "66/68",
+        "reward": 0.0
+      },
+      "frozen_candidate": {
+        "properties": "68/68",
+        "reward": 1.0
+      },
+      "declared_relation_observed": true
+    },
+    "matched_task": {
+      "task_id": "localvol-barrier",
+      "fresh_h0": {
+        "properties": "38/39",
+        "reward": 0.96,
+        "failed_property": "barrier_outputs_reasonable"
+      },
+      "frozen_candidate": {
+        "properties": "38/39",
+        "reward": 0.96,
+        "failed_property": "vanilla_mc_close_to_surface"
+      },
+      "aggregate_non_regression": true,
+      "property_set_non_regression": false,
+      "declared_relation_observed": true,
+      "observations": [
+        "all five target expiries represented on both delivered surfaces",
+        "seven strikes per expiry with finite positive local volatility",
+        "explicit pre-delivery NaN and blank scan",
+        "artifact self-consistency audit"
+      ]
+    }
+  },
+  "campaign_usage": {
+    "completed_requests": 228,
+    "total_tokens": 13880354,
+    "provider_cost_usd": 0.515488768,
+    "candidate_versions": 1,
+    "normal_budget_worker_sessions": 6,
+    "official_verifier_executions": 6,
+    "rate_limited_retries": 0,
+    "replacement_attempts": 0,
+    "unreconciled_attempts": 0
+  },
+  "claim_boundary": {
+    "quant_state_changed_search_decision": true,
+    "repeated_target_binary_gain": true,
+    "predicted_relation_correction_observed": true,
+    "matched_task_relation_executed": true,
+    "matched_task_aggregate_non_regression": true,
+    "matched_task_property_pareto_safe": false,
+    "promotion_eligible": false,
+    "stable_or_reusable_candidate": false,
+    "general_qrs_superiority": false,
+    "sealed_benchmark_gain": false,
+    "main_0_completed": false
+  },
+  "valid_run_ids": [
+    "qstate-v2-localvol-generic-20260821-r1",
+    "qstate-v2-localvol-quant-20260821-r1",
+    "qstate-v2-target-localvol-20260822-r1",
+    "qstate-v2-repeat-localvol-20260822-r1",
+    "qstate-v2-matched-localvol-barrier-20260822-r1"
+  ],
+  "evidence_root": "results/bc-mirror"
+}

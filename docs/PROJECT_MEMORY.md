@@ -1,5 +1,38 @@
 # QEA Repository Memory
 
+## 2026-08-22 Search-v2 repeated binary gain and matched property swap
+
+Search-v2 is retained as a positive search-mechanism result, but its frozen
+candidate is archived rather than promoted. Under the same Quant-H0, runtime
+evidence, history, model route, answer access, full mutation surface, and
+proposal limits, the strong generic Evolver returned calibrated `ABSTAIN`.
+Quant-state-v2 selected `maturity_propagation_terminal_completeness` as its
+primary relation and `local_vol_surface_terminal_coverage` as one independent
+residual-risk relation, then admitted a prompt-only refinement.
+
+On two independent normal-budget `dupire-local-vol` comparisons, fresh
+Quant-H0 scored 65/68 and 66/68 with reward 0; the same frozen candidate scored
+68/68 with reward 1 both times. Its artifacts realized the predeclared
+terminal-maturity, full-surface-coverage, and no-missing-cell observations.
+On matched `localvol-barrier`, Quant-H0 and candidate both scored 38/39,
+reward 0.96, and the candidate actually executed the maturity/surface audit.
+However, Quant-H0 failed `barrier_outputs_reasonable` while the candidate
+failed `vanilla_mc_close_to_surface`. Aggregate performance was preserved but
+the property set was not Pareto-safe, so the candidate is a real rollback path,
+not a stable/reusable promotion.
+
+The complete path used 228 completed requests, 13,880,354 tokens, and
+$0.515488768, with no retry, replacement, or unreconciled attempt. Search-v2
+therefore closes the pre-main repeated-binary-gain gate and shows that the
+quantitative relation representation can change search, but it does not prove
+general superiority, safe reuse, Main-0, or sealed benchmark gain. Before
+Main-0, freeze a small public-relation applicability table for the proposed
+tasks and implement only the thin JSON lifecycle controller that ingests
+existing child reports and performs target, repeat, protection, promotion or
+rollback, and resume. Full decision:
+`docs/decisions/2026-08-22-search-v2-localvol-result.md`; compact record:
+`data/breadth/QSTATE_SEARCH_V2_RESULT.json`.
+
 ## 2026-08-21 Search-v2 and pre-main gates
 
 Proceed with one bounded Search-v2 canary before Main-0. The method story is
