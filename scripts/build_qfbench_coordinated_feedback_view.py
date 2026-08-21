@@ -70,6 +70,11 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="Optional Evolver-only diagnostic for the scored optimize run.",
     )
+    parser.add_argument(
+        "--parent-candidate",
+        type=Path,
+        help="Optional parent candidate snapshot that produced the Worker run.",
+    )
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--round-label", default="round-1")
     args = parser.parse_args(argv)
@@ -127,6 +132,16 @@ def main(argv: list[str] | None = None) -> int:
         diagnostic_name = f"{label}-optimization-diagnostic.json"
         _write_json(objects / diagnostic_name, diagnostic)
         diagnostic_evidence_path = f"history/archive/objects/{diagnostic_name}"
+    parent_candidate_evidence_path = None
+    if args.parent_candidate is not None:
+        parent_candidate = args.parent_candidate.expanduser().resolve()
+        if not parent_candidate.is_dir():
+            raise ValueError("parent candidate must be a directory")
+        parent_snapshot = archive / "parent-candidates" / label
+        shutil.copytree(parent_candidate, parent_snapshot)
+        parent_candidate_evidence_path = (
+            f"history/archive/parent-candidates/{label}"
+        )
 
     prediction = proposal.get("prediction")
     if not isinstance(prediction, dict):
@@ -158,6 +173,8 @@ def main(argv: list[str] | None = None) -> int:
     }
     if diagnostic_evidence_path is not None:
         entry["evolver_only_optimization_diagnostic"] = diagnostic_evidence_path
+    if parent_candidate_evidence_path is not None:
+        entry["parent_candidate_snapshot"] = parent_candidate_evidence_path
     _write_json(archive / "entries" / f"{label}.json", entry)
     diff = proposal.get("diff")
     if not isinstance(diff, str) or not diff.strip():
@@ -181,7 +198,10 @@ def main(argv: list[str] | None = None) -> int:
         "Do not repeat the same experiment unchanged. If the prior probe ended "
         "before the predicted component could activate, make the next bounded "
         "experiment distinguish component failure from insufficient causal "
-        "distance; the Evolver still chooses the intervention and budget."
+        "distance; the Evolver still chooses the intervention and budget. "
+        "When a parent candidate snapshot is listed in the runtime-experience "
+        "entry, inspect that snapshot before attributing an observed behavior "
+        "to or away from the tested component."
     )
     _write_json(contract_path, contract)
     _write_json(
