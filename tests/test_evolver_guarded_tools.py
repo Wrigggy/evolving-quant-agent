@@ -1016,6 +1016,56 @@ def test_quant_v2_coordinated_act_cites_both_tasks_and_selects_one_target(
         decide_candidate(discovery=decision)
 
 
+def test_quant_v2_lineage_refinement_selects_target_without_rediscovery(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, access_log = guarded_roots
+    _write_flexible_quant_v2_contract(evidence, history_required=True)
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract.update(
+        {
+            "stage": "LINEAGE_REFINEMENT",
+            "target_task_keys": ["qfbench:holdings-target"],
+            "coordinated_evidence_required_for_act": False,
+            "probe_task_selection_required_for_act": True,
+            "autonomous_probe_required": True,
+            "probe_seed_policy": "none",
+            "max_worker_probes_this_round": 1,
+        }
+    )
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(
+        source="evidence", file_path="history/archive/diffs/prior.patch"
+    )
+    decision = _quant_v2_decision()
+    decision["probe_task_key"] = "qfbench:holdings-target"
+    decision["search_operator"] = "REFINE"
+    decision["experiment_spec"] = {
+        "mode": "from_scratch",
+        "seed_experience": None,
+        "worker_instruction": "Exercise the refined component on the public task.",
+        "max_iterations": 8,
+        "prediction": "The refined component changes the artifact construction.",
+        "decision_changing_observation": "No component use favors revert.",
+    }
+
+    result = decide_candidate(discovery=decision)
+    state = json.loads(
+        (access_log.parent / "discovery-hypothesis.json").read_text()
+    )
+
+    assert result["decision"] == "ACT"
+    assert state["hypothesis"]["probe_task_key"] == "qfbench:holdings-target"
+    assert "shared_mechanism" not in state["hypothesis"]
+
+
 def test_quant_v2_forbids_legacy_unlock_and_schema_uses_prediction(guarded_roots):
     from qea.evolve_agent_full.tools.guarded_workspace import (
         GuardedWorkspaceError,

@@ -1723,6 +1723,23 @@ def _decide_quant_property_candidate(
                     "ACT must cite inspected evidence from every coordinated task: "
                     + ", ".join(missing_task_evidence)
                 )
+        if (
+            contract.get("probe_task_selection_required_for_act") is True
+            and "probe_task_key" not in normalized
+        ):
+            target_task_keys = _text_list(
+                contract.get("target_task_keys"),
+                label="contract target_task_keys",
+                minimum=1,
+            )
+            probe_task_key = _text(
+                discovery.get("probe_task_key"), label="probe_task_key"
+            )
+            if probe_task_key not in target_task_keys:
+                raise GuardedWorkspaceError(
+                    "probe_task_key must select one predeclared target task"
+                )
+            normalized["probe_task_key"] = probe_task_key
         if contract.get("research_state_transition_required_for_act") is True:
             raw_transition = discovery.get("research_state_transition")
             if not isinstance(raw_transition, Mapping):

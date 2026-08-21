@@ -182,6 +182,13 @@ predeclared target in the contract. The other trajectory is evidence and a
 conditional protection task, not a second Worker call. Use a `from_scratch`
 experiment with no seed. If the two trajectories do not support one mechanism,
 or the target probe would not distinguish the leading explanations, ABSTAIN.
+When the stage is `LINEAGE_REFINEMENT`, the prior cross-task discovery has
+already happened. Read the archived parent candidate, its exact diff and
+prediction, and the scored Worker observation. Decide whether that measured
+lineage supports `REFINE`, `REUSE`, `REVERT`, a genuinely different
+`NEW_PROBE`, or `ABSTAIN`. Do not require a second cross-task shared-mechanism
+discovery. For ACT, still select the declared target in `probe_task_key` and
+provide the bounded `experiment_spec` used by the coordinator.
 When a scored history entry contains `evaluation.worker_runtime[].final_artifact`,
 compare that Worker-authored implementation with the public task contract before
 inventing another harness component. It is runtime experience, not a reference

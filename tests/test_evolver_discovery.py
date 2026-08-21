@@ -662,6 +662,23 @@ def test_coordinated_probe_selects_only_the_admitted_target():
     ) is None
 
 
+def test_lineage_refinement_dispatches_its_declared_target():
+    from scripts.run_qfbench_discovery_pilot import _coordinated_probe_task_key
+
+    assert _coordinated_probe_task_key(
+        contract={
+            "stage": "LINEAGE_REFINEMENT",
+            "max_worker_probes_this_round": 1,
+            "target_task_keys": ["qfbench:holdings-target"],
+        },
+        decision="ACT",
+        admission={"admitted": True},
+        discovery_state={
+            "hypothesis": {"probe_task_key": "qfbench:holdings-target"}
+        },
+    ) == "qfbench:holdings-target"
+
+
 def test_coordinated_probe_never_falls_back_or_dispatches_protection():
     from scripts.run_qfbench_discovery_pilot import (
         _coordinated_probe_task_key,

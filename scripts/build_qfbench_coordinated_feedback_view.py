@@ -185,8 +185,11 @@ def main(argv: list[str] | None = None) -> int:
 
     contract_path = destination / "contract.json"
     contract = _json(contract_path)
+    contract["stage"] = "LINEAGE_REFINEMENT"
     contract["history_required"] = True
     contract["runtime_feedback_round"] = 2
+    contract["coordinated_evidence_required_for_act"] = False
+    contract["shared_mechanism_assessment_required"] = False
     contract["prior_runtime_experience"] = (
         f"history/archive/entries/{label}.json"
     )
@@ -201,7 +204,8 @@ def main(argv: list[str] | None = None) -> int:
         "distance; the Evolver still chooses the intervention and budget. "
         "When a parent candidate snapshot is listed in the runtime-experience "
         "entry, inspect that snapshot before attributing an observed behavior "
-        "to or away from the tested component."
+        "to or away from the tested component. This round refines one existing "
+        "lineage; do not require a new cross-task shared-mechanism discovery."
     )
     _write_json(contract_path, contract)
     _write_json(

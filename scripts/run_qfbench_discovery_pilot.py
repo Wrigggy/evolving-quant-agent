@@ -195,8 +195,11 @@ def _coordinated_probe_task_key(
 ) -> str | None:
     """Return the Evolver-selected singleton target for an admitted ACT."""
 
-    if contract.get("stage") != "COORDINATED_BREADTH":
-        raise ValueError("selected-probe dispatch requires coordinated evidence")
+    if contract.get("stage") not in {
+        "COORDINATED_BREADTH",
+        "LINEAGE_REFINEMENT",
+    }:
+        raise ValueError("selected-probe dispatch requires a supported search stage")
     if contract.get("max_worker_probes_this_round") != 1:
         raise ValueError("coordinated evidence must permit exactly one Worker probe")
     if decision != "ACT" or admission.get("admitted") is not True:
@@ -545,11 +548,12 @@ def main(argv: list[str] | None = None) -> int:
         config=config,
     )
     evidence_contract = _json(evidence.root / "contract.json")
-    if args.dispatch_selected_probe and evidence_contract.get("stage") != (
-        "COORDINATED_BREADTH"
-    ):
+    if args.dispatch_selected_probe and evidence_contract.get("stage") not in {
+        "COORDINATED_BREADTH",
+        "LINEAGE_REFINEMENT",
+    }:
         raise ValueError(
-            "selected-probe dispatch is only valid for coordinated breadth"
+            "selected-probe dispatch is not valid for this search stage"
         )
     if a6_identity is not None:
         validate_a6_evidence_contract(
