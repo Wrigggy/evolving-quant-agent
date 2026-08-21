@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "task_id": "13f-amendment-aware-crowding",
+  "feedback_mode": "answer_rich_evolver",
+  "worker_visible": false,
+  "evidence_role": "answer-rich optimize-only Evolver diagnostic after a blind candidate Worker run",
+  "candidate_evaluation": {
+    "tests_passed": 50,
+    "tests_failed": 1,
+    "official_reward": 0.0,
+    "verifier_exit_code": 0
+  },
+  "observed_remaining_failure": {
+    "family": "entity_name_canonicalization",
+    "artifact": "effective_holdings.csv",
+    "column": "issuer_name_canonical",
+    "observation": "one canonical issuer label was over-normalized: the candidate emitted MICROSOFT CORP where the expected effective-holdings label was MICROSOFT CORP COM"
+  },
+  "lineage_interpretation": "The parent skill coincided with recovery of four of the five prior failing properties in a fresh blind Worker run, while its broad suffix-removal guidance is implicated in the remaining mismatch. The next candidate should refine the reusable normalization rule or explicitly narrow its applicability; it must not encode this issuer or expected string as a task-specific patch.",
+  "candidate_boundary": "This diagnostic is optimize-only Evolver feedback. It must not be shown to the Worker or copied into a reusable candidate as an expected task answer."
+}

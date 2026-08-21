@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Attach one scored Worker probe to a coordinated Evolver evidence view."""
+"""Attach one scored Worker run to a coordinated Evolver evidence view."""
 
 from __future__ import annotations
 
@@ -49,19 +49,44 @@ def _worker_attempt(source_run: Path) -> Path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-view", type=Path, required=True)
-    parser.add_argument("--source-run", type=Path, required=True)
+    parser.add_argument(
+        "--source-run",
+        type=Path,
+        required=True,
+        help="Run containing the Evolver proposal and candidate diff.",
+    )
+    parser.add_argument(
+        "--worker-run",
+        type=Path,
+        help="Optional separate run containing the scored Worker attempt.",
+    )
+    parser.add_argument(
+        "--component-token",
+        default="validate_surface_artifacts",
+        help="Trace token used to count observed component activation.",
+    )
+    parser.add_argument(
+        "--optimization-diagnostic",
+        type=Path,
+        help="Optional Evolver-only diagnostic for the scored optimize run.",
+    )
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--round-label", default="round-1")
     args = parser.parse_args(argv)
 
     source_run = args.source_run.expanduser().resolve()
+    worker_run = (
+        args.worker_run.expanduser().resolve()
+        if args.worker_run is not None
+        else source_run
+    )
     destination = args.destination.expanduser().resolve()
     if destination.exists():
         raise ValueError(f"destination already exists: {destination}")
     shutil.copytree(args.base_view.expanduser().resolve(), destination)
 
     proposal = _json(source_run / "proposal-report.json")
-    attempt = _worker_attempt(source_run)
+    attempt = _worker_attempt(worker_run)
     execution = _json(attempt / "worker-execution.json")
     score = _json(attempt / "completed-score.json")
     public_score = {
@@ -92,6 +117,16 @@ def main(argv: list[str] | None = None) -> int:
             "artifact_count": len(execution.get("artifacts", [])),
         },
     )
+    diagnostic_evidence_path = None
+    if args.optimization_diagnostic is not None:
+        diagnostic = _json(args.optimization_diagnostic.expanduser().resolve())
+        if diagnostic.get("feedback_mode") != "answer_rich_evolver":
+            raise ValueError("optimization diagnostic must be Evolver-only")
+        if diagnostic.get("worker_visible") is not False:
+            raise ValueError("optimization diagnostic must not be Worker-visible")
+        diagnostic_name = f"{label}-optimization-diagnostic.json"
+        _write_json(objects / diagnostic_name, diagnostic)
+        diagnostic_evidence_path = f"history/archive/objects/{diagnostic_name}"
 
     prediction = proposal.get("prediction")
     if not isinstance(prediction, dict):
@@ -101,14 +136,16 @@ def main(argv: list[str] | None = None) -> int:
         "schema_version": 1,
         "protocol": "coordinated_worker_runtime_experience",
         "source_run": source_run.name,
+        "worker_run": worker_run.name,
         "decision": proposal.get("decision"),
         "prediction": prediction,
         "worker_observation": {
             "score": public_score,
             "execution_summary": _without_hashes(execution.get("summary", {})),
             "artifact_count": len(execution.get("artifacts", [])),
+            "component_trace_token": args.component_token,
             "candidate_component_call_count": trace_text.count(
-                '"name": "validate_surface_artifacts"'
+                args.component_token
             ),
             "final_text": final_path.read_text(encoding="utf-8"),
         },
@@ -119,6 +156,8 @@ def main(argv: list[str] | None = None) -> int:
             "final": f"history/archive/objects/{label}-worker-final.txt",
         },
     }
+    if diagnostic_evidence_path is not None:
+        entry["evolver_only_optimization_diagnostic"] = diagnostic_evidence_path
     _write_json(archive / "entries" / f"{label}.json", entry)
     diff = proposal.get("diff")
     if not isinstance(diff, str) or not diff.strip():
@@ -150,6 +189,7 @@ def main(argv: list[str] | None = None) -> int:
         {
             "schema_version": 1,
             "source_run": source_run.name,
+            "worker_run": worker_run.name,
             "round": 2,
             "worker_model_requests": 0,
         },
