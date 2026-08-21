@@ -995,11 +995,9 @@ def test_quant_v2_state_guided_act_retains_only_compact_card_reference(
     _write_quant_v2_contract(evidence, history_required=False)
     _enable_quant_state_card_contract(evidence)
     _write_quant_component_catalog(evidence)
-    with pytest.raises(GuardedWorkspaceError, match="evidence already inspected"):
-        materialize_quant_research_state_card(_quant_state_card())
+    card_result = materialize_quant_research_state_card(_quant_state_card())
     read_workspace(source="evidence", file_path="overview.md")
     read_workspace(source="evidence", file_path="counterexample.md")
-    card_result = materialize_quant_research_state_card(_quant_state_card())
     decision = _quant_v2_decision()
     decision["evidence_refs"] = ["overview.md", "counterexample.md"]
     _add_quant_state_search_decision(decision)

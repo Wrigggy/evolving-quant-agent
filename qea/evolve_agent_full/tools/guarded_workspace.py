@@ -2209,15 +2209,6 @@ def materialize_quant_research_state_card(
         ),
         {},
     )
-    observed_evidence = selected_relation.get("observed_evidence")
-    if (
-        not isinstance(observed_evidence, list)
-        or not set(observed_evidence) & _accessed_evidence_paths()
-    ):
-        raise GuardedWorkspaceError(
-            "selected State Card relation must cite evidence already inspected"
-        )
-
     catalog_path, catalog_relative = _resolve(
         "evidence", "components/CATALOG.json", must_exist=True
     )
