@@ -20,6 +20,8 @@ _PROPERTIES = (
     "NRestarts",
 )
 
+_DEFAULT_STALL_SECONDS = 3600
+
 
 def _atomic_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -106,7 +108,13 @@ def _complete(run_dir: Path) -> bool:
     return False
 
 
-def build_health(*, run_id: str, unit: str, run_dir: Path) -> dict[str, object]:
+def build_health(
+    *,
+    run_id: str,
+    unit: str,
+    run_dir: Path,
+    stalled_after_seconds: int = _DEFAULT_STALL_SECONDS,
+) -> dict[str, object]:
     state = _unit_state(unit)
     scores, workers, replacements, age = _latest_progress(run_dir)
     active = state["ActiveState"]
@@ -116,7 +124,7 @@ def build_health(*, run_id: str, unit: str, run_dir: Path) -> dict[str, object]:
         category = "complete"
         needs_codex = False
     elif active in {"active", "activating"} and (
-        age is None or age <= 1200
+        age is None or age <= stalled_after_seconds
     ):
         category = "healthy"
         needs_codex = False
@@ -161,6 +169,7 @@ def build_health(*, run_id: str, unit: str, run_dir: Path) -> dict[str, object]:
         "worker_count": workers,
         "replacement_count": replacements,
         "progress_age_seconds": None if age is None else round(age, 3),
+        "stalled_after_seconds": stalled_after_seconds,
         "needs_codex": needs_codex,
         "fingerprint": fingerprint,
         "observed_unix": int(time.time()),
@@ -173,11 +182,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--unit", required=True)
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--stalled-after-seconds",
+        type=int,
+        default=_DEFAULT_STALL_SECONDS,
+        help="Alert after this many seconds without host-side result progress.",
+    )
     args = parser.parse_args(argv)
     health = build_health(
         run_id=args.run_id,
         unit=args.unit,
         run_dir=args.run_dir.expanduser().resolve(),
+        stalled_after_seconds=args.stalled_after_seconds,
     )
     _atomic_json(args.output.expanduser().resolve(), health)
     print(json.dumps(health, sort_keys=True))

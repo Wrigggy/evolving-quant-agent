@@ -1,4 +1,6 @@
 import json
+import os
+import time
 from pathlib import Path
 
 
@@ -84,3 +86,32 @@ def test_health_treats_bounded_auto_restart_as_transient(tmp_path, monkeypatch):
     health = build_health(run_id="pilot", unit="pilot.service", run_dir=tmp_path)
     assert health["category"] == "healthy"
     assert health["needs_codex"] is False
+
+
+def test_health_allows_observed_long_numerical_worker_window(tmp_path, monkeypatch):
+    from scripts.watch_qfbench_component_pilot import build_health
+
+    _state(monkeypatch)
+    attempt = tmp_path / "attempts/a"
+    attempt.mkdir(parents=True)
+    progress = attempt / "worker-execution.json"
+    progress.write_text("{}\n")
+    thirty_minutes_ago = time.time() - 1800
+    os.utime(progress, (thirty_minutes_ago, thirty_minutes_ago))
+
+    default_health = build_health(
+        run_id="long-numerical",
+        unit="long-numerical.service",
+        run_dir=tmp_path,
+    )
+    strict_health = build_health(
+        run_id="long-numerical",
+        unit="long-numerical.service",
+        run_dir=tmp_path,
+        stalled_after_seconds=1200,
+    )
+
+    assert default_health["category"] == "healthy"
+    assert default_health["stalled_after_seconds"] == 3600
+    assert strict_health["category"] == "stalled"
+    assert strict_health["needs_codex"] is True
