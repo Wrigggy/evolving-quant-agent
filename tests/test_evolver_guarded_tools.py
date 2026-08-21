@@ -1368,6 +1368,26 @@ def test_discovery_queries_map_slice_and_compare_authorized_evidence(guarded_roo
     assert "+task-b succeeded" in compared["diff"]
 
 
+def test_trace_slice_bounds_one_large_runtime_line(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import trace_slice
+
+    _, evidence, _, _, _ = guarded_roots
+    large_line = "prefix " + ("x" * 100_000) + " component-called tail"
+    (evidence / "runtime.jsonl").write_text(large_line + "\n", encoding="utf-8")
+
+    sliced = trace_slice(
+        file_path="runtime.jsonl",
+        pattern="component-called",
+        context_lines=0,
+        max_matches=1,
+    )
+
+    content = sliced["matches"][0]["content"]
+    assert "component-called" in content
+    assert "earlier text omitted" in content
+    assert len(content.encode("utf-8")) < 9_000
+
+
 def test_inspect_candidate_reports_components_bindings_and_syntax(guarded_roots):
     from qea.evolve_agent_full.tools.guarded_workspace import inspect_candidate
 

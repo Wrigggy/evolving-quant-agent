@@ -486,16 +486,30 @@ def trace_slice(
     lines = _read_text(path).splitlines()
     matches: list[dict[str, Any]] = []
     for line_number, line in enumerate(lines, start=1):
-        if expression.search(line) is None:
+        matched = expression.search(line)
+        if matched is None:
             continue
         start = max(1, line_number - context_lines)
         end = min(len(lines), line_number + context_lines)
+        content_lines = []
+        for index in range(start - 1, end):
+            value = lines[index]
+            if len(value.encode("utf-8")) > _MAX_SEARCH_LINE_BYTES:
+                center = matched.start() if index == line_number - 1 else 0
+                left = max(0, center - (_MAX_SEARCH_LINE_BYTES // 2))
+                excerpt = value[left : left + _MAX_SEARCH_LINE_BYTES]
+                if left:
+                    excerpt = "...[earlier text omitted]..." + excerpt
+                if left + _MAX_SEARCH_LINE_BYTES < len(value):
+                    excerpt += "...[later text omitted]..."
+                value = excerpt
+            content_lines.append(value)
         matches.append(
             {
                 "match_line": line_number,
                 "start_line": start,
                 "end_line": end,
-                "content": "\n".join(lines[start - 1 : end]),
+                "content": "\n".join(content_lines),
             }
         )
         if len(matches) >= max_matches:
