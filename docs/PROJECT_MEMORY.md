@@ -1,5 +1,44 @@
 # QEA Repository Memory
 
+## 2026-08-22 thin Main-0 lifecycle controller retained
+
+The thin fixed controller is retained for the next QFBench campaign. It uses a
+plain JSON lineage with target, independent repeat, protection, promotion or
+rollback, freeze, cost accounting, and resumable ingestion of completed child
+reports. The no-model replay reproduced both retained decisions: holdings
+48/51 to 50/51, repeat 37/51 to 50/51, and protection 42/42 to 42/42 produced
+`PROMOTE`; local-vol repeated two binary gains but exchanged one failed
+protection property for another and produced `ROLLBACK`. A second replay did
+not duplicate cost, archive, or decisions.
+
+In the real live path, the controller imported the retained holdings target
+and repeat, then dispatched a fresh normal-budget `brinson-sector-attribution`
+protection comparison. Quant-H0 and candidate both scored 42/42 with reward 1.
+The candidate called `reconcile_portfolio_deliverables` once, received a
+grounded skip because the task had no holdings-file deliverable set, and did
+not regress. The controller automatically promoted `holdings-qrs-v1`, froze
+the lineage, and resumed again without rerunning the child. The live child used
+16 completed requests, 167,113 tokens, and $0.015420772; the complete imported
+lineage accounted for 151 requests, 5,619,133 tokens, and $0.533176724. The
+successful service had zero restarts, retries, unreconciled requests, active
+processes, containers, or networks.
+
+This is lifecycle and small-scale readiness evidence around already retained
+autonomous candidates, not a complete from-H0 proposal campaign, matched
+relation transfer on Brinson, sealed gain, or benchmark-wide improvement. The
+controller remains ordinary infrastructure; the quant-specific claim remains
+Research-State-conditioned relation search and activation--state--outcome
+verification. The two task-family applicability and claim boundaries are
+frozen in `data/breadth/QF_MAIN0_RELATION_APPLICABILITY.json`. Full decision:
+`docs/decisions/2026-08-22-thin-main0-controller-result.md`; compact result:
+`data/breadth/QF_MAIN0_THIN_RESULT.json`.
+
+Do not run the remaining 20 licensed QuantCodeEval tasks before Main-0. The
+current adapter supports the ten credential-free public tasks; the remaining
+20 require active WRDS dataset entitlement and new adapter/runtime work. T28
+and T29 also still need public-task materialization/parity. If extra breadth is
+needed later, prefer one blind Quant-H0 T27 canary before licensed expansion.
+
 ## 2026-08-22 Search-v2 repeated binary gain and matched property swap
 
 Search-v2 is retained as a positive search-mechanism result, but its frozen
