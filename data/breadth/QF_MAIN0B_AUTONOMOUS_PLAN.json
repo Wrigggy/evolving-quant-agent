@@ -50,7 +50,6 @@
           "task_id": "13f-amendment-aware-crowding",
           "live_run_id": "main0b-holdings-target-20260823-r1",
           "checkpoint_prefix": "main0b-holdings-target",
-          "activation_token": "reconcile_portfolio_deliverables",
           "worker_concurrency": 1,
           "verifier_concurrency": 2
         },
@@ -59,7 +58,6 @@
           "task_id": "13f-amendment-aware-crowding",
           "live_run_id": "main0b-holdings-repeat-20260823-r1",
           "checkpoint_prefix": "main0b-holdings-repeat",
-          "activation_token": "reconcile_portfolio_deliverables",
           "worker_concurrency": 1,
           "verifier_concurrency": 2
         },
@@ -68,7 +66,6 @@
           "task_id": "brinson-sector-attribution",
           "live_run_id": "main0b-holdings-protection-20260823-r1",
           "checkpoint_prefix": "main0b-holdings-protection",
-          "activation_token": "reconcile_portfolio_deliverables",
           "worker_concurrency": 1,
           "verifier_concurrency": 2
         }
