@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-23",
+  "status": "approved_bounded_live_rehearsal",
+  "controller_run_id": "main0b-autonomous-20260823-r1",
+  "mode": "live",
+  "purpose": "Verify proposal-to-terminal autonomy and resumable, isolated candidate lineages before the matched main experiment.",
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0b"
+  },
+  "limits": {
+    "candidate_versions_per_lineage": 1,
+    "provider_cost_usd": 0.9,
+    "wall_time_hours": 6
+  },
+  "execution": {
+    "lineage_services": "separate state directories and systemd units",
+    "launch_stagger_seconds": 30,
+    "holdings_stop_after_stage": "proposal",
+    "localvol_stop_after_stage": null,
+    "sealed_evaluation": false,
+    "generic_comparison": false
+  },
+  "lineages": [
+    {
+      "lineage_id": "main0b-holdings",
+      "family": "holdings-final-state-reconciliation",
+      "parent": {
+        "version": "quant-h0",
+        "worker_dir": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/qea/worker_quant_h0"
+      },
+      "proposal": {
+        "live_run_id": "main0b-holdings-proposal-20260823-r1",
+        "candidate_version": "main0b-holdings-c1",
+        "evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/holdings/quant-state/holdings_lineage_reconciliation",
+        "evolver_dir": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/qea/evolve_agent_full",
+        "arm": "quant-state",
+        "reasoning_effort": "high"
+      },
+      "stages": [
+        {
+          "name": "target",
+          "task_id": "13f-amendment-aware-crowding",
+          "live_run_id": "main0b-holdings-target-20260823-r1",
+          "checkpoint_prefix": "main0b-holdings-target",
+          "activation_token": "reconcile_portfolio_deliverables",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2
+        },
+        {
+          "name": "repeat",
+          "task_id": "13f-amendment-aware-crowding",
+          "live_run_id": "main0b-holdings-repeat-20260823-r1",
+          "checkpoint_prefix": "main0b-holdings-repeat",
+          "activation_token": "reconcile_portfolio_deliverables",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2
+        },
+        {
+          "name": "protection",
+          "task_id": "brinson-sector-attribution",
+          "live_run_id": "main0b-holdings-protection-20260823-r1",
+          "checkpoint_prefix": "main0b-holdings-protection",
+          "activation_token": "reconcile_portfolio_deliverables",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2
+        }
+      ]
+    },
+    {
+      "lineage_id": "main0b-localvol",
+      "family": "localvol-calibration-to-pricing",
+      "parent": {
+        "version": "quant-h0",
+        "worker_dir": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/qea/worker_quant_h0"
+      },
+      "proposal": {
+        "live_run_id": "main0b-localvol-proposal-20260823-r1",
+        "candidate_version": "main0b-localvol-c1",
+        "evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/localvol/quant-state/localvol_calibration_to_pricing",
+        "evolver_dir": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/qea/evolve_agent_full",
+        "arm": "quant-state",
+        "reasoning_effort": "high"
+      },
+      "stages": [
+        {
+          "name": "target",
+          "task_id": "dupire-local-vol",
+          "live_run_id": "main0b-localvol-target-20260823-r1",
+          "checkpoint_prefix": "main0b-localvol-target",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2
+        },
+        {
+          "name": "repeat",
+          "task_id": "dupire-local-vol",
+          "live_run_id": "main0b-localvol-repeat-20260823-r1",
+          "checkpoint_prefix": "main0b-localvol-repeat",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2
+        },
+        {
+          "name": "protection",
+          "task_id": "localvol-barrier",
+          "live_run_id": "main0b-localvol-protection-20260823-r1",
+          "checkpoint_prefix": "main0b-localvol-protection",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2
+        }
+      ]
+    }
+  ],
+  "go_conditions": [
+    "At least one lineage autonomously reaches a truthful terminal decision from a fresh proposal.",
+    "ABSTAIN, rejected ACT, target rollback, repeated-gain protection decision, and budget stop remain valid outcomes.",
+    "The holdings stage-boundary resume does not rerun its completed proposal.",
+    "The two services do not share candidate, parent, cost, or state files.",
+    "No manual candidate edit or manual score-based promotion occurs."
+  ],
+  "claim_boundary": "Main-0B is an autonomy, resume, and lineage-isolation rehearsal. It is not the matched generic-versus-QRS main experiment, sealed evaluation, or benchmark-wide performance evidence."
+}
