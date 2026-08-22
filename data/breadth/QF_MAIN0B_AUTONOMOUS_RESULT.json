@@ -1,0 +1,241 @@
+{
+  "schema_version": 1,
+  "experiment_id": "main0b-autonomous-20260823-r1",
+  "date": "2026-08-23",
+  "status": "complete_with_two_rollbacks",
+  "question": "Can a fixed controller take two fresh Quant-H0 Evolver proposals through normal target, repeat, protection, and terminal selection without experimenter candidate edits?",
+  "setup": {
+    "benchmark": "QFBench",
+    "parent": "Quant-H0",
+    "proposal_arm": "quant-state",
+    "candidate_limit_per_lineage": 1,
+    "lineage_count": 2,
+    "controller_owns_evaluation_and_selection": true,
+    "short_probe_used": false,
+    "sealed_evaluation_used": false,
+    "generic_comparison_used": false,
+    "answer_boundary": "answer-rich optimization evidence to Evolver; answer-blind Worker"
+  },
+  "lineages": {
+    "holdings": {
+      "target_task": "13f-amendment-aware-crowding",
+      "protection_task": "brinson-sector-attribution",
+      "proposal": {
+        "decision": "ACT",
+        "admitted": true,
+        "selected_relation": "final_state_recomputable_aggregates",
+        "selected_component_locus": "tools",
+        "component": "reconcile_final_state",
+        "candidate_version": "main0b-holdings-c1",
+        "completed_requests": 32,
+        "total_tokens": 3626450,
+        "provider_cost_usd": 0.10669444
+      },
+      "target": {
+        "parent": {
+          "tests_passed": 46,
+          "tests_failed": 5,
+          "reward": 0.0,
+          "component_calls": 0
+        },
+        "candidate": {
+          "tests_passed": 51,
+          "tests_failed": 0,
+          "reward": 1.0,
+          "component_calls": 1
+        },
+        "gate_passed": true,
+        "completed_requests": 33,
+        "total_tokens": 1103645,
+        "provider_cost_usd": 0.064092676
+      },
+      "repeat": {
+        "parent": {
+          "tests_passed": 44,
+          "tests_failed": 7,
+          "reward": 0.0,
+          "component_calls": 0
+        },
+        "candidate": {
+          "tests_passed": 44,
+          "tests_failed": 7,
+          "reward": 0.0,
+          "component_calls": 1
+        },
+        "gate_passed": false,
+        "completed_requests": 45,
+        "total_tokens": 1580986,
+        "provider_cost_usd": 0.067207392
+      },
+      "protection": {
+        "launched": false,
+        "reason": "repeat_gain_not_observed"
+      },
+      "terminal": {
+        "decision": "ROLLBACK",
+        "reason": "repeat_gain_not_observed",
+        "current_parent": "quant-h0",
+        "phase": "FROZEN"
+      },
+      "resume": {
+        "proposal_boundary_stop_and_resume_observed": true,
+        "proposal_reused_without_worker_dispatch": true,
+        "terminal_rerun_reused_completed_children": true,
+        "duplicate_cost_accounting": false
+      },
+      "total": {
+        "completed_requests": 110,
+        "total_tokens": 6311081,
+        "provider_cost_usd": 0.237994508
+      }
+    },
+    "localvol": {
+      "target_task": "dupire-local-vol",
+      "protection_task": "localvol-barrier",
+      "proposal": {
+        "decision": "ACT",
+        "admitted": true,
+        "selected_relation": "svi_parameter_admissibility",
+        "selected_component_locus": "tools",
+        "component": "surface_contract_audit",
+        "candidate_version": "main0b-localvol-c1",
+        "completed_requests": 70,
+        "total_tokens": 8635293,
+        "provider_cost_usd": 0.163265156
+      },
+      "target": {
+        "parent": {
+          "tests_passed": 66,
+          "tests_failed": 2,
+          "reward": 0.0,
+          "component_calls": 0,
+          "failed_properties": [
+            "TestSVIParams::test_svi_a_positive",
+            "TestForwardVariance::test_forward_variance_local_vol_atm_positive"
+          ]
+        },
+        "candidate": {
+          "tests_passed": 68,
+          "tests_failed": 0,
+          "reward": 1.0,
+          "component_calls": 2,
+          "failed_properties": []
+        },
+        "gate_passed": true,
+        "completed_requests": 63,
+        "total_tokens": 3245119,
+        "provider_cost_usd": 0.122605396
+      },
+      "repeat": {
+        "parent": {
+          "tests_passed": 66,
+          "tests_failed": 2,
+          "reward": 0.0,
+          "component_calls": 0
+        },
+        "candidate": {
+          "tests_passed": 68,
+          "tests_failed": 0,
+          "reward": 1.0,
+          "component_calls": 2
+        },
+        "gate_passed": true,
+        "completed_requests": 60,
+        "total_tokens": 2900020,
+        "provider_cost_usd": 0.11404492
+      },
+      "protection": {
+        "parent": {
+          "tests_passed": 35,
+          "tests_failed": 4,
+          "reward": 0.9,
+          "component_calls": 0,
+          "failed_property_families": [
+            "three parameterized local-vol interior-value checks",
+            "barrier output reasonableness"
+          ]
+        },
+        "candidate": {
+          "tests_passed": 29,
+          "tests_failed": 10,
+          "reward": 0.768857,
+          "component_calls": 3,
+          "failed_property_families": [
+            "three parameterized pinned surface-node checks",
+            "three parameterized call-surface sample checks",
+            "three parameterized local-vol interior-value checks",
+            "barrier output reasonableness"
+          ]
+        },
+        "first_audit_finding": "local-vol Monte Carlo vanilla versus surface vanilla gap 27.919 percent exceeded the 5 percent tolerance",
+        "worker_acted_on_finding": true,
+        "later_audits_passed": true,
+        "property_set_safe": false,
+        "gate_passed": false,
+        "completed_requests": 77,
+        "total_tokens": 7306626,
+        "provider_cost_usd": 0.22777952
+      },
+      "terminal": {
+        "decision": "ROLLBACK",
+        "reason": "protection_not_property_safe",
+        "current_parent": "quant-h0",
+        "phase": "FROZEN"
+      },
+      "resume": {
+        "terminal_rerun_reused_completed_children": true,
+        "duplicate_cost_accounting": false
+      },
+      "total": {
+        "completed_requests": 270,
+        "total_tokens": 22087058,
+        "provider_cost_usd": 0.627694992
+      }
+    }
+  },
+  "campaign": {
+    "autonomous_act_count": 2,
+    "admitted_candidate_count": 2,
+    "executable_component_count": 2,
+    "first_target_binary_gain_count": 2,
+    "repeated_binary_gain_count": 1,
+    "protection_launched_count": 1,
+    "safe_protection_count": 0,
+    "promotion_count": 0,
+    "rollback_count": 2,
+    "completed_requests": 380,
+    "total_tokens": 28398139,
+    "provider_cost_usd": 0.8656895,
+    "runtime_restarts": 0,
+    "rate_limit_retries": 0,
+    "unreconciled_requests": 0,
+    "runtime_residue_after_completion": false
+  },
+  "interpretation": {
+    "observed": [
+      "The fixed controller completed fresh proposal-to-terminal autonomous lifecycles from Quant-H0.",
+      "The Evolver authored two admitted executable quantitative components without experimenter candidate edits.",
+      "Both candidates produced an official target binary gain; one gain repeated independently.",
+      "The holdings candidate was rejected when its first gain did not repeat.",
+      "The local-vol component activated, found an inconsistency, changed Worker behavior, and still caused a protection regression that the controller rejected.",
+      "Boundary and terminal resume reused completed work without duplicate evaluation or cost accounting."
+    ],
+    "not_established": [
+      "a promoted stable harness",
+      "generic-versus-quant search superiority",
+      "sealed or benchmark-wide gain",
+      "safe cross-task reuse",
+      "readiness for a full both-benchmark main experiment"
+    ]
+  },
+  "artifacts": {
+    "plan": "data/breadth/QF_MAIN0B_AUTONOMOUS_PLAN.json",
+    "decision": "docs/decisions/2026-08-23-main0b-autonomous-result.md",
+    "remote_run_root": "/data/qea-julius-storage/runs",
+    "local_mirror_root": "results/bc-mirror",
+    "controller_states": [
+      "results/bc-mirror/main0b-controller-holdings-20260823-r1/main0b-holdings.json",
+      "results/bc-mirror/main0b-controller-localvol-20260823-r1/main0b-localvol.json"
+    ]
+  }
+}

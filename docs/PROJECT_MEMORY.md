@@ -1,5 +1,42 @@
 # QEA Repository Memory
 
+## 2026-08-23 Main-0B autonomous proposal-to-terminal rehearsal
+
+Main-0B completed two fresh Quant-H0 QFBench lineages under the fixed resumable
+controller. Both quant-state Evolver sessions returned admitted `ACT` decisions
+and authored executable tools. Holdings added `reconcile_final_state`: its
+first target comparison improved 46/51 to 51/51 and reward 0 to 1, but the
+independent repeat was 44/51 to 44/51, so the controller skipped protection
+and rolled back. Local-vol added `surface_contract_audit`: target and repeat
+both improved 66/68 to 68/68 and reward 0 to 1, but protection regressed from
+35/39, reward 0.9 to 29/39, reward 0.768857, so it also rolled back.
+
+The local-vol protection trace is a retained negative mechanism result. The
+component was called three times; its first call found a 27.919% aggregate
+vanilla-price gap, the Worker acted on the finding, and later calls passed.
+Official protection nevertheless increased from four failed parameterized
+properties to ten. Tool activation, an actionable finding, and a green
+component audit are therefore not sufficient evidence of a safe quantitative
+intervention. The neighboring official property set must remain protected.
+
+The holdings proposal boundary and both terminal states resumed without
+rerunning completed children or duplicating cost. The complete campaign used
+380 completed requests, 28,398,139 tokens, and $0.865689500, with zero runtime
+restarts, rate-limit retries, unreconciled requests, or runtime residue. This
+establishes the small autonomous proposal-to-terminal lifecycle, not a promoted
+stable harness, matched generic superiority, sealed gain, or full main-run
+readiness. Before the matched main experiment, use retained reports for a
+zero-model preflight of the observed relation/outcome record, a thin
+QuantCodeEval child adapter, and parent-comparison reuse. Then the first matched
+QFBench wave may be retained as A0 data under the frozen setup; another paid
+Main-0C is not required. At least one repeated, property-safe autonomous
+promotion is still required before claiming an improved stable researcher; a
+calibrated `ABSTAIN` remains useful search evidence but does not close that
+claim. Do not expand to the remaining licensed QuantCodeEval tasks for this
+gate. Full decision:
+`docs/decisions/2026-08-23-main0b-autonomous-result.md`; compact result:
+`data/breadth/QF_MAIN0B_AUTONOMOUS_RESULT.json`.
+
 ## 2026-08-23 property-wise protection ablation retained
 
 The offline A2 replay compared aggregate-only and property-wise promotion on
