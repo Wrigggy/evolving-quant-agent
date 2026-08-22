@@ -4,7 +4,7 @@
   "mode": "live",
   "runtime": {
     "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
-    "source_root": "/data/qea-julius-storage/deploy/main0-thin-20260822-r1",
+    "source_root": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1",
     "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
     "qfbench_manifest": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/data/qfbench/MANIFEST_85_BASELINE.json",
     "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
