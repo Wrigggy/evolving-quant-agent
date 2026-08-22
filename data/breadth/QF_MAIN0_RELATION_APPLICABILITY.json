@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-22",
+  "status": "frozen_for_thin_main0_rehearsal",
+  "purpose": "Pre-register the public quantitative relation applicability and claim boundaries for the two retained Main-0 replay lineages.",
+  "scope": {
+    "benchmark": "QFBench",
+    "worker": "Quant Research Worker Agent",
+    "selection_surface": "development target, repeat, and protection only",
+    "sealed_evaluation_included": false,
+    "interpretation": "The relation assignments are frozen for Main-0 lifecycle rehearsal. The claim boundaries incorporate already retained canary outcomes and are not presented as prospective benchmark results."
+  },
+  "research_state_vocabulary": [
+    "research_mandate_and_contract",
+    "research_evidence_and_data",
+    "quantitative_representation",
+    "research_operation",
+    "evaluation_and_reconciliation",
+    "research_artifact_and_completion"
+  ],
+  "families": [
+    {
+      "family_id": "holdings-final-state-reconciliation",
+      "planned_lifecycle_role": "positive_promotion_replay",
+      "target": {
+        "task": "13f-amendment-aware-crowding",
+        "research_states": [
+          "research_evidence_and_data",
+          "quantitative_representation",
+          "evaluation_and_reconciliation",
+          "research_artifact_and_completion"
+        ],
+        "public_relation_family": "effective_holdings_to_derived_portfolio_deliverables",
+        "component_locus": [
+          "tools",
+          "tool_descriptions",
+          "agent_config",
+          "systemprompt"
+        ],
+        "why_applicable": "The public task constructs amendment-aware effective holdings and then derives turnover, overlap, crowding, canonical labels, and summary fields. Those downstream deliverables should reconcile to one final holdings state without requiring a hidden expected value.",
+        "known_claim_boundary": "The frozen quant-state candidate scored 50/51 on two independent target runs against fresh Quant-H0 results of 48/51 and 37/51. This is a repeated property-level target gain, not a binary task solve."
+      },
+      "protection": {
+        "task": "brinson-sector-attribution",
+        "research_states": [
+          "quantitative_representation",
+          "evaluation_and_reconciliation",
+          "research_artifact_and_completion"
+        ],
+        "public_relation_family": "portfolio_attribution_accounting_reconciliation",
+        "component_locus": [
+          "tools",
+          "systemprompt"
+        ],
+        "why_applicable": "The public task contains portfolio and benchmark returns, attribution effects, aggregation, and a final results artifact, so portfolio-accounting reconciliation is applicable. Its artifact schema is not the target task's effective-holdings and summary schema.",
+        "relation_match_to_target": false,
+        "expected_component_behavior": "The target-specific reconciliation tool may make an evidence-grounded applicability skip while the Worker completes ordinary attribution checks.",
+        "known_claim_boundary": "Quant-H0 and the frozen candidate both scored 42/42. The component was called but skipped because the expected holdings-deliverables schema was absent. This is safe protection and property-wise non-regression, not matched relation execution or reuse."
+      },
+      "retained_lifecycle_decision": "PROMOTE_FOR_CONTROLLER_REHEARSAL",
+      "paper_claim_boundary": "Use this family to exercise a positive controller path. Do not use its protection result as evidence of matched quantitative-relation transfer."
+    },
+    {
+      "family_id": "localvol-maturity-surface-coverage",
+      "planned_lifecycle_role": "negative_rollback_replay",
+      "target": {
+        "task": "dupire-local-vol",
+        "research_states": [
+          "quantitative_representation",
+          "research_operation",
+          "evaluation_and_reconciliation",
+          "research_artifact_and_completion"
+        ],
+        "public_relation_family": "maturity_propagation_and_surface_terminal_coverage",
+        "primary_relation": "maturity_propagation_terminal_completeness",
+        "residual_risk_relation": "local_vol_surface_terminal_coverage",
+        "component_locus": [
+          "systemprompt"
+        ],
+        "why_applicable": "The public task requires maturity-indexed finite differences, a complete delivered local-volatility surface, positive finite values, and exact output coverage. The terminal maturity and every selected maturity must therefore propagate through the derivative calculation and final artifacts without missing cells.",
+        "known_claim_boundary": "The frozen Search-v2 candidate improved two independent fresh comparisons from 65/68 and 66/68 to 68/68, with reward changing from 0 to 1 both times. The declared maturity and full-surface observations were realized. This is a repeated, mechanism-consistent target binary gain."
+      },
+      "protection": {
+        "task": "localvol-barrier",
+        "research_states": [
+          "quantitative_representation",
+          "research_operation",
+          "evaluation_and_reconciliation",
+          "research_artifact_and_completion"
+        ],
+        "public_relation_family": "maturity_propagation_and_surface_terminal_coverage",
+        "component_locus": [
+          "systemprompt"
+        ],
+        "why_applicable": "The public task also constructs expiry-indexed call and local-volatility surfaces before consuming them in barrier pricing. Full expiry-strike coverage, positive finite local volatility, and missing-cell checks are therefore directly applicable on the matched task.",
+        "relation_match_to_target": true,
+        "expected_component_behavior": "The Worker should execute the same maturity and surface-coverage audit before final delivery.",
+        "known_claim_boundary": "The relation-aware workflow executed and aggregate performance tied Quant-H0 at 38/39 and reward 0.96. However, Quant-H0 failed barrier_outputs_reasonable while the candidate failed vanilla_mc_close_to_surface. The failed-property set changed, so protection is not Pareto-safe."
+      },
+      "retained_lifecycle_decision": "ROLLBACK",
+      "paper_claim_boundary": "This family supports repeated target binary improvement and actual matched relation execution. The property swap rejects promotion, stable reuse, and protection-safe transfer claims."
+    }
+  ],
+  "global_claim_boundary": "This applicability record supports the thin Main-0 lifecycle rehearsal only. It does not establish general superiority of Quant Research State search, benchmark-wide improvement, sealed generalization, or reusable transfer beyond the declared task families."
+}
