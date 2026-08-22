@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "controller_run_id": "main0-thin-live-20260822-r1",
+  "mode": "live",
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/main0-thin-20260822-r1",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0"
+  },
+  "limits": {
+    "provider_cost_usd": 0.75
+  },
+  "lineages": [
+    {
+      "lineage_id": "holdings-live-protection",
+      "parent": {
+        "version": "quant-h0",
+        "worker_dir": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/qea/worker_quant_h0"
+      },
+      "candidate": {
+        "version": "holdings-qrs-v1",
+        "worker_dir": "/data/qea-julius-storage/runs/qstate-holdings-quant-20260821-r3/evolutions/iteration-0001/candidate",
+        "matched_relation_reuse_claim": false
+      },
+      "stages": [
+        {
+          "name": "target",
+          "task_id": "13f-amendment-aware-crowding",
+          "replay_report": "/data/qea-julius-storage/runs/qstate-confirm-holdings-20260821-r1/pilot-report.json",
+          "parent_arm": "h0",
+          "candidate_arm": "quant-state"
+        },
+        {
+          "name": "repeat",
+          "task_id": "13f-amendment-aware-crowding",
+          "replay_report": "/data/qea-julius-storage/runs/qstate-repeat-holdings-20260821-r1/pilot-report.json",
+          "parent_arm": "h0",
+          "candidate_arm": "quant-state"
+        },
+        {
+          "name": "protection",
+          "task_id": "brinson-sector-attribution",
+          "live_run_id": "main0-thin-holdings-protection-live-20260822-r1",
+          "checkpoint_prefix": "main0-thin-holdings-protection",
+          "activation_token": "reconcile_portfolio_deliverables",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2
+        }
+      ]
+    }
+  ]
+}
