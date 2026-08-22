@@ -16,8 +16,10 @@ from qea.qfbench_lineage import (  # noqa: E402
     LineageError,
     freeze_lineage,
     import_pilot_report,
+    import_proposal_report,
     load_lineage,
     new_lineage,
+    new_proposal_lineage,
     save_lineage,
 )
 
@@ -95,6 +97,79 @@ def build_child_argv(
     if stage.get("activation_token"):
         argv.extend(("--activation-token", str(stage["activation_token"])))
     return tuple(argv)
+
+
+def build_proposal_argv(
+    plan: Mapping[str, object],
+    lineage: Mapping[str, object],
+    proposal: Mapping[str, object],
+    *,
+    approve_external_run: bool,
+) -> tuple[str, ...]:
+    """Build one invocation of the existing QFBench discovery runner."""
+
+    if not approve_external_run:
+        raise LineageError("live proposal execution was not approved")
+    runtime = plan["runtime"]
+    run_id = str(
+        proposal.get("live_run_id")
+        or f"{plan['controller_run_id']}-{lineage['lineage_id']}-proposal"
+    )
+    argv = [
+        str(runtime["python"]),
+        str(Path(str(runtime["source_root"])) / "scripts/run_qfbench_discovery_pilot.py"),
+        "--qfbench-root",
+        str(runtime["qfbench_root"]),
+        "--qfbench-manifest",
+        str(runtime["qfbench_manifest"]),
+        "--rootless-config",
+        str(runtime["rootless_config"]),
+        "--rootless-image-set-manifest",
+        str(runtime["image_set_manifest"]),
+        "--run-id",
+        run_id,
+        "--results-dir",
+        str(runtime["results_dir"]),
+        "--backbone",
+        str(lineage["parent"]["worker_dir"]),
+        "--evidence",
+        str(proposal["evidence"]),
+        "--evolver-dir",
+        str(proposal["evolver_dir"]),
+        "--arm",
+        str(proposal["arm"]),
+        "--reasoning-effort",
+        str(proposal.get("reasoning_effort", "none")),
+        "--approve-external-run",
+    ]
+    return tuple(argv)
+
+
+def _proposal_report_path(
+    plan: Mapping[str, object],
+    lineage: Mapping[str, object],
+    proposal: Mapping[str, object],
+) -> Path:
+    replay = proposal.get("replay_report")
+    if replay:
+        return Path(str(replay))
+    run_id = str(
+        proposal.get("live_run_id")
+        or f"{plan['controller_run_id']}-{lineage['lineage_id']}-proposal"
+    )
+    return Path(str(plan["runtime"]["results_dir"])) / run_id / "proposal-report.json"
+
+
+def _proposal_run_id(
+    plan: Mapping[str, object],
+    lineage: Mapping[str, object],
+    proposal: Mapping[str, object],
+) -> str:
+    return str(
+        proposal.get("live_run_id")
+        or proposal.get("replay_run_id")
+        or f"{plan['controller_run_id']}-{lineage['lineage_id']}-proposal"
+    )
 
 
 def _report_path(
@@ -203,6 +278,7 @@ def run_controller(
     approve_external_run: bool = False,
     runner: Runner | None = None,
     selected_lineages: frozenset[str] | None = None,
+    stop_after_stage: str | None = None,
 ) -> dict[str, object]:
     """Run replay and/or live stages until every selected lineage is terminal."""
 
@@ -217,27 +293,77 @@ def run_controller(
         lineage_id = str(lineage["lineage_id"])
         if selected_lineages is not None and lineage_id not in selected_lineages:
             continue
+        paused_this_run = False
         state_path = states_root / f"{lineage_id}.json"
         if state_path.is_file():
             state = load_lineage(state_path)
         else:
             target = _stage(lineage, "target")
             protection = _stage(lineage, "protection")
-            state = new_lineage(
-                lineage_id=lineage_id,
-                parent_version=str(lineage["parent"]["version"]),
-                parent_path=str(lineage["parent"]["worker_dir"]),
-                candidate_version=str(lineage["candidate"]["version"]),
-                candidate_path=str(lineage["candidate"]["worker_dir"]),
-                target_task_id=str(target["task_id"]),
-                protection_task_id=str(protection["task_id"]),
-                worker_route=str(plan["runtime"].get("worker_route", "declared-main0-route")),
-                worker_budget="normal",
-                cost_limit_usd=plan.get("limits", {}).get("provider_cost_usd", "1"),
-            )
+            proposal = lineage.get("proposal")
+            common = {
+                "lineage_id": lineage_id,
+                "parent_version": str(lineage["parent"]["version"]),
+                "parent_path": str(lineage["parent"]["worker_dir"]),
+                "target_task_id": str(target["task_id"]),
+                "protection_task_id": str(protection["task_id"]),
+                "worker_route": str(
+                    plan["runtime"].get("worker_route", "declared-main0-route")
+                ),
+                "worker_budget": "normal",
+                "cost_limit_usd": plan.get("limits", {}).get(
+                    "provider_cost_usd", "1"
+                ),
+            }
+            if isinstance(proposal, Mapping):
+                state = new_proposal_lineage(**common)
+            else:
+                state = new_lineage(
+                    **common,
+                    candidate_version=str(lineage["candidate"]["version"]),
+                    candidate_path=str(lineage["candidate"]["worker_dir"]),
+                )
             save_lineage(state_path, state)
 
-        while state.get("phase") in {"TARGET", "REPEAT", "PROTECTION"}:
+        if state.get("phase") == "PROPOSAL":
+            proposal = lineage.get("proposal")
+            if not isinstance(proposal, Mapping):
+                raise LineageError("proposal phase has no proposal plan")
+            report_path = _proposal_report_path(plan, lineage, proposal)
+            if not report_path.is_file():
+                if plan.get("mode") == "replay":
+                    raise LineageError(f"replay proposal is missing: {report_path}")
+                argv = build_proposal_argv(
+                    plan,
+                    lineage,
+                    proposal,
+                    approve_external_run=approve_external_run,
+                )
+                _run_child(child_runner, argv)
+            report = _json(report_path)
+            state = import_proposal_report(
+                state,
+                report=report,
+                report_path=str(report_path),
+                proposal_run_id=_proposal_run_id(plan, lineage, proposal),
+                candidate_version=str(
+                    proposal.get("candidate_version")
+                    or _proposal_run_id(plan, lineage, proposal)
+                ),
+            )
+            save_lineage(state_path, state)
+            if (
+                stop_after_stage == "proposal"
+                and state.get("stopped_after_stage") != "proposal"
+            ):
+                state["stopped_after_stage"] = "proposal"
+                save_lineage(state_path, state)
+                paused_this_run = True
+
+        while (
+            not paused_this_run
+            and state.get("phase") in {"TARGET", "REPEAT", "PROTECTION"}
+        ):
             stage_name = str(state["phase"]).lower()
             stage = _stage(lineage, stage_name)
             report_path = _report_path(plan, lineage, stage)
@@ -246,7 +372,11 @@ def run_controller(
                     raise LineageError(f"replay report is missing: {report_path}")
                 argv = build_child_argv(
                     plan,
-                    lineage,
+                    {
+                        **lineage,
+                        "parent": state["current_parent"],
+                        "candidate": state["candidate"],
+                    },
                     stage,
                     approve_external_run=approve_external_run,
                 )
@@ -274,8 +404,16 @@ def run_controller(
                 property_set_safe=property_safe,
             )
             save_lineage(state_path, state)
+            if (
+                stop_after_stage == stage_name
+                and state.get("stopped_after_stage") != stage_name
+            ):
+                state["stopped_after_stage"] = stage_name
+                save_lineage(state_path, state)
+                paused_this_run = True
+                break
 
-        if state.get("phase") == "PROPOSE":
+        if state.get("phase") == "PROPOSE" and not paused_this_run:
             state = freeze_lineage(state)
             save_lineage(state_path, state)
         outputs[lineage_id] = state
@@ -295,6 +433,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--lineage", action="append")
+    parser.add_argument(
+        "--stop-after-stage",
+        choices=("proposal", "target", "repeat", "protection"),
+    )
     parser.add_argument("--approve-external-run", action="store_true")
     return parser
 
@@ -306,6 +448,7 @@ def main(argv: list[str] | None = None) -> int:
         args.state_dir,
         approve_external_run=args.approve_external_run,
         selected_lineages=(frozenset(args.lineage) if args.lineage else None),
+        stop_after_stage=args.stop_after_stage,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

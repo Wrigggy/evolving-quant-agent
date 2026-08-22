@@ -66,6 +66,37 @@ def new_lineage(
     }
 
 
+def new_proposal_lineage(
+    *,
+    lineage_id: str,
+    parent_version: str,
+    parent_path: str,
+    target_task_id: str,
+    protection_task_id: str,
+    worker_route: str,
+    worker_budget: str,
+    cost_limit_usd: float | str,
+) -> dict[str, object]:
+    """Create a lineage whose candidate will come from an Evolver report."""
+
+    state = new_lineage(
+        lineage_id=lineage_id,
+        parent_version=parent_version,
+        parent_path=parent_path,
+        candidate_version="proposal-pending",
+        candidate_path="",
+        target_task_id=target_task_id,
+        protection_task_id=protection_task_id,
+        worker_route=worker_route,
+        worker_budget=worker_budget,
+        cost_limit_usd=cost_limit_usd,
+    )
+    state["phase"] = "PROPOSAL"
+    state["candidate"] = None
+    state["proposal"] = None
+    return state
+
+
 def load_lineage(path: str | Path) -> dict[str, object]:
     """Load a saved lineage state."""
 
@@ -166,6 +197,34 @@ def _add_cost(state: dict[str, object], report: Mapping[str, object]) -> None:
     accounted.append(run_id)
 
 
+def _add_proposal_cost(
+    state: dict[str, object],
+    *,
+    proposal_run_id: str,
+    report: Mapping[str, object],
+) -> None:
+    accounted = state["accounted_run_ids"]
+    if proposal_run_id in accounted:
+        return
+    raw = report.get("candidate_generation_throughput")
+    if not isinstance(raw, Mapping):
+        raise LineageError("proposal report has no generation cost summary")
+    cost = state["cost"]
+    total_cost = _decimal(
+        cost["provider_cost_usd"], label="accounted provider cost"
+    ) + _decimal(raw.get("provider_cost_usd"), label="proposal provider cost")
+    cost["provider_cost_usd"] = format(total_cost, "f")
+    cost["completed_requests"] = (
+        int(cost["completed_requests"])
+        + int(raw.get("completed_request_count", 0))
+        + int(raw.get("downstream_delivery_request_count", 0))
+    )
+    cost["total_tokens"] = int(cost["total_tokens"]) + int(
+        raw.get("total_tokens", 0)
+    )
+    accounted.append(proposal_run_id)
+
+
 def _budget_reached(state: Mapping[str, object]) -> bool:
     return _decimal(
         state["cost"]["provider_cost_usd"], label="accounted provider cost"
@@ -188,6 +247,70 @@ def _finish_candidate(
     state["phase"] = "PROPOSE"
     state["status"] = "candidate_complete"
     return state
+
+
+def import_proposal_report(
+    state: Mapping[str, object],
+    *,
+    report: Mapping[str, object],
+    report_path: str,
+    proposal_run_id: str,
+    candidate_version: str,
+) -> dict[str, object]:
+    """Import one existing discovery ``proposal-report.json`` exactly once."""
+
+    result = deepcopy(dict(state))
+    if proposal_run_id in result.get("accounted_run_ids", []):
+        return result
+    if result.get("phase") != "PROPOSAL":
+        raise LineageError(
+            f"cannot import proposal while lineage phase is {result.get('phase')}"
+        )
+    decision = str(report.get("decision", "")).strip().upper()
+    if decision not in {"ACT", "ABSTAIN"}:
+        raise LineageError("proposal report has no legal ACT or ABSTAIN decision")
+    admission = report.get("admission")
+    if not isinstance(admission, Mapping):
+        raise LineageError("proposal report has no admission record")
+    candidate_path = report.get("candidate_dir")
+    _add_proposal_cost(
+        result,
+        proposal_run_id=proposal_run_id,
+        report=report,
+    )
+    result["proposal"] = {
+        "run_id": proposal_run_id,
+        "report_path": report_path,
+        "decision": decision,
+        "admitted": admission.get("admitted"),
+        "candidate_dir": candidate_path,
+    }
+
+    if decision == "ABSTAIN":
+        result["decision"] = "ABSTAIN"
+        result["phase"] = "FROZEN"
+        result["status"] = "abstained"
+        return result
+    if admission.get("admitted") is not True:
+        result["decision"] = "ROLLBACK"
+        result["phase"] = "FROZEN"
+        result["status"] = "proposal_rejected"
+        return result
+    if not isinstance(candidate_path, str) or not candidate_path:
+        raise LineageError("admitted ACT proposal has no candidate_dir")
+
+    result["candidate"] = {
+        "version": candidate_version,
+        "worker_dir": candidate_path,
+    }
+    result["decision"] = None
+    result["phase"] = "TARGET"
+    result["status"] = "running"
+    if _budget_reached(result):
+        result["decision"] = "BUDGET_STOP"
+        result["phase"] = "BUDGET_STOP"
+        result["status"] = "stopped"
+    return result
 
 
 def import_pilot_report(

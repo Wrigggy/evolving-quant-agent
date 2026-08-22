@@ -3,6 +3,7 @@ from pathlib import Path
 
 from scripts.run_qfbench_lineage_controller import (
     build_child_argv,
+    build_proposal_argv,
     property_set_safe,
     run_controller,
 )
@@ -131,3 +132,144 @@ def test_live_child_argv_uses_existing_component_runner():
     assert "parent=/h0" in argv
     assert "candidate=/c1" in argv
     assert argv[-1] == "--approve-external-run"
+
+
+def _proposal_report(path: Path, *, decision: str, admitted):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "decision": decision,
+        "candidate_dir": "/proposal-output/candidate",
+        "admission": {"admitted": admitted},
+        "candidate_generation_throughput": {
+            "provider_cost_usd": "0.02",
+            "completed_request_count": 3,
+            "total_tokens": 200,
+        },
+    }))
+    return path
+
+
+def _proposal_plan(proposal_path: Path):
+    return {
+        "schema_version": 1,
+        "controller_run_id": "controller-r1",
+        "mode": "replay",
+        "runtime": {},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [{
+            "lineage_id": "proposal-lineage",
+            "parent": {"version": "h0", "worker_dir": "/h0"},
+            "proposal": {
+                "replay_report": str(proposal_path),
+                "replay_run_id": "proposal-r1",
+                "candidate_version": "candidate-r1",
+            },
+            "stages": [
+                {"name": "target", "task_id": "task-t"},
+                {"name": "repeat", "task_id": "task-t"},
+                {"name": "protection", "task_id": "task-p"},
+            ],
+        }],
+    }
+
+
+def test_replay_abstain_is_terminal_and_resume_does_not_dispatch(tmp_path):
+    proposal_path = _proposal_report(
+        tmp_path / "proposal/proposal-report.json",
+        decision="ABSTAIN",
+        admitted=None,
+    )
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(_proposal_plan(proposal_path)))
+
+    def fail_if_called(_argv):
+        raise AssertionError("completed proposal must not be dispatched")
+
+    result = run_controller(plan_path, tmp_path / "state", runner=fail_if_called)
+    again = run_controller(plan_path, tmp_path / "state", runner=fail_if_called)
+
+    state = result["lineages"]["proposal-lineage"]
+    assert state["decision"] == "ABSTAIN"
+    assert state["candidate"] is None
+    assert again == result
+
+
+def test_stop_after_proposal_resumes_without_reimporting_proposal(tmp_path):
+    proposal_path = _proposal_report(
+        tmp_path / "proposal/proposal-report.json",
+        decision="ACT",
+        admitted=True,
+    )
+    plan = _proposal_plan(proposal_path)
+    target_path, _ = _report(
+        tmp_path / "target", "target", "task-t", (1, 2, 0), (2, 2, 1), {}
+    )
+    repeat_path, _ = _report(
+        tmp_path / "repeat", "repeat", "task-t", (1, 2, 0), (2, 2, 1), {}
+    )
+    protect_path, _ = _report(
+        tmp_path / "protect", "protect", "task-p", (2, 2, 1), (2, 2, 1), {}
+    )
+    for stage, path in zip(
+        plan["lineages"][0]["stages"],
+        (target_path, repeat_path, protect_path),
+    ):
+        stage.update({
+            "replay_report": str(path),
+            "parent_arm": "h0",
+            "candidate_arm": "candidate",
+        })
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    paused = run_controller(
+        plan_path,
+        tmp_path / "state",
+        stop_after_stage="proposal",
+    )["lineages"]["proposal-lineage"]
+    resumed = run_controller(
+        plan_path,
+        tmp_path / "state",
+        stop_after_stage="proposal",
+    )["lineages"]["proposal-lineage"]
+
+    assert paused["phase"] == "TARGET"
+    assert paused["accounted_run_ids"] == ["proposal-r1"]
+    assert resumed["phase"] == "FROZEN"
+    assert resumed["decision"] == "PROMOTE"
+    assert resumed["archive"][0]["worker_dir"] == "/proposal-output/candidate"
+    assert resumed["accounted_run_ids"].count("proposal-r1") == 1
+
+
+def test_live_proposal_argv_uses_existing_discovery_runner():
+    plan = {
+        "controller_run_id": "main0b",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest.json",
+            "rootless_config": "/config.json",
+            "image_set_manifest": "/images.json",
+            "results_dir": "/results",
+        },
+    }
+    lineage = {
+        "lineage_id": "a",
+        "parent": {"worker_dir": "/h0"},
+    }
+    proposal = {
+        "evidence": "/evidence",
+        "evolver_dir": "/evolver",
+        "arm": "quant-state-v2",
+        "reasoning_effort": "high",
+    }
+
+    argv = build_proposal_argv(
+        plan, lineage, proposal, approve_external_run=True
+    )
+
+    assert argv[1] == "/source/scripts/run_qfbench_discovery_pilot.py"
+    assert argv[argv.index("--backbone") + 1] == "/h0"
+    assert argv[argv.index("--arm") + 1] == "quant-state-v2"
+    assert "--dispatch-selected-probe" not in argv
