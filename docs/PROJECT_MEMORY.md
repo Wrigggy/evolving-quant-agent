@@ -1,5 +1,23 @@
 # QEA Repository Memory
 
+## 2026-08-23 property-wise protection ablation retained
+
+The offline A2 replay compared aggregate-only and property-wise promotion on
+two retained official protection reports without new model or Worker calls.
+Both rules promoted the safe holdings case at 42/42 to 42/42. On
+`localvol-barrier`, both parent and Search-v2 candidate remained 38/39 with
+reward 0.96, but the failed property changed from
+`barrier_outputs_reasonable` to `vanilla_mc_close_to_surface`. Aggregate-only
+would promote; property-wise protection correctly rolls back under the
+accepted no-new-failed-property criterion. The policies therefore disagreed
+on one of two cases.
+
+This is evidence that property identity can alter harness selection when
+aggregate performance ties. It is a verification ablation, not evidence that
+QRS search beats a generic Evolver and not a new benchmark evaluation. Full
+record: `docs/decisions/2026-08-23-property-wise-protection-ablation.md`;
+compact result: `data/breadth/QF_PROTECTION_POLICY_ABLATION_RESULT.json`.
+
 ## 2026-08-22 thin Main-0 lifecycle controller retained
 
 The thin fixed controller is retained for the next QFBench campaign. It uses a

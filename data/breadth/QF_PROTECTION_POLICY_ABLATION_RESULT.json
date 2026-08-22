@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-23",
+  "status": "offline_policy_replay_complete",
+  "research_question": "Does property-wise protection prevent promotions that an aggregate-only rule would accept?",
+  "method": {
+    "mode": "offline replay of retained official protection reports",
+    "new_model_or_worker_calls": 0,
+    "aggregate_only_rule": "promote when candidate reward and total passed-property count do not fall below the parent",
+    "property_wise_rule": "also require every property passed by the parent to remain passed by the candidate"
+  },
+  "cases": [
+    {
+      "run_id": "qstate-protect-holdings-20260821-r1",
+      "task_id": "brinson-sector-attribution",
+      "source_report": "results/bc-mirror/qstate-protect-holdings-20260821-r1/pilot-report.json",
+      "parent": {
+        "arm": "h0",
+        "properties": "42/42",
+        "reward": 1.0,
+        "failed_properties": []
+      },
+      "candidate": {
+        "arm": "quant-state",
+        "properties": "42/42",
+        "reward": 1.0,
+        "failed_properties": []
+      },
+      "aggregate_only_decision": "PROMOTE",
+      "property_wise_decision": "PROMOTE",
+      "policy_disagreement": false
+    },
+    {
+      "run_id": "qstate-v2-matched-localvol-barrier-20260822-r1",
+      "task_id": "localvol-barrier",
+      "source_report": "results/bc-mirror/qstate-v2-matched-localvol-barrier-20260822-r1/pilot-report.json",
+      "parent": {
+        "arm": "h0",
+        "properties": "38/39",
+        "reward": 0.96,
+        "failed_properties": [
+          "barrier_outputs_reasonable"
+        ]
+      },
+      "candidate": {
+        "arm": "quant-state-v2",
+        "properties": "38/39",
+        "reward": 0.96,
+        "failed_properties": [
+          "vanilla_mc_close_to_surface"
+        ]
+      },
+      "aggregate_only_decision": "PROMOTE",
+      "property_wise_decision": "ROLLBACK",
+      "policy_disagreement": true,
+      "interpretation": "The aggregate score ties, but the candidate loses a property that the parent passed."
+    }
+  ],
+  "summary": {
+    "retained_cases": 2,
+    "policy_disagreements": 1,
+    "aggregate_only_false_promotions": 1,
+    "safe_cases_accepted_by_both": 1
+  },
+  "claim_boundary": "This replay shows that property identity can change promotion decisions when aggregate reward and passed-property count tie. It does not establish that Quant Research State search outperforms a generic Evolver."
+}
