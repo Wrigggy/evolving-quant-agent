@@ -7,9 +7,9 @@
   "purpose": "Verify proposal-to-terminal autonomy and resumable, isolated candidate lineages before the matched main experiment.",
   "runtime": {
     "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
-    "source_root": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1",
+    "source_root": "/data/qea-julius-storage/deploy/main0b-20260823-r1",
     "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
-    "qfbench_manifest": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/main0b-20260823-r1/data/qfbench/MANIFEST_85_BASELINE.json",
     "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
     "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
     "results_dir": "/data/qea-julius-storage/runs",
@@ -34,13 +34,13 @@
       "family": "holdings-final-state-reconciliation",
       "parent": {
         "version": "quant-h0",
-        "worker_dir": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/qea/worker_quant_h0"
+        "worker_dir": "/data/qea-julius-storage/deploy/main0b-20260823-r1/qea/worker_quant_h0"
       },
       "proposal": {
         "live_run_id": "main0b-holdings-proposal-20260823-r1",
         "candidate_version": "main0b-holdings-c1",
         "evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/holdings/quant-state/holdings_lineage_reconciliation",
-        "evolver_dir": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/qea/evolve_agent_full",
+        "evolver_dir": "/data/qea-julius-storage/deploy/main0b-20260823-r1/qea/evolve_agent_full",
         "arm": "quant-state",
         "reasoning_effort": "high"
       },
@@ -79,13 +79,13 @@
       "family": "localvol-calibration-to-pricing",
       "parent": {
         "version": "quant-h0",
-        "worker_dir": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/qea/worker_quant_h0"
+        "worker_dir": "/data/qea-julius-storage/deploy/main0b-20260823-r1/qea/worker_quant_h0"
       },
       "proposal": {
         "live_run_id": "main0b-localvol-proposal-20260823-r1",
         "candidate_version": "main0b-localvol-c1",
         "evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/localvol/quant-state/localvol_calibration_to_pricing",
-        "evolver_dir": "/data/qea-julius-storage/deploy/quant-state-canary-20260821-r1/qea/evolve_agent_full",
+        "evolver_dir": "/data/qea-julius-storage/deploy/main0b-20260823-r1/qea/evolve_agent_full",
         "arm": "quant-state",
         "reasoning_effort": "high"
       },
