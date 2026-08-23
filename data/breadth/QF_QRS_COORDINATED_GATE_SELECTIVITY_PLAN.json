@@ -1,0 +1,229 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-24",
+  "status": "frozen_not_run",
+  "controller_run_id": "qf-qrs-coordinated-gate-selectivity-20260824-r1",
+  "mode": "live",
+  "orchestration": "manual_existing_runners_only",
+  "code_under_test": {
+    "commit": "df5342e",
+    "change": "For Quant Research State coordinated breadth only, permit ACT from one target-grounded reusable quantitative relation without requiring the protection task to exhibit the same failure or a catalog positive episode. Generic coordinated breadth retains the shared-mechanism requirement."
+  },
+  "purpose": "Test whether the repaired QRS coordinated-breadth gate recovers one known-positive local-volatility intervention opportunity while preserving calibrated ABSTAIN on one holdings negative control, then conditionally test the admitted candidate with a normal answer-blind Worker.",
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/qf-qrs-coordinated-gate-selectivity-20260824-r1",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/qf-qrs-coordinated-gate-selectivity-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0"
+  },
+  "limits": {
+    "candidate_versions": 1,
+    "max_evolver_proposals": 2,
+    "max_new_parent_worker_sessions": 0,
+    "required_path": {
+      "max_candidate_worker_sessions": 1,
+      "max_candidate_verifier_executions": 1,
+      "max_completed_requests": 100,
+      "max_total_tokens": 9000000,
+      "provider_cost_usd": 0.35,
+      "wall_time_hours": 3
+    },
+    "conditional_full_path": {
+      "max_candidate_worker_sessions": 3,
+      "max_candidate_verifier_executions": 3,
+      "max_completed_requests": 180,
+      "max_total_tokens": 15000000,
+      "provider_cost_usd": 0.6,
+      "wall_time_hours": 6
+    }
+  },
+  "frozen_inputs": {
+    "quant_h0": {
+      "version": "quant-h0",
+      "worker_dir": "/data/qea-julius-storage/deploy/qf-final-h0-matched-20260824-r1/qea/worker_quant_h0"
+    },
+    "localvol_qrs_evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/localvol/quant-state/localvol_calibration_to_pricing",
+    "holdings_qrs_evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/holdings/quant-state/holdings_lineage_reconciliation",
+    "pre_fix_localvol_abstain": "/data/qea-julius-storage/runs/qf-final-h0-matched-generic-qrs-20260824-r1-qrs-localvol-r2-proposal/proposal-report.json",
+    "pre_fix_holdings_abstain": "/data/qea-julius-storage/runs/qf-final-h0-matched-generic-qrs-20260824-r1-qrs-holdings-r1-proposal/proposal-report.json",
+    "reuse_policy": "Reuse the exact Final-H0 evidence views and Quant-H0 comparator reports. Do not run a new parent Worker. The pre-fix ABSTAIN reports are historical outcomes, not substitutes for either post-fix proposal."
+  },
+  "experimenter_only_case_label": {
+    "source": "data/breadth/QF_A02_QRS_REFINEMENT_R4_RESULT.json",
+    "use": "R4 labels the SVI-admissibility case as a known-positive repair opportunity for experiment design only.",
+    "exposed_to_evolver": false,
+    "forbidden_evolver_evidence": [
+      "data/breadth/QF_A02_QRS_REFINEMENT_R4_RESULT.json",
+      "/data/qea-julius-storage/evidence/qf-a02-localvol-qrs-refinement-20260824-r4",
+      "/data/qea-julius-storage/runs/qf-a02-localvol-qrs-refine-proposal-20260824-r4",
+      "/data/qea-julius-storage/runs/qf-a02-localvol-qrs-refine-target-20260824-r4",
+      "/data/qea-julius-storage/runs/qf-a02-localvol-qrs-refine-repeat-20260824-r4"
+    ]
+  },
+  "execution_sequence": [
+    {
+      "order": 1,
+      "gate": "G+",
+      "case_id": "localvol-positive",
+      "action": "proposal",
+      "proceed_when": "decision is ACT, admission is true, the diff is non-empty, declared roles match actual roles, the Quant Research State Card selects a target-supported relation, and component smokes pass",
+      "stop_when": "ABSTAIN, invalid or empty ACT, failed admission, or failed component smoke"
+    },
+    {
+      "order": 2,
+      "gate": "G-",
+      "case_id": "holdings-negative-control",
+      "action": "proposal",
+      "proceed_when": "decision is calibrated ABSTAIN with an empty diff, writes locked, and no Worker dispatch",
+      "stop_when": "ACT, candidate mutation, or any Worker dispatch; retain the proposal for over-admission audit"
+    },
+    {
+      "order": 3,
+      "gate": "T",
+      "case_id": "localvol-positive",
+      "action": "normal_target",
+      "proceed_when": "the admitted component activates, the candidate strictly exceeds the reused Quant-H0 66/68 target reference, and test_svi_a_positive is in the anchored resolved-property footprint",
+      "stop_when": "no strict official gain, missing activation, or missing anchored SVI-a correction"
+    },
+    {
+      "order": 4,
+      "gate": "R",
+      "case_id": "localvol-positive",
+      "action": "independent_repeat",
+      "optional": true,
+      "proceed_when": "the repeat strictly exceeds its reused Quant-H0 reference and reproduces the target's anchored resolved-property footprint under resolved_property_footprint_v1",
+      "stop_when": "the footprint is inconsistent, the component does not activate when applicable, or there is no strict gain"
+    },
+    {
+      "order": 5,
+      "gate": "P",
+      "case_id": "localvol-positive",
+      "action": "answer_free_protection",
+      "optional": true,
+      "proceed_when": "aggregate and property-set protection are safe, no new failed property is introduced, and the SVI-specific relation either applies correctly or produces an evidence-grounded skip or non-activation",
+      "stop_when": "aggregate regression, a newly failed property, or an SVI-profile false match"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "localvol-positive",
+      "case_role": "post_fix_recall_positive",
+      "expected_gate_decision": "ACT",
+      "lineage": {
+        "lineage_id": "qrs-gate-selectivity-localvol",
+        "family": "localvol-calibration-admissibility",
+        "treatment": "quant-research-state",
+        "repeat_consistency_policy": "resolved_property_footprint_v1",
+        "parent": {
+          "version": "quant-h0",
+          "worker_dir": "/data/qea-julius-storage/deploy/qf-final-h0-matched-20260824-r1/qea/worker_quant_h0"
+        },
+        "proposal": {
+          "live_run_id": "qf-qrs-coordinated-gate-selectivity-20260824-r1-localvol-positive-proposal",
+          "candidate_version": "qf-qrs-gate-selectivity-localvol-c1",
+          "evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/localvol/quant-state/localvol_calibration_to_pricing",
+          "evolver_dir": "/data/qea-julius-storage/deploy/qf-qrs-coordinated-gate-selectivity-20260824-r1/qea/evolve_agent_full",
+          "arm": "quant-state",
+          "reasoning_effort": "high"
+        },
+        "stages": [
+          {
+            "name": "target",
+            "task_id": "dupire-local-vol",
+            "live_run_id": "qf-qrs-coordinated-gate-selectivity-20260824-r1-localvol-target",
+            "checkpoint_prefix": "qf-qrs-gate-selectivity-localvol-target-r1",
+            "parent_arm": "parent",
+            "candidate_arm": "quant-state-gate-c1",
+            "worker_concurrency": 1,
+            "verifier_concurrency": 2,
+            "selection_reference": {
+              "id": "main0b-localvol-target-parent-20260823-r1",
+              "report_path": "/data/qea-julius-storage/runs/main0b-localvol-target-20260823-r1/pilot-report.json",
+              "reference_version": "quant-h0",
+              "task_id": "dupire-local-vol",
+              "worker_route": "deepseek-v4-flash-main0",
+              "worker_budget": "normal",
+              "tests_passed": 66,
+              "tests_total": 68,
+              "reward": 0.0
+            }
+          },
+          {
+            "name": "repeat",
+            "task_id": "dupire-local-vol",
+            "live_run_id": "qf-qrs-coordinated-gate-selectivity-20260824-r1-localvol-repeat",
+            "checkpoint_prefix": "qf-qrs-gate-selectivity-localvol-repeat-r1",
+            "parent_arm": "parent",
+            "candidate_arm": "quant-state-gate-c1",
+            "worker_concurrency": 1,
+            "verifier_concurrency": 2,
+            "selection_reference": {
+              "id": "main0b-localvol-repeat-parent-20260823-r1",
+              "report_path": "/data/qea-julius-storage/runs/main0b-localvol-repeat-20260823-r1/pilot-report.json",
+              "reference_version": "quant-h0",
+              "task_id": "dupire-local-vol",
+              "worker_route": "deepseek-v4-flash-main0",
+              "worker_budget": "normal",
+              "tests_passed": 66,
+              "tests_total": 68,
+              "reward": 0.0
+            }
+          },
+          {
+            "name": "protection",
+            "task_id": "localvol-barrier",
+            "live_run_id": "qf-qrs-coordinated-gate-selectivity-20260824-r1-localvol-protection",
+            "checkpoint_prefix": "qf-qrs-gate-selectivity-localvol-protection-r1",
+            "parent_arm": "parent",
+            "candidate_arm": "quant-state-gate-c1",
+            "worker_concurrency": 1,
+            "verifier_concurrency": 2,
+            "selection_reference": {
+              "id": "main0b-localvol-protection-parent-20260823-r1",
+              "report_path": "/data/qea-julius-storage/runs/main0b-localvol-protection-20260823-r1/pilot-report.json",
+              "reference_version": "quant-h0",
+              "task_id": "localvol-barrier",
+              "worker_route": "deepseek-v4-flash-main0",
+              "worker_budget": "normal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "holdings-negative-control",
+      "case_role": "post_fix_specificity_negative",
+      "expected_gate_decision": "ABSTAIN",
+      "dispatch_policy": "proposal_only_even_if_unexpected_act",
+      "lineage": {
+        "lineage_id": "qrs-gate-selectivity-holdings-control",
+        "family": "holdings-final-state-reconciliation",
+        "treatment": "quant-research-state",
+        "parent": {
+          "version": "quant-h0",
+          "worker_dir": "/data/qea-julius-storage/deploy/qf-final-h0-matched-20260824-r1/qea/worker_quant_h0"
+        },
+        "proposal": {
+          "live_run_id": "qf-qrs-coordinated-gate-selectivity-20260824-r1-holdings-negative-proposal",
+          "candidate_version": "qf-qrs-gate-selectivity-holdings-control-c1",
+          "evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/holdings/quant-state/holdings_lineage_reconciliation",
+          "evolver_dir": "/data/qea-julius-storage/deploy/qf-qrs-coordinated-gate-selectivity-20260824-r1/qea/evolve_agent_full",
+          "arm": "quant-state",
+          "reasoning_effort": "high"
+        },
+        "stages": []
+      }
+    }
+  ],
+  "answer_boundary": "The reused Final-H0 optimization diagnostics remain Evolver-only after blind Worker attempts. No R4 result, candidate, trace, artifact, expected value, trusted verifier output, or task-specific answer enters either proposal's evidence, a Worker instruction, or a reusable candidate. Target and repeat Workers are answer-blind; protection is answer-free.",
+  "claim_boundary": {
+    "gates_only": "If G+ returns a legal admitted ACT and G- remains calibrated ABSTAIN, this supports case-level selective gate recovery on one known-positive and one negative-control development case. It is not a general recall or precision estimate.",
+    "after_target": "A positive normal target additionally supports one fresh candidate-associated official improvement only when activation and the anchored SVI-a correction are observed.",
+    "after_repeat_and_protection": "Consistent repeat plus property-safe protection supports one development-family stable candidate and scoped safe reuse, not cross-task transfer unless the selected relation is actually applicable and realized on protection.",
+    "not_supported": "QRS superiority, generic inferiority, sealed or out-of-sample performance, benchmark-wide improvement, broad transfer, or complete causal isolation from one stochastic rerun."
+  }
+}
