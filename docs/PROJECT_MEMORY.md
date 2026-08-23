@@ -1,5 +1,38 @@
 # QEA Repository Memory
 
+## 2026-08-23 lineage scale runway retained
+
+The fixed controller now consumes retained QFBench and QuantCodeEval
+observations in one zero-model plan. It preserved the QF quantitative-review
+terminal state as `HOLD_FOR_REFINE` and replayed the historical QuantCodeEval
+T12 target/repeat plus T19 protection lineage to `PROMOTE`. A second invocation
+was identical. The replay made zero model, Worker, verifier, or external child
+calls. The QF lineage retained its historical accounting of 268 requests,
+16,153,179 tokens, and $0.575478412. The QuantCodeEval lineage charged only its
+three historical candidate results: 60 requests, 1,430,733 tokens, and
+$0.0584647056; the reused parent was not charged. The QuantCodeEval candidate
+was investigator-seeded, so this is a controller-integration replay rather
+than new autonomous discovery or benchmark improvement.
+
+A separate live QFBench canary reused the completed Quant-H0 Brinson
+observation and ran only the retained holdings candidate arm. Both parent and
+candidate were 42/42 with reward 1, the component activated once, and the
+property-wise protection gate remained safe. The new work used one Worker
+attempt, eight requests, 104,878 tokens, and $0.009652720. Compared with the
+earlier independent paired stage, this was 50.0% fewer requests, 37.2% fewer
+tokens, and 37.4% lower cost; only the request reduction is mechanical. The
+terminal `PROMOTE`/`FROZEN` state resumed without another dispatch or duplicate
+cost, and the service completed without restart or residue.
+
+Together these results close the immediate multi-format replay, parent reuse,
+candidate-only accounting, property-wise selection, and resume runway. They
+are infrastructure evidence around historical or retained candidates, not a
+new autonomous search, sealed result, generic-versus-QRS comparison, or
+benchmark-level gain. Full decision:
+`docs/decisions/2026-08-23-lineage-scale-runway-result.md`; compact results:
+`data/breadth/CROSS_BENCHMARK_LINEAGE_REPLAY_RESULT.json` and
+`data/breadth/QF_PARENT_COMPARATOR_LIVE_CANARY_RESULT.json`.
+
 ## 2026-08-23 quantitative protection review canary
 
 The answer-free QPR canary retained a calibrated three-stage protection path.
