@@ -86,6 +86,7 @@ class FakeBackend:
         command_error=False,
         oversized_path=None,
         echo_secret=None,
+        state_card=None,
     ):
         self.events = events
         self.candidate_archive = candidate_archive or _tar_bytes(
@@ -98,6 +99,7 @@ class FakeBackend:
         self.command_error = command_error
         self.oversized_path = oversized_path
         self.echo_secret = echo_secret
+        self.state_card = state_card
         self.specs = []
         self.uploads = {}
 
@@ -124,7 +126,16 @@ class FakeBackend:
         return values[path]
 
     def _download_values(self):
-        return {
+        summary = {"model_usage": None, "tool_calls": 4, "turns": 2}
+        if self.state_card is not None:
+            summary["discovery_hypothesis"] = {
+                "hypothesis": {
+                    "quant_research_state_card": (
+                        "quant-research-state-card.json"
+                    )
+                }
+            }
+        values = {
             NEXAU_REQUIREMENTS_LOCK: b"nexau==0.3.9\n",
             "/qea/result/candidate.tar": self.candidate_archive,
             "/qea/result/raw_trace.jsonl": (
@@ -138,9 +149,14 @@ class FakeBackend:
                 b'{"evidence_paths":["contract.json"],"records":3}\n'
             ),
             "/qea/result/summary.json": (
-                b'{"model_usage":null,"tool_calls":4,"turns":2}\n'
+                json.dumps(summary, sort_keys=True).encode() + b"\n"
             ),
         }
+        if self.state_card is not None:
+            values["/qea/result/quant-research-state-card.json"] = (
+                json.dumps(self.state_card, sort_keys=True).encode() + b"\n"
+            )
+        return values
 
     def run(self, handle, argv, *, environment, timeout_seconds):
         command = tuple(argv)
@@ -482,7 +498,39 @@ def test_evolver_validates_candidate_evidence_lock_lifecycle_and_result_order(tm
     assert manifest["proxy_sandbox_id"] == "proxy-1"
     assert manifest["network_id"] == "network-1"
     assert manifest["candidate_digest"] == result.candidate_digest
+    assert not (
+        tmp_path
+        / "run/evolutions/iteration-0001/quant-research-state-card.json"
+    ).exists()
     assert events.index("proxy:close") < events.index("lease:released")
+
+
+def test_evolver_retains_materialized_quant_research_state_card_outside_candidate(
+    tmp_path,
+):
+    state_card = {
+        "schema_version": 1,
+        "task_key": "dupire-local-vol",
+        "selected_intervention": {
+            "component_locus": "tools",
+            "relation_id": "option-price-local-vol-reconciliation",
+        },
+    }
+    events = []
+    backend = FakeBackend(events, state_card=state_card)
+    proposer, _, _, _, _ = _proposer(
+        tmp_path, backend=backend, events=events
+    )
+
+    result = _propose(proposer, tmp_path)
+
+    retained = (
+        tmp_path
+        / "run/evolutions/iteration-0001/quant-research-state-card.json"
+    )
+    assert json.loads(retained.read_text()) == state_card
+    assert not (result.candidate_dir / retained.name).exists()
+    assert f"run:bounded:/qea/result/{retained.name}" in events
 
 
 def test_remote_evolver_component_smoke_log_is_ordered_and_bounded(tmp_path):

@@ -83,9 +83,15 @@ _DOWNLOAD_LIMITS = {
     "prediction.json": 2 * 1024 * 1024,
     "access-summary.json": 2 * 1024 * 1024,
     "summary.json": 2 * 1024 * 1024,
+    "quant-research-state-card.json": 2 * 1024 * 1024,
 }
 _JSON_EVIDENCE = frozenset(
-    {"prediction.json", "access-summary.json", "summary.json"}
+    {
+        "prediction.json",
+        "access-summary.json",
+        "summary.json",
+        "quant-research-state-card.json",
+    }
 )
 _DEPENDENCY_LOCK_LIMIT = 8 * 1024 * 1024
 _TAR_MEMBER_ENVELOPE_BYTES = 8 * 1024
@@ -1423,6 +1429,39 @@ class SandboxFullHarnessProposer:
                             _validate_evidence(
                                 remote_name,
                                 payload,
+                                forbidden_values=known_secrets,
+                            ),
+                            phase="evolver.result",
+                        )
+                    summary = json.loads(paths["summary_uri"].read_text())
+                    discovery = summary.get("discovery_hypothesis")
+                    hypothesis = (
+                        discovery.get("hypothesis")
+                        if isinstance(discovery, Mapping)
+                        else None
+                    )
+                    state_card_name = (
+                        hypothesis.get("quant_research_state_card")
+                        if isinstance(hypothesis, Mapping)
+                        else None
+                    )
+                    if state_card_name == "quant-research-state-card.json":
+                        state_card = read_bounded(
+                            self.backend,
+                            handle,
+                            f"/qea/result/{state_card_name}",
+                            max_bytes=_DOWNLOAD_LIMITS[state_card_name],
+                            timeout_seconds=min(
+                                120,
+                                self.config.resource_contract.timeout_seconds,
+                            ),
+                            phase="evolver.download",
+                        )
+                        atomic_bytes(
+                            evolution_dir / state_card_name,
+                            _validate_evidence(
+                                state_card_name,
+                                state_card,
                                 forbidden_values=known_secrets,
                             ),
                             phase="evolver.result",
