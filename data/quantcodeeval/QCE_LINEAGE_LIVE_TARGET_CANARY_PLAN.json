@@ -7,13 +7,11 @@
   "purpose": "Verify QuantCodeEval candidate child dispatch, official-result import, fixed-stage resume, and candidate-only accounting on T26.",
   "runtime": {
     "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
-    "source_root": "/data/qea-julius-storage/deploy/parent-reuse-canary-20260823-r1",
+    "source_root": "/data/qea-julius-storage/deploy/qce-lineage-live-20260823-r1",
     "results_dir": "/data/qea-julius-storage/runs",
-    "quantcodeeval_config": "/data/qea-julius-storage/deploy/parent-reuse-canary-20260823-r1/configs/quantcodeeval_deepseek_v4_flash_canary.json",
+    "quantcodeeval_config": "/data/qea-julius-storage/deploy/qce-lineage-live-20260823-r1/configs/quantcodeeval_deepseek_v4_flash_canary.json",
     "quantcodeeval_release": "/data/qea-julius-storage/runs/qce-t26-ap3-20260820-r3/engineering-release",
-    "quantcodeeval_worker_image": "qea-qce-worker-ap3:20260823",
-    "quantcodeeval_verifier_image": "qea-rootless-verifier-8308e30fae771c6b:latest",
-    "quantcodeeval_proxy_image": "qea-rootless-proxy-ffadc27899f76e67:latest"
+    "quantcodeeval_task_panel": "/data/qea-julius-storage/deploy/qce-lineage-live-20260823-r1/data/quantcodeeval/PANEL_BREADTH.json"
   },
   "limits": {
     "provider_cost_usd": 0.3

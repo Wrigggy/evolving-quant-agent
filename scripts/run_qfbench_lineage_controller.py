@@ -153,6 +153,37 @@ def build_quantcodeeval_child_argv(
     )
     if not isinstance(activation_run, str) or not activation_run:
         raise LineageError("live QuantCodeEval stage has no activation_run")
+    image_fields = {
+        "quantcodeeval_worker_image": "worker_image_ref",
+        "quantcodeeval_verifier_image": "verifier_image_ref",
+        "quantcodeeval_proxy_image": "proxy_image_ref",
+    }
+    image_refs = {
+        runtime_name: runtime.get(runtime_name)
+        for runtime_name in image_fields
+    }
+    if any(
+        not isinstance(value, str) or not value
+        for value in image_refs.values()
+    ):
+        preflight_path = Path(
+            str(
+                runtime.get("quantcodeeval_h0_preflight")
+                or Path(str(runtime["quantcodeeval_release"]))
+                / "h0/H0-PREFLIGHT.json"
+            )
+        )
+        preflight = _json(preflight_path)
+        for runtime_name, preflight_name in image_fields.items():
+            if not isinstance(image_refs[runtime_name], str) or not image_refs[
+                runtime_name
+            ]:
+                image_refs[runtime_name] = preflight.get(preflight_name)
+    if any(
+        not isinstance(value, str) or not value
+        for value in image_refs.values()
+    ):
+        raise LineageError("QuantCodeEval H0 preflight has no complete image refs")
     argv = [
         str(runtime["python"]),
         str(
@@ -168,11 +199,11 @@ def build_quantcodeeval_child_argv(
         "--run-dir",
         str(_quantcodeeval_live_result_path(plan, lineage, stage).parent),
         "--worker-image",
-        str(runtime["quantcodeeval_worker_image"]),
+        str(image_refs["quantcodeeval_worker_image"]),
         "--verifier-image",
-        str(runtime["quantcodeeval_verifier_image"]),
+        str(image_refs["quantcodeeval_verifier_image"]),
         "--proxy-image",
-        str(runtime["quantcodeeval_proxy_image"]),
+        str(image_refs["quantcodeeval_proxy_image"]),
         "--task",
         str(stage["task_id"]),
     ]

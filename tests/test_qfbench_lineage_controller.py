@@ -753,6 +753,40 @@ def test_live_quantcodeeval_child_requires_approval_and_fixed_run_dir(tmp_path):
     assert argv[argv.index("--task") + 1] == "T26"
 
 
+def test_live_quantcodeeval_child_reuses_h0_preflight_image_refs(tmp_path):
+    release = tmp_path / "release"
+    preflight = release / "h0/H0-PREFLIGHT.json"
+    preflight.parent.mkdir(parents=True)
+    preflight.write_text(json.dumps({
+        "worker_image_ref": "existing-worker-id",
+        "verifier_image_ref": "existing-verifier-id",
+        "proxy_image_ref": "existing-proxy-id",
+    }))
+    plan = {
+        "controller_run_id": "main0",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "results_dir": str(tmp_path / "results"),
+            "quantcodeeval_config": "/config.json",
+            "quantcodeeval_release": str(release),
+        },
+    }
+    lineage = {
+        "lineage_id": "qce",
+        "candidate": {"activation_run": "/activation"},
+    }
+    stage = {"name": "target", "task_id": "T26"}
+
+    argv = build_quantcodeeval_child_argv(
+        plan, lineage, stage, approve_external_run=True
+    )
+
+    assert argv[argv.index("--worker-image") + 1] == "existing-worker-id"
+    assert argv[argv.index("--verifier-image") + 1] == "existing-verifier-id"
+    assert argv[argv.index("--proxy-image") + 1] == "existing-proxy-id"
+
+
 def test_live_child_argv_uses_existing_component_runner():
     plan = {
         "controller_run_id": "main0",
