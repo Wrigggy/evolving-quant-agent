@@ -864,24 +864,46 @@ def build_coordinated_evolver_view(
         },
     )
 
-    instruction = (
-        "Compare the selected Quant Research Trajectories before proposing a "
-        "component. First decide whether at least two tasks share one concrete "
-        "failure mechanism, quantitative object, or executable invariant; a broad "
-        "Research-State label alone is not evidence of a match. Preserve a "
-        "non-match as a valid conclusion. If a shared mechanism is supported, "
-        "record the predeclared target as the one probe_task_key whose Worker "
-        "result would best "
-        "discriminate the leading hypothesis from a competitor. Implement one "
-        "bounded reusable harness candidate and predict an observable action "
-        "target: an artifact edit, a validator finding acted upon, or an "
-        "evidence-grounded skip. Do not request Worker evaluation on every task. "
-        "The remaining tasks are contrast trajectories and are evaluated only "
-        "after a positive target result. Otherwise record calibrated ABSTAIN."
-        " For ACT, use decide_candidate, set shared_mechanism to the concrete "
-        "cross-task relation supported by both trajectories, and provide a "
-        "from_scratch experiment_spec with no seed experience."
-    )
+    quant_state_treatment = search_treatment in {"quant-state", "quant-state-v2"}
+    if quant_state_treatment:
+        instruction = (
+            "Compare the selected Quant Research Trajectories before proposing a "
+            "component. Ground the intervention in one reusable quantitative "
+            "relation supported by the predeclared target's public contract, "
+            "authorized runtime evidence, or declared optimize-only diagnostic. "
+            "The protection trajectory is scope and counterevidence: inspect it "
+            "before ACT, but do not require it to exhibit the same failure or "
+            "mechanism before a target candidate exists. Record the predeclared "
+            "target as the one probe_task_key whose Worker result would best "
+            "discriminate the leading hypothesis from a competitor. Implement one "
+            "bounded reusable harness candidate and predict an observable action "
+            "target: an artifact edit, a validator finding acted upon, or an "
+            "evidence-grounded skip. Do not request Worker evaluation on every "
+            "task. After a positive target result, the protection run tests "
+            "relation applicability, scoped non-activation, and non-regression; it "
+            "does not retroactively establish cross-task transfer. Otherwise record "
+            "calibrated ABSTAIN. For ACT, use decide_candidate and provide a "
+            "from_scratch experiment_spec with no seed experience."
+        )
+    else:
+        instruction = (
+            "Compare the selected Quant Research Trajectories before proposing a "
+            "component. First decide whether at least two tasks share one concrete "
+            "failure mechanism, quantitative object, or executable invariant; a "
+            "broad Research-State label alone is not evidence of a match. Preserve "
+            "a non-match as a valid conclusion. If a shared mechanism is supported, "
+            "record the predeclared target as the one probe_task_key whose Worker "
+            "result would best discriminate the leading hypothesis from a "
+            "competitor. Implement one bounded reusable harness candidate and "
+            "predict an observable action target: an artifact edit, a validator "
+            "finding acted upon, or an evidence-grounded skip. Do not request "
+            "Worker evaluation on every task. The remaining tasks are contrast "
+            "trajectories and are evaluated only after a positive target result. "
+            "Otherwise record calibrated ABSTAIN. For ACT, use decide_candidate, "
+            "set shared_mechanism to the concrete cross-task relation supported by "
+            "both trajectories, and provide a from_scratch experiment_spec with no "
+            "seed experience."
+        )
     if include_component_history:
         instruction += (
             " Prior component cards are advisory. Explain any REUSE, REFINE, "
@@ -901,8 +923,11 @@ def build_coordinated_evolver_view(
             " Before ACT, use materialize_quant_research_state_card to reconstruct "
             "one task-conditioned state, select one supported quantitative relation, "
             "and retrieve compact positive, negative, inactive, and unstable "
-            "component episodes. Let that state/relation/component query narrow the "
-            "intervention or support ABSTAIN; terminology alone is not evidence."
+            "component episodes. These episodes are retrieval priors, not an ACT "
+            "admission gate: no prior positive episode is required when target "
+            "evidence supports the relation and the card routes a reusable "
+            "component. Let the query narrow the intervention or support ABSTAIN; "
+            "terminology alone is not evidence."
         )
     elif search_treatment == "quant-state-v2":
         instruction += (
@@ -911,7 +936,10 @@ def build_coordinated_evolver_view(
             "relation. Then ask whether repairing it could leave one orthogonal, "
             "evidence-supported relation unresolved. If so, record at most one "
             "residual-risk relation and retrieve compact experience for both "
-            "queries. Predict an answer-free observation for primary and residual "
+            "queries. Catalog episodes are retrieval priors rather than an ACT "
+            "admission gate; target-grounded relation support may justify a new "
+            "reusable component without a prior positive episode. Predict an "
+            "answer-free observation for primary and residual "
             "coverage; omit the residual when evidence does not support one. Let "
             "the relations narrow component scope or support ABSTAIN rather than "
             "turning them into a mandatory failure checklist."
@@ -983,8 +1011,9 @@ def build_coordinated_evolver_view(
             "domain_tags_are_extensible": True,
             "autonomous_probe_required": True,
             "coordinated_evidence_required_for_act": True,
+            "shared_mechanism_required_for_act": not quant_state_treatment,
             "probe_seed_policy": "none",
-            "shared_mechanism_assessment_required": True,
+            "shared_mechanism_assessment_required": not quant_state_treatment,
             "probe_task_selection_required_for_act": True,
             "max_worker_probes_this_round": 1,
             "positive_target_before_contrast_evaluation": True,

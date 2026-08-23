@@ -1390,6 +1390,97 @@ def test_quant_v2_coordinated_act_cites_both_tasks_and_selects_one_target(
         decide_candidate(discovery=decision)
 
 
+def test_quant_state_coordinated_act_uses_target_relation_without_prior_episode(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        materialize_quant_research_state_card,
+        read_workspace,
+    )
+
+    _, evidence, _, _, access_log = guarded_roots
+    _write_flexible_quant_v2_contract(evidence, history_required=False)
+    task_paths = {
+        "qfbench:curve-target": "benchmarks/qfbench/tasks/curve-target/trace.jsonl",
+        "qfbench:curve-protection": (
+            "benchmarks/qfbench/tasks/curve-protection/trace.jsonl"
+        ),
+    }
+    for path in task_paths.values():
+        target = evidence / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text('{"event":"curve construction"}\n', encoding="utf-8")
+        read_workspace(source="evidence", file_path=path)
+    catalog = evidence / "components/CATALOG.json"
+    catalog.parent.mkdir(parents=True, exist_ok=True)
+    catalog.write_text('{"schema_version":1,"components":[]}\n', encoding="utf-8")
+
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract.update(
+        {
+            "stage": "COORDINATED_BREADTH",
+            "contract_arm": "quant-state",
+            "task_keys": list(task_paths),
+            "target_task_keys": ["qfbench:curve-target"],
+            "protection_task_keys": ["qfbench:curve-protection"],
+            "task_evidence_prefixes": {
+                key: [path.rsplit("/", 1)[0] + "/"]
+                for key, path in task_paths.items()
+            },
+            "coordinated_evidence_required_for_act": True,
+            "shared_mechanism_required_for_act": False,
+            "quant_research_state_card_required_for_act": True,
+            "autonomous_probe_required": True,
+            "probe_seed_policy": "none",
+            "max_worker_probes_this_round": 1,
+        }
+    )
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+
+    card = _quant_state_card()
+    card["task_key"] = "qfbench:curve-target"
+    card["candidate_relations"][0]["observed_evidence"] = [
+        task_paths["qfbench:curve-target"]
+    ]
+    card_result = materialize_quant_research_state_card(card)
+    assert card_result["retrieval"]["episodes"] == []
+
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = list(task_paths.values())
+    decision["probe_task_key"] = "qfbench:curve-target"
+    decision["experiment_spec"] = {
+        "mode": "from_scratch",
+        "seed_experience": None,
+        "worker_instruction": "Build the curve and audit the public identity.",
+        "max_iterations": 8,
+        "prediction": "The target relation is audited before delivery.",
+        "decision_changing_observation": "No audit favors rollback.",
+    }
+    _add_quant_state_search_decision(decision)
+
+    result = decide_candidate(discovery=decision)
+    state = json.loads(
+        (access_log.parent / "discovery-hypothesis.json").read_text()
+    )
+
+    assert result["decision"] == "ACT"
+    assert "shared_mechanism" not in state["hypothesis"]
+    assert state["hypothesis"]["selected_relation"]["relation_id"] == (
+        "estimator-parameter-identity"
+    )
+
+    read_workspace(source="evidence", file_path="overview.md")
+    decision["evidence_refs"] = [
+        task_paths["qfbench:curve-target"],
+        "overview.md",
+    ]
+    with pytest.raises(GuardedWorkspaceError, match="every coordinated task"):
+        decide_candidate(discovery=decision)
+
+
 def test_quant_v2_lineage_refinement_selects_target_without_rediscovery(
     guarded_roots,
 ):

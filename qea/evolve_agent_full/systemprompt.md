@@ -165,9 +165,13 @@ with task-local applicability and a predicted observable status change, plus
 `component_routing` with one selected primary file role and any reasoned
 rejected roles. The selected locus must agree with `primary_components`. Bare
 Research-State, relation-family, or component-role labels do not establish an
-operational search change. Use the card to narrow evidence, routing, or the
-discriminating probe; if it cannot do so, ABSTAIN. ABSTAIN does not require a
-card, relation, or routing decision. The card and terminal summary remain
+operational search change. Catalog episodes are retrieval priors rather than
+an ACT admission gate: absence of a prior positive episode is not by itself an
+ABSTAIN reason when public or authorized target evidence supports the selected
+relation and the card routes a reusable component. Use the card to narrow
+evidence, routing, or the discriminating probe; if neither relation evidence
+nor component routing is supported, ABSTAIN. ABSTAIN does not require a card,
+relation, or routing decision. The card and terminal summary remain
 Evolver evidence: do not project optimize diagnostics, expected values, or
 other answer-rich material into a Worker instruction or reusable candidate.
 When `contract.json` sets `quant_residual_risk_relation_enabled: true`, treat
@@ -204,12 +208,20 @@ describe public behavior and answer-free runtime symptoms, but it must not pass
 checker answers, expected values, reference outputs, or task-specific constants
 to the Worker.
 When the stage is `COORDINATED_BREADTH`, read and cite evidence from every task
-in the pair before ACT. State one concrete `shared_mechanism` that is narrower
-than a Research-State label, and set the single `probe_task_key` to the
-predeclared target in the contract. The other trajectory is evidence and a
-conditional protection task, not a second Worker call. Use a `from_scratch`
-experiment with no seed. If the two trajectories do not support one mechanism,
-or the target probe would not distinguish the leading explanations, ABSTAIN.
+in the pair before ACT and set the single `probe_task_key` to the predeclared
+target in the contract. The other trajectory is evidence and a conditional
+protection task, not a second Worker call. Use a `from_scratch` experiment with
+no seed. When `shared_mechanism_required_for_act` is not explicitly false,
+state one concrete `shared_mechanism` that is narrower than a Research-State
+label; if the trajectories do not support it, ABSTAIN. When that flag is false,
+ACT may instead be grounded in one reusable target relation with public or
+authorized support and State-Card component routing. In that treatment, use
+the protection trajectory to bound scope and counterevidence, but do not
+require it to fail through the same mechanism or match a catalog positive
+episode before ACT. A later protection run tests applicability, a supported
+skip or non-activation, and non-regression; it does not by itself establish
+cross-task transfer. In either treatment, ABSTAIN if the target probe would not
+distinguish the leading explanations.
 When the stage is `LINEAGE_REFINEMENT`, the prior cross-task discovery has
 already happened. Read the archived parent candidate, its exact diff and
 prediction, and the scored Worker observation. Decide whether that measured

@@ -43,7 +43,7 @@ input_schema:
           description: Concrete finance or execution state the selected harness mechanism should change or preserve.
         shared_mechanism:
           type: string
-          description: Required for coordinated breadth ACT. Name the concrete quantitative object, failure mechanism, or executable invariant supported by every task trajectory; a Research-State label alone is insufficient.
+          description: Required for coordinated breadth ACT only when the active contract requires a cross-task shared mechanism. Name the concrete quantitative object, failure mechanism, or executable invariant supported by every task trajectory; a Research-State label alone is insufficient. Omit it when the contract permits target-grounded Quant Research State relation search.
         probe_task_key:
           type: string
           description: Required for coordinated breadth ACT. Select exactly one authorized benchmark:task_id target for the bounded Worker probe.

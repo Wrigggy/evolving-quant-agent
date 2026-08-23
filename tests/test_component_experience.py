@@ -555,6 +555,12 @@ def test_coordinated_search_treatments_share_evidence_but_not_relation_helpers(
     assert generic_contract["contract_arm"] == "generic"
     assert quant_contract["contract_arm"] == "quant-state"
     assert quant_v2_contract["contract_arm"] == "quant-state-v2"
+    assert generic_contract["shared_mechanism_required_for_act"] is True
+    assert quant_contract["shared_mechanism_required_for_act"] is False
+    assert quant_v2_contract["shared_mechanism_required_for_act"] is False
+    assert generic_contract["shared_mechanism_assessment_required"] is True
+    assert quant_contract["shared_mechanism_assessment_required"] is False
+    assert quant_v2_contract["shared_mechanism_assessment_required"] is False
     assert generic_contract["quant_research_state_card_required_for_act"] is False
     assert quant_contract["quant_research_state_card_required_for_act"] is True
     assert quant_v2_contract["quant_research_state_card_required_for_act"] is True
@@ -577,3 +583,10 @@ def test_coordinated_search_treatments_share_evidence_but_not_relation_helpers(
         "evolver_instruction"
     ]
     assert "residual-risk relation" not in generic_contract["evolver_instruction"]
+    assert "do not require it to exhibit the same failure" in quant_contract[
+        "evolver_instruction"
+    ]
+    assert "no prior positive episode is required" in quant_contract[
+        "evolver_instruction"
+    ]
+    assert "set shared_mechanism" in generic_contract["evolver_instruction"]

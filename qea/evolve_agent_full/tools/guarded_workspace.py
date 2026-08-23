@@ -1703,10 +1703,11 @@ def _decide_quant_property_candidate(
         if selected_id is None:
             raise GuardedWorkspaceError("ACT requires selected_hypothesis_id")
         if contract.get("coordinated_evidence_required_for_act") is True:
-            shared_mechanism = _text(
-                discovery.get("shared_mechanism"), label="shared_mechanism"
-            )
-            normalized["shared_mechanism"] = shared_mechanism
+            if contract.get("shared_mechanism_required_for_act") is not False:
+                shared_mechanism = _text(
+                    discovery.get("shared_mechanism"), label="shared_mechanism"
+                )
+                normalized["shared_mechanism"] = shared_mechanism
             task_keys = _text_list(
                 contract.get("task_keys"), label="contract task_keys", minimum=2
             )
@@ -2203,6 +2204,9 @@ def _decide_quant_property_candidate(
             ),
             "coordinated_evidence_required_for_act": contract.get(
                 "coordinated_evidence_required_for_act"
+            ),
+            "shared_mechanism_required_for_act": contract.get(
+                "shared_mechanism_required_for_act"
             ),
             "max_worker_probes_this_round": contract.get(
                 "max_worker_probes_this_round"

@@ -1,6 +1,6 @@
 type: tool
 name: materialize_quant_research_state_card
-description: Materialize one task-conditioned Quant Research State Card and retrieve a compact positive, negative, inactive, and unstable component-experience view from the same catalog available to the generic arm. Use only when the evidence contract enables Quant Research State guided search. This does not unlock candidate writes; ACT must still reference the returned card path, selected relation, and component routing.
+description: Materialize one task-conditioned Quant Research State Card and retrieve a compact positive, negative, inactive, and unstable component-experience view from the same catalog available to the generic arm. Catalog episodes are retrieval priors, not an ACT admission gate; target-grounded public or authorized support may justify a reusable relation even when no positive episode is retrieved. Use only when the evidence contract enables Quant Research State guided search. This does not unlock candidate writes; ACT must still reference the returned card path, selected relation, and component routing.
 input_schema:
   type: object
   properties:
