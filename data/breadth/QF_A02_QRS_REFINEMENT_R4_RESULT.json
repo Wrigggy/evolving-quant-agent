@@ -192,6 +192,14 @@
     "related_processes_remaining": 0
   },
   "retained_conclusion": "R4 autonomously refined c2 into a valid c3 standard-SVI profile, associated activation with the same SVI-a property correction on target and repeat, passed property-safe protection, and reached PROMOTE/FROZEN.",
+  "superseding_interpretation": {
+    "audit": "data/breadth/QF_DEVELOPMENT_CANDIDATE_PROVENANCE_AUDIT_RESULT.json",
+    "provenance_status": "CONTAMINATED",
+    "reason": "R4 projected the Evolver-only test_svi_a_positive predicate into a Worker-visible, signature-gated standard-SVI profile that automatically and non-weakenably enforced raw a>0, which the public task did not specify.",
+    "claim_downgrade": "Target, repeat, protection, cost, and controller PROMOTE remain measured historical facts. Withdraw valid promotion, repeated QRS mechanism gain, stable reuse, and candidate validity.",
+    "candidate_disposition": "Do not reuse c3 or retain it as a positive component episode.",
+    "measured_fields_changed": false
+  },
   "claim_boundary": {
     "supported": "One autonomous c2-to-c3 refinement, activated standard-SVI profile, repeated relation-consistent official binary gain on one development task, safe protection, promotion, terminal resume, and cleanup.",
     "causal_limit": "Neither target Worker observed a checker violation followed by refitting, so the evidence associates profile activation and repeated SVI-a correction but does not isolate the checker as the complete cause.",

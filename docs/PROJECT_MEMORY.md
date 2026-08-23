@@ -1,5 +1,43 @@
 # QEA Repository Memory
 
+## 2026-08-24 development-candidate provenance audit: 6/6 contaminated
+
+A retrospective read-only audit reconstructed the answer provenance of all six
+evaluated development candidates from Search-v2, A0, R4, and Final-H0. The
+result is 0 `CLEAN`, 6 `CONTAMINATED`, and 0 `INCONCLUSIVE`. The official
+scores, rewards, property vectors, activation traces, costs, and controller
+decisions remain measured historical facts, but every harness-improvement,
+scientific-promotion, stable-reuse, and search-method-gain interpretation from
+these candidates is superseded.
+
+The affected candidates are: Search-v2's prompt-only terminal-maturity rule;
+A0 generic local-vol's raw SVI `a>0` audit; A0 QRS local-vol's `a>0` checker
+activation; R4 c3's automatic standard-SVI `a>0` profile; Final-H0 generic
+local-vol's `a>0` checker; and Final-H0 generic holdings' pair-array and
+weight-turnover convention bundle. Search-v2 copied the optimize-only missing-
+terminal-value predicate into a prompt rule. The four local-vol admissibility
+candidates copied diagnostic-only raw `a==0`/`a>0` semantics into Worker-visible
+prompts, descriptors, tools, or activation paths. The holdings candidate copied
+an exact weight convention and two-element pair encoding even though the public
+task did not define the former and explicitly allowed any unambiguous encoding.
+
+The raw diagnostic files were not directly given to Workers, but that does not
+satisfy evaluator isolation when their semantic predicates are projected into
+reusable Worker-visible components. Contaminated scores remain execution
+observations only. Search-v2 and R4 no longer support repeated valid mechanism
+gain; A0 generic and R4 c3 are not scientific promotions; Final-H0's generic
+target gains are not valid candidate-associated improvements. None of the six
+candidates may be reused or retained as a positive experience episode.
+
+Main-experiment readiness is `NO-GO` until a universal pre-Worker provenance
+gate verifies every decision-changing predicate across prompt, tools,
+descriptors, validators, skills, memory, middleware, and routing against public
+evidence, and one fresh public-only target passes that gate and produces a
+retained official improvement with a blind Worker. Compact audit:
+`data/breadth/QF_DEVELOPMENT_CANDIDATE_PROVENANCE_AUDIT_RESULT.json`; full
+decision:
+`docs/decisions/2026-08-24-development-candidate-provenance-retrospective-audit.md`.
+
 ## 2026-08-24 QRS coordinated-gate selectivity canary retained and re-audited
 
 The proposal-only G+/G- canary recovered the predeclared positive

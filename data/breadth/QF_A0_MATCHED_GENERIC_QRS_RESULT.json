@@ -318,6 +318,17 @@
     ],
     "next_boundary": "Predeclare a relation-footprint gate that requires the predicted state or artifact change to recur before a score gain can count as mechanism-consistent repeat evidence; keep the official score and protection gates separate."
   },
+  "superseding_interpretation": {
+    "audit": "data/breadth/QF_DEVELOPMENT_CANDIDATE_PROVENANCE_AUDIT_RESULT.json",
+    "provenance_status": {
+      "qf-a0-localvol-generic-c1": "CONTAMINATED",
+      "qf-a0-localvol-qrs-c1": "CONTAMINATED"
+    },
+    "reason": "Both local-vol candidates projected the diagnostic-only raw SVI a>0 predicate into Worker-visible prompt, descriptor, tool, or activation behavior even though the public instruction did not state it.",
+    "claim_downgrade": "All official outcomes and controller facts remain measured. Withdraw A0 scientific promotion, valid repeated generic harness improvement, relation-aligned QRS mechanism evidence, and reuse of either candidate.",
+    "candidate_disposition": "Do not reuse either local-vol candidate or retain it as a positive component episode.",
+    "measured_fields_changed": false
+  },
   "artifacts": {
     "decision": "docs/decisions/2026-08-23-qf-a0-matched-generic-qrs-result.md",
     "local_mirror_root": "results/bc-mirror/qf-a0-matched-generic-qrs-20260823-r1-artifacts",

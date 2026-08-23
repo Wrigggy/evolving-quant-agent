@@ -113,6 +113,14 @@
     "sealed_benchmark_gain": false,
     "main_0_completed": false
   },
+  "superseding_interpretation": {
+    "audit": "data/breadth/QF_DEVELOPMENT_CANDIDATE_PROVENANCE_AUDIT_RESULT.json",
+    "provenance_status": "CONTAMINATED",
+    "reason": "The Evolver-only diagnostic exposed the missing positive terminal-maturity value; the prompt-only candidate projected that hidden expected predicate into a Worker-visible rule requiring finite positive terminal cells and a one-sided terminal derivative.",
+    "claim_downgrade": "All measured scores and runtime observations remain unchanged. Withdraw valid repeated harness gain, Search-v2 mechanism gain, promotion, and reuse interpretations.",
+    "candidate_disposition": "Do not reuse or treat as a positive experience episode.",
+    "measured_fields_changed": false
+  },
   "valid_run_ids": [
     "qstate-v2-localvol-generic-20260821-r1",
     "qstate-v2-localvol-quant-20260821-r1",

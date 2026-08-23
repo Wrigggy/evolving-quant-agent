@@ -117,6 +117,17 @@
     "added_provider_cost_usd": 0.0
   },
   "retained_conclusion": "The generic arm admitted two activated candidates and produced a local-vol target binary gain, but both candidates failed the predeclared repeat-footprint gate and rolled back. The QRS arm localized the same SVI admissibility defect later repaired in R4, yet abstained because the current coordinated-breadth gate demanded cross-task support and a positive reusable episode. Both final incumbents remained Quant-H0.",
+  "superseding_interpretation": {
+    "audit": "data/breadth/QF_DEVELOPMENT_CANDIDATE_PROVENANCE_AUDIT_RESULT.json",
+    "provenance_status": {
+      "qf-final-h0-generic-localvol-c2": "CONTAMINATED",
+      "qf-final-h0-generic-holdings-c1": "CONTAMINATED"
+    },
+    "reason": "The local-vol candidate projected diagnostic-only raw SVI a>0 into Worker-visible surfaces. The holdings candidate bundled a plausible reconciliation idea with answer-derived weight-turnover and pair-array conventions not grounded in the public instruction.",
+    "claim_downgrade": "All official target and repeat outcomes, rollbacks, accounting, and final Quant-H0 incumbents remain measured. Withdraw candidate-associated binary gain and valid candidate-improvement interpretations.",
+    "candidate_disposition": "Do not reuse either candidate or retain it as a positive component episode.",
+    "measured_fields_changed": false
+  },
   "claim_boundary": {
     "supported": "Matched cumulative controller completion, calibrated QRS abstention, generic target-stage binary gain, repeat-footprint rollback, terminal incumbent preservation, zero-work resume, and clean execution.",
     "search_recall_observation": "In this canary the QRS coordinated-breadth gate reduced intervention recall despite precise localization of the SVI issue; this is a mechanism diagnosis, not evidence that removing all protection reasoning is beneficial.",

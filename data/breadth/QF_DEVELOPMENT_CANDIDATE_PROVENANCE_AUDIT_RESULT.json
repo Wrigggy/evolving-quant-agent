@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "audit_id": "qf-development-candidate-provenance-audit-20260824-r1",
+  "date": "2026-08-24",
+  "status": "complete_all_six_contaminated_main_readiness_no_go",
+  "scope": "Retrospective read-only provenance audit of every development candidate whose Worker-visible harness was evaluated in the retained Search-v2, A0, R4, and Final-H0 local-volatility or holdings lineages.",
+  "audit_question": "Did an Evolver-only answer-rich diagnostic remain diagnostic evidence, or was a hidden expected predicate or verifier-specific convention projected into a reusable Worker-visible candidate?",
+  "contamination_rule": {
+    "classification": "CONTAMINATED when a candidate requires a semantic predicate or convention not grounded in the public task, the requirement matches answer-rich expected-versus-observed feedback, and the requirement is projected into a Worker-visible prompt, tool, descriptor, validator, or other reusable harness surface.",
+    "raw_text_boundary": "The raw optimization diagnostic was not shown directly to the Worker in these runs.",
+    "semantic_projection_boundary": "Withholding the raw file is insufficient: translating its hidden expected predicate into Worker-visible candidate behavior is still answer-rich-to-candidate-to-Worker leakage."
+  },
+  "status_counts": {
+    "CLEAN": 0,
+    "CONTAMINATED": 6,
+    "INCONCLUSIVE": 0
+  },
+  "candidates": [
+    {
+      "candidate_id": "search-v2-localvol-prompt-candidate",
+      "development_lineage": "Search-v2 local-vol",
+      "status": "CONTAMINATED",
+      "candidate_surface": "systemprompt",
+      "projected_predicate": "The terminal maturity row must contain a finite positive derived value, using a one-sided terminal derivative rather than a blank terminal value.",
+      "public_grounding": "The audited public instruction did not establish this exact terminal-row rule.",
+      "answer_rich_source": "data/breadth/QSTATE_SEARCH_V2_LOCALVOL_DIAGNOSTIC.json",
+      "public_instruction_path": "results/bc-mirror/qstate-v2-localvol-quant-20260821-r1/authorized-evidence/benchmarks/qfbench/tasks/dupire-local-vol/instruction.md",
+      "projection": "The Evolver-only diagnostic named the missing terminal local_vol_atm and expected positivity at every maturity; the candidate prompt then required every terminal maturity numeric cell to be finite and positive and prescribed a one-sided terminal difference.",
+      "candidate_path": "results/bc-mirror/qstate-v2-localvol-quant-20260821-r1/evolutions/iteration-0001/candidate/systemprompt.md",
+      "proposal_path": "results/bc-mirror/qstate-v2-localvol-quant-20260821-r1/proposal-report.json",
+      "measured_scores_retained": "Target 65/68 to 68/68 and repeat 66/68 to 68/68; matched task 38/39 to 38/39 with a failed-property swap.",
+      "claim_downgrade": "Retain the official score observations and controller/protection behavior only. Do not claim a valid repeated harness gain, quant-state search benefit, or candidate reuse from this lineage."
+    },
+    {
+      "candidate_id": "a0-localvol-generic-c1",
+      "development_lineage": "A0 generic local-vol",
+      "status": "CONTAMINATED",
+      "candidate_surface": "systemprompt, tool description, executable surface audit",
+      "projected_predicate": "Raw SVI intercept a must be strictly positive and boundary-pinned a is a blocking failure.",
+      "public_grounding": "The audited public instruction did not state raw SVI a>0.",
+      "answer_rich_source": "results/bc-mirror/qf-a0-matched-generic-qrs-20260823-r1-artifacts/qf-a0-localvol-generic-proposal-20260823-r1/authorized-evidence/benchmarks/qfbench/tasks/dupire-local-vol/optimization-diagnostic.json",
+      "public_instruction_path": "results/bc-mirror/qf-a0-matched-generic-qrs-20260823-r1-artifacts/qf-a0-localvol-generic-proposal-20260823-r1/authorized-evidence/benchmarks/qfbench/tasks/dupire-local-vol/instruction.md",
+      "projection": "The candidate explicitly encoded strict a>0, an SVI_A_MIN threshold, bound-saturation rejection, and Worker repair instructions.",
+      "candidate_path": "results/bc-mirror/qf-a0-matched-generic-qrs-20260823-r1-artifacts/qf-a0-localvol-generic-proposal-20260823-r1/evolutions/iteration-0001/candidate",
+      "proposal_path": "results/bc-mirror/qf-a0-matched-generic-qrs-20260823-r1-artifacts/qf-a0-localvol-generic-proposal-20260823-r1/proposal-report.json",
+      "measured_scores_retained": "Target 66/68 to 67/68; repeat 66/68 to 68/68, reward one; protection 35/39 to 38/39.",
+      "claim_downgrade": "The measured scores remain, but the prior scientific promotion and repeated harness-improvement interpretation are withdrawn."
+    },
+    {
+      "candidate_id": "a0-localvol-qrs-c1",
+      "development_lineage": "A0 QRS local-vol",
+      "status": "CONTAMINATED",
+      "candidate_surface": "systemprompt, tool description, executable admissibility checker activation",
+      "projected_predicate": "The Worker should treat an intercept exactly equal to zero as inadmissible, pass the relevant raw column as strictly positive, and refit with a positive lower bound.",
+      "public_grounding": "The audited public instruction did not state raw SVI a>0.",
+      "answer_rich_source": "results/bc-mirror/qf-a0-matched-generic-qrs-20260823-r1-artifacts/qf-a0-localvol-qrs-proposal-20260823-r1/authorized-evidence/benchmarks/qfbench/tasks/dupire-local-vol/optimization-diagnostic.json",
+      "public_instruction_path": "results/bc-mirror/qf-a0-matched-generic-qrs-20260823-r1-artifacts/qf-a0-localvol-qrs-proposal-20260823-r1/authorized-evidence/benchmarks/qfbench/tasks/dupire-local-vol/instruction.md",
+      "projection": "The candidate taught the blind Worker the hidden boundary-zero failure and the repair direction, then activated the checker on that predicate.",
+      "candidate_path": "results/bc-mirror/qf-a0-matched-generic-qrs-20260823-r1-artifacts/qf-a0-localvol-qrs-proposal-20260823-r1/evolutions/iteration-0001/candidate",
+      "proposal_path": "results/bc-mirror/qf-a0-matched-generic-qrs-20260823-r1-artifacts/qf-a0-localvol-qrs-proposal-20260823-r1/proposal-report.json",
+      "measured_scores_retained": "Target 66/68 to 67/68; repeat 66/68 to 67/68; protection 35/39 to 38/39.",
+      "claim_downgrade": "Retain activation and score observations only; do not treat the relation-aligned target change as valid QRS mechanism evidence."
+    },
+    {
+      "candidate_id": "qf-a02-localvol-qrs-c3-r4",
+      "development_lineage": "A0.2 R4 QRS refinement",
+      "status": "CONTAMINATED",
+      "candidate_surface": "systemprompt, tool description, executable standard-SVI profile",
+      "projected_predicate": "A recognized SVI table automatically and non-weakenably requires a, b, and sigma to be strictly positive, including raw a>0.",
+      "public_grounding": "The audited public instruction did not state raw SVI a>0.",
+      "answer_rich_source": "results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts/proposal/authorized-evidence/history/archive/objects/a02-qrs-r3-target-optimization-diagnostic.json",
+      "public_instruction_path": "results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts/proposal/authorized-evidence/benchmarks/qfbench/tasks/dupire-local-vol/instruction.md",
+      "projection": "R4 moved that hidden predicate into a signature-gated standard-SVI profile and made a>0 automatic regardless of the Worker caller.",
+      "candidate_path": "results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts/proposal/evolutions/iteration-0001/candidate",
+      "proposal_path": "results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts/proposal/proposal-report.json",
+      "measured_scores_retained": "Target and repeat 67/68, reward zero, to 68/68, reward one; protection 38/39 to 39/39.",
+      "claim_downgrade": "The measured repeated property correction and controller PROMOTE remain historical observations, but the candidate is not a valid promotion, reusable component, or autonomous QRS gain."
+    },
+    {
+      "candidate_id": "qf-final-h0-generic-localvol-c2",
+      "development_lineage": "Final-H0 generic local-vol",
+      "status": "CONTAMINATED",
+      "candidate_surface": "systemprompt, tool description, executable volatility-surface checker",
+      "projected_predicate": "An SVI table requires raw a>0 and a boundary-zero fit must be repaired before finalization.",
+      "public_grounding": "The audited public instruction did not state raw SVI a>0.",
+      "answer_rich_source": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-localvol-r2-proposal/authorized-evidence/benchmarks/qfbench/tasks/dupire-local-vol/optimization-diagnostic.json",
+      "public_instruction_path": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-localvol-r2-proposal/authorized-evidence/benchmarks/qfbench/tasks/dupire-local-vol/instruction.md",
+      "projection": "The candidate encoded a>0 in tool code and description and instructed the blind Worker to satisfy standard admissibility even when the task text did not specify it.",
+      "candidate_path": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-localvol-r2-proposal/evolutions/iteration-0001/candidate",
+      "proposal_path": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-localvol-r2-proposal/proposal-report.json",
+      "measured_scores_retained": "Target 66/68, reward zero, to 68/68, reward one; repeat 66/68 to 67/68.",
+      "claim_downgrade": "Retain the official target and repeat values as contaminated-development observations; withdraw the candidate-associated binary-gain interpretation."
+    },
+    {
+      "candidate_id": "qf-final-h0-generic-holdings-c1",
+      "development_lineage": "Final-H0 generic holdings",
+      "status": "CONTAMINATED",
+      "candidate_surface": "systemprompt, tool description, executable reconciliation validator",
+      "projected_predicate": "Turnover must use a weight-derived convention and a manager pair must remain a two-element structured value rather than any unambiguous joined encoding.",
+      "public_grounding": "The public instruction did not define the exact turnover formula and explicitly allowed any unambiguous pair encoding.",
+      "answer_rich_source": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-holdings-r1-proposal/authorized-evidence/benchmarks/qfbench/tasks/13f-amendment-aware-crowding/optimization-diagnostic.json",
+      "public_instruction_path": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-holdings-r1-proposal/authorized-evidence/benchmarks/qfbench/tasks/13f-amendment-aware-crowding/instruction.md",
+      "projection": "The candidate bundled a generally plausible final-state reconciliation mechanism with answer-derived weight and pair-array conventions and directed the blind Worker to repair artifacts accordingly.",
+      "candidate_path": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-holdings-r1-proposal/evolutions/iteration-0001/candidate",
+      "proposal_path": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-holdings-r1-proposal/proposal-report.json",
+      "measured_scores_retained": "Target 46/51 to 50/51; repeat 44/51 to 46/51, with an inconsistent resolved-property footprint.",
+      "claim_downgrade": "Retain the official score and rollback observations only; do not claim a valid candidate improvement or use this exact bundle in another Worker run."
+    }
+  ],
+  "global_claim_downgrade": {
+    "measured_values": "All official scores, rewards, property vectors, activation observations, costs, controller decisions, and runtime outcomes remain measured historical facts.",
+    "withdrawn_interpretations": [
+      "valid development harness improvement from any of the six candidates",
+      "scientific promotion or stable reuse of A0 generic or R4 c3",
+      "repeated Search-v2 or R4 mechanism gain",
+      "candidate-associated Final-H0 binary gain",
+      "QRS or generic search superiority inferred from these candidates"
+    ],
+    "still_supported": [
+      "controller, resume, accounting, cleanup, and official-evaluation infrastructure behavior",
+      "Evolver proposal and component-construction behavior",
+      "the need to distinguish raw-answer isolation from semantic-predicate provenance"
+    ]
+  },
+  "main_experiment_readiness": {
+    "decision": "NO-GO",
+    "blocking_conditions": [
+      "A universal pre-Worker provenance gate must reject any candidate predicate or convention that cannot be grounded in public task evidence, regardless of component role.",
+      "At least one fresh target must be proposed from public-only evidence, pass the provenance gate, run with a blind Worker, and produce a retained official improvement before the main experiment starts."
+    ]
+  },
+  "artifacts": {
+    "decision": "docs/decisions/2026-08-24-development-candidate-provenance-retrospective-audit.md",
+    "search_v2_result": "data/breadth/QSTATE_SEARCH_V2_RESULT.json",
+    "a0_result": "data/breadth/QF_A0_MATCHED_GENERIC_QRS_RESULT.json",
+    "r4_result": "data/breadth/QF_A02_QRS_REFINEMENT_R4_RESULT.json",
+    "final_h0_result": "data/breadth/QF_FINAL_H0_MATCHED_GENERIC_QRS_CANARY_RESULT.json"
+  }
+}
