@@ -60,6 +60,59 @@ def _generation_metadata(request_id: str, token: str) -> dict[str, object]:
     return {"status": "unavailable"}
 
 
+def _openrouter_complete(
+    prompt: str,
+    *,
+    model: str,
+    provider: str | None,
+    token: str,
+    request_record: dict[str, object],
+) -> str:
+    """Issue the one canary request using the standard library HTTP client."""
+
+    base_url = os.environ.get(
+        "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+    ).rstrip("/")
+    payload: dict[str, object] = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.2,
+    }
+    if provider:
+        payload["provider"] = {"order": [provider], "allow_fallbacks": False}
+    request = urllib.request.Request(
+        f"{base_url}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    timeout = float(os.environ.get("QEA_REQUEST_TIMEOUT", "90"))
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        result = json.loads(response.read())
+    request_id = result.get("id")
+    choices = result.get("choices")
+    content = (
+        choices[0].get("message", {}).get("content")
+        if isinstance(choices, list) and choices
+        else None
+    )
+    if not isinstance(request_id, str) or not request_id:
+        raise RuntimeError("Reviewer response contained no request ID")
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError("Reviewer response contained no text")
+    request_record["request_count"] = 1
+    request_record["request_id"] = request_id
+    request_record["requested_model"] = model
+    request_record["required_provider"] = provider
+    request_record["response_usage"] = result.get("usage")
+    request_record["accounting"] = _generation_metadata(request_id, token)
+    return content
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
@@ -75,9 +128,9 @@ def main() -> int:
     if args.model:
         os.environ["QEA_EVOLVE_AGENT_MODEL"] = args.model
 
-    from qea.llm import OpenRouterLLM, make_llm, provider_for
+    from qea.llm import make_llm, provider_for, resolve_provider_map
 
-    llm = OpenRouterLLM() if args.backend == "openrouter" else make_llm(False)
+    llm = None if args.backend == "openrouter" else make_llm(False)
     review_package = json.loads(args.input.read_text(encoding="utf-8"))
     request: dict[str, object] = {"request_count": 0}
 
@@ -85,39 +138,27 @@ def main() -> int:
         started = time.monotonic()
         if args.backend != "openrouter":
             request["request_count"] = 1
+            assert llm is not None
             content = llm.complete(prompt, role="evolve_agent")
             request["wall_seconds"] = round(time.monotonic() - started, 3)
             request["accounting"] = {"status": "unavailable"}
             return content
 
-        model = llm._model("evolve_agent")
-        provider = provider_for(model, llm.provider_map)
-        extra = (
-            {"provider": {"order": [provider], "allow_fallbacks": False}}
-            if provider
-            else None
+        model = os.environ.get(
+            "QEA_EVOLVE_AGENT_MODEL", "deepseek/deepseek-v4-pro"
         )
-        response = llm.client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            extra_body=extra,
-        )
-        request["request_count"] = 1
-        request["request_id"] = response.id
-        request["requested_model"] = model
-        request["required_provider"] = provider
-        request["wall_seconds"] = round(time.monotonic() - started, 3)
-        usage = getattr(response, "usage", None)
-        request["response_usage"] = (
-            usage.model_dump() if usage is not None else None
-        )
+        provider = provider_for(model, resolve_provider_map())
         token = os.environ.get("OPENROUTER_API_KEY", "")
-        request["accounting"] = _generation_metadata(response.id, token)
-        choices = getattr(response, "choices", None)
-        content = choices[0].message.content if choices else None
-        if not content:
-            raise RuntimeError("Reviewer response contained no text")
+        if not token:
+            raise RuntimeError("OPENROUTER_API_KEY not set (real mode)")
+        content = _openrouter_complete(
+            prompt,
+            model=model,
+            provider=provider,
+            token=token,
+            request_record=request,
+        )
+        request["wall_seconds"] = round(time.monotonic() - started, 3)
         return content
 
     review = run_candidate_information_set_review(
