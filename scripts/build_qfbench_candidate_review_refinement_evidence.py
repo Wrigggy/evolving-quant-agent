@@ -15,6 +15,9 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from qea.evolution_evidence import authorize_evidence_tree  # noqa: E402
+from scripts.run_qfbench_lineage_controller import (  # noqa: E402
+    _worker_visible_candidate_material,
+)
 
 
 class CandidateReviewRefinementEvidenceError(ValueError):
@@ -163,6 +166,32 @@ def _diff_body(value: str) -> str:
     return value[marker:] if marker >= 0 else value
 
 
+def _candidate_material(
+    *, baseline: Path, candidate: Path, label: str
+) -> dict[str, object]:
+    if baseline.is_symlink() or not baseline.is_dir():
+        raise CandidateReviewRefinementEvidenceError(
+            f"{label} is unavailable: {baseline}"
+        )
+    material = _worker_visible_candidate_material(str(baseline), str(candidate))
+    if not isinstance(material, dict):
+        raise CandidateReviewRefinementEvidenceError(
+            f"{label} has no Worker-visible difference from the candidate"
+        )
+    return material
+
+
+def _reviewed_material(candidate: Mapping[str, object]) -> dict[str, object]:
+    return {
+        "diff_ref": _text(
+            candidate.get("diff_ref", "candidate:diff"),
+            label="reviewed diff ref",
+        ),
+        "diff": _text(candidate.get("diff"), label="reviewed diff"),
+        "files": _list(candidate.get("files"), label="reviewed candidate files"),
+    }
+
+
 def _semantic_basis(value: object, *, label: str) -> list[dict[str, str]]:
     bases: list[dict[str, str]] = []
     for index, raw_basis in enumerate(_list(value, label=label)):
@@ -299,9 +328,11 @@ def build(
     *,
     base_view: Path,
     proposal_report: Path,
+    proposal_parent_dir: Path | None = None,
     candidate_dir: Path,
     review_input: Path,
     review_result: Path,
+    review_baseline_dir: Path | None = None,
     destination: Path,
     round_label: str = "candidate-review-refinement-r1",
 ) -> dict[str, object]:
@@ -310,6 +341,20 @@ def build(
     base = base_view.expanduser().resolve()
     proposal_path = proposal_report.expanduser().resolve()
     candidate = candidate_dir.expanduser().resolve()
+    proposal_parent = (
+        proposal_parent_dir.expanduser().resolve()
+        if proposal_parent_dir is not None
+        else None
+    )
+    review_baseline = (
+        review_baseline_dir.expanduser().resolve()
+        if review_baseline_dir is not None
+        else None
+    )
+    if proposal_parent is None and review_baseline is not None:
+        proposal_parent = review_baseline
+    if review_baseline is None and proposal_parent is not None:
+        review_baseline = proposal_parent
     review_input_path = review_input.expanduser().resolve()
     review_result_path = review_result.expanduser().resolve()
     target = destination.expanduser().resolve()
@@ -330,15 +375,15 @@ def build(
 
     # This validates the base corpus before any lineage material is attached.
     authorize_evidence_tree(base)
-    proposal = _json(proposal_path, label="R1 proposal report")
+    proposal = _json(proposal_path, label="proposal report")
     if proposal.get("decision") != "ACT":
-        raise CandidateReviewRefinementEvidenceError("R1 proposal must be ACT")
+        raise CandidateReviewRefinementEvidenceError("proposal must be ACT")
     admission = _mapping(proposal.get("admission"), label="proposal admission")
     if admission.get("admitted") is not True:
         raise CandidateReviewRefinementEvidenceError(
-            "R1 proposal candidate must be admitted"
+            "proposal candidate must be admitted"
         )
-    review_package = _json(review_input_path, label="R2 review input")
+    review_package = _json(review_input_path, label="review input")
     review_id = _text(review_package.get("review_id"), label="review ID")
     candidate_id = _text(
         review_package.get("candidate_id"), label="review candidate ID"
@@ -350,11 +395,38 @@ def build(
     reviewed_candidate = _mapping(
         review_package.get("candidate"), label="review candidate"
     )
-    reviewed_diff = _text(reviewed_candidate.get("diff"), label="reviewed diff")
+    reviewed_material = _reviewed_material(reviewed_candidate)
+    reviewed_diff = str(reviewed_material["diff"])
     proposal_diff = _text(proposal.get("diff"), label="proposal diff")
-    if _diff_body(reviewed_diff) != _diff_body(proposal_diff):
+    if proposal_parent is not None and review_baseline is not None:
+        incremental_material = _candidate_material(
+            baseline=proposal_parent,
+            candidate=candidate,
+            label="proposal parent directory",
+        )
+        if _diff_body(str(incremental_material["diff"])) != _diff_body(
+            proposal_diff
+        ):
+            raise CandidateReviewRefinementEvidenceError(
+                "proposal incremental diff does not match proposal parent to "
+                "candidate Worker-visible material"
+            )
+        cumulative_material = _candidate_material(
+            baseline=review_baseline,
+            candidate=candidate,
+            label="review baseline directory",
+        )
+        if cumulative_material != reviewed_material:
+            raise CandidateReviewRefinementEvidenceError(
+                "review package cumulative material does not match review "
+                "baseline to candidate Worker-visible material"
+            )
+    elif _diff_body(reviewed_diff) != _diff_body(proposal_diff):
+        # Legacy equal-baseline packages predate explicit parent inputs. They
+        # remain usable when the proposal and review both describe one delta.
         raise CandidateReviewRefinementEvidenceError(
-            "R1 proposal and R2 reviewed candidate diffs do not match"
+            "proposal and reviewed candidate diffs do not match in legacy "
+            "equal-baseline mode"
         )
     claims = _list(
         review_package.get("worker_visible_claims"),
@@ -362,16 +434,14 @@ def build(
     )
     if claims != _proposal_claims(proposal):
         raise CandidateReviewRefinementEvidenceError(
-            "R2 reviewed claims do not match the R1 structured proposal claims"
+            "reviewed claims do not match the structured proposal claims"
         )
     claim_ids = _claim_ids(claims, label="reviewed Worker-visible claims")
 
-    reviewed_files = _list(
-        reviewed_candidate.get("files"), label="reviewed candidate files"
-    )
+    reviewed_files = list(reviewed_material["files"])
     if not reviewed_files:
         raise CandidateReviewRefinementEvidenceError(
-            "R2 review input must expose at least one candidate file"
+            "review input must expose at least one candidate file"
         )
     for index, raw_file in enumerate(reviewed_files):
         item = _mapping(raw_file, label=f"reviewed candidate file[{index}]")
@@ -392,7 +462,7 @@ def build(
             )
 
     semantic_review = _semantic_review(
-        result=_json(review_result_path, label="R2 review result"),
+        result=_json(review_result_path, label="review result"),
         review_id=review_id,
         candidate_id=candidate_id,
         expected_claim_ids=claim_ids,
@@ -400,7 +470,6 @@ def build(
 
     shutil.copytree(base, staging)
     try:
-        archive = staging / "history/archive"
         entry_relative = Path("history/archive/entries") / f"{label.name}.json"
         candidate_relative = Path("history/archive/candidates") / label.name
         diff_relative = Path("history/archive/diffs") / f"{label.name}.diff"
@@ -410,6 +479,23 @@ def build(
         review_relative = (
             Path("history/archive/objects") / f"{label.name}-semantic-review.json"
         )
+        round_paths = (
+            entry_relative,
+            candidate_relative,
+            diff_relative,
+            claims_relative,
+            review_relative,
+        )
+        duplicates = [
+            path.as_posix()
+            for path in round_paths
+            if (staging / path).exists()
+        ]
+        if duplicates:
+            raise CandidateReviewRefinementEvidenceError(
+                "round label already exists in retained history: "
+                + ", ".join(duplicates)
+            )
         copied = _copy_candidate(candidate, staging / candidate_relative)
         (staging / diff_relative).parent.mkdir(parents=True, exist_ok=True)
         (staging / diff_relative).write_text(reviewed_diff, encoding="utf-8")
@@ -443,9 +529,28 @@ def build(
 
         contract_path = staging / "contract.json"
         contract = _json(contract_path, label="base evidence contract")
+        retained_entries = contract.get("prior_runtime_experience_entries", [])
+        if not isinstance(retained_entries, list):
+            raise CandidateReviewRefinementEvidenceError(
+                "base prior_runtime_experience_entries must be a list"
+            )
+        retained_entries = [str(path) for path in retained_entries]
+        legacy_entry = contract.get("prior_runtime_experience")
+        if (
+            not retained_entries
+            and isinstance(legacy_entry, str)
+            and legacy_entry
+        ):
+            retained_entries.append(legacy_entry)
+        if entry_relative.as_posix() in retained_entries:
+            raise CandidateReviewRefinementEvidenceError(
+                "round label already exists in retained history entries"
+            )
+        retained_entries.append(entry_relative.as_posix())
         contract.update(
             {
                 "stage": "LINEAGE_REFINEMENT",
+                "candidate_parent": candidate_id,
                 "candidate_history_exposed": True,
                 "candidate_component_history_exposed": False,
                 "component_history_enabled": False,
@@ -454,7 +559,7 @@ def build(
                 "shared_mechanism_assessment_required": False,
                 "shared_mechanism_required_for_act": False,
                 "prior_runtime_experience": entry_relative.as_posix(),
-                "prior_runtime_experience_entries": [entry_relative.as_posix()],
+                "prior_runtime_experience_entries": retained_entries,
                 "required_runtime_experience_entries": [entry_relative.as_posix()],
                 "answer_free": True,
                 "optimization_answers_exposed_to_evolver": False,
@@ -513,18 +618,36 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-view", type=Path, required=True)
     parser.add_argument("--proposal-report", type=Path, required=True)
+    parser.add_argument(
+        "--proposal-parent-dir",
+        type=Path,
+        help=(
+            "Candidate mutation parent used to validate the proposal's "
+            "incremental Worker-visible diff."
+        ),
+    )
     parser.add_argument("--candidate-dir", type=Path, required=True)
     parser.add_argument("--review-input", type=Path, required=True)
     parser.add_argument("--review-result", type=Path, required=True)
+    parser.add_argument(
+        "--review-baseline-dir",
+        type=Path,
+        help=(
+            "Baseline used to validate the Reviewer's cumulative "
+            "Worker-visible candidate material."
+        ),
+    )
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--round-label", default="candidate-review-refinement-r1")
     args = parser.parse_args(argv)
     report = build(
         base_view=args.base_view,
         proposal_report=args.proposal_report,
+        proposal_parent_dir=args.proposal_parent_dir,
         candidate_dir=args.candidate_dir,
         review_input=args.review_input,
         review_result=args.review_result,
+        review_baseline_dir=args.review_baseline_dir,
         destination=args.destination,
         round_label=args.round_label,
     )

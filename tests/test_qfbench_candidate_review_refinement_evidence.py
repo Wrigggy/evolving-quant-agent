@@ -8,6 +8,9 @@ from scripts.build_qfbench_candidate_review_refinement_evidence import (
     CandidateReviewRefinementEvidenceError,
     build,
 )
+from scripts.run_qfbench_lineage_controller import (
+    _worker_visible_candidate_material,
+)
 
 
 def _write(path: Path, value: object) -> None:
@@ -84,14 +87,21 @@ def _fixture(tmp_path: Path) -> dict[str, Path]:
         "Public holdings instruction.\n",
     )
 
+    proposal_parent = tmp_path / "proposal-parent"
+    review_baseline = tmp_path / "review-baseline"
     candidate = tmp_path / "candidate-c1"
+    for root, prompt in (
+        (proposal_parent, "Base prompt.\n"),
+        (review_baseline, "Base prompt.\n"),
+        (candidate, "Base prompt.\n\nCanonicalize keys and reconcile totals.\n"),
+    ):
+        _write(root / "agent.yaml", "name: public_holdings_c1\n")
+        _write(root / "systemprompt.md", prompt)
+        _write(
+            root / "tool_descriptions/run_shell_command.tool.yaml",
+            "name: run_shell_command\n",
+        )
     candidate_prompt = "Base prompt.\n\nCanonicalize keys and reconcile totals.\n"
-    _write(candidate / "agent.yaml", "name: public_holdings_c1\n")
-    _write(candidate / "systemprompt.md", candidate_prompt)
-    _write(
-        candidate / "tool_descriptions/run_shell_command.tool.yaml",
-        "name: run_shell_command\n",
-    )
     proposal_diff = (
         "--- a/systemprompt.md\n"
         "+++ b/systemprompt.md\n"
@@ -183,6 +193,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path]:
                             {
                                 "ref": "public:holdings",
                                 "role": "INSUFFICIENT_PUBLIC_SUPPORT",
+                                "provider": "must not be copied",
                             }
                         ],
                     },
@@ -211,6 +222,8 @@ def _fixture(tmp_path: Path) -> dict[str, Path]:
     )
     return {
         "base": base,
+        "proposal_parent": proposal_parent,
+        "review_baseline": review_baseline,
         "candidate": candidate,
         "proposal": proposal,
         "review_input": review_input,
@@ -218,16 +231,78 @@ def _fixture(tmp_path: Path) -> dict[str, Path]:
     }
 
 
-def _build(source: dict[str, Path], destination: Path) -> dict[str, object]:
+def _build(
+    source: dict[str, Path],
+    destination: Path,
+    *,
+    explicit_baselines: bool = True,
+    round_label: str = "holdings-c1-review-r2",
+) -> dict[str, object]:
     return build(
         base_view=source["base"],
         proposal_report=source["proposal"],
+        proposal_parent_dir=(
+            source["proposal_parent"] if explicit_baselines else None
+        ),
         candidate_dir=source["candidate"],
         review_input=source["review_input"],
         review_result=source["review_result"],
+        review_baseline_dir=(
+            source["review_baseline"] if explicit_baselines else None
+        ),
         destination=destination,
-        round_label="holdings-c1-review-r2",
+        round_label=round_label,
     )
+
+
+def _make_chained_round(source: dict[str, Path]) -> str:
+    """Turn the equal-baseline fixture into H0 -> C1 -> C2 material."""
+
+    baseline_prompt = "Base prompt.\n"
+    parent_prompt = baseline_prompt + "Apply the retained C1 rule.\n"
+    candidate_prompt = parent_prompt + "Apply the proposed C2 refinement.\n"
+    _write(source["review_baseline"] / "systemprompt.md", baseline_prompt)
+    _write(source["proposal_parent"] / "systemprompt.md", parent_prompt)
+    _write(source["candidate"] / "systemprompt.md", candidate_prompt)
+
+    incremental = _worker_visible_candidate_material(
+        str(source["proposal_parent"]), str(source["candidate"])
+    )
+    cumulative = _worker_visible_candidate_material(
+        str(source["review_baseline"]), str(source["candidate"])
+    )
+    assert incremental is not None
+    assert cumulative is not None
+    proposal = json.loads(source["proposal"].read_text())
+    proposal["diff"] = incremental["diff"].replace(
+        "--- parent/", "--- a/"
+    ).replace("+++ candidate/", "+++ b/")
+    _write(source["proposal"], proposal)
+
+    review_input = json.loads(source["review_input"].read_text())
+    review_input["candidate_id"] = "holdings-c2"
+    review_input["candidate"] = cumulative
+    _write(source["review_input"], review_input)
+    review_result = json.loads(source["review_result"].read_text())
+    review_result["review"]["candidate_id"] = "holdings-c2"
+    _write(source["review_result"], review_result)
+
+    previous = "history/archive/entries/holdings-c1-review-r2.json"
+    _write(
+        source["base"] / previous,
+        {
+            "schema_version": 1,
+            "protocol": "candidate_information_set_review_refinement",
+            "candidate_id": "holdings-c1",
+        },
+    )
+    contract = json.loads((source["base"] / "contract.json").read_text())
+    contract["candidate_parent"] = "holdings-c1"
+    contract["prior_runtime_experience"] = previous
+    contract["prior_runtime_experience_entries"] = [previous]
+    contract["required_runtime_experience_entries"] = [previous]
+    _write(source["base"] / "contract.json", contract)
+    return previous
 
 
 def test_builds_guarded_answer_free_lineage_refinement_view(tmp_path, monkeypatch):
@@ -252,6 +327,7 @@ def test_builds_guarded_answer_free_lineage_refinement_view(tmp_path, monkeypatc
     contract = json.loads((destination / "contract.json").read_text())
     entry_path = "history/archive/entries/holdings-c1-review-r2.json"
     assert contract["stage"] == "LINEAGE_REFINEMENT"
+    assert contract["candidate_parent"] == "holdings-c1"
     assert contract["history_required"] is True
     assert contract["required_runtime_experience_entries"] == [entry_path]
     assert contract["candidate_history_exposed"] is True
@@ -377,4 +453,108 @@ def test_rejects_review_exposure_that_is_not_the_exact_candidate_snapshot(tmp_pa
         CandidateReviewRefinementEvidenceError,
         match="reviewed exposure does not match candidate snapshot",
     ):
+        _build(
+            source,
+            tmp_path / "refinement-view",
+            explicit_baselines=False,
+        )
+
+
+def test_chains_incremental_proposal_and_cumulative_review_baselines(tmp_path):
+    source = _fixture(tmp_path)
+    previous = _make_chained_round(source)
+    destination = tmp_path / "refinement-view-r4"
+    latest = "history/archive/entries/holdings-c2-review-r3.json"
+
+    report = _build(
+        source,
+        destination,
+        round_label="holdings-c2-review-r3",
+    )
+
+    assert report["candidate_id"] == "holdings-c2"
+    contract = json.loads((destination / "contract.json").read_text())
+    assert contract["candidate_parent"] == "holdings-c2"
+    assert contract["prior_runtime_experience"] == latest
+    assert contract["prior_runtime_experience_entries"] == [previous, latest]
+    assert contract["required_runtime_experience_entries"] == [latest]
+    assert (destination / previous).is_file()
+    assert (destination / latest).is_file()
+    authorize_evidence_tree(destination)
+
+
+def test_rejects_tampered_incremental_proposal_diff(tmp_path):
+    source = _fixture(tmp_path)
+    _make_chained_round(source)
+    proposal = json.loads(source["proposal"].read_text())
+    proposal["diff"] = proposal["diff"].replace(
+        "proposed C2 refinement", "tampered C2 refinement"
+    )
+    _write(source["proposal"], proposal)
+
+    with pytest.raises(
+        CandidateReviewRefinementEvidenceError,
+        match="proposal incremental diff does not match",
+    ):
+        _build(
+            source,
+            tmp_path / "refinement-view",
+            round_label="holdings-c2-review-r3",
+        )
+
+
+def test_rejects_tampered_cumulative_review_material(tmp_path):
+    source = _fixture(tmp_path)
+    _make_chained_round(source)
+    review_input = json.loads(source["review_input"].read_text())
+    review_input["candidate"]["diff"] = review_input["candidate"]["diff"].replace(
+        "retained C1 rule", "tampered C1 rule"
+    )
+    _write(source["review_input"], review_input)
+
+    with pytest.raises(
+        CandidateReviewRefinementEvidenceError,
+        match="review package cumulative material does not match",
+    ):
+        _build(
+            source,
+            tmp_path / "refinement-view",
+            round_label="holdings-c2-review-r3",
+        )
+
+
+def test_rejects_claims_that_do_not_match_proposal(tmp_path):
+    source = _fixture(tmp_path)
+    review_input = json.loads(source["review_input"].read_text())
+    review_input["worker_visible_claims"][0]["claim"] = "Tampered claim."
+    _write(source["review_input"], review_input)
+
+    with pytest.raises(
+        CandidateReviewRefinementEvidenceError,
+        match="reviewed claims do not match",
+    ):
         _build(source, tmp_path / "refinement-view")
+
+
+def test_rejects_duplicate_round_label_paths_in_retained_history(tmp_path):
+    source = _fixture(tmp_path)
+    duplicate = "history/archive/entries/holdings-c1-review-r2.json"
+    _write(source["base"] / duplicate, {"schema_version": 1})
+
+    with pytest.raises(
+        CandidateReviewRefinementEvidenceError,
+        match="round label already exists in retained history",
+    ):
+        _build(source, tmp_path / "refinement-view")
+
+
+def test_legacy_equal_baseline_package_remains_supported(tmp_path):
+    source = _fixture(tmp_path)
+
+    report = _build(
+        source,
+        tmp_path / "legacy-refinement-view",
+        explicit_baselines=False,
+    )
+
+    assert report["candidate_id"] == "holdings-c1"
