@@ -1,5 +1,53 @@
 # QEA Repository Memory
 
+## 2026-08-23 A0 matched generic-versus-QRS wave retained
+
+The frozen two-family A0 wave completed four autonomous proposal lineages under
+the same Quant-H0 parent, evidence, model routes, mutation surface, answer
+boundary, fixed lifecycle controller, and parent-comparator reuse. On the
+holdings family, both Evolvers made calibrated `ABSTAIN` decisions and therefore
+dispatched no candidate Worker: generic used 13 requests, 1,025,314 tokens, and
+$0.043881888; QRS used 19 requests, 2,035,103 tokens, and $0.063065348. This is
+useful search restraint, but it supplies no candidate-quality comparison.
+
+On `dupire-local-vol`, the generic candidate changed the reused 66/68 parent to
+67/68 on target and 68/68 with reward 1 on the independent repeat. Its
+answer-free `localvol-barrier` protection changed the reused parent from 35/39
+to 38/39, reward 0.96, without introducing a failed-property regression. The
+fixed controller mechanically returned `PROMOTE` and froze the lineage. This
+lineage used 124 requests, 7,615,937 tokens, and $0.264551780.
+
+The QRS candidate also changed 66/68 to 67/68 on the target, with runtime
+evidence tying the intervention to `evaluation_reconciliation`, the selected
+`calibrated_surface_parameter_admissibility` relation, and actual parameter-
+admissibility checking. The repeat remained 67/68: the SVI-target footprint
+persisted while the flat-vol residual resolved, so the count gain repeated but
+the stricter relation-to-outcome footprint was inconsistent. Protection was
+35/39 to 38/39, reward 0.96, and property-wise safe. The controller therefore
+also mechanically returned `PROMOTE`, but the scientific interpretation is
+weaker than the generic 68/68 reward-one repeat. The QRS lineage used 119
+requests, 6,641,602 tokens, and $0.236471352.
+
+Across all four lineages, A0 used 275 completed requests, 17,317,956 tokens,
+and $0.607970368, with zero retries, unreconciled requests, service restarts,
+or runtime residue. Terminal resume checks dispatched no new work and added no
+cost. The QRS State Card affected runtime evidence retrieval and component
+routing, and its first useful local-vol target was cheaper than generic in this
+single sample. However, the older uploader did not persist the full State Card
+artifact, and the generic activation ledger recorded zero calls even though raw
+trace review found two in repeat and three in protection; these are
+mechanism-audit gaps, not score invalidations.
+
+A0 is a bounded positive result for autonomous full-harness evolution and safe
+selection in the generic local-vol lineage. It is also a negative result for
+the current claim that QRS is superior: QRS localized a meaningful quantitative
+relation and reached the same property-count improvement more cheaply, but it
+did not deliver the stronger or more stable terminal result. No sealed panel,
+broad benchmark result, repeated campaign, or QRS-superiority claim is
+supported. Compact result:
+`data/breadth/QF_A0_MATCHED_GENERIC_QRS_RESULT.json`; full decision:
+`docs/decisions/2026-08-23-qf-a0-matched-generic-qrs-result.md`.
+
 ## 2026-08-23 QuantCodeEval live lineage target and repeat retained
 
 The shared lineage controller completed a live candidate-only QuantCodeEval

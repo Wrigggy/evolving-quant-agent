@@ -1,0 +1,326 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-a0-matched-generic-qrs-20260823-r1",
+  "date": "2026-08-23",
+  "status": "complete_with_one_scientific_promotion_and_one_mechanical_only_promotion",
+  "research_question": "Does an operational Quant Research State Card with relation-conditioned retrieval and component routing improve full-harness search beyond a matched generic Evolver with the same quantitative runtime evidence?",
+  "setup": {
+    "benchmark": "QFBench",
+    "parent": "Quant-H0",
+    "families": 2,
+    "lineages": 4,
+    "candidate_limit_per_lineage": 1,
+    "matched_arms": [
+      "generic",
+      "qrs"
+    ],
+    "worker_route": "deepseek-v4-flash-main0",
+    "worker_budget": "normal",
+    "parent_comparator_reused": true,
+    "sealed_evaluation_used": false,
+    "answer_boundary": "Optimization answers and expected-versus-observed diagnostics were available only to the Evolver after blind Worker attempts; Workers and protection remained answer-blind.",
+    "frozen_plan": "data/breadth/QF_A0_MATCHED_GENERIC_QRS_PLAN.json"
+  },
+  "lineages": {
+    "a0-holdings-generic": {
+      "family": "holdings-final-state-reconciliation",
+      "treatment": "generic",
+      "target_task": "13f-amendment-aware-crowding",
+      "protection_task": "brinson-sector-attribution",
+      "proposal": {
+        "decision": "ABSTAIN",
+        "admitted": false,
+        "reason": "The five target failures reduced to heterogeneous reference-convention mismatches while the delivered artifacts were internally self-consistent; no reusable answer-free mechanism shared with the successful protection trajectory was supported.",
+        "completed_requests": 13,
+        "total_tokens": 1025314,
+        "provider_cost_usd": 0.043881888
+      },
+      "worker_stages_dispatched": 0,
+      "terminal": {
+        "controller_decision": "ABSTAIN",
+        "scientific_interpretation": "CALIBRATED_ABSTAIN",
+        "phase": "FROZEN",
+        "current_parent": "quant-h0"
+      },
+      "total": {
+        "completed_requests": 13,
+        "total_tokens": 1025314,
+        "provider_cost_usd": 0.043881888
+      }
+    },
+    "a0-holdings-qrs": {
+      "family": "holdings-final-state-reconciliation",
+      "treatment": "qrs",
+      "target_task": "13f-amendment-aware-crowding",
+      "protection_task": "brinson-sector-attribution",
+      "proposal": {
+        "decision": "ABSTAIN",
+        "admitted": false,
+        "reason": "The State Card probe found internally consistent target artifacts and no supported relation/component locus shared with protection; encoding the missing checker conventions would be a task-specific answer patch.",
+        "completed_requests": 19,
+        "total_tokens": 2035103,
+        "provider_cost_usd": 0.063065348
+      },
+      "worker_stages_dispatched": 0,
+      "terminal": {
+        "controller_decision": "ABSTAIN",
+        "scientific_interpretation": "CALIBRATED_ABSTAIN",
+        "phase": "FROZEN",
+        "current_parent": "quant-h0"
+      },
+      "total": {
+        "completed_requests": 19,
+        "total_tokens": 2035103,
+        "provider_cost_usd": 0.063065348
+      }
+    },
+    "a0-localvol-generic": {
+      "family": "localvol-maturity-surface-coverage",
+      "treatment": "generic",
+      "target_task": "dupire-local-vol",
+      "protection_task": "localvol-barrier",
+      "proposal": {
+        "decision": "ACT",
+        "admitted": true,
+        "candidate_version": "qf-a0-localvol-generic-c1",
+        "component": "audit_surface_artifacts",
+        "component_scope": "Broad delivered-surface audit covering fitted-parameter admissibility, local-vol and call-surface relations, barrier relations, and summary coherence.",
+        "completed_requests": 37,
+        "total_tokens": 3284516,
+        "provider_cost_usd": 0.0899064
+      },
+      "target": {
+        "parent": {
+          "tests_passed": 66,
+          "tests_failed": 2,
+          "reward": 0.0
+        },
+        "candidate": {
+          "tests_passed": 67,
+          "tests_failed": 1,
+          "reward": 0.0,
+          "failed_properties": [
+            "TestForwardVariance::test_forward_variance_local_vol_atm_positive"
+          ],
+          "raw_trace_component_calls": 3
+        },
+        "controller_gate_passed": true,
+        "completed_requests": 30,
+        "total_tokens": 1404262,
+        "provider_cost_usd": 0.058186288
+      },
+      "repeat": {
+        "parent": {
+          "tests_passed": 66,
+          "tests_failed": 2,
+          "reward": 0.0
+        },
+        "candidate": {
+          "tests_passed": 68,
+          "tests_failed": 0,
+          "reward": 1.0,
+          "failed_properties": [],
+          "raw_trace_component_calls": 2
+        },
+        "controller_gate_passed": true,
+        "scientific_footprint_consistent": true,
+        "completed_requests": 32,
+        "total_tokens": 1545302,
+        "provider_cost_usd": 0.056568336
+      },
+      "protection": {
+        "parent": {
+          "tests_passed": 35,
+          "tests_failed": 4,
+          "reward": 0.9
+        },
+        "candidate": {
+          "tests_passed": 38,
+          "tests_failed": 1,
+          "reward": 0.96,
+          "failed_properties": [
+            "TestBarrierResults::test_barrier_outputs_reasonable"
+          ],
+          "raw_trace_component_calls": 3
+        },
+        "aggregate_safe": true,
+        "property_set_safe": true,
+        "controller_gate_passed": true,
+        "completed_requests": 25,
+        "total_tokens": 1381857,
+        "provider_cost_usd": 0.059890756
+      },
+      "activation_accounting_note": "The retained activation ledger recorded zero because no proposal-specific activation token was bound. The raw Worker traces show two calls in repeat and three in protection; this is an observer/accounting false zero, not component non-use.",
+      "terminal": {
+        "controller_decision": "PROMOTE",
+        "scientific_interpretation": "PROMOTE",
+        "phase": "FROZEN",
+        "current_parent": "qf-a0-localvol-generic-c1"
+      },
+      "total": {
+        "completed_requests": 124,
+        "total_tokens": 7615937,
+        "provider_cost_usd": 0.26455178
+      }
+    },
+    "a0-localvol-qrs": {
+      "family": "localvol-maturity-surface-coverage",
+      "treatment": "qrs",
+      "target_task": "dupire-local-vol",
+      "protection_task": "localvol-barrier",
+      "proposal": {
+        "decision": "ACT",
+        "admitted": true,
+        "candidate_version": "qf-a0-localvol-qrs-c1",
+        "research_state": "evaluation_reconciliation",
+        "selected_relation": "calibrated_surface_parameter_admissibility",
+        "component": "check_parameter_admissibility",
+        "component_scope": "Check fitted parameter tables for contract-level strict positivity and require repair before finalization.",
+        "state_card_used_at_runtime": true,
+        "full_state_card_persisted": false,
+        "state_card_persistence_note": "The run used the State Card and relation-conditioned routing, but the pre-fix uploader did not retain the complete State Card as a standalone artifact.",
+        "completed_requests": 32,
+        "total_tokens": 1926466,
+        "provider_cost_usd": 0.063865752
+      },
+      "target": {
+        "parent": {
+          "tests_passed": 66,
+          "tests_failed": 2,
+          "reward": 0.0
+        },
+        "candidate": {
+          "tests_passed": 67,
+          "tests_failed": 1,
+          "reward": 0.0,
+          "failed_properties": [
+            "TestForwardVariance::test_forward_variance_local_vol_atm_positive"
+          ],
+          "raw_trace_component_calls": 2,
+          "minimum_svi_a": 0.001
+        },
+        "controller_gate_passed": true,
+        "scientific_footprint_consistent": true,
+        "footprint": "The component was called, every delivered SVI intercept was moved above zero, and the SVI strict-positivity failure was removed.",
+        "completed_requests": 23,
+        "total_tokens": 1114814,
+        "provider_cost_usd": 0.053678792
+      },
+      "repeat": {
+        "parent": {
+          "tests_passed": 66,
+          "tests_failed": 2,
+          "reward": 0.0
+        },
+        "candidate": {
+          "tests_passed": 67,
+          "tests_failed": 1,
+          "reward": 0.0,
+          "failed_properties": [
+            "TestSVIParams::test_svi_a_positive"
+          ],
+          "raw_trace_component_calls": 2,
+          "minimum_svi_a": 0.0
+        },
+        "controller_gate_passed": true,
+        "scientific_footprint_consistent": false,
+        "footprint": "The declared SVI admissibility footprint failed: several delivered intercepts remained zero or numerically indistinguishable from zero. Relative to the retained repeat parent, the observed plus-one came from resolving the separate flat-vol-consistency property rather than preserving the selected relation.",
+        "completed_requests": 35,
+        "total_tokens": 1620487,
+        "provider_cost_usd": 0.054308484
+      },
+      "protection": {
+        "parent": {
+          "tests_passed": 35,
+          "tests_failed": 4,
+          "reward": 0.9
+        },
+        "candidate": {
+          "tests_passed": 38,
+          "tests_failed": 1,
+          "reward": 0.96,
+          "failed_properties": [
+            "TestBarrierResults::test_barrier_outputs_reasonable"
+          ],
+          "raw_trace_component_calls": 6
+        },
+        "aggregate_safe": true,
+        "property_set_safe": true,
+        "controller_gate_passed": true,
+        "completed_requests": 29,
+        "total_tokens": 1979835,
+        "provider_cost_usd": 0.064618324
+      },
+      "terminal": {
+        "controller_decision": "PROMOTE",
+        "controller_reason": "repeat_and_protection_safe",
+        "scientific_interpretation": "INCONSISTENT_REPEAT_FOOTPRINT",
+        "scientific_action": "Do not count as a repeated mechanism-consistent promotion; retain the mechanical controller result and use a predeclared relation-footprint gate in subsequent experiments.",
+        "phase": "FROZEN",
+        "controller_current_parent": "qf-a0-localvol-qrs-c1"
+      },
+      "total": {
+        "completed_requests": 119,
+        "total_tokens": 6641602,
+        "provider_cost_usd": 0.236471352
+      }
+    }
+  },
+  "matched_summary": {
+    "holdings": {
+      "generic": "ABSTAIN",
+      "qrs": "ABSTAIN",
+      "interpretation": "Both arms calibratedly rejected an unsupported reusable intervention. QRS consumed more work in this one proposal and did not change the decision."
+    },
+    "localvol": {
+      "generic": "Repeated official binary gain followed by property-safe protection and scientific promotion.",
+      "qrs": "Relation-aligned target gain, but the same relation footprint failed on repeat; the controller mechanically promoted on score and protection while the scientific interpretation is inconsistent.",
+      "interpretation": "The generic arm is the only scientifically repeated promotion in A0. The QRS arm used fewer total requests, tokens, and cost, but did not preserve its declared mechanism, so this sample does not support a QRS search-efficiency advantage."
+    }
+  },
+  "campaign": {
+    "proposal_count": 4,
+    "act_count": 2,
+    "abstain_count": 2,
+    "mechanical_controller_promotion_count": 2,
+    "scientific_promotion_count": 1,
+    "post_hoc_inconsistent_repeat_count": 1,
+    "completed_requests": 275,
+    "total_tokens": 17317956,
+    "provider_cost_usd": 0.607970368,
+    "rate_limit_retries": 0,
+    "unreconciled_requests": 0,
+    "runtime_restarts": 0,
+    "runtime_residue_after_completion": false,
+    "terminal_resume": {
+      "lineages_resumed": 4,
+      "new_child_dispatches": 0,
+      "additional_completed_requests": 0,
+      "additional_tokens": 0,
+      "additional_provider_cost_usd": 0.0
+    }
+  },
+  "interpretation": {
+    "measured": [
+      "The matched controller completed and froze four independent lineages with exact parent reuse and no duplicate terminal-resume work.",
+      "Both holdings Evolvers abstained after finding no supported answer-free shared mechanism.",
+      "The generic local-vol candidate achieved an independent 68/68 binary repeat and improved answer-free protection from 35/39 to 38/39.",
+      "The QRS local-vol candidate produced a relation-aligned target improvement and lower total cost, but its declared SVI-admissibility artifact footprint did not repeat.",
+      "Raw traces confirmed component use despite false-zero activation ledgers caused by missing proposal-specific activation tokens."
+    ],
+    "post_hoc_analysis": "The relation-footprint check was applied after the frozen run exposed that equal score deltas can come from different properties. It refines the scientific interpretation but does not retroactively alter the controller's recorded PROMOTE decision.",
+    "not_established": [
+      "QRS superiority over a generic full-harness Evolver",
+      "benchmark-wide or cross-family superiority",
+      "sealed or out-of-sample gain",
+      "stable QRS promotion",
+      "causal attribution from tool activation alone"
+    ],
+    "next_boundary": "Predeclare a relation-footprint gate that requires the predicted state or artifact change to recur before a score gain can count as mechanism-consistent repeat evidence; keep the official score and protection gates separate."
+  },
+  "artifacts": {
+    "decision": "docs/decisions/2026-08-23-qf-a0-matched-generic-qrs-result.md",
+    "local_mirror_root": "results/bc-mirror/qf-a0-matched-generic-qrs-20260823-r1-artifacts",
+    "controller_root": "results/bc-mirror/qf-a0-matched-generic-qrs-20260823-r1-artifacts/qf-a0-matched-generic-qrs-20260823-r1"
+  }
+}
