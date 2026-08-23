@@ -2402,6 +2402,23 @@ def test_information_review_live_argv_requires_explicit_approval(tmp_path):
         )
 
 
+def test_information_review_live_argv_uses_existing_raw_token_file(tmp_path):
+    argv = build_candidate_information_set_review_argv(
+        {"runtime": {"python": "/python", "source_root": "/source"}},
+        {
+            "backend": "openrouter",
+            "token_file": "/runtime/secrets/model-token",
+        },
+        input_path=tmp_path / "input.json",
+        result_dir=tmp_path / "result",
+        approve_external_run=True,
+    )
+
+    assert argv[argv.index("--token-file") + 1] == (
+        "/runtime/secrets/model-token"
+    )
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [

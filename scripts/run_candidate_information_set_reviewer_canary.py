@@ -30,6 +30,17 @@ def _load_dotenv(path: Path) -> None:
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
+def _load_token_file(path: Path) -> None:
+    """Load one existing raw API token without exposing it in output."""
+
+    if "OPENROUTER_API_KEY" in os.environ:
+        return
+    token = path.read_text(encoding="utf-8").strip()
+    if not token:
+        raise RuntimeError("OpenRouter token file is empty")
+    os.environ["OPENROUTER_API_KEY"] = token
+
+
 def _generation_metadata(request_id: str, token: str) -> dict[str, object]:
     """Fetch OpenRouter accounting without repeating the Reviewer request."""
 
@@ -113,11 +124,21 @@ def _openrouter_complete(
     return content
 
 
+def _review_scope(package: dict[str, object]) -> str:
+    """Describe whether the Reviewer was given optimize-only source material."""
+
+    optimize_sources = package.get("optimize_only_sources")
+    if isinstance(optimize_sources, list) and optimize_sources:
+        return "answer_rich_evolver_candidate_information_set"
+    return "answer_free_candidate_information_set"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--dotenv", type=Path, default=Path(".env"))
+    parser.add_argument("--token-file", type=Path)
     parser.add_argument("--model", default=None)
     parser.add_argument(
         "--backend", choices=("openrouter", "auto"), default="openrouter"
@@ -125,6 +146,8 @@ def main() -> int:
     args = parser.parse_args()
 
     _load_dotenv(args.dotenv)
+    if args.token_file is not None:
+        _load_token_file(args.token_file)
     if args.model:
         os.environ["QEA_EVOLVE_AGENT_MODEL"] = args.model
 
@@ -167,7 +190,7 @@ def main() -> int:
     result = {
         "schema_version": 1,
         "status": "complete",
-        "review_scope": "answer_rich_evolver_candidate_information_set",
+        "review_scope": _review_scope(review_package),
         "model": os.environ.get(
             "QEA_EVOLVE_AGENT_MODEL", "deepseek/deepseek-v4-pro"
         ),

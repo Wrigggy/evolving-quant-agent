@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 from qea.candidate_information_set_review import (
@@ -100,3 +101,28 @@ def test_openrouter_runner_uses_one_standard_library_request(monkeypatch):
     }
     assert record["request_count"] == 1
     assert record["accounting"] == {"provider_cost_usd": 0.01}
+
+
+def test_runner_loads_existing_raw_token_file_without_overwriting_env(
+    tmp_path, monkeypatch
+):
+    token_file = tmp_path / "model-token"
+    token_file.write_text("file-token\n", encoding="utf-8")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    runner._load_token_file(token_file)
+
+    assert os.environ["OPENROUTER_API_KEY"] == "file-token"
+    monkeypatch.setenv("OPENROUTER_API_KEY", "existing-token")
+    token_file.write_text("replacement-token\n", encoding="utf-8")
+    runner._load_token_file(token_file)
+    assert os.environ["OPENROUTER_API_KEY"] == "existing-token"
+
+
+def test_reviewer_scope_distinguishes_answer_free_from_answer_rich() -> None:
+    assert runner._review_scope({"optimize_only_sources": []}) == (
+        "answer_free_candidate_information_set"
+    )
+    assert runner._review_scope(
+        {"optimize_only_sources": [{"ref": "diagnostic:one"}]}
+    ) == "answer_rich_evolver_candidate_information_set"

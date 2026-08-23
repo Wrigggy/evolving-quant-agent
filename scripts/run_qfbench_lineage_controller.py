@@ -517,6 +517,8 @@ def build_candidate_information_set_review_argv(
         argv.extend(("--model", str(spec["model"])))
     if spec.get("dotenv"):
         argv.extend(("--dotenv", str(spec["dotenv"])))
+    if spec.get("token_file"):
+        argv.extend(("--token-file", str(spec["token_file"])))
     return tuple(argv)
 
 
