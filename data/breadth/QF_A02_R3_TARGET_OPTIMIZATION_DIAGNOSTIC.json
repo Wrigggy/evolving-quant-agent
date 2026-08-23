@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "task_id": "dupire-local-vol",
+  "feedback_mode": "answer_rich_evolver",
+  "worker_visible": false,
+  "evidence_role": "answer-rich optimize-only Evolver diagnostic after the blind R3 c2 Worker attempt",
+  "candidate_boundary": "The Evolver may diagnose why the retained checker and its selected quantitative relation did not change the official property, then autonomously REFINE or ABSTAIN. The Worker never receives this file, and a reusable candidate must not encode an expected task value or task-specific verifier assertion.",
+  "prior_selected_relation": {
+    "relation_id": "calibrated_surface_parameter_strict_positivity",
+    "predicted_worker_behavior": "declare the SVI intercept a as strictly positive, reject a <= 0, re-fit, and deliver a > 0 in every row"
+  },
+  "observed_component_use": {
+    "component_token": "check_parameter_admissibility",
+    "activation_status": "activated",
+    "checker_call_batches": 2,
+    "checker_calls_total": 10,
+    "final_audit_checker_calls": 5,
+    "call_count_note": "The trace contains two checker batches over the same five CSV artifacts; the final audit batch contributes five of the ten total calls.",
+    "svi_params_strict_positive_columns": [
+      "T",
+      "b",
+      "sigma",
+      "rmse"
+    ],
+    "omitted_relation_column": "a",
+    "observation": "The Worker invoked the retained checker on svi_params.csv, but omitted a from strict_positive_columns; every delivered a value was negative, so the selected strict-positivity relation was not instantiated in the checker call."
+  },
+  "observed_failure_families": [
+    {
+      "family": "relation_to_component_call_realization",
+      "observation": "The harness activated and the checker ran, but the Worker-selected checker arguments omitted the exact parameter named by the selected relation."
+    },
+    {
+      "family": "calibration_parameter_admissibility",
+      "observation": "All six delivered SVI intercept values were below zero while the official output property requires a > 0."
+    }
+  ],
+  "official_outcome": {
+    "task_id": "dupire-local-vol",
+    "official_reward": 0.0,
+    "tests_passed": 67,
+    "tests_failed": 1,
+    "persistent_failed_property": "test_outputs.py::TestSVIParams::test_svi_a_positive",
+    "target_property_count": "68/68",
+    "provenance": "R3 trusted QFBench verifier output and controller property delta"
+  }
+}

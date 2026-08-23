@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-24",
+  "status": "frozen_not_run",
+  "controller_run_id": "qf-a02-localvol-qrs-refine-20260824-r4",
+  "mode": "live",
+  "supersedes_setup_run": "R3 autonomously produced and activated c2, but its target remained 67/68 because the Worker called the checker without declaring the selected relation's SVI intercept column; the fixed controller rolled the candidate back after target_gain_not_observed",
+  "purpose": "Test whether the Evolver can autonomously refine the effective-but-incompletely-realized R3 c2 harness after observing the exact selected relation, State Card, checker calls, artifacts, and persistent official SVI-a property.",
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/qf-a02-qrs-refine-20260824-r4",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/qf-a02-qrs-refine-20260824-r4/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0"
+  },
+  "evidence_build": {
+    "destination": "/data/qea-julius-storage/evidence/qf-a02-localvol-qrs-refinement-20260824-r4",
+    "base_view": "/data/qea-julius-storage/evidence/qf-a01-localvol-qrs-refinement-20260823-r1",
+    "round_label": "a02-qrs-r3-target",
+    "source_proposal_run": "/data/qea-julius-storage/runs/qf-a01-localvol-qrs-refine-proposal-20260824-r3",
+    "source_worker_run": "/data/qea-julius-storage/runs/qf-a01-localvol-qrs-refine-target-20260824-r3",
+    "source_parent_candidate": "/data/qea-julius-storage/runs/qf-a01-localvol-qrs-refine-proposal-20260824-r3/evolutions/iteration-0001/candidate",
+    "optimization_diagnostic": "/data/qea-julius-storage/deploy/qf-a02-qrs-refine-20260824-r4/data/breadth/QF_A02_R3_TARGET_OPTIMIZATION_DIAGNOSTIC.json",
+    "component_token": "check_parameter_admissibility",
+    "worker_model_requests": 0,
+    "argv": [
+      "/home/julius/qea/runtime/venvs/rootless/bin/python",
+      "/data/qea-julius-storage/deploy/qf-a02-qrs-refine-20260824-r4/scripts/build_qfbench_coordinated_feedback_view.py",
+      "--base-view",
+      "/data/qea-julius-storage/evidence/qf-a01-localvol-qrs-refinement-20260823-r1",
+      "--source-run",
+      "/data/qea-julius-storage/runs/qf-a01-localvol-qrs-refine-proposal-20260824-r3",
+      "--worker-run",
+      "/data/qea-julius-storage/runs/qf-a01-localvol-qrs-refine-target-20260824-r3",
+      "--component-token",
+      "check_parameter_admissibility",
+      "--optimization-diagnostic",
+      "/data/qea-julius-storage/deploy/qf-a02-qrs-refine-20260824-r4/data/breadth/QF_A02_R3_TARGET_OPTIMIZATION_DIAGNOSTIC.json",
+      "--parent-candidate",
+      "/data/qea-julius-storage/runs/qf-a01-localvol-qrs-refine-proposal-20260824-r3/evolutions/iteration-0001/candidate",
+      "--destination",
+      "/data/qea-julius-storage/evidence/qf-a02-localvol-qrs-refinement-20260824-r4",
+      "--round-label",
+      "a02-qrs-r3-target"
+    ]
+  },
+  "limits": {
+    "candidate_versions_per_lineage": 1,
+    "max_evolver_proposals": 1,
+    "max_new_parent_worker_sessions": 0,
+    "max_candidate_worker_sessions": 3,
+    "provider_cost_usd": 0.4,
+    "wall_time_hours": 6
+  },
+  "retained_cost_context": {
+    "r3_completed_requests": 65,
+    "r3_total_tokens": 4760661,
+    "r3_provider_cost_usd": 0.137164964,
+    "accounting_boundary": "Historical R3 cost remains in the lineage record but does not consume the new R4 execution cap."
+  },
+  "lineages": [
+    {
+      "lineage_id": "a02-localvol-qrs-refine-r4",
+      "family": "localvol-relation-realization-refinement",
+      "treatment": "qrs-refinement",
+      "repeat_consistency_policy": "resolved_property_footprint_v1",
+      "parent": {
+        "version": "qf-a01-localvol-qrs-c2-r3",
+        "worker_dir": "/data/qea-julius-storage/runs/qf-a01-localvol-qrs-refine-proposal-20260824-r3/evolutions/iteration-0001/candidate",
+        "retained_activation_token": "check_parameter_admissibility"
+      },
+      "proposal": {
+        "live_run_id": "qf-a02-localvol-qrs-refine-proposal-20260824-r4",
+        "candidate_version": "qf-a02-localvol-qrs-c3-r4",
+        "evidence": "/data/qea-julius-storage/evidence/qf-a02-localvol-qrs-refinement-20260824-r4",
+        "evolver_dir": "/data/qea-julius-storage/deploy/qf-a02-qrs-refine-20260824-r4/qea/evolve_agent_full",
+        "arm": "quant-state",
+        "reasoning_effort": "high"
+      },
+      "stages": [
+        {
+          "name": "target",
+          "task_id": "dupire-local-vol",
+          "live_run_id": "qf-a02-localvol-qrs-refine-target-20260824-r4",
+          "checkpoint_prefix": "qf-a02-localvol-qrs-refine-target-r4",
+          "parent_arm": "quant-state",
+          "candidate_arm": "quant-state-refined-r4",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2,
+          "selection_reference": {
+            "id": "qf-a0-localvol-qrs-repeat-c1-20260823-r1",
+            "report_path": "/data/qea-julius-storage/runs/qf-a0-localvol-qrs-repeat-20260823-r1/pilot-report.json",
+            "reference_version": "qf-a0-localvol-qrs-c1",
+            "task_id": "dupire-local-vol",
+            "worker_route": "deepseek-v4-flash-main0",
+            "worker_budget": "normal"
+          }
+        },
+        {
+          "name": "repeat",
+          "task_id": "dupire-local-vol",
+          "live_run_id": "qf-a02-localvol-qrs-refine-repeat-20260824-r4",
+          "checkpoint_prefix": "qf-a02-localvol-qrs-refine-repeat-r4",
+          "parent_arm": "quant-state",
+          "candidate_arm": "quant-state-refined-r4",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2,
+          "selection_reference": {
+            "id": "qf-a0-localvol-qrs-repeat-c1-20260823-r1",
+            "report_path": "/data/qea-julius-storage/runs/qf-a0-localvol-qrs-repeat-20260823-r1/pilot-report.json",
+            "reference_version": "qf-a0-localvol-qrs-c1",
+            "task_id": "dupire-local-vol",
+            "worker_route": "deepseek-v4-flash-main0",
+            "worker_budget": "normal"
+          }
+        },
+        {
+          "name": "protection",
+          "task_id": "localvol-barrier",
+          "live_run_id": "qf-a02-localvol-qrs-refine-protection-20260824-r4",
+          "checkpoint_prefix": "qf-a02-localvol-qrs-refine-protection-r4",
+          "parent_arm": "quant-state",
+          "candidate_arm": "quant-state-refined-r4",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2,
+          "selection_reference": {
+            "id": "qf-a0-localvol-qrs-protection-20260823-r1",
+            "report_path": "/data/qea-julius-storage/runs/qf-a0-localvol-qrs-protection-20260823-r1/pilot-report.json",
+            "reference_version": "qf-a0-localvol-qrs-c1",
+            "task_id": "localvol-barrier",
+            "worker_route": "deepseek-v4-flash-main0",
+            "worker_budget": "normal"
+          }
+        }
+      ]
+    }
+  ],
+  "selection_rule": "Use c2 only as the refinement backbone. Compare the new c3 target and repeat against the retained c1 67/68 SVI-a selection reference: target must reach 68/68 by resolving test_svi_a_positive, and repeat must reproduce that same resolved-property footprint. Protection reuses the c1 38/39 localvol-barrier reference and must introduce no newly failed property.",
+  "evolver_decision_boundary": "The Evolver sees the R3 selected relation, projected Quant Research State Card, exact c2 diff and parent snapshot, exact blind-Worker trace and artifacts, and the Evolver-only persistent-property diagnostic. It must autonomously choose REFINE or ABSTAIN and author any component change itself; the setup supplies no handwritten c3 component.",
+  "answer_boundary": "The R3 property-level optimization diagnostic is Evolver-only. Every R4 Worker and the answer-free protection run remain blind to diagnostics, expected values, and trusted verifier output.",
+  "claim_boundary": "A positive result is one autonomous c2-to-c3 relation-realization refinement on one development family. It is not QRS superiority, sealed evidence, or benchmark-wide improvement."
+}
