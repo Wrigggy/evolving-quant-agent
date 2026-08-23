@@ -1,6 +1,7 @@
 # Main-experiment ablation plan
 
 Date: 2026-08-23
+Updated: 2026-08-24
 
 ## Objective
 
@@ -9,6 +10,13 @@ Quant Research State reconstruction, relation-conditioned experience reuse,
 and property-wise intervention verification. Do not enumerate the six states
 or every harness file. The fixed lifecycle controller is infrastructure and is
 not an ablation treatment.
+
+The comparison unit is now a **cumulative from-Quant-H0 campaign**. Generic and
+QRS each maintain their own official incumbent while traversing the same frozen
+task-family order. A family-level Worker call is an observation inside that
+campaign, not an independent evolution replicate. The retained two-family A0
+result remains a matched mechanism-localization canary; it is not relabeled as
+a cumulative main-campaign replicate.
 
 The design follows the useful pattern in prior systems: ablate the claimed
 search operation or evidence interface rather than every implementation file.
@@ -25,7 +33,7 @@ matched budget. Primary sources:
 - QuantaAlpha: https://arxiv.org/html/2602.07085v3
 - R&D-Agent-Quant: https://arxiv.org/html/2505.15155
 
-## A0: Full QRS versus matched generic
+## A0: Full QRS versus matched generic cumulative campaigns
 
 Priority: P0; required for the main paper.
 
@@ -37,6 +45,9 @@ Treatment difference:
 | Current runtime trajectory and optimize diagnostic | same | same |
 | Raw candidate/component history | same | same |
 | Model, budget, mutation surface, Worker and verifier | same | same |
+| Frozen task-family order | same | same |
+| Initial official incumbent | Quant-H0 | Quant-H0 |
+| Later official incumbent | own promoted harness | own promoted harness |
 | Operational State Card | enabled | not required |
 | Relation-conditioned retrieval and routing | enabled | unavailable |
 | ACT bound to state/relation/component locus | required | generic causal ACT |
@@ -44,6 +55,15 @@ Treatment difference:
 The generic arm remains a strong full-harness Evolver. It may freely inspect
 the same history and infer finance mechanisms; it is not restricted to prompt
 mutation or given a smaller context.
+
+Both methods begin with the same frozen initial history snapshot and the same
+Quant-H0. After the first proposal, their promoted components and runtime
+episodes may differ; that divergence is part of the end-to-end treatment. The
+family order, candidate opportunity, conditional repeat/protection gates,
+model routes, answer policy, and stage-start budget remain matched. An
+activated but non-promoted search parent may support at most one predeclared
+within-family refinement; it does not carry into the next family unless a
+repeat-confirmed, property-safe candidate updates the official incumbent.
 
 Question:
 
@@ -57,9 +77,36 @@ candidate. A useful candidate requires fresh Worker activation, at least one
 predeclared relation observation, and no official regression; benchmark-helpful
 additionally requires an official property or binary gain.
 
-Paper target: three optimize tasks, at least two relation families and both
-benchmarks, two Evolver proposal seeds per arm: 12 proposal sessions. Full-QRS
-sessions are the main-method runs, not duplicated ablation runs.
+Paper target: four frozen QFBench task families spanning at least three public
+quantitative relation families, with two independently initialized cumulative
+campaign seeds per method when budget permits. Full-QRS campaigns are the
+main-method runs, not duplicated ablation runs. The immediate bounded canary is
+QFBench-only. QuantCodeEval breadth can be added later under the same frozen
+contract, but licensed or unfinished QCE coverage does not block this
+mechanism-scale campaign. With only one campaign seed per method, report a
+bounded system canary rather than a stable superiority estimate.
+
+## Campaign and frozen-evaluation boundary
+
+Each campaign follows one fixed outer sequence:
+
+```text
+Quant-H0
+  -> fixed family 1: propose / conditional refine / repeat / protection
+  -> fixed family 2: propose / conditional refine / repeat / protection
+  -> fixed family 3: propose / conditional refine / repeat / protection
+  -> fixed family 4: propose / conditional refine / repeat / protection
+  -> freeze the final official incumbent
+  -> frozen no-feedback evaluation
+```
+
+Every optimize target, repeat, protection task, and diagnostic that can change
+the incumbent is development evidence. Protection is a selection guard, not an
+out-of-sample result. The final panel is workflow-lineage separated, scheduled
+only after all compared incumbents are frozen, and never returned to the
+Evolver, history store, task selector, or promotion rule. If prior project
+exploration means a panel is not globally untouched, describe it as
+**frozen no-feedback evaluation**, not pristine OOS.
 
 ## A1: Experience decomposition
 
@@ -89,10 +136,12 @@ Questions:
 Metrics add repeated-known-failure rate, inactive/mislocalized component rate,
 episode use in the Evolver's decision, and relation/component-locus stability.
 
-Paper target: two tasks from distinct relation families, each with at least one
-positive and one negative/inactive historical episode, two proposal seeds per
-arm. This is 12 sessions, of which four Full-QRS sessions are reused from A0;
-the incremental budget is eight proposals plus only admitted Worker paths.
+Paper target, if this causal history claim is retained: two family boundaries
+from the cumulative campaigns, each with at least one positive and one
+negative/inactive historical episode. Reuse the Full-QRS campaign paths and add
+only the matched unconditioned/cold proposal paths. If this ablation is skipped,
+limit the claim to the measured ability to use runtime history for refinement;
+do not claim that history itself improves search.
 
 ## A2: Property-wise versus aggregate-only protection
 
@@ -156,10 +205,12 @@ It is not a prerequisite for Main-0B.
 
 ## Execution order
 
-1. Complete A2 immediately by offline replay of retained protection cases.
-2. Use A0 Full-QRS runs as the main-method runs and add only the matched generic
-   arms.
-3. Select two history-rich A0 tasks for A1.
-4. Run A3 only if source screening finds a second genuine residual-risk task.
-5. Freeze the selected harness before any sealed final evaluation.
-
+1. Retain the completed A2 offline replay as the verification-policy ablation.
+2. Freeze the QFBench family order, relation-applicability record, initial
+   history snapshot, matched budgets, and answer boundary.
+3. Run matched Generic and Full-QRS cumulative campaigns from Quant-H0; do not
+   count family-level observations as independent campaign seeds.
+4. Add A1 only if the paper claims a causal benefit from accumulated history.
+5. Run A3 only if source screening finds a second genuine residual-risk task.
+6. Freeze every final official incumbent before the no-feedback panel; sealed
+   outcomes never select, refine, or rank candidates.

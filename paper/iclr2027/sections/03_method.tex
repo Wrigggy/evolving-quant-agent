@@ -72,12 +72,14 @@ episodes. Retrieval is conditioned on the Research State, attempted component,
 observed transition, and official outcome rather than only task identity or a
 broad language failure class.
 
-When the available runtime evidence does not locate a state mismatch, the
-planned system exposes a callable Quant Research Reviewer to the Evolver. The
-Reviewer investigates authorized trajectory, artifact, component-use, and
-history evidence and returns competing state explanations plus a discriminating
-observation. It neither edits the harness nor promotes a candidate; the call and
-its result become ordinary Evolver experience.
+The core method does not require a separate Reviewer. When runtime evidence
+does not locate a state mismatch, the Evolver may return calibrated
+insufficiency using the same State Card and authorized history interface.
+\Proposed{A callable Quant Research Reviewer remains an optional deferred
+extension: it may investigate authorized trajectory, artifact, component-use,
+and history evidence and return competing explanations plus a discriminating
+observation, but it neither edits the harness nor promotes a candidate. It is
+not part of the current main-campaign treatment.}
 
 \subsection{Intervention Verdicts}
 
@@ -100,6 +102,22 @@ predicted transition remains performance evidence with unresolved mechanism
 attribution. We maintain separate official and search parents: binary-reward
 Pareto improvement updates the official incumbent, while a non-regressing
 candidate with observed component activation and a supported predeclared state
-transition may advance only the search parent. \Proposed{This dual-parent rule
-is implemented and locally tested; its effect on live autonomous search remains
-to be measured.}
+transition may advance only the search parent. \Measured{R4 exercised this
+separation in a live autonomous refinement: the rejected c2 harness supplied
+the refinement backbone, the retained c1 harness supplied the official
+selection reference, and only the repeated, protection-safe c3 harness updated
+the official incumbent.} \Boundary{This is one-family lifecycle feasibility,
+not evidence that dual-parent search improves broad performance. R4 associated
+component activation with the same repeated official property correction, but
+neither fresh Worker exposed a violation followed by checker-directed refitting;
+the component-mediated causal transition therefore remains unresolved.}
+
+\Proposed{The main comparison unit is a cumulative campaign rather than a set
+of disconnected task-specific winners. Matched Generic and QRS campaigns each
+start from Quant-$H_0$, maintain their own official incumbent, and traverse the
+same frozen family order under matched model, evidence, mutation, and evaluation
+budgets. Runtime histories may diverge after treatment begins. Each final
+official incumbent is frozen before a separate no-feedback evaluation whose
+outcomes never return to proposal, retrieval, or promotion. The next bounded
+canary is QFBench-only; adding QuantCodeEval breadth is useful but does not block
+this campaign-level mechanism test.}

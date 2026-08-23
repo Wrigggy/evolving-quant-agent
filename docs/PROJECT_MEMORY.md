@@ -1,5 +1,25 @@
 # QEA Repository Memory
 
+## 2026-08-24 cumulative-campaign writing decision
+
+The next matched Generic--QRS comparison is defined at the cumulative campaign
+level. Each method starts from Quant-H0, maintains its own official incumbent,
+and traverses the same frozen QFBench family order with matched initial history,
+model route, mutation surface, candidate opportunities, answer policy, and
+evaluation gates. Runtime histories may diverge after treatment begins. A
+non-promoted search parent may support one bounded within-family refinement,
+but it does not enter the next family unless repeat and property-safe protection
+promote an official incumbent.
+
+This bounded canary is QFBench-only; QuantCodeEval breadth is useful but does
+not block the campaign-level mechanism test. Final official incumbents are
+frozen before a workflow-lineage-separated no-feedback panel, and those
+outcomes never return to search. R4 is retained as live dual-parent lifecycle
+feasibility and mechanism-associated repeated correction with unresolved full
+causality. A callable Quant Research Reviewer is optional/deferred, not part of
+the core main-campaign treatment. This entry changes the writing and future
+experiment unit only; it records no new experimental result.
+
 ## 2026-08-24 A0.2 QRS refinement R4 promoted
 
 R4 autonomously refined the R3 c2 checker into
