@@ -1,5 +1,37 @@
 # QEA Repository Memory
 
+## 2026-08-24 A0.1 QRS refinement retained negative
+
+The local-vol QRS refinement lineage reached a valid target-stage rollback
+after two setup failures. R1 recovered a concrete checker-refinement hypothesis
+but the mandatory State Card gate rejected all eight recorded materialization
+attempts with `ACT selected relation has no support`; it ended `ABSTAIN` with no
+candidate or Worker run. R2 reported `ACT` and declared changes to tools,
+system prompt, and tool descriptions, but its diff was empty, changed-file count
+was zero, and declared roles did not match actual roles. The old structural
+admission path accepted that unchanged snapshot; no target Worker was launched,
+so R2 is an invalid ACT rather than a candidate result.
+
+R3 validly changed `systemprompt.md`, the
+`check_parameter_admissibility` descriptor, and `tools/admissibility.py`. The
+fresh target Worker called the refined component ten times, but both calls on
+`svi_params.csv` declared only `T`, `b`, `sigma`, and `rmse` as strictly
+positive and omitted `a`. The official result therefore remained 67/68, reward
+zero, with the persistent `test_svi_a_positive` failure. The controller rolled
+the candidate back for `target_gain_not_observed` and did not run repeat or
+protection. This localizes the gap to contract-to-predicate binding, not checker
+non-activation.
+
+Costs were $0.078508572 for R1 proposal, $0.095760508 for R2 proposal,
+$0.070165888 for R3 proposal, and $0.066999076 for R3 target. The full retained
+path used 111 completed requests, 9,848,257 tokens, and $0.311434044; the valid
+R3 proposal-plus-target portion used 65 requests, 4,760,661 tokens, and
+$0.137164964. This is mechanism-localized negative evidence with a truthful
+rollback, not benchmark gain, repeat stability, protection safety, promotion,
+sealed performance, or QRS superiority. Compact result:
+`data/breadth/QF_A01_QRS_REFINEMENT_RESULT.json`; full decision:
+`docs/decisions/2026-08-24-qf-a01-qrs-refinement-result.md`.
+
 ## 2026-08-23 A0 matched generic-versus-QRS wave retained
 
 The frozen two-family A0 wave completed four autonomous proposal lineages under

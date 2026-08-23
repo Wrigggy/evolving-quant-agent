@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-a01-localvol-qrs-refine-20260824",
+  "date": "2026-08-24",
+  "status": "retained_negative_after_valid_target_rollback",
+  "research_question": "Can runtime evidence from the A0 QRS local-vol lineage refine the retained admissibility component into a mechanism-consistent 68/68 candidate?",
+  "setup": {
+    "benchmark": "QFBench",
+    "target_task": "dupire-local-vol",
+    "protection_task": "localvol-barrier",
+    "parent_version": "qf-a0-localvol-qrs-c1",
+    "candidate_limit_per_run": 1,
+    "worker_route": "deepseek-v4-flash-main0",
+    "worker_budget": "normal",
+    "answer_boundary": "Optimization diagnostics were available only to the Evolver; the fresh target Worker remained answer-blind.",
+    "sealed_evaluation_used": false
+  },
+  "runs": {
+    "r1": {
+      "proposal_run_id": "qf-a01-localvol-qrs-refine-proposal-20260823-r1",
+      "decision": "ABSTAIN",
+      "terminal_stage": "proposal",
+      "candidate_admitted": false,
+      "observed_failure": "The mandatory Quant Research State Card gate rejected all eight recorded materialization attempts with ACT selected relation has no support, so the Evolver preserved the refinement hypothesis but could not ground ACT.",
+      "scientific_interpretation": "Interface-gated calibrated abstention; no candidate or benchmark result.",
+      "completed_requests": 27,
+      "total_tokens": 3107331,
+      "provider_cost_usd": 0.078508572
+    },
+    "r2": {
+      "proposal_run_id": "qf-a01-localvol-qrs-refine-proposal-20260824-r2",
+      "reported_decision": "ACT",
+      "terminal_stage": "proposal",
+      "candidate_admitted_by_old_gate": true,
+      "declared_component_roles": [
+        "systemprompt",
+        "tool_descriptions",
+        "tools"
+      ],
+      "actual_component_roles": [],
+      "changed_file_count": 0,
+      "measurement_only": true,
+      "declared_roles_match_actual": false,
+      "observed_failure": "The old admission path accepted an unchanged parent snapshot as an ACT candidate even though the recorded diff was empty.",
+      "scientific_interpretation": "Invalid empty-diff ACT; no target Worker was run and this is not a candidate or benchmark result.",
+      "completed_requests": 19,
+      "total_tokens": 1980265,
+      "provider_cost_usd": 0.095760508
+    },
+    "r3": {
+      "proposal_run_id": "qf-a01-localvol-qrs-refine-proposal-20260824-r3",
+      "target_run_id": "qf-a01-localvol-qrs-refine-target-20260824-r3",
+      "candidate_version": "qf-a01-localvol-qrs-c2-r3",
+      "proposal_decision": "ACT",
+      "candidate_admitted": true,
+      "changed_files": [
+        "systemprompt.md",
+        "tool_descriptions/check_parameter_admissibility.tool.yaml",
+        "tools/admissibility.py"
+      ],
+      "declared_roles_match_actual": true,
+      "component": "check_parameter_admissibility",
+      "component_activation": {
+        "status": "ACTIVATED",
+        "raw_trace_calls": 10,
+        "svi_calls": 2,
+        "observed_svi_strict_positive_columns": [
+          "T",
+          "b",
+          "sigma",
+          "rmse"
+        ],
+        "missing_research_state_predicate": "a"
+      },
+      "official_target": {
+        "parent": {
+          "tests_passed": 67,
+          "tests_failed": 1,
+          "reward": 0.0
+        },
+        "candidate": {
+          "tests_passed": 67,
+          "tests_failed": 1,
+          "reward": 0.0
+        },
+        "persistent_failed_property": "test_outputs.py::TestSVIParams::test_svi_a_positive",
+        "strict_gain_observed": false
+      },
+      "mechanism_interpretation": "The component was available and repeatedly activated, but the Worker did not bind the predeclared strict-positivity relation for SVI a into the checker call. The remaining gap is contract-to-predicate binding, not checker non-activation.",
+      "controller_decision": "ROLLBACK",
+      "controller_reason": "target_gain_not_observed",
+      "stopped_after_stage": "target",
+      "repeat_run": false,
+      "protection_run": false,
+      "proposal": {
+        "completed_requests": 28,
+        "total_tokens": 2683796,
+        "provider_cost_usd": 0.070165888
+      },
+      "target": {
+        "completed_requests": 37,
+        "total_tokens": 2076865,
+        "provider_cost_usd": 0.066999076
+      },
+      "total": {
+        "completed_requests": 65,
+        "total_tokens": 4760661,
+        "provider_cost_usd": 0.137164964
+      }
+    }
+  },
+  "path_accounting": {
+    "included_runs": [
+      "r1_proposal",
+      "r2_proposal",
+      "r3_proposal",
+      "r3_target"
+    ],
+    "completed_requests": 111,
+    "total_tokens": 9848257,
+    "provider_cost_usd": 0.311434044
+  },
+  "retained_conclusion": "A0.1 reached a valid refined candidate and actual fresh-Worker component activation, but it did not improve the official target and was correctly rolled back. The observed failure localizes the next search problem to semantic binding between the task contract and caller-supplied checker predicates.",
+  "claim_boundary": {
+    "benchmark_gain": false,
+    "repeat_stability": false,
+    "protection_safety": false,
+    "promotion": false,
+    "qrs_superiority": false,
+    "supported": "Retained lineage refinement, valid component activation, mechanism-localized no-gain, and target-stage rollback.",
+    "not_supported": "Benchmark improvement, stable or reusable harness gain, repeat consistency, protection safety, sealed performance, or QRS superiority."
+  },
+  "artifacts": {
+    "r1_mirror": "results/bc-mirror/qf-a01-localvol-qrs-refine-20260823-r1-artifacts",
+    "r2_mirror": "results/bc-mirror/qf-a01-localvol-qrs-refine-20260824-r2-artifacts",
+    "r3_mirror": "results/bc-mirror/qf-a01-localvol-qrs-refine-20260824-r3-artifacts",
+    "plans": [
+      "data/breadth/QF_A01_QRS_REFINEMENT_PLAN.json",
+      "data/breadth/QF_A01_QRS_REFINEMENT_R2_PLAN.json",
+      "data/breadth/QF_A01_QRS_REFINEMENT_R3_PLAN.json"
+    ]
+  }
+}

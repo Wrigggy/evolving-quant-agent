@@ -100,3 +100,21 @@ proposal and child accounting, controller decisions, terminal resume, cleanup,
 mechanism observations, audit gaps, and claim boundary. Full interpretation is
 in
 \path{docs/decisions/2026-08-23-qf-a0-matched-generic-qrs-result.md}.
+
+\subsection{A0.1 QRS refinement record}
+
+The three frozen refinement plans are retained at
+\path{data/breadth/QF_A01_QRS_REFINEMENT_PLAN.json},
+\path{data/breadth/QF_A01_QRS_REFINEMENT_R2_PLAN.json}, and
+\path{data/breadth/QF_A01_QRS_REFINEMENT_R3_PLAN.json}. Proposal, controller,
+target, official-evaluation, and raw-trace evidence is mirrored under
+\path{results/bc-mirror/qf-a01-localvol-qrs-refine-20260823-r1-artifacts/},
+\path{results/bc-mirror/qf-a01-localvol-qrs-refine-20260824-r2-artifacts/}, and
+\path{results/bc-mirror/qf-a01-localvol-qrs-refine-20260824-r3-artifacts/}.
+The compact result at
+\path{data/breadth/QF_A01_QRS_REFINEMENT_RESULT.json} separates R1's State Card
+gate abstention, R2's invalid empty-diff ACT, and R3's valid activated no-gain
+candidate; it also records exact per-run and cumulative accounting, the sole
+persistent official property, terminal rollback, skipped repeat/protection,
+and claim boundary. Full interpretation is in
+\path{docs/decisions/2026-08-24-qf-a01-qrs-refinement-result.md}.
