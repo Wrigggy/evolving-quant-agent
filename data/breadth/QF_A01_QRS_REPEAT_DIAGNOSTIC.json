@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "task_id": "dupire-local-vol",
+  "feedback_mode": "answer_rich_evolver",
+  "worker_visible": false,
+  "evidence_role": "Evolver-only optimize diagnostic after the blind A0 QRS repeat Worker",
+  "source_run": "qf-a0-localvol-qrs-repeat-20260823-r1",
+  "source_arm": "quant-state",
+  "official_outcome": {
+    "tests_passed": 67,
+    "tests_failed": 1,
+    "reward": 0.0,
+    "failed_properties": [
+      "TestSVIParams::test_svi_a_positive"
+    ]
+  },
+  "observed_component_use": {
+    "component": "check_parameter_admissibility",
+    "call_count": 2,
+    "strict_positive_columns": [
+      "b",
+      "sigma"
+    ],
+    "lower_bounds": {
+      "a": 0.0,
+      "b": 0.0,
+      "sigma": 0.0001
+    },
+    "delivered_svi_a_values": [
+      0.0,
+      0.0,
+      6.8e-19,
+      5.3e-15,
+      0.0,
+      1.6e-18
+    ],
+    "relation_outcome": "The component was activated but accepted a caller-selected inclusive zero bound for a parameter that the quantitative output contract required to be strictly positive."
+  },
+  "runtime_contrast": "The target Worker passed a, b, and sigma as strict-positive and delivered a=0.001. The repeat Worker excluded a from strict-positive columns, and the same selected SVI-admissibility footprint failed even though a different flat-vol property improved.",
+  "refinement_question": "Can the harness make the applicable quantitative admissibility constraint stable across fresh trajectories without encoding this task's expected outputs? The Evolver may refine, reuse, revert, probe, or abstain and may choose any harness locus.",
+  "candidate_boundary": "Use this only for Evolver diagnosis. The Worker must remain blind to this diagnostic, and a reusable candidate must not embed task-specific expected values or checker answers."
+}

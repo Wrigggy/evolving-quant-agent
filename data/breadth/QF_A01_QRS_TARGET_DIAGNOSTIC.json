@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "task_id": "dupire-local-vol",
+  "feedback_mode": "answer_rich_evolver",
+  "worker_visible": false,
+  "evidence_role": "Evolver-only optimize diagnostic after the blind A0 QRS target Worker",
+  "source_run": "qf-a0-localvol-qrs-target-20260823-r1",
+  "source_arm": "quant-state",
+  "official_outcome": {
+    "tests_passed": 67,
+    "tests_failed": 1,
+    "reward": 0.0,
+    "failed_properties": [
+      "TestForwardVariance::test_forward_variance_local_vol_atm_positive"
+    ]
+  },
+  "observed_component_use": {
+    "component": "check_parameter_admissibility",
+    "call_count": 2,
+    "strict_positive_columns": [
+      "a",
+      "b",
+      "sigma"
+    ],
+    "delivered_minimum_svi_a": 0.001,
+    "relation_outcome": "The selected SVI parameter-admissibility relation was realized and the SVI strict-positivity property passed."
+  },
+  "remaining_gap": "The successful SVI repair did not also close the separate forward-variance-to-local-vol ATM propagation property.",
+  "candidate_boundary": "Use this only to diagnose and refine a reusable quantitative harness component. Do not copy a task-specific expected value, output row, or checker assertion into the Worker or candidate."
+}
