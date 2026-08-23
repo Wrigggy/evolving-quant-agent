@@ -196,7 +196,9 @@ input_schema:
         component_override_reason:
           type: string
           description: Required when QuantCodeEval v2 evidence justifies a primary component outside the failure-class routing prior.
-        prediction: {}
+        prediction:
+          type: string
+          description: Top-level falsifiable outcome of the proposed harness intervention. When an autonomous experiment_spec is present, its required prediction also supplies this outcome.
         failure_signature:
           type: object
           description: Required for answer-rich QuantCodeEval ACT. Describe the reusable failure mechanism to test on another blind-H0 task; do not copy the optimize-task answer.

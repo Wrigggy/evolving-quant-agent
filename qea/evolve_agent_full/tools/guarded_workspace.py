@@ -2072,6 +2072,9 @@ def _decide_quant_property_candidate(
                 label="component_override_reason",
             )
         prediction = discovery.get("prediction")
+        raw_experiment = discovery.get("experiment_spec")
+        if prediction in (None, "") and isinstance(raw_experiment, Mapping):
+            prediction = raw_experiment.get("prediction")
         if not isinstance(prediction, (str, list, Mapping)) or not prediction:
             raise GuardedWorkspaceError("ACT requires a falsifiable prediction")
         normalized["prediction"] = prediction
@@ -2093,7 +2096,6 @@ def _decide_quant_property_candidate(
                 )
             normalized["failure_signature"] = signature
         if contract.get("autonomous_probe_required") is True:
-            raw_experiment = discovery.get("experiment_spec")
             if not isinstance(raw_experiment, Mapping):
                 raise GuardedWorkspaceError(
                     "ACT requires an Evolver-authored experiment_spec"

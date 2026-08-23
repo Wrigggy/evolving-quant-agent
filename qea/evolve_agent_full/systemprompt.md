@@ -264,7 +264,10 @@ Each item in `hypotheses_considered` uses the field `prediction` (not the older
 `failure_prediction` field), and `failure_types` is not part of the quant v2
 decision object. `failure_type_id` is required only by the older multi-task
 failure-type contract; omit it for a quant v2 property or lineage-refinement
-decision unless the active contract explicitly defines `failure_types`.
+decision unless the active contract explicitly defines `failure_types`. Every
+ACT also needs one top-level falsifiable outcome. When an autonomous
+`experiment_spec` is required, its `prediction` supplies that outcome and need
+not be duplicated at the top level.
 
 When the QuantCodeEval contract names `answer_rich_optimization_v1`, the task is
 a declared optimization task and `optimization-diagnostic.json` is Evolver-only

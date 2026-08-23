@@ -1429,6 +1429,7 @@ def test_quant_v2_lineage_refinement_selects_target_without_rediscovery(
         "prediction": "The refined component changes the artifact construction.",
         "decision_changing_observation": "No component use favors revert.",
     }
+    decision.pop("prediction", None)
 
     result = decide_candidate(discovery=decision)
     state = json.loads(
@@ -1437,6 +1438,9 @@ def test_quant_v2_lineage_refinement_selects_target_without_rediscovery(
 
     assert result["decision"] == "ACT"
     assert state["hypothesis"]["probe_task_key"] == "qfbench:holdings-target"
+    assert state["hypothesis"]["prediction"] == decision["experiment_spec"][
+        "prediction"
+    ]
     assert "shared_mechanism" not in state["hypothesis"]
 
 
