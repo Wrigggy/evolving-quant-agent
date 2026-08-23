@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-24",
+  "status": "frozen_not_run",
+  "controller_run_id": "qf-a01-localvol-qrs-refine-20260824-r2",
+  "mode": "live",
+  "supersedes_setup_run": "qf-a01-localvol-qrs-refine-proposal-20260823-r1 ended in calibrated ABSTAIN because the State Card tool did not expose its accepted relation-support fields; no candidate Worker ran",
+  "purpose": "Retry the same autonomous c1-to-c2 refinement after fixing only the observed State Card interface, then require repeated official property-footprint consistency and answer-free protection.",
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/qf-a01-qrs-refine-20260823-r1",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/qf-a01-qrs-refine-20260823-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0"
+  },
+  "limits": {
+    "candidate_versions_per_lineage": 1,
+    "max_evolver_proposals": 1,
+    "max_new_parent_worker_sessions": 0,
+    "max_candidate_worker_sessions": 3,
+    "provider_cost_usd": 0.4,
+    "wall_time_hours": 6
+  },
+  "lineages": [
+    {
+      "lineage_id": "a01-localvol-qrs-refine-r2",
+      "family": "localvol-parameter-admissibility-refinement",
+      "treatment": "qrs-refinement",
+      "repeat_consistency_policy": "resolved_property_footprint_v1",
+      "parent": {
+        "version": "qf-a0-localvol-qrs-c1",
+        "worker_dir": "/data/qea-julius-storage/runs/qf-a0-localvol-qrs-proposal-20260823-r1/evolutions/iteration-0001/candidate",
+        "retained_activation_token": "check_parameter_admissibility"
+      },
+      "proposal": {
+        "live_run_id": "qf-a01-localvol-qrs-refine-proposal-20260824-r2",
+        "candidate_version": "qf-a01-localvol-qrs-c2-r2",
+        "evidence": "/data/qea-julius-storage/evidence/qf-a01-localvol-qrs-refinement-20260823-r1",
+        "evolver_dir": "/data/qea-julius-storage/deploy/qf-a01-qrs-refine-20260823-r1/qea/evolve_agent_full",
+        "arm": "quant-state",
+        "reasoning_effort": "high"
+      },
+      "stages": [
+        {
+          "name": "target",
+          "task_id": "dupire-local-vol",
+          "live_run_id": "qf-a01-localvol-qrs-refine-target-20260824-r2",
+          "checkpoint_prefix": "qf-a01-localvol-qrs-refine-target-r2",
+          "parent_arm": "quant-state",
+          "candidate_arm": "quant-state-refined",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2,
+          "parent_comparator": {
+            "id": "qf-a0-localvol-qrs-repeat-parent-20260823-r1",
+            "report_path": "/data/qea-julius-storage/runs/qf-a0-localvol-qrs-repeat-20260823-r1/pilot-report.json",
+            "parent_version": "qf-a0-localvol-qrs-c1",
+            "task_id": "dupire-local-vol",
+            "worker_route": "deepseek-v4-flash-main0",
+            "worker_budget": "normal"
+          }
+        },
+        {
+          "name": "repeat",
+          "task_id": "dupire-local-vol",
+          "live_run_id": "qf-a01-localvol-qrs-refine-repeat-20260824-r2",
+          "checkpoint_prefix": "qf-a01-localvol-qrs-refine-repeat-r2",
+          "parent_arm": "quant-state",
+          "candidate_arm": "quant-state-refined",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2,
+          "parent_comparator": {
+            "id": "qf-a0-localvol-qrs-repeat-parent-20260823-r1",
+            "report_path": "/data/qea-julius-storage/runs/qf-a0-localvol-qrs-repeat-20260823-r1/pilot-report.json",
+            "parent_version": "qf-a0-localvol-qrs-c1",
+            "task_id": "dupire-local-vol",
+            "worker_route": "deepseek-v4-flash-main0",
+            "worker_budget": "normal"
+          }
+        },
+        {
+          "name": "protection",
+          "task_id": "localvol-barrier",
+          "live_run_id": "qf-a01-localvol-qrs-refine-protection-20260824-r2",
+          "checkpoint_prefix": "qf-a01-localvol-qrs-refine-protection-r2",
+          "parent_arm": "quant-state",
+          "candidate_arm": "quant-state-refined",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2,
+          "parent_comparator": {
+            "id": "qf-a0-localvol-qrs-protection-parent-20260823-r1",
+            "report_path": "/data/qea-julius-storage/runs/qf-a0-localvol-qrs-protection-20260823-r1/pilot-report.json",
+            "parent_version": "qf-a0-localvol-qrs-c1",
+            "task_id": "localvol-barrier",
+            "worker_route": "deepseek-v4-flash-main0",
+            "worker_budget": "normal"
+          }
+        }
+      ]
+    }
+  ],
+  "selection_rule": "The target must improve the retained c1 SVI-failing comparator and anchor an official resolved-property footprint. The independent repeat must reproduce the same footprint with the retained or modified component activated. Protection must preserve every property passed by c1.",
+  "answer_boundary": "The retained optimize diagnostics are Evolver-only. Every r2 Worker and answer-free protection run remains blind to diagnostics and expected values.",
+  "claim_boundary": "A positive result is one autonomous refinement after an observed proposal-interface repair, not QRS superiority, sealed evidence, or benchmark-wide improvement. The failed pre-fix proposal remains part of the cost and result record."
+}
