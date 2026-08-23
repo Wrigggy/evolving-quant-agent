@@ -273,11 +273,13 @@ Each candidate receives one intervention verdict:
 Only official property or task outcomes support benchmark-performance claims.
 Only repeat/protection/transfer supports stability or reuse.
 
-## Proposed quantitative protection review extension
+## Quantitative protection review extension
 
-This extension is pending. It does not change any retained measured verdict.
-Its complete predeclared plan is in the
-[quantitative protection review decision](../../decisions/2026-08-23-quantitative-protection-review-plan.md).
+The bounded validation and thin opt-in controller integration are measured.
+The predeclared plan is in the
+[quantitative protection review decision](../../decisions/2026-08-23-quantitative-protection-review-plan.md),
+and the retained QPR-0/QPR-1/QPR-2 result is in the
+[result record](../../decisions/2026-08-23-quantitative-protection-review-result.md).
 
 Protection should no longer collapse directly from one comparison to a binary
 promotion/rollback bit:
@@ -317,12 +319,22 @@ the Reviewer must not reinterpret it as mild noise. Search-v2 local-vol,
 review and at most one paired repeat. The same review access, fixed decision
 rule, repeat limit, and cost accounting apply to generic and QRS arms.
 
-Implementation proceeds in three bounded stages: a zero-model replay of four
-frozen evidence cards, one structured Reviewer canary over those cards, and---
-only if the Reviewer adds real discrimination---one matched Search-v2
-protection pair. Controller integration follows only after these gates. This
-phase does not add a scheduler, open-ended Worker calls, RAG, or branching
-search.
+The three bounded stages are now complete: the zero-model replay matched four
+of four cases; one structured Reviewer call returned the four expected
+directional classifications; and one matched Search-v2 protection repeat
+returned parent 39/39 versus candidate 38/39. The same candidate's failed leaf
+rotated from `vanilla_mc_close_to_surface` to
+`barrier_outputs_reasonable`, while the parent moved from 38/39 to 39/39.
+Accordingly, the predeclared conflicting-evidence branch remains
+`INCONCLUSIVE`, stops additional repeats, rejects promotion, and retains the
+component for scope refinement. QPR-1's hard-negative prompt validates
+structured discrimination and compliance, not autonomous diagnosis. This
+phase adds no scheduler, open-ended Worker calls, RAG, or branching search.
+The resumable controller now preserves `PROTECTION_REVIEW` and
+`PROTECTION_REPEAT` as explicit states, accounts for the Reviewer once, reuses
+an already completed repeat, and maps conflicting repeat evidence to
+`HOLD_FOR_REFINE` without changing the incumbent. The legacy binary protection
+path remains the default when quantitative review is not enabled.
 
 ## Minimal candidate decision payload
 

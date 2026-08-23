@@ -1,5 +1,46 @@
 # QEA Repository Memory
 
+## 2026-08-23 quantitative protection review canary
+
+The answer-free QPR canary retained a calibrated three-stage protection path.
+QPR-0 matched all four deterministic cases without model, Worker, or official-
+verifier calls. One `deepseek/deepseek-v4-pro` QPR-1 Reviewer call returned all
+four expected directional classifications: it kept same-harness 38/39 to 35/39
+inside provisional variability, escalated the Search-v2 38/39 property swap to
+one paired repeat, and preserved Main-0B 35/39 to 29/39 as a meaningful
+harness--Worker interaction requiring `HOLD_FOR_REFINE`. The call used 6,364
+response-accounted tokens, cost $0.00966108, and took 56.969 seconds. Because
+the prompt constrained Main-0B as a hard negative, this validates structured
+discrimination and contract compliance, not autonomous discovery.
+
+QPR-2 ran the exact frozen Search-v2 protection pair once. Quant-H0 scored
+39/39 and reward 1; the candidate scored 38/39 and reward 0.96. The same
+candidate's prior 38/39 failure was `vanilla_mc_close_to_surface`, while the
+repeat failed `barrier_outputs_reasonable`; the parent also moved from its
+prior 38/39 barrier failure to 39/39. Although the repeat candidate trace
+realized public unit-consistent forward parity, complete 35-node surfaces,
+0.9-percent MC-to-surface agreement, barrier inequalities, and probability
+closure, the rotating leaves activate the predeclared conflicting-evidence
+branch. The terminal interpretation is still `INCONCLUSIVE`: stop extra
+repeats, do not promote, and retain the component for scope refinement.
+
+QPR-2 used 66 completed requests, 4,492,623 tokens, and $0.164949156 with zero
+retry, unreconciled request, or runtime restart; total paid QPR cost was
+$0.174610236. The observed Quant-H0 range is now 35/39, 38/39, and 39/39, not a
+variance estimate. Margin three was provisional for this canary; the main
+experiment must predeclare a margin from more matched Quant-H0 repetitions.
+This is positive calibrated-triage, Reviewer-escalation, and evidence-efficient
+stopping evidence, not a promoted stable harness, formal non-inferiority,
+sealed gain, or benchmark improvement. Full result:
+`docs/decisions/2026-08-23-quantitative-protection-review-result.md`.
+
+The thin controller now implements this branch as an opt-in resumable path:
+`PROTECTION_REVIEW` imports one pre-generated answer-free review,
+`PROTECTION_REPEAT` reuses the existing component-pilot runner, and conflicting
+repeat evidence ends in `HOLD_FOR_REFINE` with the incumbent unchanged and the
+candidate retained. Review and child cost are counted once across resume. The
+legacy binary protection path remains the default.
+
 ## 2026-08-23 Main-0B autonomous proposal-to-terminal rehearsal
 
 Main-0B completed two fresh Quant-H0 QFBench lineages under the fixed resumable

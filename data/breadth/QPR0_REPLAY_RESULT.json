@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "protocol": "qpr-0",
+  "status": "pass",
+  "case_count": 4,
+  "model_requests": 0,
+  "worker_sessions": 0,
+  "official_verifier_executions": 0,
+  "records": [
+    {
+      "case_id": "same-harness-38-to-35",
+      "result": {
+        "verdict": "INCONCLUSIVE",
+        "outcome_severity": "WITHIN_PROVISIONAL_VARIABILITY",
+        "causal_attribution": "WORKER_TRAJECTORY",
+        "quantitative_diagnosis": "NO_QUANT_SPECIFIC_EVIDENCE",
+        "next_evidence": "NO_EXTRA_RUN",
+        "evidence": {
+          "passed_property_delta": -3,
+          "reward_delta": -0.05999999999999994,
+          "provisional_margin": 3,
+          "new_critical_relation_breaks": [],
+          "adverse_property_families": [],
+          "same_harness": true
+        }
+      },
+      "expected": {
+        "verdict": "INCONCLUSIVE",
+        "outcome_severity": "WITHIN_PROVISIONAL_VARIABILITY",
+        "next_evidence": "NO_EXTRA_RUN"
+      },
+      "expected_matched": true
+    },
+    {
+      "case_id": "search-v2-38-to-38-property-swap",
+      "result": {
+        "verdict": "INCONCLUSIVE",
+        "outcome_severity": "UNRESOLVED",
+        "causal_attribution": "UNRESOLVED",
+        "quantitative_diagnosis": "NUMERIC_TOLERANCE_ONLY",
+        "next_evidence": "PAIRED_PROTECTION_REPEAT",
+        "evidence": {
+          "passed_property_delta": 0,
+          "reward_delta": 0.0,
+          "provisional_margin": 3,
+          "new_critical_relation_breaks": [],
+          "adverse_property_families": [
+            "vanilla_monte_carlo_to_surface_reconciliation"
+          ],
+          "same_harness": false
+        }
+      },
+      "expected": {
+        "verdict": "INCONCLUSIVE",
+        "outcome_severity": "UNRESOLVED",
+        "next_evidence": "PAIRED_PROTECTION_REPEAT"
+      },
+      "expected_matched": true
+    },
+    {
+      "case_id": "main0b-35-to-29",
+      "result": {
+        "verdict": "FAIL",
+        "outcome_severity": "MEANINGFUL_CANDIDATE_REGRESSION",
+        "causal_attribution": "HARNESS_WORKER_INTERACTION",
+        "quantitative_diagnosis": "UPSTREAM_STATE_UNVERIFIED",
+        "next_evidence": "HOLD_FOR_REFINE",
+        "evidence": {
+          "passed_property_delta": -6,
+          "reward_delta": -0.131143,
+          "provisional_margin": 3,
+          "new_critical_relation_breaks": [],
+          "adverse_property_families": [
+            "call_surface",
+            "surface_nodes"
+          ],
+          "same_harness": false
+        }
+      },
+      "expected": {
+        "verdict": "FAIL",
+        "outcome_severity": "MEANINGFUL_CANDIDATE_REGRESSION",
+        "next_evidence": "HOLD_FOR_REFINE"
+      },
+      "expected_matched": true
+    },
+    {
+      "case_id": "aggregate-tie-critical-break",
+      "result": {
+        "verdict": "FAIL",
+        "outcome_severity": "MEANINGFUL_CANDIDATE_REGRESSION",
+        "causal_attribution": "UNRESOLVED",
+        "quantitative_diagnosis": "PUBLIC_RELATION_BROKEN",
+        "next_evidence": "HOLD_FOR_REFINE",
+        "evidence": {
+          "passed_property_delta": 0,
+          "reward_delta": 0.0,
+          "provisional_margin": 3,
+          "new_critical_relation_breaks": [
+            "unit_and_forward_parity"
+          ],
+          "adverse_property_families": [],
+          "same_harness": false
+        }
+      },
+      "expected": {
+        "verdict": "FAIL",
+        "outcome_severity": "MEANINGFUL_CANDIDATE_REGRESSION",
+        "next_evidence": "HOLD_FOR_REFINE"
+      },
+      "expected_matched": true
+    }
+  ],
+  "claim_boundary": "deterministic rule replay only; no Reviewer, Worker, controller mutation, official evaluation, or promotion was run"
+}

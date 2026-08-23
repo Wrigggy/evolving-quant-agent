@@ -199,6 +199,15 @@ protection tie at 38/39 with a failed-property swap is the intended gray case.
 The same Reviewer, evidence policy, non-inferiority rule, repeat limit, and
 controller must apply to generic and QRS arms.
 
+The subsequent 2026-08-23 canary supports this narrower mechanism story. A
+deterministic replay and one constrained answer-free Reviewer call separated
+ordinary movement, the Search-v2 gray case, and the Main-0B hard negative. The
+authorized Search-v2 repeat remained inconclusive because its failed leaf
+rotated while the parent also changed. The mechanism therefore stopped further
+sampling and retained the component for scope refinement; it did not promote a
+stable harness. See the
+[QPR result](2026-08-23-quantitative-protection-review-result.md).
+
 ## Quant Research Worker flow
 
 The high-level Worker flow is:

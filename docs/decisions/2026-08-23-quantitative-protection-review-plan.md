@@ -6,6 +6,10 @@
 results as inputs, but does not report a new Reviewer run, controller change,
 promotion, or benchmark result.
 
+**Subsequent result:** The protocol was executed later on 2026-08-23. Preserve
+this file as the preregistered plan; see the
+[retained result](2026-08-23-quantitative-protection-review-result.md).
+
 ## Decision
 
 Add a small answer-free **Quantitative Regression Reviewer** only at an

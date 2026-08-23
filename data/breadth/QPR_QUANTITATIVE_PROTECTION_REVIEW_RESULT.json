@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "experiment_id": "quantitative-protection-review-20260823-r1",
+  "date": "2026-08-23",
+  "status": "complete_still_inconclusive",
+  "question": "Can an answer-free quantitative review distinguish ordinary trajectory variation, ambiguous numerical property movement, and a clear harness-worker protection regression without giving the Reviewer promotion authority?",
+  "setup": {
+    "benchmark": "QFBench",
+    "development_task": "localvol-barrier",
+    "candidate": "frozen Search-v2 local-vol candidate",
+    "reviewer_access": "answer-free development protection evidence",
+    "worker_access": "public task inputs only; no trusted failure details",
+    "controller_owns_selection": true,
+    "paired_repeat_limit": 1,
+    "provisional_property_margin": 3,
+    "sealed_evaluation_used": false
+  },
+  "qpr0_rule_replay": {
+    "status": "pass",
+    "model_requests": 0,
+    "worker_sessions": 0,
+    "official_verifier_executions": 0,
+    "case_count": 4,
+    "expected_classification_count": 4,
+    "result": "The deterministic triage kept ordinary baseline movement and the Search-v2 property swap inconclusive while preserving Main-0B and a critical public-relation break as failures."
+  },
+  "qpr1_answer_free_reviewer": {
+    "status": "pass",
+    "model": "deepseek/deepseek-v4-pro",
+    "required_provider": "deepseek",
+    "request_count": 1,
+    "wall_seconds": 56.969,
+    "total_tokens": 6364,
+    "provider_cost_usd": 0.00966108,
+    "classifications": {
+      "same_harness_38_to_35": {
+        "outcome_severity": "WITHIN_PROVISIONAL_VARIABILITY",
+        "causal_attribution": "WORKER_TRAJECTORY",
+        "next_evidence": "NO_EXTRA_RUN"
+      },
+      "search_v2_property_swap": {
+        "outcome_severity": "UNRESOLVED",
+        "causal_attribution": "UNRESOLVED",
+        "next_evidence": "PAIRED_PROTECTION_REPEAT"
+      },
+      "main0b_35_to_29": {
+        "outcome_severity": "MEANINGFUL_CANDIDATE_REGRESSION",
+        "causal_attribution": "HARNESS_WORKER_INTERACTION",
+        "next_evidence": "HOLD_FOR_REFINE"
+      },
+      "aggregate_tie_critical_break": {
+        "outcome_severity": "MEANINGFUL_CANDIDATE_REGRESSION",
+        "causal_attribution": "COMPONENT_CAUSAL",
+        "next_evidence": "HOLD_FOR_REFINE"
+      }
+    }
+  },
+  "qpr2_paired_protection_repeat": {
+    "status": "complete",
+    "run_id": "qpr1-searchv2-localvol-barrier-protection-repeat-20260823-r1",
+    "task_id": "localvol-barrier",
+    "parent": {
+      "tests_passed": 39,
+      "tests_failed": 0,
+      "reward": 1.0
+    },
+    "candidate": {
+      "tests_passed": 38,
+      "tests_failed": 1,
+      "reward": 0.96,
+      "failed_property": "TestBarrierResults::test_barrier_outputs_reasonable"
+    },
+    "previous_matched_protection": {
+      "parent_tests_passed": 38,
+      "parent_failed_property": "TestBarrierResults::test_barrier_outputs_reasonable",
+      "candidate_tests_passed": 38,
+      "candidate_failed_property": "TestBarrierResults::test_vanilla_mc_close_to_surface"
+    },
+    "answer_free_candidate_observations": [
+      "The candidate completed finite and missing-cell checks over all delivery artifacts.",
+      "It checked positivity, surface monotonicity and convexity, intrinsic bounds, barrier bounds, and hit-survival closure.",
+      "It reduced the vanilla Monte Carlo versus surface reconciliation gap from the parent trace's 6.95 percent to 0.89 percent.",
+      "The prompt-level candidate has no separate callable activation token, so this run is not recorded as executable-tool activation evidence."
+    ],
+    "decision": {
+      "protection_state": "INCONCLUSIVE",
+      "label": "STILL_INCONCLUSIVE",
+      "reason": "The candidate remained at 38 of 39 across two independent protection runs, but the failed property rotated while the matched parent moved from 38 of 39 to 39 of 39.",
+      "controller_action": "HOLD_FOR_REFINE",
+      "promotion": false,
+      "additional_protection_repeat": false,
+      "current_parent_unchanged": true,
+      "candidate_component_retained": true
+    },
+    "cost": {
+      "completed_requests": 66,
+      "total_tokens": 4492623,
+      "provider_cost_usd": 0.164949156,
+      "rate_limit_retries": 0,
+      "unreconciled_requests": 0
+    },
+    "runtime": {
+      "service_restarts": 0,
+      "completed_cleanly": true,
+      "runtime_residue_after_cleanup": false
+    }
+  },
+  "campaign": {
+    "paid_model_requests": 67,
+    "paid_total_tokens": 4498987,
+    "paid_provider_cost_usd": 0.174610236,
+    "promotion_count": 0,
+    "hold_for_refine_count": 1
+  },
+  "interpretation": {
+    "observed": [
+      "The answer-free Reviewer distinguished a gray quantitative protection case from two clear regression cases under a fixed authority boundary.",
+      "One predeclared paired repeat showed that the candidate's failed property can rotate while its aggregate score stays fixed and the matched parent changes.",
+      "The tri-state controller can therefore preserve a target-helpful component without promoting an unresolved integration or discarding it as intrinsically harmful.",
+      "The repeat cap stopped further adaptive sampling after conflicting evidence."
+    ],
+    "not_established": [
+      "stable non-inferiority of the Search-v2 candidate",
+      "a safe reusable local-vol harness promotion",
+      "QRS superiority over a matched generic Evolver",
+      "sealed or benchmark-wide improvement",
+      "a main-experiment protection margin"
+    ]
+  },
+  "artifacts": {
+    "rule_replay": "data/breadth/QPR0_REPLAY_RESULT.json",
+    "reviewer_result": "results/qpr1-reviewer-20260823-r1/RESULT.json",
+    "paired_repeat": "results/bc-mirror/qpr1-searchv2-localvol-barrier-protection-repeat-20260823-r1/pilot-report.json",
+    "plan": "docs/decisions/2026-08-23-quantitative-protection-review-plan.md"
+  }
+}
