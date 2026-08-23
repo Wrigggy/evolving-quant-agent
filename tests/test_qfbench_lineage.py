@@ -2,8 +2,11 @@ from qea.qfbench_lineage import (
     freeze_lineage,
     import_pilot_report,
     import_proposal_report,
+    import_quantitative_protection_review,
+    load_lineage,
     new_lineage,
     new_proposal_lineage,
+    save_lineage,
 )
 
 
@@ -19,6 +22,22 @@ def _state(limit="1"):
         worker_route="route-a",
         worker_budget="normal",
         cost_limit_usd=limit,
+    )
+
+
+def _quant_state(limit="2"):
+    return new_lineage(
+        lineage_id="quant-lineage",
+        parent_version="h0",
+        parent_path="/workers/h0",
+        candidate_version="search-v2",
+        candidate_path="/workers/search-v2",
+        target_task_id="dupire-local-vol",
+        protection_task_id="localvol-barrier",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd=limit,
+        quantitative_protection_review=True,
     )
 
 
@@ -198,3 +217,200 @@ def test_unadmitted_act_never_enters_candidate_lineage():
     assert state["decision"] == "ROLLBACK"
     assert state["status"] == "proposal_rejected"
     assert state["candidate"] is None
+
+
+def test_search_v2_conflicting_protection_repeat_holds_for_refinement():
+    state = _apply(
+        _quant_state(),
+        "target",
+        _report(
+            "target-run", "dupire-local-vol", (65, 68, 0), (68, 68, 1)
+        ),
+    )
+    state = _apply(
+        state,
+        "repeat",
+        _report(
+            "target-repeat", "dupire-local-vol", (66, 68, 0), (68, 68, 1)
+        ),
+    )
+    first_protection = _report(
+        "protection-r1",
+        "localvol-barrier",
+        (38, 39, 0.96),
+        (38, 39, 0.96),
+    )
+    state = import_pilot_report(
+        state,
+        stage="protection",
+        report=first_protection,
+        report_path="/protection-r1/pilot-report.json",
+        parent_arm="h0",
+        candidate_arm="candidate",
+        property_set_safe=False,
+        quantitative_protection_triage={
+            "verdict": "INCONCLUSIVE",
+            "outcome_severity": "UNRESOLVED",
+            "failed_properties": {
+                "parent": ["barrier_outputs_reasonable"],
+                "candidate": ["vanilla_mc_close_to_surface"],
+            },
+        },
+    )
+    assert state["phase"] == "PROTECTION_REVIEW"
+
+    review = {
+        "schema_version": 1,
+        "reviews": [{
+            "case_id": "search-v2-protection",
+            "outcome_severity": "UNRESOLVED",
+            "causal_attribution": "UNRESOLVED",
+            "quantitative_diagnosis": "NUMERIC_TOLERANCE_ONLY",
+            "next_evidence": "PAIRED_PROTECTION_REPEAT",
+            "evidence_refs": ["search-v2:protection-r1"],
+        }],
+    }
+    state = import_quantitative_protection_review(
+        state,
+        review_id="review-r1",
+        review_path="/review-r1/RESULT.json",
+        review_payload=review,
+        case_id="search-v2-protection",
+        review_accounting={
+            "provider_cost_usd": "0.012",
+            "completed_request_count": 1,
+            "total_tokens": 123,
+        },
+    )
+    resumed_review = import_quantitative_protection_review(
+        state,
+        review_id="review-r1",
+        review_path="/review-r1/RESULT.json",
+        review_payload=review,
+        case_id="search-v2-protection",
+        review_accounting={
+            "provider_cost_usd": "0.012",
+            "completed_request_count": 1,
+            "total_tokens": 123,
+        },
+    )
+    assert resumed_review == state
+    assert state["phase"] == "PROTECTION_REPEAT"
+
+    repeat_report = _report(
+        "protection-r2",
+        "localvol-barrier",
+        (39, 39, 1),
+        (38, 39, 0.96),
+    )
+    state = import_pilot_report(
+        state,
+        stage="protection_repeat",
+        report=repeat_report,
+        report_path="/protection-r2/pilot-report.json",
+        parent_arm="h0",
+        candidate_arm="candidate",
+        property_set_safe=False,
+        quantitative_protection_triage={
+            "verdict": "INCONCLUSIVE",
+            "outcome_severity": "UNRESOLVED",
+            "decision_label": "STILL_INCONCLUSIVE",
+            "failed_properties": {
+                "parent": [],
+                "candidate": ["barrier_outputs_reasonable"],
+            },
+            "evidence_summary": (
+                "candidate failure identity rotated across protection repeats"
+            ),
+        },
+    )
+    resumed_repeat = import_pilot_report(
+        state,
+        stage="protection_repeat",
+        report=repeat_report,
+        report_path="/protection-r2/pilot-report.json",
+        parent_arm="h0",
+        candidate_arm="candidate",
+        property_set_safe=False,
+        quantitative_protection_triage={"verdict": "INCONCLUSIVE"},
+    )
+
+    assert resumed_repeat == state
+    assert state["decision"] == "HOLD_FOR_REFINE"
+    assert state["phase"] == "HOLD_FOR_REFINE"
+    assert state["current_parent"]["version"] == "h0"
+    assert state["candidate"]["version"] == "search-v2"
+    assert state["archive"] == []
+    assert state["hold"]["reason"] == (
+        "quantitative_protection_still_inconclusive"
+    )
+    assert state["cost"]["provider_cost_usd"] == "0.412"
+    assert state["cost"]["completed_requests"] == 9
+    assert state["cost"]["total_tokens"] == 523
+    assert state["accounted_review_ids"] == ["review-r1"]
+
+
+def test_main0b_clear_protection_failure_holds_component_for_refinement(
+    tmp_path,
+):
+    state = _apply(
+        _quant_state(),
+        "target",
+        _report(
+            "target-run", "dupire-local-vol", (66, 68, 0), (68, 68, 1)
+        ),
+    )
+    state = _apply(
+        state,
+        "repeat",
+        _report(
+            "target-repeat", "dupire-local-vol", (66, 68, 0), (68, 68, 1)
+        ),
+    )
+    report = _report(
+        "protection-main0b",
+        "localvol-barrier",
+        (35, 39, 0.9),
+        (29, 39, 0.768857),
+    )
+    state = import_pilot_report(
+        state,
+        stage="protection",
+        report=report,
+        report_path="/protection-main0b/pilot-report.json",
+        parent_arm="h0",
+        candidate_arm="candidate",
+        property_set_safe=False,
+        quantitative_protection_triage={
+            "verdict": "FAIL",
+            "outcome_severity": "MEANINGFUL_CANDIDATE_REGRESSION",
+            "causal_attribution": "HARNESS_WORKER_INTERACTION",
+        },
+    )
+    resumed = import_pilot_report(
+        state,
+        stage="protection",
+        report=report,
+        report_path="/protection-main0b/pilot-report.json",
+        parent_arm="h0",
+        candidate_arm="candidate",
+        property_set_safe=False,
+        quantitative_protection_triage={"verdict": "FAIL"},
+    )
+
+    assert resumed == state
+    assert state["decision"] == "HOLD_FOR_REFINE"
+    assert state["phase"] == "HOLD_FOR_REFINE"
+    assert state["current_parent"]["version"] == "h0"
+    assert state["candidate"]["version"] == "search-v2"
+    assert state["archive"] == []
+    assert state["hold"]["reason"] == "quantitative_protection_regression"
+
+    state_path = tmp_path / "lineage.json"
+    save_lineage(state_path, state)
+    restored = load_lineage(state_path)
+    assert restored["phase"] == "HOLD_FOR_REFINE"
+    assert restored["status"] == "candidate_hold"
+    assert restored["current_parent"] == state["current_parent"]
+    assert restored["candidate"] == state["candidate"]
+    assert restored["hold"] == state["hold"]

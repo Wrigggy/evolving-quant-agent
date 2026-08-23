@@ -18,6 +18,7 @@ _STAGE_PHASE = {
     "target": "TARGET",
     "repeat": "REPEAT",
     "protection": "PROTECTION",
+    "protection_repeat": "PROTECTION_REPEAT",
 }
 
 
@@ -33,6 +34,7 @@ def new_lineage(
     worker_route: str,
     worker_budget: str,
     cost_limit_usd: float | str,
+    quantitative_protection_review: bool = False,
 ) -> dict[str, object]:
     """Create a one-candidate lineage ready for its target evaluation."""
 
@@ -60,9 +62,11 @@ def new_lineage(
             "total_tokens": 0,
         },
         "accounted_run_ids": [],
+        "accounted_review_ids": [],
         "observations": {},
         "archive": [],
         "decision": None,
+        "quantitative_protection_review": quantitative_protection_review,
     }
 
 
@@ -76,6 +80,7 @@ def new_proposal_lineage(
     worker_route: str,
     worker_budget: str,
     cost_limit_usd: float | str,
+    quantitative_protection_review: bool = False,
 ) -> dict[str, object]:
     """Create a lineage whose candidate will come from an Evolver report."""
 
@@ -90,6 +95,7 @@ def new_proposal_lineage(
         worker_route=worker_route,
         worker_budget=worker_budget,
         cost_limit_usd=cost_limit_usd,
+        quantitative_protection_review=quantitative_protection_review,
     )
     state["phase"] = "PROPOSAL"
     state["candidate"] = None
@@ -225,6 +231,26 @@ def _add_proposal_cost(
     accounted.append(proposal_run_id)
 
 
+def _add_review_cost(
+    state: dict[str, object], accounting: Mapping[str, object]
+) -> None:
+    """Add one Reviewer request using the lineage's existing cost fields."""
+
+    cost = state["cost"]
+    total_cost = _decimal(
+        cost["provider_cost_usd"], label="accounted provider cost"
+    ) + _decimal(
+        accounting.get("provider_cost_usd", 0), label="review provider cost"
+    )
+    cost["provider_cost_usd"] = format(total_cost, "f")
+    cost["completed_requests"] = int(cost["completed_requests"]) + int(
+        accounting.get("completed_request_count", 0)
+    )
+    cost["total_tokens"] = int(cost["total_tokens"]) + int(
+        accounting.get("total_tokens", 0)
+    )
+
+
 def _budget_reached(state: Mapping[str, object]) -> bool:
     return _decimal(
         state["cost"]["provider_cost_usd"], label="accounted provider cost"
@@ -246,6 +272,21 @@ def _finish_candidate(
     state["decision"] = decision
     state["phase"] = "PROPOSE"
     state["status"] = "candidate_complete"
+    return state
+
+
+def _hold_candidate_for_refine(
+    state: dict[str, object], *, reason: str
+) -> dict[str, object]:
+    """Keep the incumbent and candidate source while pausing for refinement."""
+
+    state["decision"] = "HOLD_FOR_REFINE"
+    state["phase"] = "HOLD_FOR_REFINE"
+    state["status"] = "candidate_hold"
+    state["hold"] = {
+        "candidate_version": state["candidate"]["version"],
+        "reason": reason,
+    }
     return state
 
 
@@ -323,6 +364,7 @@ def import_pilot_report(
     candidate_arm: str,
     relation_observed: bool | None = None,
     property_set_safe: bool | None = None,
+    quantitative_protection_triage: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Apply one completed target, repeat, or protection child report."""
 
@@ -340,7 +382,7 @@ def import_pilot_report(
         )
     task_id = (
         result["protection_task_id"]
-        if stage == "protection"
+        if stage in {"protection", "protection_repeat"}
         else result["target_task_id"]
     )
     parent = _score(report, parent_arm, str(task_id))
@@ -375,6 +417,34 @@ def import_pilot_report(
     aggregate_safe = _aggregate_safe(parent, candidate)
     observation["aggregate_safe"] = aggregate_safe
     observation["property_set_safe"] = property_set_safe
+    quantitative_path = (
+        result.get("quantitative_protection_review") is True
+        and quantitative_protection_triage is not None
+    )
+    if quantitative_path:
+        triage = deepcopy(dict(quantitative_protection_triage))
+        observation["quantitative_protection_triage"] = triage
+        verdict = triage.get("verdict")
+        if verdict == "PASS":
+            return _finish_candidate(
+                result,
+                decision="PROMOTE",
+                reason="repeat_and_quantitative_protection_noninferior",
+            )
+        if verdict == "FAIL":
+            return _hold_candidate_for_refine(
+                result, reason="quantitative_protection_regression"
+            )
+        if verdict != "INCONCLUSIVE":
+            raise LineageError("quantitative protection triage has no legal verdict")
+        if stage == "protection_repeat":
+            return _hold_candidate_for_refine(
+                result, reason="quantitative_protection_still_inconclusive"
+            )
+        result["phase"] = "PROTECTION_REVIEW"
+        result["status"] = "running"
+        return result
+
     passed = aggregate_safe and property_set_safe is True
     observation["gate_passed"] = passed
     if passed:
@@ -383,6 +453,51 @@ def import_pilot_report(
         )
     return _finish_candidate(
         result, decision="ROLLBACK", reason="protection_not_property_safe"
+    )
+
+
+def import_quantitative_protection_review(
+    state: Mapping[str, object],
+    *,
+    review_id: str,
+    review_path: str,
+    review_payload: Mapping[str, object],
+    case_id: str,
+    review_accounting: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Import and optionally account for one answer-free Reviewer result."""
+
+    from qea.quantitative_protection_review import (
+        validate_quantitative_regression_review,
+    )
+
+    result = deepcopy(dict(state))
+    accounted = result.setdefault("accounted_review_ids", [])
+    if review_id in accounted:
+        return result
+    if result.get("phase") != "PROTECTION_REVIEW":
+        raise LineageError(
+            "cannot import quantitative review outside PROTECTION_REVIEW"
+        )
+    validated = validate_quantitative_regression_review(
+        review_payload, [case_id]
+    )
+    review = deepcopy(validated["reviews"][0])
+    if review_accounting is not None:
+        _add_review_cost(result, review_accounting)
+    accounted.append(review_id)
+    result["observations"]["protection_review"] = {
+        "review_id": review_id,
+        "review_path": review_path,
+        "review": review,
+    }
+    next_evidence = review["next_evidence"]
+    if next_evidence == "PAIRED_PROTECTION_REPEAT":
+        result["phase"] = "PROTECTION_REPEAT"
+        result["status"] = "running"
+        return result
+    return _hold_candidate_for_refine(
+        result, reason=f"quantitative_review_{str(next_evidence).lower()}"
     )
 
 

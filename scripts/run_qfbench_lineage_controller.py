@@ -17,6 +17,7 @@ from qea.qfbench_lineage import (  # noqa: E402
     freeze_lineage,
     import_pilot_report,
     import_proposal_report,
+    import_quantitative_protection_review,
     load_lineage,
     new_lineage,
     new_proposal_lineage,
@@ -187,6 +188,88 @@ def _report_path(
     return Path(str(plan["runtime"]["results_dir"])) / run_id / "pilot-report.json"
 
 
+def _quantitative_triage(stage: Mapping[str, object]) -> dict[str, object]:
+    """Return the explicitly supplied deterministic protection result."""
+
+    value = stage.get("quantitative_triage")
+    if not isinstance(value, Mapping):
+        raise LineageError(
+            f"{stage.get('name')} has no explicit quantitative_triage result"
+        )
+    return dict(value)
+
+
+def _quantitative_review(
+    lineage: Mapping[str, object],
+) -> tuple[
+    str,
+    str,
+    Path,
+    dict[str, object],
+    dict[str, object] | None,
+]:
+    """Load one pre-generated answer-free Reviewer result from the plan."""
+
+    review = lineage.get("quantitative_review")
+    if not isinstance(review, Mapping):
+        raise LineageError("PROTECTION_REVIEW has no quantitative_review plan")
+    review_id = review.get("review_id")
+    case_id = review.get("case_id")
+    result_path = review.get("result_path")
+    if not isinstance(review_id, str) or not review_id:
+        raise LineageError("quantitative_review has no review_id")
+    if not isinstance(case_id, str) or not case_id:
+        raise LineageError("quantitative_review has no case_id")
+    if not isinstance(result_path, str) or not result_path:
+        raise LineageError("quantitative_review has no result_path")
+    path = Path(result_path)
+    if not path.is_file():
+        raise LineageError(f"quantitative review is missing: {path}")
+    payload = _json(path)
+    accounting = _review_accounting(payload)
+    wrapped = payload.get("review")
+    if isinstance(wrapped, Mapping):
+        payload = dict(wrapped)
+    return review_id, case_id, path, payload, accounting
+
+
+def _review_accounting(
+    payload: Mapping[str, object],
+) -> dict[str, object] | None:
+    """Normalize the explicit accounting in a Reviewer RESULT wrapper."""
+
+    request = payload.get("request")
+    if not isinstance(request, Mapping):
+        return None
+    accounting = request.get("accounting")
+    if isinstance(accounting, Mapping):
+        prompt_tokens = int(accounting.get("prompt_tokens", 0))
+        completion_tokens = int(accounting.get("completion_tokens", 0))
+        usage = request.get("response_usage")
+        total_tokens = prompt_tokens + completion_tokens
+        if isinstance(usage, Mapping) and usage.get("total_tokens") is not None:
+            total_tokens = int(usage["total_tokens"])
+        return {
+            "provider_cost_usd": accounting.get("provider_cost_usd", 0),
+            "completed_request_count": 1,
+            "total_tokens": total_tokens,
+        }
+    usage = request.get("response_usage")
+    if isinstance(usage, Mapping):
+        return {
+            "provider_cost_usd": usage.get("cost", 0),
+            "completed_request_count": 1,
+            "total_tokens": int(
+                usage.get(
+                    "total_tokens",
+                    int(usage.get("prompt_tokens", 0))
+                    + int(usage.get("completion_tokens", 0)),
+                )
+            ),
+        }
+    return None
+
+
 def _attempt_id(
     report: Mapping[str, object], arm: str, task_id: str
 ) -> str | None:
@@ -314,6 +397,9 @@ def run_controller(
                 "cost_limit_usd": plan.get("limits", {}).get(
                     "provider_cost_usd", "1"
                 ),
+                "quantitative_protection_review": (
+                    lineage.get("quantitative_protection_review") is True
+                ),
             }
             if isinstance(proposal, Mapping):
                 state = new_proposal_lineage(**common)
@@ -360,10 +446,32 @@ def run_controller(
                 save_lineage(state_path, state)
                 paused_this_run = True
 
-        while (
-            not paused_this_run
-            and state.get("phase") in {"TARGET", "REPEAT", "PROTECTION"}
-        ):
+        while not paused_this_run and state.get("phase") in {
+            "TARGET",
+            "REPEAT",
+            "PROTECTION",
+            "PROTECTION_REVIEW",
+            "PROTECTION_REPEAT",
+        }:
+            if state.get("phase") == "PROTECTION_REVIEW":
+                (
+                    review_id,
+                    case_id,
+                    review_path,
+                    review_payload,
+                    review_accounting,
+                ) = _quantitative_review(lineage)
+                state = import_quantitative_protection_review(
+                    state,
+                    review_id=review_id,
+                    review_path=str(review_path),
+                    review_payload=review_payload,
+                    case_id=case_id,
+                    review_accounting=review_accounting,
+                )
+                save_lineage(state_path, state)
+                continue
+
             stage_name = str(state["phase"]).lower()
             stage = _stage(lineage, stage_name)
             report_path = _report_path(plan, lineage, stage)
@@ -385,7 +493,15 @@ def run_controller(
             parent_arm = str(stage.get("parent_arm", "parent"))
             candidate_arm = str(stage.get("candidate_arm", "candidate"))
             property_safe = None
-            if stage_name == "protection":
+            quantitative_triage = None
+            quantitative_review = (
+                state.get("quantitative_protection_review") is True
+            )
+            if stage_name in {"protection", "protection_repeat"} and (
+                quantitative_review
+            ):
+                quantitative_triage = _quantitative_triage(stage)
+            elif stage_name == "protection":
                 property_safe = property_set_safe(
                     report_path,
                     report,
@@ -402,6 +518,7 @@ def run_controller(
                 candidate_arm=candidate_arm,
                 relation_observed=stage.get("relation_observed"),
                 property_set_safe=property_safe,
+                quantitative_protection_triage=quantitative_triage,
             )
             save_lineage(state_path, state)
             if (
@@ -435,7 +552,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lineage", action="append")
     parser.add_argument(
         "--stop-after-stage",
-        choices=("proposal", "target", "repeat", "protection"),
+        choices=(
+            "proposal",
+            "target",
+            "repeat",
+            "protection",
+            "protection_repeat",
+        ),
     )
     parser.add_argument("--approve-external-run", action="store_true")
     return parser

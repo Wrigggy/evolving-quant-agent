@@ -273,3 +273,219 @@ def test_live_proposal_argv_uses_existing_discovery_runner():
     assert argv[argv.index("--backbone") + 1] == "/h0"
     assert argv[argv.index("--arm") + 1] == "quant-state-v2"
     assert "--dispatch-selected-probe" not in argv
+
+
+def test_qpr_replay_resumes_review_and_existing_protection_repeat(tmp_path):
+    reports = tmp_path / "reports"
+    target_path, _ = _report(
+        reports / "target",
+        "target-r1",
+        "dupire-local-vol",
+        (65, 68, 0),
+        (68, 68, 1),
+        {},
+    )
+    repeat_path, _ = _report(
+        reports / "repeat",
+        "target-r2",
+        "dupire-local-vol",
+        (66, 68, 0),
+        (68, 68, 1),
+        {},
+    )
+    protect_path, protect_report = _report(
+        reports / "protect",
+        "protect-r1",
+        "localvol-barrier",
+        (38, 39, 0.96),
+        (38, 39, 0.96),
+        {"h0": ["barrier"], "candidate": ["vanilla"]},
+    )
+    protection_repeat_path, protection_repeat_report = _report(
+        reports / "protect-repeat",
+        "protect-r2",
+        "localvol-barrier",
+        (39, 39, 1),
+        (38, 39, 0.96),
+        {"candidate": ["barrier"]},
+    )
+
+    # The QPR path consumes explicit answer-free triage results. Removing these
+    # trusted CTRF files proves the controller does not guess property meaning.
+    for report_path, report in (
+        (protect_path, protect_report),
+        (protection_repeat_path, protection_repeat_report),
+    ):
+        for arm in ("h0", "candidate"):
+            attempt_id = report["activations"][arm]["attempts"][0]["attempt_id"]
+            ctrf = report_path.parent / "attempts" / attempt_id / "verifier/ctrf.json"
+            ctrf.unlink()
+
+    review_path = tmp_path / "review/RESULT.json"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text(json.dumps({
+        "schema_version": 1,
+        "status": "complete",
+        "review_scope": "answer_free_development_protection",
+        "request": {
+            "accounting": {
+                "provider_cost_usd": 0.00966108,
+                "prompt_tokens": 1998,
+                "completion_tokens": 4165,
+            },
+            "response_usage": {
+                "cost": 0.01,
+                "prompt_tokens": 2227,
+                "completion_tokens": 4137,
+                "total_tokens": 6364,
+            },
+        },
+        "review": {
+            "schema_version": 1,
+            "reviews": [{
+                "case_id": "search-v2-protection",
+                "outcome_severity": "UNRESOLVED",
+                "causal_attribution": "UNRESOLVED",
+                "quantitative_diagnosis": "NUMERIC_TOLERANCE_ONLY",
+                "next_evidence": "PAIRED_PROTECTION_REPEAT",
+                "evidence_refs": ["search-v2:protect-r1"],
+            }],
+        },
+    }))
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "qpr-controller-r1",
+        "mode": "replay",
+        "runtime": {},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [{
+            "lineage_id": "search-v2",
+            "parent": {"version": "h0", "worker_dir": "/h0"},
+            "candidate": {"version": "search-v2", "worker_dir": "/search-v2"},
+            "quantitative_protection_review": True,
+            "quantitative_review": {
+                "review_id": "qpr1-review-r1",
+                "case_id": "search-v2-protection",
+                "result_path": str(review_path),
+            },
+            "stages": [
+                {
+                    "name": "target",
+                    "task_id": "dupire-local-vol",
+                    "replay_report": str(target_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                },
+                {
+                    "name": "repeat",
+                    "task_id": "dupire-local-vol",
+                    "replay_report": str(repeat_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                },
+                {
+                    "name": "protection",
+                    "task_id": "localvol-barrier",
+                    "replay_report": str(protect_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                    "quantitative_triage": {
+                        "verdict": "INCONCLUSIVE",
+                        "outcome_severity": "UNRESOLVED",
+                        "next_evidence": "PAIRED_PROTECTION_REPEAT",
+                    },
+                },
+                {
+                    "name": "protection_repeat",
+                    "task_id": "localvol-barrier",
+                    "replay_report": str(protection_repeat_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                    "quantitative_triage": {
+                        "verdict": "INCONCLUSIVE",
+                        "outcome_severity": "UNRESOLVED",
+                        "decision_label": "STILL_INCONCLUSIVE",
+                    },
+                },
+            ],
+        }],
+    }
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    def fail_if_called(_argv):
+        raise AssertionError("existing replay reports must not dispatch a child")
+
+    paused = run_controller(
+        plan_path,
+        tmp_path / "state",
+        runner=fail_if_called,
+        stop_after_stage="protection",
+    )["lineages"]["search-v2"]
+    resumed = run_controller(
+        plan_path,
+        tmp_path / "state",
+        runner=fail_if_called,
+        stop_after_stage="protection",
+    )["lineages"]["search-v2"]
+    again = run_controller(
+        plan_path,
+        tmp_path / "state",
+        runner=fail_if_called,
+    )["lineages"]["search-v2"]
+
+    assert paused["phase"] == "PROTECTION_REVIEW"
+    assert paused["accounted_run_ids"] == [
+        "target-r1",
+        "target-r2",
+        "protect-r1",
+    ]
+    assert paused["accounted_review_ids"] == []
+    assert resumed == again
+    assert resumed["phase"] == "HOLD_FOR_REFINE"
+    assert resumed["decision"] == "HOLD_FOR_REFINE"
+    assert resumed["accounted_run_ids"] == [
+        "target-r1",
+        "target-r2",
+        "protect-r1",
+        "protect-r2",
+    ]
+    assert resumed["accounted_review_ids"] == ["qpr1-review-r1"]
+    assert resumed["cost"] == {
+        "provider_cost_usd": "0.04966108",
+        "completed_requests": 9,
+        "total_tokens": 6764,
+    }
+    assert resumed["hold"]["reason"] == (
+        "quantitative_protection_still_inconclusive"
+    )
+
+
+def test_protection_repeat_argv_reuses_component_pilot():
+    plan = {
+        "controller_run_id": "main0",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest.json",
+            "rootless_config": "/config.json",
+            "image_set_manifest": "/images.json",
+            "results_dir": "/results",
+        },
+    }
+    lineage = {
+        "lineage_id": "a",
+        "parent": {"worker_dir": "/h0"},
+        "candidate": {"worker_dir": "/c1"},
+    }
+    stage = {
+        "name": "protection_repeat",
+        "task_id": "localvol-barrier",
+    }
+
+    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+
+    assert argv[1] == "/source/scripts/run_qfbench_component_pilot.py"
+    assert argv[argv.index("--run-id") + 1] == "main0-a-protection_repeat"
+    assert argv[argv.index("--task-id") + 1] == "localvol-barrier"
