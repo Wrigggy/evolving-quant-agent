@@ -231,3 +231,19 @@ fresh-artifact 0/15 public rounding-mismatch audit,
 \texttt{CLOSE\_FX\_NO\_HEADROOM}, zero follow-on search, combined R1/R2 setup
 cost, and the single-observation boundary. Full interpretation is in
 \path{docs/decisions/2026-08-24-public-only-fx-h0-prescreen-r2-result.md}.
+
+\subsection{Public-only holdings Quant-H0 prescreen record}
+
+The frozen setup is retained at
+\path{data/breadth/QF_PUBLIC_ONLY_HOLDINGS_H0_PRESCREEN_PLAN.json}. The complete
+local mirror at
+\path{results/bc-mirror/qf-public-only-holdings-h0-prescreen-20260824-r1/}
+contains the preflight, completed 47-turn Worker trace, eight artifacts, exact
+request accounting, trusted 47/51 evaluation, service health, and cleanup
+evidence. The compact result at
+\path{data/breadth/QF_PUBLIC_ONLY_HOLDINGS_H0_PRESCREEN_RESULT.json} records the
+headroom classification, request-threshold breach, no-follow-on disposition,
+and single-observation boundary. The four failed-test identities are retained
+only inside the compact and dated evaluator-side research records and are
+explicitly barred from Evolver evidence. Full interpretation is in
+\path{docs/decisions/2026-08-24-public-only-holdings-h0-prescreen-result.md}.

@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-public-only-holdings-h0-prescreen-20260824-r1",
+  "date": "2026-08-24",
+  "status": "valid_fresh_h0_headroom_observation",
+  "research_question": "Does one fresh Quant-H0 Worker leave official headroom on the public 13f-amendment-aware-crowding task before any public-only proposal is authorized?",
+  "setup": {
+    "benchmark": "QFBench",
+    "task_id": "13f-amendment-aware-crowding",
+    "arm": "Quant-H0",
+    "result_role": "adaptive development target prescreen only",
+    "deployment_source_version": "694eea8",
+    "frozen_plan": "data/breadth/QF_PUBLIC_ONLY_HOLDINGS_H0_PRESCREEN_PLAN.json",
+    "source_artifacts": "results/bc-mirror/qf-public-only-holdings-h0-prescreen-20260824-r1",
+    "worker_sessions_planned": 1,
+    "official_verifier_executions_planned": 1,
+    "evolver_calls": 0,
+    "reviewer_calls": 0,
+    "candidate_workers": 0,
+    "sealed_evaluation_used": false
+  },
+  "preflight": {
+    "status": "preflight_complete",
+    "model_requests": 0
+  },
+  "live_attempt": {
+    "attempt_count": 1,
+    "worker_outcome": "completed",
+    "turns": 47,
+    "tool_calls": 52,
+    "tool_errors": 13,
+    "files": 8,
+    "artifact_count": 8,
+    "artifacts": [
+      "cleaning_audit.csv",
+      "crowded_securities_latest.csv",
+      "effective_holdings.csv",
+      "filing_resolution.csv",
+      "manager_metrics.csv",
+      "overlap_latest.csv",
+      "summary.json",
+      "turnover.csv"
+    ],
+    "valid_worker_result": true
+  },
+  "official_evaluation": {
+    "tests_passed": 47,
+    "tests_total": 51,
+    "reward": 0.0,
+    "verifier_exit_code": 0,
+    "valid_fresh_observation": true,
+    "headroom_present": true,
+    "stable_baseline": false
+  },
+  "trusted_failed_set_research_record_only": {
+    "failed_count": 4,
+    "failed_tests": [
+      "test_outputs.py::test_reference_match_resolution_and_holdings_outputs",
+      "test_outputs.py::TestEffectiveHoldings::test_weights_sum_to_one_by_book",
+      "test_outputs.py::TestTurnover::test_summary_max_turnover_matches",
+      "test_outputs.py::TestOverlapLatest::test_summary_max_overlap_matches"
+    ],
+    "worker_visible": false,
+    "evolver_visible": false,
+    "allowed_use": "Research record and evaluator-side reconstruction only.",
+    "prohibited_use": "Do not place these identities, expected values, traces, or inferred predicates in Evolver evidence, public-only proposal inputs, reusable components, Worker prompts, tools, memory, routing, or candidate selection."
+  },
+  "request_accounting": {
+    "completed_requests": 47,
+    "input_tokens": 2409646,
+    "output_tokens": 54930,
+    "total_tokens": 2464576,
+    "provider_cost_usd": 0.061991920,
+    "rate_limited_retries": 0,
+    "failed_requests": 0,
+    "unreconciled_attempts": 0,
+    "unreconciled_requests": 0
+  },
+  "frozen_post_run_thresholds": {
+    "max_completed_requests": 40,
+    "completed_requests_observed": 47,
+    "request_threshold_exceeded": true,
+    "max_total_tokens": 3000000,
+    "total_tokens_observed": 2464576,
+    "token_threshold_exceeded": false,
+    "max_provider_cost_usd": 0.15,
+    "provider_cost_usd_observed": 0.061991920,
+    "cost_threshold_exceeded": false,
+    "effect": "Retain completed accounting and stop. This frozen plan authorizes no follow-on dispatch."
+  },
+  "runtime": {
+    "service_result": "success",
+    "service_restarts": 0,
+    "worker_cleaned_up": true,
+    "related_residue": 0
+  },
+  "terminal": {
+    "decision": "HOLDINGS_HEADROOM_FOR_SEPARATE_PUBLIC_ONLY_PLAN",
+    "classification": "headroom",
+    "follow_on_dispatch": false,
+    "proposal_launched": false,
+    "reviewer_launched": false,
+    "candidate_launched": false,
+    "next_plan_requirement": "Any public-only proposal requires a separately frozen plan whose evidence excludes the trusted failed set."
+  },
+  "retained_conclusion": "One valid fresh stochastic Quant-H0 execution left four official properties of headroom on the holdings task. The request threshold was exceeded after the completed Worker call, so R1 stops with no automatic follow-on; the trusted failed set remains evaluator-side research evidence only.",
+  "claim_boundary": {
+    "supported": "One valid stochastic Quant-H0 official observation, aggregate headroom, exact Worker activity and request cost, post-run threshold disposition, terminal classification, service completion, and cleanup.",
+    "not_supported": "A stable Quant-H0 baseline, candidate quality, harness improvement, Evolver or Reviewer effectiveness, a public failure localization, benchmark-wide performance, sealed generalization, or main-experiment readiness.",
+    "selection_boundary": "The aggregate 47/51 result establishes headroom only. Trusted failed-test identities cannot supervise the Evolver or a future candidate."
+  }
+}

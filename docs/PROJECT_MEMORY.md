@@ -1,5 +1,34 @@
 # QEA Repository Memory
 
+## 2026-08-24 public-only holdings Quant-H0 prescreen found headroom
+
+The frozen `qf-public-only-holdings-h0-prescreen-20260824-r1` produced one
+valid fresh stochastic Quant-H0 observation on
+`13f-amendment-aware-crowding`. The Worker completed 47 turns and 52 tool calls
+with 13 tool errors, created eight required artifacts, and scored 47/51 with
+reward 0 and verifier exit code 0. The terminal classification is
+`HOLDINGS_HEADROOM_FOR_SEPARATE_PUBLIC_ONLY_PLAN`; no Evolver, Reviewer,
+proposal, candidate, repeat, or protection run followed.
+
+The run used 47 completed requests, 2,409,646 input, 54,930 output, and
+2,464,576 total tokens for $0.061991920, with zero retries, failures, or
+unreconciled accounting. The request count exceeded the frozen post-run
+threshold of 40, while token and cost thresholds remained within bounds. The
+completed observation is retained, but the breach and frozen plan both require
+stop with no follow-on. Service result was success, `NRestarts=0`, cleanup
+completed, and related residue was zero.
+
+The trusted four-test failed set is retained only inside the compact and dated
+evaluator-side research records. Its identities, traces, expected values, and
+inferred predicates must not enter Evolver evidence or a future candidate. A
+later proposal must be separately frozen and grounded only in public task
+evidence and public Worker artifacts.
+
+This is one H0 headroom observation, not a stable baseline, candidate result,
+harness gain, search-method result, or main-readiness claim. Compact result:
+`data/breadth/QF_PUBLIC_ONLY_HOLDINGS_H0_PRESCREEN_RESULT.json`; full decision:
+`docs/decisions/2026-08-24-public-only-holdings-h0-prescreen-result.md`.
+
 ## 2026-08-24 public-only FX Quant-H0 prescreen R2 recovered and closed
 
 The separately frozen `qf-public-only-fx-h0-prescreen-20260824-r2` recovery
