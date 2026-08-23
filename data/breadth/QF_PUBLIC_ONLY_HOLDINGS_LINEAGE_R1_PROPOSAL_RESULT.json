@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-public-only-holdings-lineage-20260824-r1",
+  "proposal_run_id": "qf-public-only-holdings-proposal-20260824-r1",
+  "date": "2026-08-24",
+  "status": "proposal_admitted_stopped_activation_binding_non_singleton",
+  "research_question": "Can one public-contract plus answer-free trajectory proposal stage construct a legal holdings candidate that satisfies the frozen gate for a separate Information-Set Review?",
+  "setup": {
+    "benchmark": "QFBench",
+    "task_id": "13f-amendment-aware-crowding",
+    "parent": "Quant-H0",
+    "deployment_source_version": "320ab1b",
+    "frozen_plan": "data/breadth/QF_PUBLIC_ONLY_HOLDINGS_LINEAGE_R1_PLAN.json",
+    "proposal_artifacts": "results/bc-mirror/qf-public-only-holdings-proposal-20260824-r1",
+    "controller_artifacts": "results/bc-mirror/qf-public-only-holdings-lineage-20260824-r1-controller-state",
+    "authorized_evidence_record": "results/bc-mirror/qf-public-only-holdings-public-trajectory-evidence-20260824-r1/PUBLIC-TRAJECTORY-RECORD.json",
+    "proposal_stage_only": true,
+    "reviewer_requests_allowed": 0,
+    "worker_sessions_allowed": 0,
+    "verifier_executions_allowed": 0
+  },
+  "preflight": {
+    "status": "preflight_complete",
+    "model_requests": 0,
+    "selected_probe_dispatch_enabled": false
+  },
+  "proposal": {
+    "decision": "ACT",
+    "admitted": true,
+    "nonempty_diff": true,
+    "mutation": {
+      "component_roles": [
+        "systemprompt"
+      ],
+      "declared_roles": [
+        "systemprompt"
+      ],
+      "declared_roles_match_actual": true,
+      "changed_files": [
+        "systemprompt.md"
+      ],
+      "added_lines": 11,
+      "added_bytes": 1463,
+      "net_tree_bytes": 1463,
+      "prompt_only": true
+    },
+    "admission_checks": {
+      "passed": 9,
+      "total": 9,
+      "failure": null,
+      "checks": [
+        "file_manifest",
+        "protected_config",
+        "python_compile",
+        "declared_imports",
+        "subprocess_timeouts",
+        "local_bindings",
+        "local_skills",
+        "local_middlewares",
+        "component_reachability"
+      ]
+    },
+    "quant_research_state_cards": 1,
+    "state_retrieval_operations": 1,
+    "worker_visible_claims": {
+      "count": 3,
+      "claim_ids": [
+        "cross_table_key_canonicalization",
+        "numeric_column_coercion",
+        "filing_totals_reconciliation"
+      ]
+    }
+  },
+  "candidate_forbidden_content_surface_scan": {
+    "scope": "The complete 11-line Worker-visible system-prompt addition.",
+    "turnover_formula_found": false,
+    "canonical_output_label_found": false,
+    "mandatory_pair_shape_found": false,
+    "official_result_or_property_found": false,
+    "checker_predicate_found": false,
+    "expected_value_or_answer_found": false,
+    "interpretation": "No predeclared forbidden content was found in the changed Worker-visible prompt surface. This bounded text audit is not a Candidate Information-Set Reviewer verdict and does not establish candidate eligibility."
+  },
+  "activation_binding": {
+    "status": "none",
+    "new_registered_tools": [],
+    "modified_registered_tools": [],
+    "frozen_gate_required": "singleton_callable_component_activation_binding",
+    "gate_observation": "NON-SINGLETON",
+    "gate_passed": false
+  },
+  "controller": {
+    "stopped_after_stage": "proposal",
+    "recorded_phase": "INFORMATION_SET_REVIEW",
+    "phase_interpretation": "The phase names the next staged location; no Reviewer request executed.",
+    "frozen_proceed_stop_decision": "STOP",
+    "stop_reason": "The prompt-only candidate had no new or modified registered callable tool, so activation binding was not singleton.",
+    "reviewer_requests": 0,
+    "worker_sessions": 0,
+    "verifier_executions": 0,
+    "selected_probe_dispatched": false
+  },
+  "request_accounting": {
+    "completed_requests": 22,
+    "total_tokens": 2093270,
+    "provider_cost_usd": 0.061361376,
+    "retries": 0,
+    "failed_requests": 0
+  },
+  "legacy_discovery_summary": {
+    "contract_score": 0.7272727272727273,
+    "discriminating_probe_recorded": false,
+    "final_component_consistent": false,
+    "final_mechanism_consistent": false,
+    "authority": "Diagnostic only; these legacy fields are not the frozen activation-binding proceed/stop gate."
+  },
+  "runtime": {
+    "service_result": "success",
+    "service_restarts": 0,
+    "cleanup_complete": true,
+    "related_residue": 0
+  },
+  "retained_conclusion": "The public-only proposal stage autonomously produced a legal admitted prompt-only candidate with three Worker-visible claims carrying proposal-supplied public provenance that had not yet been Reviewer-validated for support or coverage. It did not satisfy the frozen singleton callable-component activation-binding gate, so the controller stopped before Reviewer, Worker, verifier, or probe dispatch.",
+  "claim_boundary": {
+    "supported": "One legal public-only proposal observation, nonempty prompt mutation, admission, declared-claim inventory, bounded forbidden-content surface scan, activation-binding gate stop, exact proposal accounting, and cleanup.",
+    "not_supported": "Candidate Information-Set Reviewer PASS or REJECT, complete semantic provenance, Worker activation, process improvement, official score change, candidate quality, harness gain, stable reuse, or main-experiment readiness.",
+    "candidate_disposition": "Not eligible for Reviewer or Worker dispatch under the frozen R1 gate."
+  }
+}

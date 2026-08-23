@@ -627,3 +627,29 @@ budget rule. Retain-and-stop preserves both. Finally, 13 tool errors and a
 non-full score in one long trajectory do not by themselves identify a stable
 harness defect; repeats or a later matched candidate evaluation would be
 needed for any capability or improvement claim.
+
+The proposal-stage result separates three questions that earlier canaries had
+blurred: whether the Evolver can construct a public-grounded mutation, whether
+that mutation passes semantic provenance review, and whether a Worker can
+activate the proposed component. R1 answers only the first question. The
+nonempty prompt edit, declared three-claim inventory, and admission success make
+it a legal proposal, while zero Reviewer calls leave both claim support and
+coverage open, and zero Worker calls leave the third question unmeasured.
+
+The stop also exposes a deliberate incompatibility between the candidate and
+the frozen mechanism gate. A system-prompt intervention may be always visible
+to the Worker, but it is not a registered callable component and thus cannot
+produce the singleton tool-activation evidence demanded by this plan. The
+controller correctly treats the empty new/modified tool sets as
+non-singleton. This is not a Reviewer rejection and should not be interpreted
+as evidence that the prompt content is bad; it means the candidate cannot test
+the predeclared activation-linked mechanism claim under R1.
+
+Finally, the legacy contract score of \HoldingsProposalLegacyContract{} and
+negative probe/component/mechanism-consistency flags are useful diagnostics of
+the proposal trace, but they are not the primary hard gate. Keeping them
+subordinate prevents a legacy summary metric from silently overriding the
+explicit staged protocol. A future experiment would need a newly frozen design
+choice---either a callable singleton component compatible with the existing
+gate or a different predeclared activation observable for prompt-only
+interventions---before any Reviewer or Worker dispatch.

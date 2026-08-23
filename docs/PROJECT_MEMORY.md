@@ -1,5 +1,40 @@
 # QEA Repository Memory
 
+## 2026-08-24 public-only holdings proposal admitted, then stopped at binding gate
+
+The proposal stage of `qf-public-only-holdings-lineage-20260824-r1` returned a
+legal admitted nonempty `ACT`. The only mutation was an 11-line, 1,463-byte
+addition to `systemprompt.md`; declared and actual roles both identified
+`systemprompt`, and all 9 admission checks passed. The proposal materialized
+one Quant Research State Card, performed one state retrieval, and declared
+three Worker-visible claims with proposal-supplied public provenance. Their
+support and coverage were not yet Reviewer-validated.
+
+A bounded read-only audit of the changed prompt found no turnover formula,
+verifier-derived canonical output label, mandatory pair/list shape, official
+result or property, checker predicate, expected value, or answer. This does
+not substitute for the Candidate Information-Set Reviewer or establish a
+Reviewer verdict.
+
+The candidate registered no new or modified callable tool, so activation
+binding was `none`, not the singleton binding required by the frozen gate. The
+controller stopped after `proposal`; its recorded `INFORMATION_SET_REVIEW`
+phase names the next staged location, not an executed review. Reviewer, Worker,
+verifier, and selected-probe dispatch counts were all zero.
+
+The proposal used 22 completed requests and 2,093,270 tokens for $0.061361376,
+with zero retries or failed requests. Service result was success,
+`NRestarts=0`, cleanup completed, and residue was zero. Legacy contract score
+0.7272727272727273 and its three negative consistency fields remain diagnostic
+only, not the primary gate.
+
+This is a legal public-only proposal observation and a frozen-gate stop, not a
+Reviewer result, Worker activation, candidate-quality result, or harness gain.
+Compact result:
+`data/breadth/QF_PUBLIC_ONLY_HOLDINGS_LINEAGE_R1_PROPOSAL_RESULT.json`; full
+decision:
+`docs/decisions/2026-08-24-public-only-holdings-lineage-r1-proposal-result.md`.
+
 ## 2026-08-24 public-only holdings Quant-H0 prescreen found headroom
 
 The frozen `qf-public-only-holdings-h0-prescreen-20260824-r1` produced one
