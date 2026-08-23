@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-public-only-holdings-review-refinement-20260824-r3",
+  "proposal_run_id": "qf-public-only-holdings-refine-proposal-20260824-r3",
+  "review_id": "qf-public-only-holdings-information-set-review-20260824-r3",
+  "date": "2026-08-24",
+  "status": "proposal_admitted_review_rejected_candidate_hold",
+  "research_question": "Can one answer-free LINEAGE_REFINEMENT round repair the public provenance and claim coverage of the held R1 holdings prompt candidate sufficiently to pass mandatory arm-blind Information-Set Review before any Worker dispatch?",
+  "setup": {
+    "benchmark": "QFBench",
+    "task_id": "13f-amendment-aware-crowding",
+    "mutation_parent": "qf-public-only-holdings-c1",
+    "candidate_id": "qf-public-only-holdings-c2-r3",
+    "proposal_arm": "quant-state",
+    "proposal_stage": "LINEAGE_REFINEMENT",
+    "review_scope": "answer_free_candidate_information_set",
+    "review_model": "deepseek/deepseek-v4-pro",
+    "reviewer_arm_blind": true,
+    "reviewer_worker_visible": false,
+    "reviewer_promotion_authority": false,
+    "review_material_scope": "Cumulative Quant-H0-to-c2 Worker-visible material, three declared c2 claims, one complete pre-existing public target instruction, and no optimize-only source.",
+    "proposal_artifact": "results/bc-mirror/qf-public-only-holdings-refine-proposal-20260824-r3/proposal-report.json",
+    "review_artifact": "results/bc-mirror/qf-public-only-holdings-information-set-review-20260824-r3/RESULT.json",
+    "controller_artifacts": "results/bc-mirror/qf-public-only-holdings-review-refinement-20260824-r3-controller-state"
+  },
+  "proposal": {
+    "decision": "ACT",
+    "admitted": true,
+    "admission_checks_passed": 9,
+    "mutation": {
+      "changed_files": [
+        "systemprompt.md"
+      ],
+      "declared_roles": [
+        "systemprompt"
+      ],
+      "actual_roles": [
+        "systemprompt"
+      ],
+      "declared_roles_match_actual": true,
+      "prompt_or_description_only": true,
+      "touches_executable_code": false,
+      "added_lines": 4,
+      "deleted_lines": 4,
+      "net_tree_bytes": 442,
+      "interpretation": "The refinement replaced four existing prompt lines: it narrowed key canonicalization to contract-declared cross-table consistency or exact-universe cases, made missing and numeric handling concrete, and added a public summary-page reconciliation example."
+    },
+    "worker_visible_claims": [
+      {
+        "claim_id": "cross_table_key_canonicalization_and_universe_coverage",
+        "surface": "systemprompt"
+      },
+      {
+        "claim_id": "numeric_and_missing_value_discipline",
+        "surface": "systemprompt"
+      },
+      {
+        "claim_id": "summary_page_reconciliation",
+        "surface": "systemprompt"
+      }
+    ],
+    "activation_binding": "none",
+    "selected_probe_requested": false,
+    "selected_probe_dispatched": false,
+    "accounting": {
+      "completed_requests": 17,
+      "total_tokens": 1688240,
+      "provider_cost_usd": 0.060657984,
+      "noncompleted_requests": 0,
+      "missing_token_count": 0,
+      "missing_cost_count": 0
+    }
+  },
+  "review_package_audit": {
+    "candidate_diff_scope": "Quant-H0-to-c2 cumulative prompt diff",
+    "candidate_files": [
+      "systemprompt.md"
+    ],
+    "claim_count": 3,
+    "public_source_count": 1,
+    "public_source_ref": "public:13f-full-instruction",
+    "public_source_exact_match": true,
+    "public_source_characters": 5355,
+    "optimize_only_source_count": 0,
+    "search_arm_exposed": false,
+    "review_feedback_exposed": false
+  },
+  "review": {
+    "overall_verdict": "REJECT",
+    "coverage": {
+      "verdict": "REJECT",
+      "undeclared_exposures": [
+        {
+          "surface": "systemprompt",
+          "exposure": "Report retained-set cardinalities after universe-coverage verification.",
+          "coverage_gap": "The canonicalization-and-coverage claim declared verification and small-set bug signaling but omitted the reporting/cardinality instruction."
+        },
+        {
+          "surface": "systemprompt",
+          "exposure": "Confirm dtypes after aggregation.",
+          "coverage_gap": "The numeric-and-missing claim declared pre-aggregation and pre-filtering coercion plus no string aggregation but omitted post-aggregation dtype confirmation."
+        }
+      ]
+    },
+    "claim_reviews": [
+      {
+        "claim_id": "cross_table_key_canonicalization_and_universe_coverage",
+        "verdict": "INCONCLUSIVE",
+        "interpretation": "The complete public instruction supports an exact manager-period universe and mutually consistent report-period fields but does not directly entail mandatory key-encoding inspection and canonicalization before joins or filters."
+      },
+      {
+        "claim_id": "numeric_and_missing_value_discipline",
+        "verdict": "INCONCLUSIVE",
+        "interpretation": "The complete public instruction requires blank and non-positive filtering plus numeric analytics but does not directly entail the candidate's string-nan handling, mandatory numeric coercion procedure, or post-aggregation dtype confirmation."
+      },
+      {
+        "claim_id": "summary_page_reconciliation",
+        "verdict": "PASS",
+        "interpretation": "The complete public instruction directly requires filing-total reconciliation against summary-page data and the associated recorded differences and checks."
+      }
+    ]
+  },
+  "review_request": {
+    "request_count": 1,
+    "response_usage": {
+      "prompt_tokens": 4872,
+      "completion_tokens": 13293,
+      "total_tokens": 18165
+    },
+    "provider_accounting": {
+      "provider": "DeepSeek",
+      "resolved_model": "deepseek/deepseek-v4-pro-20260813",
+      "prompt_tokens": 4877,
+      "completion_tokens": 15744,
+      "total_tokens": 20621
+    },
+    "accounting_difference": {
+      "provider_minus_response_prompt_tokens": 5,
+      "provider_minus_response_completion_tokens": 2451,
+      "provider_minus_response_total_tokens": 2456,
+      "controller_token_surface": "response_usage",
+      "interpretation": "Both token surfaces are retained; the controller added response-usage tokens to lineage cost."
+    },
+    "provider_cost_usd": 0.028964012,
+    "wall_seconds": 162.231
+  },
+  "lineage_accounting": {
+    "proposal": {
+      "completed_requests": 17,
+      "total_tokens": 1688240,
+      "provider_cost_usd": 0.060657984
+    },
+    "review_increment": {
+      "completed_requests": 1,
+      "total_tokens": 18165,
+      "provider_cost_usd": 0.028964012
+    },
+    "cumulative_after_review": {
+      "completed_requests": 18,
+      "total_tokens": 1706405,
+      "provider_cost_usd": 0.089621996
+    },
+    "token_rule": "1,688,240 proposal tokens plus 18,165 Reviewer response-usage tokens."
+  },
+  "controller": {
+    "decision": "HOLD_FOR_REFINE",
+    "phase": "HOLD_FOR_REFINE",
+    "reason": "information_set_review_reject",
+    "proposal_evolver_sessions": 1,
+    "reviewer_requests": 1,
+    "worker_sessions": 0,
+    "verifier_executions": 0,
+    "selected_probe_dispatches": 0,
+    "candidate_passed": false
+  },
+  "terminal_resume_audit": {
+    "first_resume": {
+      "external_approval_flag_present": false,
+      "action": "Cleared only the stopped_after_stage marker.",
+      "phase": "HOLD_FOR_REFINE",
+      "decision": "HOLD_FOR_REFINE",
+      "new_dispatches": 0,
+      "new_completed_requests": 0,
+      "new_tokens": 0,
+      "new_provider_cost_usd": 0.0,
+      "accounted_ids_changed": false,
+      "result_changed": false
+    },
+    "second_resume": {
+      "external_approval_flag_present": false,
+      "state_changed": false,
+      "result_changed": false,
+      "new_dispatches": 0,
+      "new_completed_requests": 0,
+      "new_tokens": 0,
+      "new_provider_cost_usd": 0.0,
+      "final_completed_requests": 18,
+      "final_total_tokens": 1706405,
+      "final_provider_cost_usd": 0.089621996,
+      "interpretation": "The post-marker candidate hold and accounted proposal and review identities remained exact and stable."
+    }
+  },
+  "runtime": {
+    "proposal_systemd_result": "success",
+    "review_systemd_result": "success",
+    "proposal_service_restarts": 0,
+    "review_service_restarts": 0,
+    "sandbox_and_network_cleanup_complete": true,
+    "accidental_public_instruction_temp_file_removed": true,
+    "related_residue": 0
+  },
+  "retained_conclusion": "R3 demonstrates answer-free lineage refinement followed by a mandatory cumulative pre-Worker review that rejects both insufficient public support and incomplete claim coverage. The prompt candidate remains held and no Worker, verifier, or selected probe was dispatched.",
+  "claim_boundary": {
+    "supported": "One admitted prompt-only refinement proposal, one arm-blind cumulative Information-Set Review, claim-level and coverage verdicts, rejection-driven controller hold, dual token accounting, terminal idempotence, and cleanup.",
+    "not_supported": "Candidate PASS, Worker uptake, process improvement, official benchmark gain, harness improvement, promotion, stable reuse, broad transfer, or main-experiment readiness.",
+    "next_candidate_status": "Rejected by mandatory review and held; no recorded result authorizes Worker dispatch."
+  }
+}

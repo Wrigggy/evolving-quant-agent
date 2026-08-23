@@ -1,5 +1,48 @@
 # QEA Repository Memory
 
+## 2026-08-24 public-only holdings R3 refinement was rejected before Worker
+
+The answer-free R3 `LINEAGE_REFINEMENT` proposal returned an admitted `ACT`.
+It replaced four lines in `systemprompt.md`, changed no executable code or
+registered tool, passed all nine admission checks, and declared three
+Worker-visible prompt claims: cross-table key canonicalization plus universe
+coverage, numeric plus missing-value discipline, and summary-page
+reconciliation. Proposal accounting was 17 completed requests, 1,688,240
+tokens, and $0.060657984. Selected-probe, Worker, and verifier dispatch were
+all zero.
+
+The mandatory arm-blind Candidate Information-Set Reviewer then inspected
+cumulative Quant-H0-to-c2 prompt material, the three declared claims, one
+complete exact public target instruction, and zero optimize-only sources. The
+overall verdict and coverage verdict were both `REJECT`. Canonicalization plus
+coverage and numeric plus missing-value discipline were `INCONCLUSIVE` because
+their procedural rules were not directly entailed by the supplied public
+instruction. Summary-page reconciliation was `PASS`. Coverage independently
+found two undeclared prompt exposures: reporting retained-set cardinalities and
+confirming dtypes after aggregation.
+
+The one Reviewer request used 18,165 response-usage tokens and cost
+$0.028964012 over 162.231 seconds. Provider accounting separately reported
+20,621 tokens. The controller used response usage, so proposal-plus-review
+cumulative accounting was 18 requests, 1,706,405 tokens, and $0.089621996. It
+selected `HOLD_FOR_REFINE` with reason `information_set_review_reject` and
+dispatched zero Worker, verifier, or probe.
+
+Two no-approval terminal resumes were zero-work: the first cleared only the
+stopped-stage marker, and the second left state exactly stable. Both preserved
+the candidate hold, accounted proposal and review identities, and cumulative
+cost. Both systemd stages reported success with zero restarts; sandbox and
+network cleanup completed. The accidental public-instruction comparison file
+in `/tmp` was removed, leaving zero related residue.
+
+This is evidence that answer-free Reviewer-guided refinement and mandatory
+pre-Worker coverage review can reject an incompletely declared candidate. It is
+not a candidate PASS, Worker-uptake result, official gain, harness improvement,
+or main-readiness result. Compact result:
+`data/breadth/QF_PUBLIC_ONLY_HOLDINGS_REVIEW_REFINEMENT_R3_RESULT.json`; full
+decision:
+`docs/decisions/2026-08-24-public-only-holdings-review-refinement-r3-result.md`.
+
 ## 2026-08-24 public-only holdings R2 Reviewer held the candidate
 
 The R2 Reviewer-only replay corrected prompt-family review eligibility without
