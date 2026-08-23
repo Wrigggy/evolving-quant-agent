@@ -113,6 +113,7 @@ def _apply(
     *,
     property_set_safe=None,
     relation_observed=None,
+    property_delta=None,
 ):
     return import_pilot_report(
         state,
@@ -122,8 +123,55 @@ def _apply(
         parent_arm="h0",
         candidate_arm="candidate",
         relation_observed=relation_observed,
+        property_delta=property_delta,
         property_set_safe=property_set_safe,
     )
+
+
+def _semantic_state(*, token="audit_component", relation="relation-any"):
+    state = _state()
+    state["repeat_consistency_policy"] = "resolved_property_footprint_v1"
+    state["proposal"] = {
+        "mechanism_claim": {
+            "selected_relation": (
+                {"relation_id": relation} if relation is not None else None
+            )
+        }
+    }
+    if token is not None:
+        state["candidate"]["activation_token"] = token
+    return state
+
+
+def _activated(report, *, token="audit_component", count=1):
+    report["activations"] = {
+        "candidate": {
+            "activation_count": count,
+            "attempts": [
+                {
+                    "attempt_id": f"{report['run_id']}-candidate",
+                    "task_id": report["summaries"]["candidate"]["scores"][0][
+                        "task_id"
+                    ],
+                    "activation_token": token,
+                    "activated": count > 0,
+                }
+            ],
+        }
+    }
+    return report
+
+
+def _delta(parent_failed, candidate_failed):
+    parent = set(parent_failed)
+    candidate = set(candidate_failed)
+    return {
+        "parent_failed": sorted(parent),
+        "candidate_failed": sorted(candidate),
+        "resolved": sorted(parent - candidate),
+        "introduced": sorted(candidate - parent),
+        "persistent": sorted(parent & candidate),
+    }
 
 
 def test_repeated_gain_and_safe_protection_promote_then_freeze():
@@ -160,6 +208,212 @@ def test_target_without_gain_rolls_back_without_repeat():
 
     assert state["decision"] == "ROLLBACK"
     assert "repeat" not in state["observations"]
+
+
+def test_repeat_semantic_footprint_consistent_advances_to_protection():
+    target = _activated(
+        _report("target-run", "target", (1, 3, 0), (2, 3, 1))
+    )
+    state = _apply(
+        _semantic_state(),
+        "target",
+        target,
+        property_delta=_delta(("property-P", "property-Z"), ("property-Z",)),
+    )
+    repeat = _activated(
+        _report("repeat-run", "target", (1, 3, 0), (2, 3, 1))
+    )
+    state = _apply(
+        state,
+        "repeat",
+        repeat,
+        property_delta=_delta(("property-P", "property-Z"), ("property-Z",)),
+    )
+
+    semantic = state["observations"]["repeat"]["mechanism"]["semantic_repeat"]
+    assert semantic["verdict"] == "CONSISTENT"
+    assert semantic["expected_property_ids"] == ["property-P"]
+    assert state["phase"] == "PROTECTION"
+    assert _apply(
+        state,
+        "repeat",
+        repeat,
+        property_delta=_delta(("property-P", "property-Z"), ("property-Z",)),
+    ) == state
+
+
+def test_repeat_same_score_gain_on_unrelated_property_rolls_back():
+    target = _activated(
+        _report("target-run", "target", (1, 3, 0), (2, 3, 1))
+    )
+    state = _apply(
+        _semantic_state(relation="open-family-relation"),
+        "target",
+        target,
+        property_delta=_delta(("property-P", "property-Q"), ("property-Q",)),
+    )
+    repeat = _activated(
+        _report("repeat-run", "target", (1, 3, 0), (2, 3, 1),),
+        count=2,
+    )
+    state = _apply(
+        state,
+        "repeat",
+        repeat,
+        property_delta=_delta(("property-P", "property-Q"), ("property-P",)),
+    )
+
+    semantic = state["observations"]["repeat"]["mechanism"]["semantic_repeat"]
+    assert semantic["persistent_expected"] == ["property-P"]
+    assert semantic["unrelated_resolved"] == ["property-Q"]
+    assert semantic["verdict"] == "INCONSISTENT"
+    assert state["decision"] == "ROLLBACK"
+
+
+def test_repeat_callable_component_must_activate_again():
+    state = _apply(
+        _semantic_state(),
+        "target",
+        _activated(_report("target-run", "target", (1, 2, 0), (2, 2, 1))),
+        property_delta=_delta(("property-P",), ()),
+    )
+    state = _apply(
+        state,
+        "repeat",
+        _activated(
+            _report("repeat-run", "target", (1, 2, 0), (2, 2, 1)), count=0
+        ),
+        property_delta=_delta(("property-P",), ()),
+    )
+
+    semantic = state["observations"]["repeat"]["mechanism"]["semantic_repeat"]
+    assert semantic["verdict"] == "INCONSISTENT"
+    assert semantic["reason"] == "repeat_component_not_activated"
+    assert state["decision"] == "ROLLBACK"
+
+
+def test_repeat_reintroducing_target_property_rolls_back():
+    state = _apply(
+        _semantic_state(),
+        "target",
+        _activated(_report("target-run", "target", (1, 3, 0), (2, 3, 1))),
+        property_delta=_delta(("property-P", "property-Q"), ("property-Q",)),
+    )
+    state = _apply(
+        state,
+        "repeat",
+        _activated(_report("repeat-run", "target", (1, 3, 0), (2, 3, 1))),
+        property_delta=_delta(("property-Q",), ("property-P",)),
+    )
+
+    semantic = state["observations"]["repeat"]["mechanism"]["semantic_repeat"]
+    assert semantic["introduced_expected"] == ["property-P"]
+    assert semantic["repeat_introduced"] == ["property-P"]
+    assert semantic["verdict"] == "INCONSISTENT"
+    assert state["decision"] == "ROLLBACK"
+
+
+def test_repeat_target_footprint_not_exercised_holds_for_refine():
+    state = _apply(
+        _semantic_state(),
+        "target",
+        _activated(_report("target-run", "target", (1, 3, 0), (2, 3, 1))),
+        property_delta=_delta(("property-P", "property-Q"), ("property-Q",)),
+    )
+    state = _apply(
+        state,
+        "repeat",
+        _activated(_report("repeat-run", "target", (2, 3, 0), (3, 3, 1))),
+        property_delta=_delta(("property-Q",), ()),
+    )
+
+    semantic = state["observations"]["repeat"]["mechanism"]["semantic_repeat"]
+    assert semantic["not_exercised_expected"] == ["property-P"]
+    assert semantic["verdict"] == "NOT_EXERCISED"
+    assert state["decision"] == "HOLD_FOR_REFINE"
+
+
+def test_unexercised_footprint_holds_before_aggregate_repeat_gate():
+    state = _apply(
+        _semantic_state(),
+        "target",
+        _activated(_report("target-run", "target", (1, 3, 0), (2, 3, 1))),
+        property_delta=_delta(("property-P", "property-Q"), ("property-Q",)),
+    )
+    state = _apply(
+        state,
+        "repeat",
+        _activated(_report("repeat-run", "target", (2, 3, 0), (2, 3, 0))),
+        property_delta=_delta(("property-Q",), ("property-Q",)),
+    )
+
+    semantic = state["observations"]["repeat"]["mechanism"]["semantic_repeat"]
+    assert state["observations"]["repeat"]["gate_passed"] is False
+    assert semantic["not_exercised_expected"] == ["property-P"]
+    assert semantic["verdict"] == "NOT_EXERCISED"
+    assert state["decision"] == "HOLD_FOR_REFINE"
+
+
+def test_callable_target_without_activation_is_unbound_and_holds():
+    state = _apply(
+        _semantic_state(),
+        "target",
+        _activated(
+            _report("target-run", "target", (1, 2, 0), (2, 2, 1)), count=0
+        ),
+        property_delta=_delta(("property-P",), ()),
+    )
+
+    footprint = state["observations"]["target"]["mechanism"][
+        "empirical_relation_footprint"
+    ]
+    assert footprint["status"] == "UNBOUND"
+    assert state["decision"] == "HOLD_FOR_REFINE"
+
+
+def test_prompt_only_candidate_can_repeat_same_property_footprint():
+    state = _apply(
+        _semantic_state(token=None),
+        "target",
+        _report("target-run", "target", (1, 2, 0), (2, 2, 1)),
+        property_delta=_delta(("arbitrary-property",), ()),
+    )
+    state = _apply(
+        state,
+        "repeat",
+        _report("repeat-run", "target", (1, 2, 0), (2, 2, 1)),
+        property_delta=_delta(("arbitrary-property",), ()),
+    )
+
+    assert (
+        state["observations"]["repeat"]["mechanism"]["semantic_repeat"][
+            "verdict"
+        ]
+        == "CONSISTENT"
+    )
+    assert state["phase"] == "PROTECTION"
+
+
+def test_generic_candidate_can_anchor_footprint_without_named_relation():
+    state = _apply(
+        _semantic_state(token=None, relation=None),
+        "target",
+        _report("target-run", "target", (1, 2, 0), (2, 2, 1)),
+        property_delta=_delta(("open-property",), ()),
+    )
+    footprint = state["observations"]["target"]["mechanism"][
+        "empirical_relation_footprint"
+    ]
+    assert footprint["relation_id"] is None
+    assert footprint["status"] == "ANCHORED"
+
+    state = _apply(
+        state,
+        "repeat",
+        _report("repeat-run", "target", (1, 2, 0), (2, 2, 1)),
+        property_delta=_delta(("open-property",), ()),
+    )
+    assert state["phase"] == "PROTECTION"
 
 
 def test_reimporting_accounted_report_is_idempotent():

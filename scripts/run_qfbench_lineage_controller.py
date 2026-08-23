@@ -782,6 +782,64 @@ def property_set_safe_from_reports(
     return candidate_failed.issubset(parent_failed)
 
 
+def failed_property_delta(
+    report_path: Path,
+    report: Mapping[str, object],
+    *,
+    parent_arm: str,
+    candidate_arm: str,
+    task_id: str,
+) -> dict[str, object]:
+    """Return one trusted parent--candidate failed-property delta."""
+
+    parent_failed = failed_properties(
+        report_path, report, arm=parent_arm, task_id=task_id
+    )
+    candidate_failed = failed_properties(
+        report_path, report, arm=candidate_arm, task_id=task_id
+    )
+    return _failed_property_delta(parent_failed, candidate_failed)
+
+
+def failed_property_delta_from_reports(
+    *,
+    parent_report_path: Path,
+    parent_report: Mapping[str, object],
+    parent_arm: str,
+    candidate_report_path: Path,
+    candidate_report: Mapping[str, object],
+    candidate_arm: str,
+    task_id: str,
+) -> dict[str, object]:
+    """Return a trusted delta when the parent comparator is reused."""
+
+    parent_failed = failed_properties(
+        parent_report_path,
+        parent_report,
+        arm=parent_arm,
+        task_id=task_id,
+    )
+    candidate_failed = failed_properties(
+        candidate_report_path,
+        candidate_report,
+        arm=candidate_arm,
+        task_id=task_id,
+    )
+    return _failed_property_delta(parent_failed, candidate_failed)
+
+
+def _failed_property_delta(
+    parent_failed: frozenset[str], candidate_failed: frozenset[str]
+) -> dict[str, object]:
+    return {
+        "parent_failed": sorted(parent_failed),
+        "candidate_failed": sorted(candidate_failed),
+        "resolved": sorted(parent_failed - candidate_failed),
+        "introduced": sorted(candidate_failed - parent_failed),
+        "persistent": sorted(parent_failed & candidate_failed),
+    }
+
+
 def _run_child(runner: Runner, argv: Sequence[str]) -> None:
     result = runner(argv)
     return_code = getattr(result, "returncode", 0)
@@ -834,6 +892,9 @@ def run_controller(
                 ),
                 "quantitative_protection_review": (
                     lineage.get("quantitative_protection_review") is True
+                ),
+                "repeat_consistency_policy": lineage.get(
+                    "repeat_consistency_policy", "aggregate_only"
                 ),
             }
             if isinstance(proposal, Mapping):
@@ -992,6 +1053,7 @@ def run_controller(
                     task_id=str(stage["task_id"]),
                 )
             property_safe = None
+            property_delta = None
             quantitative_triage = None
             quantitative_review = (
                 state.get("quantitative_protection_review") is True
@@ -1020,6 +1082,30 @@ def run_controller(
                         candidate_arm=candidate_arm,
                         task_id=str(stage["task_id"]),
                     )
+            if (
+                stage_name in {"target", "repeat"}
+                and state.get("repeat_consistency_policy")
+                == "resolved_property_footprint_v1"
+            ):
+                if parent_comparator is None:
+                    property_delta = failed_property_delta(
+                        report_path,
+                        report,
+                        parent_arm=parent_arm,
+                        candidate_arm=candidate_arm,
+                        task_id=str(stage["task_id"]),
+                    )
+                else:
+                    _, parent_report_path, parent_report = parent_comparator
+                    property_delta = failed_property_delta_from_reports(
+                        parent_report_path=parent_report_path,
+                        parent_report=parent_report,
+                        parent_arm=parent_arm,
+                        candidate_report_path=report_path,
+                        candidate_report=child_report,
+                        candidate_arm=candidate_arm,
+                        task_id=str(stage["task_id"]),
+                    )
             state = import_pilot_report(
                 state,
                 stage=stage_name,
@@ -1028,6 +1114,7 @@ def run_controller(
                 parent_arm=parent_arm,
                 candidate_arm=candidate_arm,
                 relation_observed=stage.get("relation_observed"),
+                property_delta=property_delta,
                 property_set_safe=property_safe,
                 quantitative_protection_triage=quantitative_triage,
             )

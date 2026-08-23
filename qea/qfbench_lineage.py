@@ -22,6 +22,9 @@ _STAGE_PHASE = {
     "protection": "PROTECTION",
     "protection_repeat": "PROTECTION_REPEAT",
 }
+_REPEAT_CONSISTENCY_POLICIES = frozenset(
+    {"aggregate_only", "resolved_property_footprint_v1"}
+)
 
 
 def new_lineage(
@@ -37,8 +40,14 @@ def new_lineage(
     worker_budget: str,
     cost_limit_usd: float | str,
     quantitative_protection_review: bool = False,
+    repeat_consistency_policy: str = "aggregate_only",
 ) -> dict[str, object]:
     """Create a one-candidate lineage ready for its target evaluation."""
+
+    if repeat_consistency_policy not in _REPEAT_CONSISTENCY_POLICIES:
+        raise LineageError(
+            f"unknown repeat consistency policy: {repeat_consistency_policy}"
+        )
 
     return {
         "schema_version": 1,
@@ -69,6 +78,7 @@ def new_lineage(
         "archive": [],
         "decision": None,
         "quantitative_protection_review": quantitative_protection_review,
+        "repeat_consistency_policy": repeat_consistency_policy,
     }
 
 
@@ -83,6 +93,7 @@ def new_proposal_lineage(
     worker_budget: str,
     cost_limit_usd: float | str,
     quantitative_protection_review: bool = False,
+    repeat_consistency_policy: str = "aggregate_only",
 ) -> dict[str, object]:
     """Create a lineage whose candidate will come from an Evolver report."""
 
@@ -98,6 +109,7 @@ def new_proposal_lineage(
         worker_budget=worker_budget,
         cost_limit_usd=cost_limit_usd,
         quantitative_protection_review=quantitative_protection_review,
+        repeat_consistency_policy=repeat_consistency_policy,
     )
     state["phase"] = "PROPOSAL"
     state["candidate"] = None
@@ -430,6 +442,130 @@ def _mechanism_observation(
     }
 
 
+def _property_ids(
+    delta: Mapping[str, object] | None, field: str
+) -> frozenset[str]:
+    if not isinstance(delta, Mapping) or not isinstance(delta.get(field), list):
+        return frozenset()
+    return frozenset(
+        str(value) for value in delta[field] if isinstance(value, str) and value
+    )
+
+
+def _target_relation_footprint(
+    observation: Mapping[str, object],
+) -> dict[str, object]:
+    """Bind a proposed relation to its first independent property correction."""
+
+    mechanism = observation.get("mechanism")
+    mechanism = mechanism if isinstance(mechanism, Mapping) else {}
+    activation = mechanism.get("activation")
+    activation = activation if isinstance(activation, Mapping) else {}
+    relation_id = mechanism.get("relation_id")
+    component_token = activation.get("token")
+    activation_status = activation.get("status", "UNKNOWN")
+    resolved = sorted(_property_ids(observation.get("property_delta"), "resolved"))
+    introduced = sorted(
+        _property_ids(observation.get("property_delta"), "introduced")
+    )
+    callable_component = isinstance(component_token, str) and bool(component_token)
+    # Generic proposals do not have to name a research relation.  The
+    # footprint is still an independently observed component/outcome anchor,
+    # so requiring a relation ID here would make the matched QRS treatment
+    # easier to promote than the generic arm.
+    anchored = bool(resolved) and (
+        not callable_component or activation_status == "ACTIVATED"
+    )
+    return {
+        "policy": "resolved_property_footprint_v1",
+        "relation_id": relation_id,
+        "component_token": component_token,
+        "activation_status": activation_status,
+        "activation_required": callable_component,
+        "resolved_property_ids": resolved,
+        "introduced_property_ids": introduced,
+        "status": "ANCHORED" if anchored else "UNBOUND",
+        "boundary": "empirical_association_not_semantic_causality",
+    }
+
+
+def evaluate_repeat_semantic_consistency(
+    state: Mapping[str, object], observation: Mapping[str, object]
+) -> dict[str, object]:
+    """Check whether repeat reproduces the target's empirical relation footprint."""
+
+    target = state.get("observations", {}).get("target")
+    target_mechanism = (
+        target.get("mechanism") if isinstance(target, Mapping) else None
+    )
+    footprint = (
+        target_mechanism.get("empirical_relation_footprint")
+        if isinstance(target_mechanism, Mapping)
+        else None
+    )
+    if not isinstance(footprint, Mapping) or footprint.get("status") != "ANCHORED":
+        return {
+            "policy": "resolved_property_footprint_v1",
+            "verdict": "UNBOUND",
+            "reason": "target_relation_footprint_unbound",
+        }
+
+    expected = _property_ids(footprint, "resolved_property_ids")
+    delta = observation.get("property_delta")
+    parent_failed = _property_ids(delta, "parent_failed")
+    candidate_failed = _property_ids(delta, "candidate_failed")
+    resolved = _property_ids(delta, "resolved")
+    introduced = _property_ids(delta, "introduced")
+    resolved_expected = expected & resolved
+    persistent_expected = expected & parent_failed & candidate_failed
+    introduced_expected = expected & candidate_failed - parent_failed
+    not_exercised_expected = expected - parent_failed - candidate_failed
+    unrelated_resolved = resolved - expected
+
+    mechanism = observation.get("mechanism")
+    mechanism = mechanism if isinstance(mechanism, Mapping) else {}
+    activation = mechanism.get("activation")
+    activation = activation if isinstance(activation, Mapping) else {}
+    activation_status = activation.get("status", "UNKNOWN")
+    activation_required = footprint.get("activation_required") is True
+    component_token = activation.get("token")
+    same_component = component_token == footprint.get("component_token")
+
+    if activation_required and (
+        activation_status != "ACTIVATED" or not same_component
+    ):
+        verdict = "INCONSISTENT"
+        reason = "repeat_component_not_activated"
+    elif persistent_expected or introduced_expected or introduced:
+        verdict = "INCONSISTENT"
+        reason = "repeat_relation_footprint_not_reproduced"
+    elif not_exercised_expected:
+        verdict = "NOT_EXERCISED"
+        reason = "repeat_parent_did_not_expose_target_footprint"
+    elif resolved_expected == expected:
+        verdict = "CONSISTENT"
+        reason = "repeat_relation_footprint_reproduced"
+    else:
+        verdict = "INCONSISTENT"
+        reason = "repeat_relation_footprint_not_reproduced"
+
+    return {
+        "policy": "resolved_property_footprint_v1",
+        "relation_id": footprint.get("relation_id"),
+        "component_token": footprint.get("component_token"),
+        "activation_status": activation_status,
+        "expected_property_ids": sorted(expected),
+        "resolved_expected": sorted(resolved_expected),
+        "persistent_expected": sorted(persistent_expected),
+        "introduced_expected": sorted(introduced_expected),
+        "not_exercised_expected": sorted(not_exercised_expected),
+        "unrelated_resolved": sorted(unrelated_resolved),
+        "repeat_introduced": sorted(introduced),
+        "verdict": verdict,
+        "reason": reason,
+    }
+
+
 def _finish_candidate(
     state: dict[str, object], *, decision: str, reason: str
 ) -> dict[str, object]:
@@ -548,6 +684,7 @@ def import_pilot_report(
     parent_arm: str,
     candidate_arm: str,
     relation_observed: bool | None = None,
+    property_delta: Mapping[str, object] | None = None,
     property_set_safe: bool | None = None,
     quantitative_protection_triage: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
@@ -591,6 +728,7 @@ def import_pilot_report(
             if isinstance(candidate_activation, Mapping)
             else None
         ),
+        property_delta=property_delta,
         property_set_safe=property_set_safe,
         quantitative_protection_triage=quantitative_protection_triage,
     )
@@ -645,6 +783,7 @@ def import_comparison_observation(
     provenance: Mapping[str, object] | None = None,
     relation_observed: bool | None = None,
     mechanism_activation: Mapping[str, object] | None = None,
+    property_delta: Mapping[str, object] | None = None,
     property_set_safe: bool | None = None,
     quantitative_protection_triage: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
@@ -698,6 +837,8 @@ def import_comparison_observation(
     )
     if mechanism is not None:
         observation["mechanism"] = mechanism
+    if isinstance(property_delta, Mapping):
+        observation["property_delta"] = deepcopy(dict(property_delta))
     if isinstance(provenance, Mapping):
         observation["provenance"] = deepcopy(dict(provenance))
         comparator_reuse = provenance.get("parent_comparator_reuse")
@@ -710,10 +851,47 @@ def import_comparison_observation(
     if stage in {"target", "repeat"}:
         passed = _gain(normalized_parent, normalized_candidate)
         observation["gate_passed"] = passed
-        if not passed:
+        semantic_policy = result.get("repeat_consistency_policy")
+        if (
+            stage == "repeat"
+            and semantic_policy == "resolved_property_footprint_v1"
+        ):
+            mechanism = observation.setdefault("mechanism", {})
+            semantic_repeat = evaluate_repeat_semantic_consistency(
+                result, observation
+            )
+            mechanism["semantic_repeat"] = semantic_repeat
+            if semantic_repeat["verdict"] == "INCONSISTENT":
+                return _finish_candidate(
+                    result,
+                    decision="ROLLBACK",
+                    reason=str(semantic_repeat["reason"]),
+                )
+            if semantic_repeat["verdict"] in {"NOT_EXERCISED", "UNBOUND"}:
+                return _hold_candidate_for_refine(
+                    result, reason=str(semantic_repeat["reason"])
+                )
+            if not passed:
+                return _finish_candidate(
+                    result,
+                    decision="ROLLBACK",
+                    reason="repeat_gain_not_observed",
+                )
+        elif not passed:
             return _finish_candidate(
                 result, decision="ROLLBACK", reason=f"{stage}_gain_not_observed"
             )
+        if (
+            stage == "target"
+            and semantic_policy == "resolved_property_footprint_v1"
+        ):
+            mechanism = observation.setdefault("mechanism", {})
+            footprint = _target_relation_footprint(observation)
+            mechanism["empirical_relation_footprint"] = footprint
+            if footprint["status"] != "ANCHORED":
+                return _hold_candidate_for_refine(
+                    result, reason="target_relation_footprint_unbound"
+                )
         if _budget_reached(result):
             result["decision"] = "BUDGET_STOP"
             result["phase"] = "BUDGET_STOP"

@@ -11,6 +11,7 @@ from scripts.run_qfbench_lineage_controller import (
     build_child_argv,
     build_proposal_argv,
     build_quantcodeeval_child_argv,
+    failed_property_delta_from_reports,
     property_set_safe,
     property_set_safe_from_reports,
     run_controller,
@@ -179,6 +180,21 @@ def test_reused_parent_property_safety_reads_each_report(tmp_path):
         candidate_arm="candidate",
         task_id="task-p",
     )
+    assert failed_property_delta_from_reports(
+        parent_report_path=parent_path,
+        parent_report=parent_report,
+        parent_arm="h0",
+        candidate_report_path=candidate_path,
+        candidate_report=candidate_report,
+        candidate_arm="candidate",
+        task_id="task-p",
+    ) == {
+        "parent_failed": ["barrier"],
+        "candidate_failed": ["vanilla"],
+        "resolved": ["barrier"],
+        "introduced": ["vanilla"],
+        "persistent": [],
+    }
 
 def test_replay_runs_to_frozen_without_child_dispatch(tmp_path):
     reports = tmp_path / "reports"
@@ -851,6 +867,7 @@ def test_live_child_argv_prefers_proposal_bound_activation_token():
     argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
 
     assert argv[argv.index("--activation-token") + 1] == "actual_new_tool"
+    assert "property-P" not in argv
 
 
 def test_live_child_argv_does_not_guess_for_ambiguous_proposal_binding():
@@ -1204,6 +1221,132 @@ def test_stop_after_proposal_resumes_without_reimporting_proposal(tmp_path):
     assert resumed["decision"] == "PROMOTE"
     assert resumed["archive"][0]["worker_dir"] == "/proposal-output/candidate"
     assert resumed["accounted_run_ids"].count("proposal-r1") == 1
+
+
+def test_opt_in_semantic_repeat_controller_is_resume_idempotent(tmp_path):
+    parent = tmp_path / "workers/h0"
+    candidate = tmp_path / "workers/candidate"
+    parent.mkdir(parents=True)
+    candidate.mkdir(parents=True)
+    parent.joinpath("agent.yaml").write_text(json.dumps({
+        "tools": [{"name": "run_shell_command", "yaml_path": "shell.yaml"}]
+    }))
+    candidate.joinpath("agent.yaml").write_text(json.dumps({
+        "tools": [
+            {"name": "run_shell_command", "yaml_path": "shell.yaml"},
+            {"name": "audit_component", "yaml_path": "audit.yaml"},
+        ]
+    }))
+    proposal_path = tmp_path / "proposal/proposal-report.json"
+    proposal_path.parent.mkdir(parents=True)
+    proposal_path.write_text(json.dumps({
+        "decision": "ACT",
+        "candidate_dir": str(candidate),
+        "admission": {"admitted": True},
+        "candidate_generation_throughput": {
+            "provider_cost_usd": "0.02",
+            "completed_request_count": 3,
+            "total_tokens": 200,
+        },
+        "summary": {
+            "discovery_hypothesis": {
+                "hypothesis": {
+                    "selected_relation": {"relation_id": "open-relation"}
+                }
+            }
+        },
+    }))
+    target_path, target_report = _report(
+        tmp_path / "target",
+        "target-r1",
+        "task-t",
+        (1, 3, 0),
+        (2, 3, 1),
+        {"h0": ["property-P", "property-Z"], "candidate": ["property-Z"]},
+    )
+    repeat_path, repeat_report = _report(
+        tmp_path / "repeat",
+        "repeat-r1",
+        "task-t",
+        (1, 3, 0),
+        (2, 3, 1),
+        {"h0": ["property-P", "property-Z"], "candidate": ["property-Z"]},
+    )
+    protection_path, _ = _report(
+        tmp_path / "protection",
+        "protection-r1",
+        "task-p",
+        (2, 2, 1),
+        (2, 2, 1),
+        {},
+    )
+    for path, report in ((target_path, target_report), (repeat_path, repeat_report)):
+        report["activations"]["candidate"].update({
+            "activation_count": 1,
+        })
+        report["activations"]["candidate"]["attempts"][0].update({
+            "activation_token": "audit_component",
+            "activated": True,
+        })
+        path.write_text(json.dumps(report))
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "semantic-repeat-controller",
+        "mode": "replay",
+        "runtime": {},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [{
+            "lineage_id": "semantic-repeat-lineage",
+            "parent": {"version": "h0", "worker_dir": str(parent)},
+            "proposal": {
+                "replay_report": str(proposal_path),
+                "replay_run_id": "proposal-r1",
+                "candidate_version": "candidate-r1",
+            },
+            "repeat_consistency_policy": "resolved_property_footprint_v1",
+            "stages": [
+                {
+                    "name": "target",
+                    "task_id": "task-t",
+                    "replay_report": str(target_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                },
+                {
+                    "name": "repeat",
+                    "task_id": "task-t",
+                    "replay_report": str(repeat_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                },
+                {
+                    "name": "protection",
+                    "task_id": "task-p",
+                    "replay_report": str(protection_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                    "property_set_safe": True,
+                },
+            ],
+        }],
+    }
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+    state_dir = tmp_path / "state"
+
+    first = run_controller(plan_path, state_dir)
+    resumed = run_controller(plan_path, state_dir)
+
+    state = first["lineages"]["semantic-repeat-lineage"]
+    assert state["decision"] == "PROMOTE"
+    assert (
+        state["observations"]["repeat"]["mechanism"]["semantic_repeat"][
+            "verdict"
+        ]
+        == "CONSISTENT"
+    )
+    assert resumed == first
+    assert state["accounted_run_ids"].count("proposal-r1") == 1
 
 
 def test_live_proposal_argv_uses_existing_discovery_runner():
