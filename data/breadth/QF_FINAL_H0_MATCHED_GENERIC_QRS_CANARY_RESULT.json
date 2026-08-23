@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-final-h0-matched-generic-qrs-20260824-r1",
+  "date": "2026-08-24",
+  "status": "complete_both_arms_retained_quant_h0",
+  "research_question": "Does operational Quant Research State reconstruction and conditioned experience retrieval improve a matched cumulative two-family search from Quant-H0 over generic access to the same authorized evidence?",
+  "setup": {
+    "benchmark": "QFBench",
+    "initial_incumbent": "Quant-H0",
+    "arm_order": [
+      "holdings-final-state-reconciliation",
+      "localvol-calibration-to-pricing"
+    ],
+    "matched_plan": "data/breadth/QF_FINAL_H0_MATCHED_GENERIC_QRS_CANARY_PLAN.json",
+    "worker_route": "deepseek-v4-flash-main0",
+    "sealed_evaluation_used": false,
+    "answer_boundary": "Optimize diagnostics were Evolver-only after blind Worker attempts; Workers and reusable candidates remained answer-blind and no sealed outcome entered search."
+  },
+  "generic": {
+    "holdings": {
+      "candidate_version": "qf-final-h0-generic-holdings-c1",
+      "component": "reconcile_outputs",
+      "target": {
+        "parent_tests_passed": 46,
+        "candidate_tests_passed": 50,
+        "reward": 0.0,
+        "component_activated": true,
+        "resolved_property_count": 4
+      },
+      "repeat": {
+        "parent_tests_passed": 44,
+        "candidate_tests_passed": 46,
+        "reward": 0.0,
+        "component_activated": true,
+        "semantic_repeat_verdict": "INCONSISTENT",
+        "semantic_repeat_reason": "repeat_relation_footprint_not_reproduced"
+      },
+      "controller_decision": "ROLLBACK",
+      "completed_requests": 81,
+      "total_tokens": 5415621,
+      "provider_cost_usd": 0.181935356
+    },
+    "localvol": {
+      "candidate_version": "qf-final-h0-generic-localvol-c2",
+      "component": "check_vol_surface_admissibility",
+      "target": {
+        "parent_tests_passed": 66,
+        "candidate_tests_passed": 68,
+        "parent_reward": 0.0,
+        "candidate_reward": 1.0,
+        "component_activated": true,
+        "resolved_properties": [
+          "test_outputs.py::TestForwardVariance::test_forward_variance_local_vol_atm_positive",
+          "test_outputs.py::TestSVIParams::test_svi_a_positive"
+        ]
+      },
+      "repeat": {
+        "parent_tests_passed": 66,
+        "candidate_tests_passed": 67,
+        "reward": 0.0,
+        "component_activated": true,
+        "resolved_expected": [
+          "test_outputs.py::TestSVIParams::test_svi_a_positive"
+        ],
+        "introduced_expected": [
+          "test_outputs.py::TestForwardVariance::test_forward_variance_local_vol_atm_positive"
+        ],
+        "semantic_repeat_verdict": "INCONSISTENT",
+        "semantic_repeat_reason": "repeat_relation_footprint_not_reproduced"
+      },
+      "controller_decision": "ROLLBACK",
+      "completed_requests": 84,
+      "total_tokens": 3907873,
+      "provider_cost_usd": 0.12790206
+    },
+    "terminal_incumbent": "Quant-H0",
+    "completed_requests": 165,
+    "total_tokens": 9323494,
+    "provider_cost_usd": 0.309837416
+  },
+  "qrs": {
+    "holdings": {
+      "decision": "ABSTAIN",
+      "candidate_worker_dispatched": false,
+      "completed_requests": 14,
+      "total_tokens": 1245090,
+      "provider_cost_usd": 0.049751256
+    },
+    "localvol": {
+      "decision": "ABSTAIN",
+      "candidate_worker_dispatched": false,
+      "localized_state": "evaluation_reconciliation",
+      "localized_issue": "SVI fitted-parameter admissibility was not audited; a was exactly zero on all six expiries.",
+      "abstention_gate": "COORDINATED_BREADTH required a shared target-protection mechanism and the State Card found no positive reusable calibration-admissibility episode.",
+      "counterevidence": "The protection task contained no fitted-SVI step or shared parameter-boundary signature.",
+      "completed_requests": 19,
+      "total_tokens": 858394,
+      "provider_cost_usd": 0.036081504
+    },
+    "terminal_incumbent": "Quant-H0",
+    "completed_requests": 33,
+    "total_tokens": 2103484,
+    "provider_cost_usd": 0.08583276
+  },
+  "combined": {
+    "completed_requests": 198,
+    "total_tokens": 11426978,
+    "provider_cost_usd": 0.395670176,
+    "service_restarts": 0,
+    "runtime_residue": 0
+  },
+  "terminal_resume": {
+    "performed": true,
+    "new_child_dispatches": 0,
+    "added_requests": 0,
+    "added_tokens": 0,
+    "added_provider_cost_usd": 0.0
+  },
+  "retained_conclusion": "The generic arm admitted two activated candidates and produced a local-vol target binary gain, but both candidates failed the predeclared repeat-footprint gate and rolled back. The QRS arm localized the same SVI admissibility defect later repaired in R4, yet abstained because the current coordinated-breadth gate demanded cross-task support and a positive reusable episode. Both final incumbents remained Quant-H0.",
+  "claim_boundary": {
+    "supported": "Matched cumulative controller completion, calibrated QRS abstention, generic target-stage binary gain, repeat-footprint rollback, terminal incumbent preservation, zero-work resume, and clean execution.",
+    "search_recall_observation": "In this canary the QRS coordinated-breadth gate reduced intervention recall despite precise localization of the SVI issue; this is a mechanism diagnosis, not evidence that removing all protection reasoning is beneficial.",
+    "not_supported": "QRS superiority, generic superiority, stable promotion, sealed or out-of-sample improvement, benchmark-wide gain, or causal attribution of either candidate component."
+  },
+  "artifacts": {
+    "generic_campaign": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-campaign",
+    "qrs_campaign": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-qrs-campaign",
+    "generic_holdings_proposal": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-holdings-r1-proposal",
+    "generic_holdings_target": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-holdings-r1-target",
+    "generic_holdings_repeat": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-holdings-r1-repeat",
+    "generic_localvol_proposal": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-localvol-r2-proposal",
+    "generic_localvol_target": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-localvol-r2-target",
+    "generic_localvol_repeat": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-localvol-r2-repeat",
+    "qrs_holdings_proposal": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-qrs-holdings-r1-proposal",
+    "qrs_localvol_proposal": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-qrs-localvol-r2-proposal"
+  }
+}

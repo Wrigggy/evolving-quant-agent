@@ -1,5 +1,34 @@
 # QEA Repository Memory
 
+## 2026-08-24 Final-H0 matched cumulative canary retained
+
+The final-code Generic and QRS Evolvers completed a matched two-family QFBench
+development canary from Quant-H0. Generic admitted two activated candidates.
+Its holdings candidate changed the target from 46/51 to 50/51 and repeat from
+44/51 to 46/51, but the resolved-property footprint was inconsistent, so it
+rolled back. Its local-vol candidate changed target from 66/68, reward zero, to
+68/68, reward one; repeat reached 67/68 and reproduced SVI-`a` but not the
+forward-variance property, so it also rolled back. Generic used 165 completed
+requests, 9,323,494 tokens, and $0.309837416.
+
+QRS made calibrated `ABSTAIN` decisions in both rounds and launched no Worker.
+On local volatility it still localized the same SVI fitted-parameter
+admissibility gap later repaired in R4. The current `COORDINATED_BREADTH` gate
+required a shared protection mechanism and a positive reusable episode; the
+protection task had no fitted-SVI path, so the correct target-local diagnosis
+could not enter ACT. This is evidence of reduced intervention recall under the
+current gate, not a QRS-superiority result. QRS used 33 requests, 2,103,484
+tokens, and $0.085832760.
+
+Both final incumbents remained Quant-H0. Combined accounting was 198 requests,
+11,426,978 tokens, and $0.395670176. Terminal resume added zero work or cost;
+there were zero service restarts and zero runtime residue. This is a development
+controller canary with one generic target binary gain, not a stable promotion,
+sealed result, benchmark-wide gain, causal component result, or superiority
+claim. Compact result:
+`data/breadth/QF_FINAL_H0_MATCHED_GENERIC_QRS_CANARY_RESULT.json`; full decision:
+`docs/decisions/2026-08-24-qf-final-h0-matched-generic-qrs-canary-result.md`.
+
 ## 2026-08-24 cumulative-campaign writing decision
 
 The next matched Generic--QRS comparison is defined at the cumulative campaign
