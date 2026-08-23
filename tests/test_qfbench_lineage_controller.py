@@ -2306,6 +2306,149 @@ def test_candidate_review_trusted_sources_must_be_disjoint(tmp_path):
         _candidate_information_set_review_package(state, spec)
 
 
+def test_candidate_review_can_use_cumulative_material_baseline(tmp_path):
+    h0 = tmp_path / "workers/cumulative-h0"
+    c1 = tmp_path / "workers/cumulative-c1"
+    c2 = tmp_path / "workers/cumulative-c2"
+    for root, prompt in (
+        (h0, "Use public task instructions.\n"),
+        (
+            c1,
+            "Use public task instructions.\n"
+            "Apply the publicly supported c1 canonicalization rule.\n",
+        ),
+        (
+            c2,
+            "Use public task instructions.\n"
+            "Apply the publicly supported c1 canonicalization rule.\n"
+            "Apply the publicly supported c2 numeric-coercion rule.\n",
+        ),
+    ):
+        root.mkdir(parents=True)
+        root.joinpath("systemprompt.md").write_text(prompt)
+
+    state = {
+        # c1 remains the proposal mutation parent and later Worker comparator.
+        "current_parent": {"version": "c1", "worker_dir": str(c1)},
+        "candidate": {"version": "c2", "worker_dir": str(c2)},
+        "proposal": {
+            "worker_visible_claims": [
+                {
+                    "claim_id": "c1-canonicalization",
+                    "claim": "Use the public canonicalization rule.",
+                    "surfaces": ["systemprompt"],
+                    "basis_refs": ["public:instruction"],
+                },
+                {
+                    "claim_id": "c2-numeric-coercion",
+                    "claim": "Use the public numeric-coercion rule.",
+                    "surfaces": ["systemprompt"],
+                    "basis_refs": ["public:instruction"],
+                },
+            ]
+        },
+    }
+    sources = _information_review_sources()
+    default_spec = {
+        "review_id": "cumulative-review",
+        **sources,
+    }
+    cumulative_spec = {
+        **default_spec,
+        "candidate_material_baseline_worker_dir": str(h0),
+        "review_feedback_path": str(tmp_path / "trusted/review-feedback.json"),
+    }
+
+    cumulative, hold_reason = _candidate_information_set_review_package(
+        state, cumulative_spec
+    )
+    default, default_hold_reason = _candidate_information_set_review_package(
+        state, default_spec
+    )
+    explicit_legacy, explicit_legacy_hold_reason = (
+        _candidate_information_set_review_package(
+            state,
+            {
+                **default_spec,
+                "candidate_material_baseline_worker_dir": str(c1),
+            },
+        )
+    )
+
+    assert hold_reason is None
+    assert default_hold_reason is None
+    assert explicit_legacy_hold_reason is None
+    assert default == explicit_legacy
+    assert state["current_parent"] == {"version": "c1", "worker_dir": str(c1)}
+    c1_added = (
+        "+Apply the publicly supported c1 canonicalization rule."
+    )
+    c2_added = "+Apply the publicly supported c2 numeric-coercion rule."
+    assert c1_added in cumulative["candidate"]["diff"]
+    assert c2_added in cumulative["candidate"]["diff"]
+    assert c1_added not in default["candidate"]["diff"]
+    assert c2_added in default["candidate"]["diff"]
+    rendered = json.dumps(cumulative)
+    assert str(h0) not in rendered
+    assert "review-feedback.json" not in rendered
+
+
+@pytest.mark.parametrize("baseline", ["", "   ", 7])
+def test_candidate_review_rejects_invalid_cumulative_baseline(
+    tmp_path, baseline
+):
+    parent, candidate = _information_review_workers(tmp_path)
+    state = {
+        "current_parent": {"worker_dir": str(parent)},
+        "candidate": {"version": "candidate", "worker_dir": str(candidate)},
+        "proposal": {
+            "worker_visible_claims": [
+                {
+                    "claim_id": "positive",
+                    "claim": "Written output must be positive.",
+                    "surfaces": ["tools"],
+                    "basis_refs": ["public:instruction"],
+                }
+            ]
+        },
+    }
+    spec = {
+        "review_id": "invalid-baseline-review",
+        "candidate_material_baseline_worker_dir": baseline,
+        **_information_review_sources(),
+    }
+
+    with pytest.raises(LineageError, match="must be a non-empty string"):
+        _candidate_information_set_review_package(state, spec)
+
+
+def test_candidate_review_rejects_missing_cumulative_baseline(tmp_path):
+    parent, candidate = _information_review_workers(tmp_path)
+    state = {
+        "current_parent": {"worker_dir": str(parent)},
+        "candidate": {"version": "candidate", "worker_dir": str(candidate)},
+        "proposal": {
+            "worker_visible_claims": [
+                {
+                    "claim_id": "positive",
+                    "claim": "Written output must be positive.",
+                    "surfaces": ["tools"],
+                    "basis_refs": ["public:instruction"],
+                }
+            ]
+        },
+    }
+    missing = tmp_path / "workers/missing-cumulative-baseline"
+    spec = {
+        "review_id": "missing-baseline-review",
+        "candidate_material_baseline_worker_dir": str(missing),
+        **_information_review_sources(),
+    }
+
+    with pytest.raises(LineageError, match="is not an existing directory"):
+        _candidate_information_set_review_package(state, spec)
+
+
 def test_information_review_missing_candidate_material_holds_without_call(
     tmp_path,
 ):
@@ -2370,6 +2513,7 @@ def test_worker_argv_never_contains_review_reason_or_diagnostic():
         "candidate": {"worker_dir": "/candidate"},
         "candidate_information_set_review": {
             "reason": "secret-review-reason",
+            "review_feedback_path": "/trusted/review-feedback.json",
             "optimize_only_sources": [
                 {"excerpt": "secret-diagnostic-answer"}
             ],
@@ -2385,6 +2529,7 @@ def test_worker_argv_never_contains_review_reason_or_diagnostic():
     rendered = " ".join(argv)
     assert "secret-review-reason" not in rendered
     assert "secret-diagnostic-answer" not in rendered
+    assert "review-feedback.json" not in rendered
 
 
 def test_information_review_live_argv_requires_explicit_approval(tmp_path):

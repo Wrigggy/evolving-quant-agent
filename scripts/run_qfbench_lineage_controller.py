@@ -449,8 +449,26 @@ def _candidate_information_set_review_package(
     )
     if not isinstance(claims, list) or not claims:
         return None, "information_set_review_missing_worker_visible_claims"
+
+    material_baseline = spec.get("candidate_material_baseline_worker_dir")
+    if material_baseline is None:
+        material_baseline = (
+            parent.get("worker_dir") if isinstance(parent, Mapping) else None
+        )
+    else:
+        if not isinstance(material_baseline, str) or not material_baseline.strip():
+            raise LineageError(
+                "candidate information-set review "
+                "candidate_material_baseline_worker_dir must be a non-empty string"
+            )
+        if not Path(material_baseline).is_dir():
+            raise LineageError(
+                "candidate information-set review "
+                "candidate_material_baseline_worker_dir is not an existing "
+                f"directory: {material_baseline}"
+            )
     material = _worker_visible_candidate_material(
-        parent.get("worker_dir") if isinstance(parent, Mapping) else None,
+        material_baseline,
         candidate.get("worker_dir") if isinstance(candidate, Mapping) else None,
     )
     if material is None:
