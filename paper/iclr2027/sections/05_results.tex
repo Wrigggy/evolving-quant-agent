@@ -666,3 +666,26 @@ and zero related residue remained. \Boundary{The official score is retained as
 an empty-submission verifier response, not as a Quant-$H_0$ baseline or target-
 selection observation. R1 terminates at \FXHZeroROneDecision{}; any recovery is
 a separately frozen R2, not an implicit retry.}
+
+\Measured{The separately frozen R2 setup recovery produced one valid fresh
+Quant-$H_0$ observation.} The Worker completed \FXHZeroRTwoTurns{} turns and
+\FXHZeroRTwoToolCalls{} tool calls with zero tool errors, writing one
+\FXHZeroRTwoArtifactBytes{}-byte \texttt{results.json}. The trusted verifier
+reported \FXHZeroRTwoOfficial{} with exit code zero. Its
+\FXHZeroRTwoRequests{} completed requests used \FXHZeroRTwoInputTokens{} input,
+\FXHZeroRTwoOutputTokens{} output, and \FXHZeroRTwoTotalTokens{} total tokens
+at \FXHZeroRTwoCost{}, with zero retries or unreconciled requests.
+
+The public-only audit checked 15 bid, ask, and mid values under the fresh
+\texttt{forward\_cross\_rates\_3M} artifact and found
+\FXHZeroRTwoRoundingMismatch{} mismatches against four-decimal rounding. The
+frozen branch therefore terminated at \FXHZeroRTwoDecision{} without an
+Evolver, Reviewer, proposal, candidate, repeat, or protection run. Service
+completion, zero restarts, cleanup, and zero related residue were verified.
+
+Across setup R1 and recovery R2, accounting was \FXHZeroCombinedRequests{}
+requests, \FXHZeroCombinedTokens{} tokens, and \FXHZeroCombinedCost{}.
+\Boundary{R1 remains invalid and R2 is the only valid observation. One
+stochastic full-score Worker run is not a stable H0 baseline, a harness gain,
+or benchmark-wide evidence; it closes only this FX branch for lack of the
+predeclared public headroom.}

@@ -216,3 +216,18 @@ the 0/16 score as baseline or target-selection evidence, non-applicable public
 rounding audit, \texttt{STOP\_NO\_RESULT}, and separately frozen R2 boundary.
 Full interpretation is in
 \path{docs/decisions/2026-08-24-public-only-fx-h0-prescreen-r1-result.md}.
+
+\subsection{Public-only FX Quant-H0 prescreen R2 record}
+
+The separately frozen recovery setup is retained at
+\path{data/breadth/QF_PUBLIC_ONLY_FX_H0_PRESCREEN_R2_PLAN.json}. The complete
+local mirror at
+\path{results/bc-mirror/qf-public-only-fx-h0-prescreen-20260824-r2/} contains
+the zero-model preflight, completed five-turn Worker trace, 6,534-byte
+\texttt{results.json}, exact request accounting, trusted 37/37 evaluation,
+service health, and cleanup evidence. The compact result at
+\path{data/breadth/QF_PUBLIC_ONLY_FX_H0_PRESCREEN_R2_RESULT.json} records the
+fresh-artifact 0/15 public rounding-mismatch audit,
+\texttt{CLOSE\_FX\_NO\_HEADROOM}, zero follow-on search, combined R1/R2 setup
+cost, and the single-observation boundary. Full interpretation is in
+\path{docs/decisions/2026-08-24-public-only-fx-h0-prescreen-r2-result.md}.

@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-public-only-fx-h0-prescreen-20260824-r2",
+  "date": "2026-08-24",
+  "status": "valid_setup_recovery_closed_no_headroom",
+  "research_question": "Can a separately frozen recovery produce one valid fresh Quant-H0 observation on fx-forward-cross-rate, and does that artifact retain the predeclared public four-decimal mismatch?",
+  "setup": {
+    "benchmark": "QFBench",
+    "task_id": "fx-forward-cross-rate",
+    "arm": "Quant-H0",
+    "result_role": "adaptive development target setup recovery only",
+    "frozen_plan": "data/breadth/QF_PUBLIC_ONLY_FX_H0_PRESCREEN_R2_PLAN.json",
+    "source_artifacts": "results/bc-mirror/qf-public-only-fx-h0-prescreen-20260824-r2",
+    "separately_frozen_recovery_of": "qf-public-only-fx-h0-prescreen-20260824-r1",
+    "worker_sessions_planned": 1,
+    "official_verifier_executions_planned": 1,
+    "evolver_calls": 0,
+    "reviewer_calls": 0,
+    "candidate_workers": 0,
+    "sealed_evaluation_used": false
+  },
+  "preflight": {
+    "status": "preflight_complete",
+    "model_requests": 0
+  },
+  "live_attempt": {
+    "attempt_count": 1,
+    "worker_outcome": "completed",
+    "turns": 5,
+    "tool_calls": 7,
+    "tool_errors": 0,
+    "files": 1,
+    "artifacts": [
+      {
+        "path": "results.json",
+        "size_bytes": 6534
+      }
+    ],
+    "valid_worker_result": true
+  },
+  "request_accounting": {
+    "completed_requests": 5,
+    "input_tokens": 125242,
+    "output_tokens": 34439,
+    "total_tokens": 159681,
+    "provider_cost_usd": 0.024900196,
+    "rate_limited_retries": 0,
+    "unreconciled_attempts": 0,
+    "unreconciled_requests": 0
+  },
+  "official_evaluation": {
+    "tests_passed": 37,
+    "tests_total": 37,
+    "reward": 1.0,
+    "verifier_exit_code": 0,
+    "valid_fresh_observation": true,
+    "stable_baseline": false,
+    "interpretation": "R2 is the only valid baseline observation in the R1/R2 setup path, but one stochastic Worker execution is not a stable baseline estimate."
+  },
+  "public_rounding_audit": {
+    "section": "forward_cross_rates_3M",
+    "numeric_fields_checked": 15,
+    "rule": "Each bid, ask, and mid value must equal the same value rounded to four decimal places.",
+    "mismatch_count": 0,
+    "rounding_mismatch_present": false,
+    "evidence_scope": "Public instruction and fresh R2 Worker artifact only."
+  },
+  "runtime": {
+    "service_result": "success",
+    "service_restarts": 0,
+    "worker_cleaned_up": true,
+    "related_residue": 0
+  },
+  "terminal": {
+    "decision": "CLOSE_FX_NO_HEADROOM",
+    "follow_on_dispatch": false,
+    "proposal_launched": false,
+    "reviewer_launched": false,
+    "candidate_launched": false
+  },
+  "r1_r2_setup_accounting": {
+    "completed_requests": 8,
+    "total_tokens": 201502,
+    "provider_cost_usd": 0.047060872,
+    "interpretation": "This is combined setup-path cost only. R1 was invalid; R2 is the sole valid fresh observation."
+  },
+  "retained_conclusion": "The separately frozen R2 recovery produced one valid full-score Quant-H0 artifact. Its fresh public FX values had no four-decimal mismatch, so the predeclared branch closed for lack of headroom without an Evolver, Reviewer, proposal, or candidate run.",
+  "claim_boundary": {
+    "supported": "One valid stochastic Quant-H0 observation, exact official result and request cost, fresh-artifact public rounding audit, no-headroom terminal decision, combined R1/R2 setup cost, service completion, and cleanup.",
+    "not_supported": "A stable Quant-H0 baseline, harness improvement, Evolver or Reviewer effectiveness, candidate quality, benchmark-wide performance, sealed generalization, or main-experiment readiness.",
+    "r1_r2_distinction": "R1 remains an invalid setup outcome. R2 is the only valid baseline observation and is not an experimental repeat of a valid R1 result."
+  }
+}

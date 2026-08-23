@@ -1,5 +1,33 @@
 # QEA Repository Memory
 
+## 2026-08-24 public-only FX Quant-H0 prescreen R2 recovered and closed
+
+The separately frozen `qf-public-only-fx-h0-prescreen-20260824-r2` recovery
+produced the sole valid fresh Quant-H0 observation in the R1/R2 setup path. Its
+preflight made zero model requests. The one live Worker completed in 5 turns
+with 7 tool calls, 0 tool errors, and one 6,534-byte
+`artifacts/results.json`. The trusted verifier reported 37/37, reward 1, and
+exit code 0.
+
+The public-only audit checked all 15 bid, ask, and mid values under the fresh
+artifact's `forward_cross_rates_3M`; every value equaled its four-decimal
+rounding, so mismatch count was 0. Under the frozen branch, the terminal
+decision is `CLOSE_FX_NO_HEADROOM`. No Evolver, Information-Set Reviewer,
+proposal, candidate Worker, repeat, or protection task ran.
+
+R2 used 5 completed requests, 125,242 input, 34,439 output, and 159,681 total
+tokens for $0.024900196, with zero retries and zero unreconciled attempts or
+requests. The service reported success, `NRestarts=0`, completed cleanup, and
+zero related residue. Combined R1+R2 setup-path cost is 8 requests, 201,502
+tokens, and $0.047060872; R1 remains invalid and R2 is the only valid
+observation.
+
+This single stochastic full-score observation is not a stable baseline or a
+harness-gain result. It closes this FX target for lack of public headroom and
+does not change main-experiment readiness. Compact result:
+`data/breadth/QF_PUBLIC_ONLY_FX_H0_PRESCREEN_R2_RESULT.json`; full decision:
+`docs/decisions/2026-08-24-public-only-fx-h0-prescreen-r2-result.md`.
+
 ## 2026-08-24 public-only FX Quant-H0 prescreen R1 stopped without a valid result
 
 The frozen `qf-public-only-fx-h0-prescreen-20260824-r1` preflight made zero
