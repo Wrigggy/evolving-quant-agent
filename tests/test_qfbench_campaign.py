@@ -422,3 +422,73 @@ def test_campaign_cost_cap_gates_later_arm_in_single_process(tmp_path):
     assert result["arms"]["generic"]["status"] == "BUDGET_STOP"
     assert result["cost"]["provider_cost_usd"] == "0.01"
     assert len(calls) == 1
+
+
+def test_hold_continue_policy_restores_incumbent_for_next_family_and_resumes(
+    tmp_path,
+):
+    plan_path = _plan(
+        tmp_path,
+        [
+            {
+                "round_id": "family-a",
+                "on_hold": "retain_incumbent_and_continue",
+                "lineage": _lineage("held-c1"),
+            },
+            {"round_id": "family-b", "lineage": _lineage("c2")},
+        ],
+    )
+    calls = []
+
+    def child(plan_path, state_dir, **kwargs):
+        calls.append(json.loads(Path(plan_path).read_text()))
+        decision = "HOLD_FOR_REFINE" if len(calls) == 1 else "ROLLBACK"
+        return _terminal(Path(plan_path), decision)
+
+    result = run_campaign(plan_path, tmp_path / "state", child_controller=child)
+
+    arm = result["arms"]["qrs"]
+    assert result["status"] == "COMPLETE"
+    assert [item["decision"] for item in arm["round_results"]] == [
+        "HOLD_FOR_REFINE",
+        "ROLLBACK",
+    ]
+    assert arm["round_results"][0]["on_hold"] == (
+        "retain_incumbent_and_continue"
+    )
+    assert calls[1]["lineages"][0]["parent"] == {
+        "version": "h0",
+        "worker_dir": "workers/h0",
+    }
+    assert calls[1]["lineages"][0]["stages"][0][
+        "selection_reference"
+    ]["id"] == "h0-target"
+    assert arm["pending_hold"] is None
+
+    resumed = run_campaign(
+        plan_path, tmp_path / "state", child_controller=child
+    )
+    assert resumed == result
+    assert len(calls) == 2
+
+
+def test_hold_default_stops_before_next_non_refinement_round(tmp_path):
+    plan_path = _plan(
+        tmp_path,
+        [
+            {"round_id": "family-a", "lineage": _lineage("held-c1")},
+            {"round_id": "family-b", "lineage": _lineage("c2")},
+        ],
+    )
+    calls = []
+
+    def child(plan_path, state_dir, **kwargs):
+        calls.append(json.loads(Path(plan_path).read_text()))
+        return _terminal(Path(plan_path), "HOLD_FOR_REFINE")
+
+    result = run_campaign(plan_path, tmp_path / "state", child_controller=child)
+
+    assert result["status"] == "ATTENTION"
+    assert result["arms"]["qrs"]["status"] == "HOLD_FOR_REFINE"
+    assert result["arms"]["qrs"]["next_round_index"] == 1
+    assert len(calls) == 1

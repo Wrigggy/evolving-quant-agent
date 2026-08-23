@@ -289,6 +289,9 @@ def _apply_terminal_child(
     decision = str(child.get("decision"))
     round_id = str(round_spec["round_id"])
     lineage = child_plan["lineages"][0]
+    on_hold = str(round_spec.get("on_hold", "stop"))
+    if on_hold not in {"stop", "retain_incumbent_and_continue"}:
+        raise LineageError(f"round {round_id!r} has invalid on_hold policy")
     child_cost = child.get("cost")
     if not isinstance(child_cost, Mapping):
         raise LineageError("terminal child has no cost summary")
@@ -299,6 +302,7 @@ def _apply_terminal_child(
             "round_id": round_id,
             "kind": round_spec.get("kind", "candidate"),
             "decision": decision,
+            "on_hold": on_hold,
             "child_plan_path": str(child_plan_path),
             "child_state_dir": str(child_state_dir),
             "child_controller_run_id": child_plan["controller_run_id"],
@@ -329,6 +333,11 @@ def _apply_terminal_child(
         )
         return
     if decision == "HOLD_FOR_REFINE":
+        if on_hold == "retain_incumbent_and_continue":
+            arm_state["mutation_parent"] = deepcopy(
+                arm_state["current_incumbent"]
+            )
+            return
         if arm_state["refinement_used"]:
             arm_state["status"] = "HOLD_FOR_REFINE"
             return
@@ -423,7 +432,11 @@ def run_campaign(
         while arm_state.get("status") == "RUNNING":
             index = int(arm_state["next_round_index"])
             if index >= len(rounds):
-                arm_state["status"] = "COMPLETE"
+                arm_state["status"] = (
+                    "HOLD_FOR_REFINE"
+                    if arm_state.get("pending_hold") is not None
+                    else "COMPLETE"
+                )
                 break
             arm_cap = _provider_cap(plan, arm, "arm_provider_cost_usd")
             campaign_cap = _provider_cap(
