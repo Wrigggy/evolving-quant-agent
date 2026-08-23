@@ -571,9 +571,12 @@ def test_coordinated_search_treatments_share_evidence_but_not_relation_helpers(
     assert generic_contract["quant_research_state_card_required_for_act"] is False
     assert quant_contract["quant_research_state_card_required_for_act"] is True
     assert quant_v2_contract["quant_research_state_card_required_for_act"] is True
-    assert generic_contract["worker_visible_claim_provenance_required_for_act"] is False
-    assert quant_contract["worker_visible_claim_provenance_required_for_act"] is False
-    assert "worker_visible_claims" not in generic_contract["evolver_instruction"]
+    assert generic_contract["worker_visible_claim_provenance_required_for_act"] is True
+    assert quant_contract["worker_visible_claim_provenance_required_for_act"] is True
+    assert "worker_visible_claims" in generic_contract["evolver_instruction"]
+    assert "named principle is an inventory label" in generic_contract[
+        "evolver_instruction"
+    ]
     assert generic_contract["quant_residual_risk_relation_enabled"] is False
     assert quant_contract["quant_residual_risk_relation_enabled"] is False
     assert quant_v2_contract["quant_residual_risk_relation_enabled"] is True
