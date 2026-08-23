@@ -616,7 +616,12 @@ def evaluate_repeat_semantic_consistency(
 ) -> dict[str, object]:
     """Check whether repeat reproduces the target's empirical relation footprint."""
 
-    target = state.get("observations", {}).get("target")
+    observations = state.get("observations")
+    target = (
+        observations.get("target")
+        if isinstance(observations, Mapping)
+        else None
+    )
     target_mechanism = (
         target.get("mechanism") if isinstance(target, Mapping) else None
     )
@@ -625,7 +630,10 @@ def evaluate_repeat_semantic_consistency(
         if isinstance(target_mechanism, Mapping)
         else None
     )
-    if not isinstance(footprint, Mapping) or footprint.get("status") != "ANCHORED":
+    if (
+        not isinstance(footprint, Mapping)
+        or footprint.get("status") != "ANCHORED"
+    ):
         return {
             "policy": "resolved_property_footprint_v1",
             "verdict": "UNBOUND",
@@ -686,6 +694,91 @@ def evaluate_repeat_semantic_consistency(
         "verdict": verdict,
         "reason": reason,
     }
+
+
+def _annotate_protection_mechanism(
+    state: Mapping[str, object],
+    observation: dict[str, object],
+    *,
+    safety_passed: bool | None,
+) -> None:
+    """Separate a protection safety gate from target-relation transfer."""
+
+    mechanism = observation.get("mechanism")
+    if not isinstance(mechanism, dict):
+        return
+    target = state.get("observations", {}).get("target")
+    target_mechanism = (
+        target.get("mechanism") if isinstance(target, Mapping) else None
+    )
+    footprint = (
+        target_mechanism.get("empirical_relation_footprint")
+        if isinstance(target_mechanism, Mapping)
+        else None
+    )
+    marker = observation.get("relation_observed")
+    if not isinstance(footprint, Mapping) or footprint.get("status") != "ANCHORED":
+        # Legacy score-only lineages have no target relation footprint.  Their
+        # decisions and existing observation shape remain unchanged.
+        return
+
+    expected = _property_ids(footprint, "resolved_property_ids")
+    delta = observation.get("property_delta")
+    observed_properties = frozenset().union(
+        *(
+            _property_ids(delta, field)
+            for field in (
+                "parent_failed",
+                "candidate_failed",
+                "resolved",
+                "introduced",
+                "persistent",
+            )
+        )
+    )
+    activation = mechanism.get("activation")
+    activation = activation if isinstance(activation, Mapping) else {}
+    activation_matches = (
+        footprint.get("activation_required") is not True
+        or (
+            activation.get("status") == "ACTIVATED"
+            and activation.get("token") == footprint.get("component_token")
+        )
+    )
+    exact_footprint_observed = bool(expected & observed_properties) and (
+        activation_matches
+    )
+    if marker is True:
+        exercised = True
+        reason = "matched_semantic_marker_observed"
+    elif marker is False:
+        exercised = False
+        reason = "semantic_marker_declared_not_observed"
+    elif exact_footprint_observed:
+        exercised = True
+        reason = "target_property_footprint_observed"
+    else:
+        exercised = False
+        reason = "target_relation_not_observed_on_protection"
+
+    if safety_passed is True:
+        protection_outcome = "SAFE_NO_REGRESSION"
+    elif safety_passed is False:
+        protection_outcome = "SAFETY_GATE_FAILED"
+    else:
+        protection_outcome = "SAFETY_INCONCLUSIVE"
+    mechanism["protection_outcome"] = protection_outcome
+    mechanism["semantic_protection"] = {
+        "policy": "target_relation_exercise_v1",
+        "relation_id": footprint.get("relation_id"),
+        "expected_property_ids": sorted(expected),
+        "relation_observed": marker,
+        "verdict": "MATCHED" if exercised else "NOT_EXERCISED",
+        "reason": reason,
+        "boundary": "safety_gate_not_relation_transfer",
+    }
+    if not exercised:
+        mechanism["relation_outcome"] = "NOT_EXERCISED"
 
 
 def _finish_candidate(
@@ -1042,27 +1135,42 @@ def import_comparison_observation(
         observation["quantitative_protection_triage"] = triage
         verdict = triage.get("verdict")
         if verdict == "PASS":
+            _annotate_protection_mechanism(
+                result, observation, safety_passed=True
+            )
             return _finish_candidate(
                 result,
                 decision="PROMOTE",
                 reason="repeat_and_quantitative_protection_noninferior",
             )
         if verdict == "FAIL":
+            _annotate_protection_mechanism(
+                result, observation, safety_passed=False
+            )
             return _hold_candidate_for_refine(
                 result, reason="quantitative_protection_regression"
             )
         if verdict != "INCONCLUSIVE":
             raise LineageError("quantitative protection triage has no legal verdict")
         if stage == "protection_repeat":
+            _annotate_protection_mechanism(
+                result, observation, safety_passed=None
+            )
             return _hold_candidate_for_refine(
                 result, reason="quantitative_protection_still_inconclusive"
             )
+        _annotate_protection_mechanism(
+            result, observation, safety_passed=None
+        )
         result["phase"] = "PROTECTION_REVIEW"
         result["status"] = "running"
         return result
 
     passed = aggregate_safe and property_set_safe is True
     observation["gate_passed"] = passed
+    _annotate_protection_mechanism(
+        result, observation, safety_passed=passed
+    )
     if passed:
         return _finish_candidate(
             result, decision="PROMOTE", reason="repeat_and_protection_safe"

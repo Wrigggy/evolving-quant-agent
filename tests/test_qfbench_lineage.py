@@ -271,6 +271,92 @@ def test_repeat_semantic_footprint_consistent_advances_to_protection():
     ) == state
 
 
+def test_unmatched_protection_keeps_safe_gate_without_relation_gain_label():
+    state = _apply(
+        _semantic_state(),
+        "target",
+        _activated(
+            _report("target-run", "target", (67, 68, 0), (68, 68, 1))
+        ),
+        property_delta=_delta(("property-svi-a",), ()),
+    )
+    state = _apply(
+        state,
+        "repeat",
+        _activated(
+            _report("repeat-run", "target", (67, 68, 0), (68, 68, 1))
+        ),
+        property_delta=_delta(("property-svi-a",), ()),
+    )
+    protection = _activated(
+        _report("protect-run", "protect", (38, 39, 0.96), (39, 39, 1))
+    )
+    promoted = _apply(
+        state,
+        "protection",
+        protection,
+        property_set_safe=True,
+    )
+
+    observation = promoted["observations"]["protection"]
+    mechanism = observation["mechanism"]
+    assert promoted["decision"] == "PROMOTE"
+    assert observation["gate_passed"] is True
+    assert observation["property_set_safe"] is True
+    assert mechanism["official_outcome"]["strict_gain_observed"] is True
+    assert mechanism["relation_outcome"] == "NOT_EXERCISED"
+    assert mechanism["protection_outcome"] == "SAFE_NO_REGRESSION"
+    assert mechanism["semantic_protection"] == {
+        "policy": "target_relation_exercise_v1",
+        "relation_id": "relation-any",
+        "expected_property_ids": ["property-svi-a"],
+        "relation_observed": None,
+        "verdict": "NOT_EXERCISED",
+        "reason": "target_relation_not_observed_on_protection",
+        "boundary": "safety_gate_not_relation_transfer",
+    }
+    assert (
+        _apply(
+            promoted,
+            "protection",
+            protection,
+            property_set_safe=True,
+        )
+        == promoted
+    )
+
+
+def test_matched_semantic_protection_retains_relation_outcome():
+    state = _apply(
+        _semantic_state(),
+        "target",
+        _activated(_report("target-run", "target", (1, 2, 0), (2, 2, 1))),
+        property_delta=_delta(("property-P",), ()),
+    )
+    state = _apply(
+        state,
+        "repeat",
+        _activated(_report("repeat-run", "target", (1, 2, 0), (2, 2, 1))),
+        property_delta=_delta(("property-P",), ()),
+    )
+    state = _apply(
+        state,
+        "protection",
+        _activated(_report("protect-run", "protect", (1, 2, 0), (2, 2, 1))),
+        property_set_safe=True,
+        property_delta=_delta(("property-P",), ()),
+    )
+
+    mechanism = state["observations"]["protection"]["mechanism"]
+    assert state["decision"] == "PROMOTE"
+    assert mechanism["relation_outcome"] == "ACTIVATED_WITH_OFFICIAL_GAIN"
+    assert mechanism["protection_outcome"] == "SAFE_NO_REGRESSION"
+    assert mechanism["semantic_protection"]["verdict"] == "MATCHED"
+    assert mechanism["semantic_protection"]["reason"] == (
+        "target_property_footprint_observed"
+    )
+
+
 def test_repeat_same_score_gain_on_unrelated_property_rolls_back():
     target = _activated(
         _report("target-run", "target", (1, 3, 0), (2, 3, 1))
