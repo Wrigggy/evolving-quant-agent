@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from qea.benchmarks.qfbench import git_blob_oid
 
@@ -1439,7 +1440,9 @@ def test_quant_v2_lineage_refinement_selects_target_without_rediscovery(
     assert "shared_mechanism" not in state["hypothesis"]
 
 
-def test_quant_v2_forbids_legacy_unlock_and_schema_uses_prediction(guarded_roots):
+def test_quant_v2_forbids_legacy_unlock_and_schema_matches_quant_hypotheses(
+    guarded_roots,
+):
     from qea.evolve_agent_full.tools.guarded_workspace import (
         GuardedWorkspaceError,
         unlock_candidate,
@@ -1448,12 +1451,18 @@ def test_quant_v2_forbids_legacy_unlock_and_schema_uses_prediction(guarded_roots
     _, evidence, _, _, _ = guarded_roots
     _write_quant_v2_contract(evidence, history_required=False)
 
-    schema = (
+    schema_path = (
         Path(__file__).resolve().parents[1]
         / "qea/evolve_agent_full/tool_descriptions/decide_candidate.tool.yaml"
-    ).read_text()
-    assert "prediction: {type: string}" in schema
-    assert "failure_prediction" not in schema
+    )
+    schema_text = schema_path.read_text()
+    schema = yaml.safe_load(schema_text)["input_schema"]
+    hypothesis_schema = schema["properties"]["discovery"]["properties"][
+        "hypotheses_considered"
+    ]["items"]
+    assert "prediction" in hypothesis_schema["required"]
+    assert "failure_type_id" not in hypothesis_schema["required"]
+    assert "failure_prediction" not in schema_text
     with pytest.raises(GuardedWorkspaceError, match="legacy unlock is forbidden"):
         unlock_candidate(
             hypothesis={

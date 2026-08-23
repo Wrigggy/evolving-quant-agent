@@ -155,12 +155,14 @@ input_schema:
             type: object
             properties:
               hypothesis_id: {type: string}
-              failure_type_id: {type: string}
+              failure_type_id:
+                type: string
+                description: Required only by the multi-task failure-type contract. Quant property and lineage-refinement decisions may omit it.
               mechanism: {type: string}
               prediction: {type: string}
               success_counterfactual: {type: string}
               insufficient_contrast: {type: boolean}
-            required: [hypothesis_id, failure_type_id, mechanism, prediction]
+            required: [hypothesis_id, mechanism, prediction]
             additionalProperties: true
         selected_hypothesis_id: {type: [string, "null"]}
         probe_ids_used:

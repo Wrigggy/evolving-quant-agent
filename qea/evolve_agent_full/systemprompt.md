@@ -262,7 +262,9 @@ of code stored under another role. The component routing prior in
 Call `decide_candidate`, never the legacy `unlock_candidate`, for this protocol.
 Each item in `hypotheses_considered` uses the field `prediction` (not the older
 `failure_prediction` field), and `failure_types` is not part of the quant v2
-decision object.
+decision object. `failure_type_id` is required only by the older multi-task
+failure-type contract; omit it for a quant v2 property or lineage-refinement
+decision unless the active contract explicitly defines `failure_types`.
 
 When the QuantCodeEval contract names `answer_rich_optimization_v1`, the task is
 a declared optimization task and `optimization-diagnostic.json` is Evolver-only
