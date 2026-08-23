@@ -896,6 +896,9 @@ def run_controller(
                 "repeat_consistency_policy": lineage.get(
                     "repeat_consistency_policy", "aggregate_only"
                 ),
+                "retained_activation_token": lineage["parent"].get(
+                    "retained_activation_token"
+                ),
             }
             if isinstance(proposal, Mapping):
                 state = new_proposal_lineage(**common)

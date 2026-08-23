@@ -902,6 +902,35 @@ def test_live_child_argv_uses_modified_component_binding():
     assert argv[argv.index("--activation-token") + 1] == "audit_quant_state"
 
 
+def test_live_child_argv_uses_retained_component_binding():
+    plan = {
+        "controller_run_id": "refine",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest.json",
+            "rootless_config": "/config.json",
+            "image_set_manifest": "/images.json",
+            "results_dir": "/results",
+        },
+    }
+    lineage = {
+        "lineage_id": "refinement",
+        "parent": {"worker_dir": "/component-v1"},
+        "candidate": {
+            "worker_dir": "/component-v2",
+            "activation_binding": {"status": "retained"},
+            "activation_token": "audit_quant_state",
+        },
+    }
+    stage = {"name": "target", "task_id": "task-t"}
+
+    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+
+    assert argv[argv.index("--activation-token") + 1] == "audit_quant_state"
+
+
 def test_live_child_argv_does_not_guess_for_ambiguous_proposal_binding():
     plan = {
         "controller_run_id": "main0",
@@ -1253,6 +1282,137 @@ def test_stop_after_proposal_resumes_without_reimporting_proposal(tmp_path):
     assert resumed["decision"] == "PROMOTE"
     assert resumed["archive"][0]["worker_dir"] == "/proposal-output/candidate"
     assert resumed["accounted_run_ids"].count("proposal-r1") == 1
+
+
+def test_retained_component_refinement_controller_resumes_idempotently(tmp_path):
+    parent = tmp_path / "workers/component-v1"
+    candidate = tmp_path / "workers/component-v2"
+    for worker, prompt in (
+        (parent, "Use the registered audit when relevant.\n"),
+        (candidate, "Route reconciliation through the registered audit.\n"),
+    ):
+        worker.joinpath("tool_descriptions").mkdir(parents=True)
+        worker.joinpath("tools").mkdir()
+        worker.joinpath("agent.yaml").write_text(json.dumps({
+            "tools": [
+                {
+                    "name": "run_shell_command",
+                    "yaml_path": "tool_descriptions/shell.yaml",
+                },
+                {
+                    "name": "audit_quant_state",
+                    "yaml_path": "tool_descriptions/audit.yaml",
+                    "binding": "tools.audit:audit_quant_state",
+                },
+            ]
+        }))
+        worker.joinpath("tool_descriptions/shell.yaml").write_text(
+            "name: run_shell_command\n"
+        )
+        worker.joinpath("tool_descriptions/audit.yaml").write_text(
+            "name: audit_quant_state\n"
+        )
+        worker.joinpath("tools/audit.py").write_text(
+            "def audit_quant_state():\n    return True\n"
+        )
+        worker.joinpath("systemprompt.md").write_text(prompt)
+
+    proposal_path = tmp_path / "proposal/proposal-report.json"
+    proposal_path.parent.mkdir(parents=True)
+    proposal_path.write_text(json.dumps({
+        "decision": "ACT",
+        "candidate_dir": str(candidate),
+        "admission": {"admitted": True},
+        "candidate_generation_throughput": {
+            "provider_cost_usd": "0.02",
+            "completed_request_count": 3,
+            "total_tokens": 200,
+        },
+    }))
+    target_path, _ = _report(
+        tmp_path / "target",
+        "target-r1",
+        "task-t",
+        (1, 2, 0),
+        (2, 2, 1),
+        {},
+    )
+    repeat_path, _ = _report(
+        tmp_path / "repeat",
+        "repeat-r1",
+        "task-t",
+        (1, 2, 0),
+        (2, 2, 1),
+        {},
+    )
+    protection_path, _ = _report(
+        tmp_path / "protection",
+        "protection-r1",
+        "task-p",
+        (2, 2, 1),
+        (2, 2, 1),
+        {},
+    )
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "retained-refinement-controller",
+        "mode": "replay",
+        "runtime": {},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [{
+            "lineage_id": "retained-refinement",
+            "parent": {
+                "version": "component-v1",
+                "worker_dir": str(parent),
+                "retained_activation_token": "audit_quant_state",
+            },
+            "proposal": {
+                "replay_report": str(proposal_path),
+                "replay_run_id": "proposal-r1",
+                "candidate_version": "component-v2",
+            },
+            "stages": [
+                {
+                    "name": "target",
+                    "task_id": "task-t",
+                    "replay_report": str(target_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                },
+                {
+                    "name": "repeat",
+                    "task_id": "task-t",
+                    "replay_report": str(repeat_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                },
+                {
+                    "name": "protection",
+                    "task_id": "task-p",
+                    "replay_report": str(protection_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                },
+            ],
+        }],
+    }
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+    state_dir = tmp_path / "state"
+
+    first = run_controller(plan_path, state_dir)
+    resumed = run_controller(plan_path, state_dir)
+
+    state = first["lineages"]["retained-refinement"]
+    archived = state["archive"][0]
+    assert state["decision"] == "PROMOTE"
+    assert archived["activation_token"] == "audit_quant_state"
+    assert archived["activation_binding"]["status"] == "retained"
+    assert archived["realized_component"]["source"] == (
+        "lineage_parent_retained_activation_token"
+    )
+    assert state["accounted_run_ids"].count("proposal-r1") == 1
+    assert resumed == first
 
 
 def test_opt_in_semantic_repeat_controller_is_resume_idempotent(tmp_path):

@@ -718,6 +718,169 @@ def test_proposal_multiple_registered_tool_changes_remain_ambiguous(tmp_path):
     assert "activation_token" not in state["candidate"]
 
 
+def test_prompt_only_refinement_inherits_declared_registered_component(tmp_path):
+    parent = _worker_with_registered_tool(tmp_path / "parent")
+    candidate = _worker_with_registered_tool(tmp_path / "candidate")
+    parent.joinpath("systemprompt.md").write_text("Use the audit when relevant.\n")
+    candidate.joinpath("systemprompt.md").write_text(
+        "Route reconciliation work through the audit before finalizing.\n"
+    )
+    state = new_proposal_lineage(
+        lineage_id="prompt-refinement",
+        parent_version="component-v1",
+        parent_path=str(parent),
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+        retained_activation_token="audit_quant_state",
+    )
+    state = import_proposal_report(
+        state,
+        report=_proposal("ACT", True, str(candidate)),
+        report_path="/prompt-refinement/proposal-report.json",
+        proposal_run_id="proposal-prompt-refinement",
+        candidate_version="candidate-prompt-refinement",
+    )
+    again = import_proposal_report(
+        state,
+        report=_proposal("ACT", True, str(candidate)),
+        report_path="/prompt-refinement/proposal-report.json",
+        proposal_run_id="proposal-prompt-refinement",
+        candidate_version="candidate-prompt-refinement",
+    )
+
+    assert state["current_parent"]["retained_activation_token"] == (
+        "audit_quant_state"
+    )
+    binding = state["candidate"]["activation_binding"]
+    assert binding["status"] == "retained"
+    assert binding["new_registered_tools"] == []
+    assert binding["modified_registered_tools"] == []
+    assert state["candidate"]["activation_token"] == "audit_quant_state"
+    assert state["candidate"]["realized_component"] == {
+        "kind": "tool",
+        "token": "audit_quant_state",
+        "change_kind": "retained",
+        "changed_surfaces": [],
+        "descriptor_path": (
+            "./tool_descriptions/audit_quant_state.tool.yaml"
+        ),
+        "binding": "tools.audit:audit_quant_state",
+        "source": "lineage_parent_retained_activation_token",
+    }
+    assert again == state
+
+
+def test_retained_component_must_remain_registered_in_candidate(tmp_path):
+    parent = _worker_with_registered_tool(tmp_path / "parent")
+    candidate = _worker_with_registered_tool(tmp_path / "candidate")
+    candidate.joinpath("agent.yaml").write_text(
+        "tools:\n"
+        "  - name: run_shell_command\n"
+        "    yaml_path: ./tool_descriptions/run_shell_command.tool.yaml\n"
+    )
+    state = new_proposal_lineage(
+        lineage_id="removed-component",
+        parent_version="component-v1",
+        parent_path=str(parent),
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+        retained_activation_token="audit_quant_state",
+    )
+    state = import_proposal_report(
+        state,
+        report=_proposal("ACT", True, str(candidate)),
+        report_path="/removed-component/proposal-report.json",
+        proposal_run_id="proposal-removed-component",
+        candidate_version="candidate-removed-component",
+    )
+
+    assert state["candidate"]["activation_binding"]["status"] == "none"
+    assert "activation_token" not in state["candidate"]
+
+
+def test_singleton_change_wins_over_retained_component(tmp_path):
+    parent = _worker_with_registered_tool(tmp_path / "parent")
+    candidate = _worker_with_registered_tool(tmp_path / "candidate")
+    with candidate.joinpath("agent.yaml").open("a") as stream:
+        stream.write(
+            "  - name: new_reconciliation_tool\n"
+            "    yaml_path: ./tool_descriptions/new_reconciliation_tool.tool.yaml\n"
+        )
+    candidate.joinpath(
+        "tool_descriptions/new_reconciliation_tool.tool.yaml"
+    ).write_text(
+        "type: tool\nname: new_reconciliation_tool\n"
+        "description: Reconcile the current state.\n"
+    )
+    state = new_proposal_lineage(
+        lineage_id="singleton-wins",
+        parent_version="component-v1",
+        parent_path=str(parent),
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+        retained_activation_token="audit_quant_state",
+    )
+    state = import_proposal_report(
+        state,
+        report=_proposal("ACT", True, str(candidate)),
+        report_path="/singleton-wins/proposal-report.json",
+        proposal_run_id="proposal-singleton-wins",
+        candidate_version="candidate-singleton-wins",
+    )
+
+    assert state["candidate"]["activation_binding"]["status"] == "singleton"
+    assert state["candidate"]["activation_token"] == "new_reconciliation_tool"
+    assert state["candidate"]["realized_component"]["source"] == (
+        "admitted_candidate_registration"
+    )
+
+
+def test_ambiguous_change_never_falls_back_to_retained_component(tmp_path):
+    parent = _worker_with_registered_tool(tmp_path / "parent")
+    candidate = _worker_with_registered_tool(
+        tmp_path / "candidate",
+        source="def audit_quant_state():\n    return 2\n",
+    )
+    with candidate.joinpath("agent.yaml").open("a") as stream:
+        stream.write(
+            "  - name: second_component\n"
+            "    yaml_path: ./tool_descriptions/second_component.tool.yaml\n"
+        )
+    candidate.joinpath("tool_descriptions/second_component.tool.yaml").write_text(
+        "type: tool\nname: second_component\ndescription: Second component.\n"
+    )
+    state = new_proposal_lineage(
+        lineage_id="ambiguous-retained",
+        parent_version="component-v1",
+        parent_path=str(parent),
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+        retained_activation_token="audit_quant_state",
+    )
+    state = import_proposal_report(
+        state,
+        report=_proposal("ACT", True, str(candidate)),
+        report_path="/ambiguous-retained/proposal-report.json",
+        proposal_run_id="proposal-ambiguous-retained",
+        candidate_version="candidate-ambiguous-retained",
+    )
+
+    assert state["candidate"]["activation_binding"]["status"] == "ambiguous"
+    assert "activation_token" not in state["candidate"]
+
+
 def test_abstain_is_a_terminal_proposal_without_candidate():
     state = import_proposal_report(
         _proposal_state(),

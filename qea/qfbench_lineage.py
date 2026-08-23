@@ -41,6 +41,7 @@ def new_lineage(
     cost_limit_usd: float | str,
     quantitative_protection_review: bool = False,
     repeat_consistency_policy: str = "aggregate_only",
+    retained_activation_token: str | None = None,
 ) -> dict[str, object]:
     """Create a one-candidate lineage ready for its target evaluation."""
 
@@ -49,15 +50,26 @@ def new_lineage(
             f"unknown repeat consistency policy: {repeat_consistency_policy}"
         )
 
+    current_parent = {
+        "version": parent_version,
+        "worker_dir": parent_path,
+    }
+    if retained_activation_token is not None:
+        if (
+            not isinstance(retained_activation_token, str)
+            or not retained_activation_token
+        ):
+            raise LineageError(
+                "retained activation token must be a non-empty string"
+            )
+        current_parent["retained_activation_token"] = retained_activation_token
+
     return {
         "schema_version": 1,
         "lineage_id": lineage_id,
         "status": "running",
         "phase": "TARGET",
-        "current_parent": {
-            "version": parent_version,
-            "worker_dir": parent_path,
-        },
+        "current_parent": current_parent,
         "candidate": {
             "version": candidate_version,
             "worker_dir": candidate_path,
@@ -94,6 +106,7 @@ def new_proposal_lineage(
     cost_limit_usd: float | str,
     quantitative_protection_review: bool = False,
     repeat_consistency_policy: str = "aggregate_only",
+    retained_activation_token: str | None = None,
 ) -> dict[str, object]:
     """Create a lineage whose candidate will come from an Evolver report."""
 
@@ -110,6 +123,7 @@ def new_proposal_lineage(
         cost_limit_usd=cost_limit_usd,
         quantitative_protection_review=quantitative_protection_review,
         repeat_consistency_policy=repeat_consistency_policy,
+        retained_activation_token=retained_activation_token,
     )
     state["phase"] = "PROPOSAL"
     state["candidate"] = None
@@ -398,9 +412,12 @@ def _proposal_mechanism_claim(
 
 
 def _activation_binding(
-    *, parent_dir: object, candidate_dir: object
+    *,
+    parent_dir: object,
+    candidate_dir: object,
+    retained_activation_token: object = None,
 ) -> dict[str, object]:
-    """Bind one added or modified registered tool without guessing among tools."""
+    """Bind one changed tool, or one explicitly retained unchanged tool."""
 
     parent_tools = _registered_tools(parent_dir)
     candidate_tools = _registered_tools(candidate_dir)
@@ -438,6 +455,22 @@ def _activation_binding(
             "binding": tool.get("binding"),
             "source": "admitted_candidate_registration",
         }
+    elif not changed and isinstance(retained_activation_token, str):
+        if (
+            retained_activation_token in parent_tools
+            and retained_activation_token in candidate_tools
+        ):
+            tool = candidate_tools[retained_activation_token]
+            binding["status"] = "retained"
+            binding["realized_component"] = {
+                "kind": "tool",
+                "token": retained_activation_token,
+                "change_kind": "retained",
+                "changed_surfaces": [],
+                "descriptor_path": tool.get("descriptor_path"),
+                "binding": tool.get("binding"),
+                "source": "lineage_parent_retained_activation_token",
+            }
     return binding
 
 
@@ -744,6 +777,9 @@ def import_proposal_report(
     activation_binding = _activation_binding(
         parent_dir=result["current_parent"]["worker_dir"],
         candidate_dir=candidate_path,
+        retained_activation_token=result["current_parent"].get(
+            "retained_activation_token"
+        ),
     )
     result["candidate"] = {
         "version": candidate_version,
