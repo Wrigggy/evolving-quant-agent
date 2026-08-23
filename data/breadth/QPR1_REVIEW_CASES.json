@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "review_scope": "answer_free_development_protection",
+  "cases": [
+    {
+      "case_id": "same-harness-38-to-35",
+      "comparison_kind": "same_harness_variability",
+      "provisional_margin": 3,
+      "parent": {"tests_passed": 38, "tests_total": 39, "reward": 0.96},
+      "candidate": {"tests_passed": 35, "tests_total": 39, "reward": 0.9},
+      "harness_diff": "none",
+      "public_relation_observation": "no new critical public relation break observed",
+      "triage_input": {
+        "same_harness": true,
+        "property_family_deltas": {},
+        "public_critical_relations": [],
+        "trace_attribution_hints": {}
+      },
+      "expected_triage": {
+        "verdict": "INCONCLUSIVE",
+        "outcome_severity": "WITHIN_PROVISIONAL_VARIABILITY",
+        "next_evidence": "NO_EXTRA_RUN"
+      },
+      "evidence_refs": ["retained:h0-localvol-38", "retained:h0-localvol-35"]
+    },
+    {
+      "case_id": "search-v2-38-to-38-property-swap",
+      "comparison_kind": "matched_candidate_protection",
+      "provisional_margin": 3,
+      "parent": {
+        "tests_passed": 38,
+        "tests_total": 39,
+        "reward": 0.96,
+        "failed_property_family": "barrier_output_reasonableness"
+      },
+      "candidate": {
+        "tests_passed": 38,
+        "tests_total": 39,
+        "reward": 0.96,
+        "failed_property_family": "vanilla_monte_carlo_to_surface_reconciliation"
+      },
+      "target_gain_context": "the same frozen candidate improved 65/68 to 68/68 and 66/68 to 68/68 on two independent target comparisons",
+      "runtime_trace_observations": [
+        "the candidate represented every selected maturity on its delivered surfaces",
+        "the candidate checked finite positive local volatility and scanned final artifacts for missing numeric cells",
+        "the aggregate protection score tied while the failed quantitative property family changed"
+      ],
+      "public_relation_observation": "the declared maturity and surface-completeness relations were observed, but downstream price reconciliation remained unresolved",
+      "triage_input": {
+        "same_harness": false,
+        "property_family_deltas": {
+          "barrier_output_reasonableness": -1,
+          "vanilla_monte_carlo_to_surface_reconciliation": 1
+        },
+        "public_critical_relations": [],
+        "trace_attribution_hints": {
+          "causal_attribution": "UNRESOLVED",
+          "quantitative_diagnosis": "NUMERIC_TOLERANCE_ONLY"
+        }
+      },
+      "expected_triage": {
+        "verdict": "INCONCLUSIVE",
+        "outcome_severity": "UNRESOLVED",
+        "next_evidence": "PAIRED_PROTECTION_REPEAT"
+      },
+      "evidence_refs": [
+        "search-v2:localvol-protection-score",
+        "search-v2:localvol-property-swap",
+        "search-v2:localvol-answer-free-trace"
+      ]
+    },
+    {
+      "case_id": "main0b-35-to-29",
+      "comparison_kind": "matched_candidate_protection",
+      "provisional_margin": 3,
+      "parent": {"tests_passed": 35, "tests_total": 39, "reward": 0.9},
+      "candidate": {"tests_passed": 29, "tests_total": 39, "reward": 0.768857},
+      "target_gain_context": "the frozen candidate improved 66/68 to 68/68 in two independent target comparisons",
+      "property_family_change": {"surface_nodes": 3, "call_surface": 3, "local_vol": 0, "barrier": 0},
+      "runtime_trace_observations": [
+        "the Worker used an inconsistent BTC-premium forward relation before its first component call",
+        "the component reported a 27.919 percent Monte-Carlo-versus-surface gap",
+        "the harness instructed the Worker to act on every finding until the audit passed",
+        "the Worker modified downstream surface nodes while upstream forward parity remained unverified",
+        "the internal audit later passed while official failed properties increased from four to ten"
+      ],
+      "triage_input": {
+        "same_harness": false,
+        "property_family_deltas": {
+          "surface_nodes": 3,
+          "call_surface": 3,
+          "local_vol": 0,
+          "barrier": 0
+        },
+        "public_critical_relations": [
+          {
+            "name": "forward_parity",
+            "critical": true,
+            "parent": "PASS",
+            "candidate": "UNVERIFIED"
+          }
+        ],
+        "trace_attribution_hints": {
+          "causal_attribution": "HARNESS_WORKER_INTERACTION",
+          "quantitative_diagnosis": "UPSTREAM_STATE_UNVERIFIED"
+        }
+      },
+      "expected_triage": {
+        "verdict": "FAIL",
+        "outcome_severity": "MEANINGFUL_CANDIDATE_REGRESSION",
+        "next_evidence": "HOLD_FOR_REFINE"
+      },
+      "evidence_refs": [
+        "main0b:localvol-protection-score",
+        "main0b:localvol-worker-trace",
+        "main0b:parent-candidate-harness-diff"
+      ]
+    },
+    {
+      "case_id": "aggregate-tie-critical-break",
+      "comparison_kind": "matched_candidate_protection",
+      "provisional_margin": 3,
+      "parent": {"tests_passed": 38, "tests_total": 39, "reward": 0.96},
+      "candidate": {"tests_passed": 38, "tests_total": 39, "reward": 0.96},
+      "public_critical_relation": {
+        "name": "unit_and_forward_parity",
+        "parent": "PASS",
+        "candidate": "FAIL"
+      },
+      "triage_input": {
+        "same_harness": false,
+        "property_family_deltas": {},
+        "public_critical_relations": [
+          {
+            "name": "unit_and_forward_parity",
+            "critical": true,
+            "parent": "PASS",
+            "candidate": "FAIL"
+          }
+        ],
+        "trace_attribution_hints": {}
+      },
+      "expected_triage": {
+        "verdict": "FAIL",
+        "outcome_severity": "MEANINGFUL_CANDIDATE_REGRESSION",
+        "next_evidence": "HOLD_FOR_REFINE"
+      },
+      "evidence_refs": ["fixture:aggregate-tie-public-relation-break"]
+    }
+  ]
+}

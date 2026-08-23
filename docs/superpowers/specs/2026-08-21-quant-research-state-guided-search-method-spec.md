@@ -273,6 +273,57 @@ Each candidate receives one intervention verdict:
 Only official property or task outcomes support benchmark-performance claims.
 Only repeat/protection/transfer supports stability or reuse.
 
+## Proposed quantitative protection review extension
+
+This extension is pending. It does not change any retained measured verdict.
+Its complete predeclared plan is in the
+[quantitative protection review decision](../../decisions/2026-08-23-quantitative-protection-review-plan.md).
+
+Protection should no longer collapse directly from one comparison to a binary
+promotion/rollback bit:
+
+- `PASS`: the candidate is inside a predeclared non-inferiority band and breaks
+  no critical public quantitative relation;
+- `INCONCLUSIVE`: the movement is small, property identities exchange under a
+  stable aggregate, or the evidence cannot separate trajectory variation from
+  a candidate effect; and
+- `FAIL`: the candidate clearly exceeds the band or breaks a critical public
+  relation.
+
+Only `INCONCLUSIVE` invokes an answer-free Quantitative Regression Reviewer.
+The Reviewer may inspect public task semantics, answer-free trajectories,
+component activation, artifact changes, aggregate and answer-free failure-
+family movement, retained baseline variability, and public reconciliation
+relations. It may not inspect checker answers, expected values, hidden tests,
+reference solutions, raw answer-rich rubric, or sealed outcomes.
+
+The Reviewer returns severity, causal attribution, quantitative diagnosis,
+evidence locations, and one next-evidence recommendation. It does not edit the
+harness or promote a candidate. The fixed controller owns all terminal
+selection. It may request at most one predeclared paired protection repeat for
+an ambiguous case; repeated sampling is never used to select the best outcome.
+
+When target benefit has repeated but the current integration fails protection,
+the controller records `HOLD_FOR_REFINE`: the official incumbent stays fixed,
+the current candidate is not promoted, and the component plus protection
+evidence remain available for one bounded refinement. This separates a useful
+component hypothesis from a safe deployable harness version.
+
+The retained cases fix the intended calibration of this mechanism. Main-0B
+local-vol, 35/39 to 29/39 with an upstream forward/unit inconsistency and
+downstream surface modification, is a clear candidate-integration regression;
+the Reviewer must not reinterpret it as mild noise. Search-v2 local-vol,
+38/39 to 38/39 with a failed-property swap, is the intended gray case for
+review and at most one paired repeat. The same review access, fixed decision
+rule, repeat limit, and cost accounting apply to generic and QRS arms.
+
+Implementation proceeds in three bounded stages: a zero-model replay of four
+frozen evidence cards, one structured Reviewer canary over those cards, and---
+only if the Reviewer adds real discrimination---one matched Search-v2
+protection pair. Controller integration follows only after these gates. This
+phase does not add a scheduler, open-ended Worker calls, RAG, or branching
+search.
+
 ## Minimal candidate decision payload
 
 Extend the current structured decision conceptually with:

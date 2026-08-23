@@ -164,6 +164,41 @@ evaluation, and sealed results must never return to search or retrieval.
 This is the real experimental use of candidate history. Versioning, rollback,
 and caching remain infrastructure rather than quant-specific novelty.
 
+### Quantitative protection review
+
+General agent trajectories are stochastic, and repeated sampling can change
+the observed success rate even when the model and harness are fixed. QEA does
+not claim that repeated sampling, `pass@k`, or variance estimation is a
+quant-specific contribution.
+
+The proposed domain distinction is how a protection change is interpreted.
+Quantitative Workers propagate continuous, coupled states through calibration,
+interpolation, differentiation, simulation, aggregation, and artifact closure.
+A small upstream difference may move several downstream quantities before a
+property verifier discretizes them through tolerances. One failed property can
+therefore exchange for another without establishing a meaningful capability
+loss; conversely, an unchanged aggregate count can conceal a newly broken
+economic or dimensional relation. Ill-posed inverse problems such as local-
+volatility calibration make this propagation especially visible.
+
+QEA therefore proposes an answer-free **Quantitative Regression Reviewer** at
+an ambiguous protection boundary. It uses public quantitative relations and
+Research-State propagation to distinguish ordinary Worker variation,
+tolerance-level numerical movement, structural state inconsistency, and unsafe
+candidate integration. It cannot promote a candidate. The fixed controller
+retains promotion authority and maps protection to `PASS`, `INCONCLUSIVE`, or
+`FAIL`. When a target gain has repeated but protection fails, the official
+incumbent remains unchanged while the component and evidence enter
+`HOLD_FOR_REFINE` for one bounded lineage refinement.
+
+This proposed mechanism must not be used to excuse clear regressions. The
+retained Main-0B local-vol movement from 35/39 to 29/39, together with its
+upstream forward/unit inconsistency and downstream surface modification, is a
+clear current-candidate integration failure. By contrast, the Search-v2
+protection tie at 38/39 with a failed-property swap is the intended gray case.
+The same Reviewer, evidence policy, non-inferiority rule, repeat limit, and
+controller must apply to generic and QRS arms.
+
 ## Quant Research Worker flow
 
 The high-level Worker flow is:
@@ -365,3 +400,6 @@ runway with the method and story frozen.
 - [R&D-Agent-Quant](https://arxiv.org/abs/2505.15155)
 - [QuantaAlpha](https://arxiv.org/abs/2602.07085)
 - [Learning to Discover at Test Time](https://arxiv.org/abs/2601.16175)
+- [Evaluating Large Language Models Trained on Code](https://arxiv.org/abs/2107.03374)
+- [On Randomness in Agentic Evals](https://arxiv.org/abs/2602.07150)
+- [Regularized local-volatility calibration](https://doi.org/10.1137/S0036141001400202)
