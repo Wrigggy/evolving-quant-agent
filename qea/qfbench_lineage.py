@@ -9,6 +9,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Mapping
 
+import yaml
+
 
 class LineageError(ValueError):
     """Raised when a lineage or child report cannot be interpreted."""
@@ -257,6 +259,177 @@ def _budget_reached(state: Mapping[str, object]) -> bool:
     ) >= _decimal(state["cost_limit_usd"], label="cost limit")
 
 
+def _registered_tools(worker_dir: object) -> dict[str, str | None]:
+    """Return the tools actually registered by one admitted Worker harness."""
+
+    if not isinstance(worker_dir, str) or not worker_dir:
+        return {}
+    try:
+        payload = yaml.safe_load((Path(worker_dir) / "agent.yaml").read_text())
+    except (OSError, yaml.YAMLError):
+        return {}
+    if not isinstance(payload, Mapping) or not isinstance(
+        payload.get("tools"), list
+    ):
+        return {}
+    tools: dict[str, str | None] = {}
+    for value in payload["tools"]:
+        if not isinstance(value, Mapping):
+            continue
+        name = value.get("name")
+        if isinstance(name, str) and name:
+            path = value.get("yaml_path")
+            tools[name] = path if isinstance(path, str) and path else None
+    return tools
+
+
+def _proposal_mechanism_claim(
+    report: Mapping[str, object],
+) -> dict[str, object] | None:
+    """Keep the compact mechanism claim already emitted by the Evolver."""
+
+    summary = report.get("summary")
+    discovery = (
+        summary.get("discovery_hypothesis")
+        if isinstance(summary, Mapping)
+        else None
+    )
+    hypothesis = (
+        discovery.get("hypothesis") if isinstance(discovery, Mapping) else None
+    )
+    if not isinstance(hypothesis, Mapping):
+        return None
+    claim: dict[str, object] = {}
+    for field in (
+        "selected_relation",
+        "research_state_transition",
+        "component_routing",
+        "prediction",
+    ):
+        if field in hypothesis:
+            claim[field] = deepcopy(hypothesis[field])
+    return claim or None
+
+
+def _activation_binding(
+    *, parent_dir: object, candidate_dir: object
+) -> dict[str, object]:
+    """Bind a singleton newly registered tool without guessing among tools."""
+
+    parent_tools = _registered_tools(parent_dir)
+    candidate_tools = _registered_tools(candidate_dir)
+    added = sorted(set(candidate_tools) - set(parent_tools))
+    binding: dict[str, object] = {
+        "status": (
+            "singleton"
+            if len(added) == 1
+            else "none"
+            if not added
+            else "ambiguous"
+        ),
+        "new_registered_tools": added,
+    }
+    if len(added) == 1:
+        token = added[0]
+        binding["realized_component"] = {
+            "kind": "tool",
+            "token": token,
+            "descriptor_path": candidate_tools[token],
+            "source": "admitted_candidate_registration",
+        }
+    return binding
+
+
+def _mechanism_observation(
+    state: Mapping[str, object],
+    *,
+    activation: Mapping[str, object] | None,
+    parent: Mapping[str, object],
+    candidate: Mapping[str, object],
+) -> dict[str, object] | None:
+    """Relate exact activation to official deltas without claiming causality."""
+
+    proposal = state.get("proposal")
+    claim = proposal.get("mechanism_claim") if isinstance(proposal, Mapping) else None
+    selected_relation = (
+        claim.get("selected_relation") if isinstance(claim, Mapping) else None
+    )
+    relation_id = (
+        selected_relation.get("relation_id")
+        if isinstance(selected_relation, Mapping)
+        else None
+    )
+    if activation is None and relation_id is None:
+        return None
+
+    candidate_state = state.get("candidate")
+    token = (
+        candidate_state.get("activation_token")
+        if isinstance(candidate_state, Mapping)
+        else None
+    )
+    count = activation.get("activation_count") if activation is not None else None
+    if isinstance(count, bool) or not isinstance(count, int):
+        count = None
+    if not isinstance(token, str) or not token:
+        status = "UNKNOWN"
+    elif count is None:
+        status = "UNKNOWN"
+    elif count > 0:
+        status = "ACTIVATED"
+    else:
+        status = "NOT_ACTIVATED"
+
+    gain = _gain(parent, candidate)
+    if status == "ACTIVATED":
+        relation_outcome = (
+            "ACTIVATED_WITH_OFFICIAL_GAIN"
+            if gain
+            else "ACTIVATED_WITHOUT_OFFICIAL_GAIN"
+        )
+    elif status == "NOT_ACTIVATED":
+        relation_outcome = "NOT_ACTIVATED"
+    else:
+        relation_outcome = "UNKNOWN"
+
+    attempts: list[dict[str, object]] = []
+    raw_attempts = activation.get("attempts") if activation is not None else None
+    if isinstance(raw_attempts, list):
+        for value in raw_attempts:
+            if not isinstance(value, Mapping):
+                continue
+            attempts.append(
+                {
+                    field: value.get(field)
+                    for field in (
+                        "attempt_id",
+                        "task_id",
+                        "trace_path",
+                        "activation_token",
+                        "activated",
+                    )
+                    if field in value
+                }
+            )
+    return {
+        "relation_id": relation_id,
+        "activation": {
+            "token": token,
+            "status": status,
+            "count": count,
+            "attempts": attempts,
+        },
+        "official_outcome": {
+            "reward_delta": float(candidate["reward"]) - float(parent["reward"]),
+            "tests_passed_delta": int(candidate["tests_passed"])
+            - int(parent["tests_passed"]),
+            "strict_gain_observed": gain,
+        },
+        "relation_outcome": relation_outcome,
+        "boundary": "association_not_causal_semantic_verification",
+    }
+
+
 def _finish_candidate(
     state: dict[str, object], *, decision: str, reason: str
 ) -> dict[str, object]:
@@ -326,6 +499,9 @@ def import_proposal_report(
         "admitted": admission.get("admitted"),
         "candidate_dir": candidate_path,
     }
+    mechanism_claim = _proposal_mechanism_claim(report)
+    if mechanism_claim is not None:
+        result["proposal"]["mechanism_claim"] = mechanism_claim
 
     if decision == "ABSTAIN":
         result["decision"] = "ABSTAIN"
@@ -340,10 +516,19 @@ def import_proposal_report(
     if not isinstance(candidate_path, str) or not candidate_path:
         raise LineageError("admitted ACT proposal has no candidate_dir")
 
+    activation_binding = _activation_binding(
+        parent_dir=result["current_parent"]["worker_dir"],
+        candidate_dir=candidate_path,
+    )
     result["candidate"] = {
         "version": candidate_version,
         "worker_dir": candidate_path,
+        "activation_binding": activation_binding,
     }
+    realized = activation_binding.get("realized_component")
+    if isinstance(realized, Mapping):
+        result["candidate"]["realized_component"] = deepcopy(dict(realized))
+        result["candidate"]["activation_token"] = realized["token"]
     result["decision"] = None
     result["phase"] = "TARGET"
     result["status"] = "running"
@@ -385,6 +570,10 @@ def import_pilot_report(
     comparator_reuse = report.get("parent_comparator_reuse")
     if isinstance(comparator_reuse, Mapping):
         provenance = {"parent_comparator_reuse": dict(comparator_reuse)}
+    activations = report.get("activations")
+    candidate_activation = (
+        activations.get(candidate_arm) if isinstance(activations, Mapping) else None
+    )
     return import_comparison_observation(
         state,
         stage=stage,
@@ -397,6 +586,11 @@ def import_pilot_report(
         report_path=report_path,
         provenance=provenance,
         relation_observed=relation_observed,
+        mechanism_activation=(
+            candidate_activation
+            if isinstance(candidate_activation, Mapping)
+            else None
+        ),
         property_set_safe=property_set_safe,
         quantitative_protection_triage=quantitative_protection_triage,
     )
@@ -450,6 +644,7 @@ def import_comparison_observation(
     report_path: str,
     provenance: Mapping[str, object] | None = None,
     relation_observed: bool | None = None,
+    mechanism_activation: Mapping[str, object] | None = None,
     property_set_safe: bool | None = None,
     quantitative_protection_triage: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
@@ -495,6 +690,14 @@ def import_comparison_observation(
         "candidate": normalized_candidate,
         "relation_observed": relation_observed,
     }
+    mechanism = _mechanism_observation(
+        result,
+        activation=mechanism_activation,
+        parent=normalized_parent,
+        candidate=normalized_candidate,
+    )
+    if mechanism is not None:
+        observation["mechanism"] = mechanism
     if isinstance(provenance, Mapping):
         observation["provenance"] = deepcopy(dict(provenance))
         comparator_reuse = provenance.get("parent_comparator_reuse")

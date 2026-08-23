@@ -96,7 +96,24 @@ def _proposal(decision, admitted, candidate_dir="/real/proposal/candidate"):
     }
 
 
-def _apply(state, stage, report, *, property_set_safe=None):
+def _worker(root, tools):
+    root.mkdir(parents=True)
+    entries = "\n".join(
+        f"  - name: {name}\n    yaml_path: ./tool_descriptions/{name}.tool.yaml"
+        for name in tools
+    )
+    (root / "agent.yaml").write_text(f"tools:\n{entries}\n")
+    return root
+
+
+def _apply(
+    state,
+    stage,
+    report,
+    *,
+    property_set_safe=None,
+    relation_observed=None,
+):
     return import_pilot_report(
         state,
         stage=stage,
@@ -104,6 +121,7 @@ def _apply(state, stage, report, *, property_set_safe=None):
         report_path=f"/{report['run_id']}/pilot-report.json",
         parent_arm="h0",
         candidate_arm="candidate",
+        relation_observed=relation_observed,
         property_set_safe=property_set_safe,
     )
 
@@ -185,10 +203,116 @@ def test_admitted_act_attaches_report_candidate_and_accounts_once():
     assert state["candidate"] == {
         "version": "candidate-r1",
         "worker_dir": "/real/proposal/candidate",
+        "activation_binding": {
+            "status": "none",
+            "new_registered_tools": [],
+        },
     }
     assert again == state
     assert state["cost"]["provider_cost_usd"] == "0.02"
     assert state["cost"]["completed_requests"] == 4
+
+
+def test_proposal_singleton_tool_binds_and_observes_activation(tmp_path):
+    parent = _worker(tmp_path / "parent", ("run_shell_command",))
+    candidate = _worker(
+        tmp_path / "candidate", ("run_shell_command", "audit_quant_state")
+    )
+    state = new_proposal_lineage(
+        lineage_id="lineage-a",
+        parent_version="h0",
+        parent_path=str(parent),
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+    )
+    report = _proposal("ACT", True, str(candidate))
+    report["summary"] = {
+        "discovery_hypothesis": {
+            "hypothesis": {
+                "selected_relation": {"relation_id": "state_reconciliation"},
+                "component_routing": {"selected_locus": "tools"},
+            }
+        }
+    }
+    state = import_proposal_report(
+        state,
+        report=report,
+        report_path="/proposal/proposal-report.json",
+        proposal_run_id="proposal-r1",
+        candidate_version="candidate-r1",
+    )
+
+    assert state["candidate"]["activation_token"] == "audit_quant_state"
+    assert state["candidate"]["activation_binding"]["status"] == "singleton"
+    assert (
+        state["proposal"]["mechanism_claim"]["selected_relation"]["relation_id"]
+        == "state_reconciliation"
+    )
+
+    pilot = _report("target-run", "target", (1, 2, 0), (2, 2, 1))
+    pilot["activations"] = {
+        "candidate": {
+            "activation_count": 1,
+            "attempts": [
+                {
+                    "attempt_id": "attempt-c1",
+                    "task_id": "target",
+                    "trace_path": "attempts/attempt-c1/raw-trace.jsonl",
+                    "activation_token": "audit_quant_state",
+                    "activated": True,
+                }
+            ],
+        }
+    }
+    observed = _apply(state, "target", pilot, relation_observed=True)
+    mechanism = observed["observations"]["target"]["mechanism"]
+
+    assert observed["observations"]["target"]["relation_observed"] is True
+    assert mechanism["activation"]["status"] == "ACTIVATED"
+    assert mechanism["activation"]["count"] == 1
+    assert mechanism["official_outcome"] == {
+        "reward_delta": 1.0,
+        "tests_passed_delta": 1,
+        "strict_gain_observed": True,
+    }
+    assert mechanism["relation_outcome"] == "ACTIVATED_WITH_OFFICIAL_GAIN"
+    assert _apply(observed, "target", pilot, relation_observed=True) == observed
+
+
+def test_proposal_zero_or_multiple_new_tools_does_not_guess(tmp_path):
+    parent = _worker(tmp_path / "parent", ("run_shell_command",))
+    for label, tools, expected in (
+        ("zero", ("run_shell_command",), "none"),
+        (
+            "multiple",
+            ("run_shell_command", "audit_one", "audit_two"),
+            "ambiguous",
+        ),
+    ):
+        candidate = _worker(tmp_path / label, tools)
+        state = new_proposal_lineage(
+            lineage_id=label,
+            parent_version="h0",
+            parent_path=str(parent),
+            target_task_id="target",
+            protection_task_id="protect",
+            worker_route="route-a",
+            worker_budget="normal",
+            cost_limit_usd="1",
+        )
+        state = import_proposal_report(
+            state,
+            report=_proposal("ACT", True, str(candidate)),
+            report_path=f"/{label}/proposal-report.json",
+            proposal_run_id=f"proposal-{label}",
+            candidate_version=f"candidate-{label}",
+        )
+
+        assert state["candidate"]["activation_binding"]["status"] == expected
+        assert "activation_token" not in state["candidate"]
 
 
 def test_abstain_is_a_terminal_proposal_without_candidate():

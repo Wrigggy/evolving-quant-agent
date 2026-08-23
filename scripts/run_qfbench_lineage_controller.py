@@ -106,8 +106,12 @@ def build_child_argv(
             "--approve-external-run",
         ]
     )
-    if stage.get("activation_token"):
-        argv.extend(("--activation-token", str(stage["activation_token"])))
+    if "activation_binding" in candidate:
+        activation_token = candidate.get("activation_token")
+    else:
+        activation_token = stage.get("activation_token")
+    if activation_token:
+        argv.extend(("--activation-token", str(activation_token)))
     return tuple(argv)
 
 

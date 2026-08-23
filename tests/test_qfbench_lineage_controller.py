@@ -820,6 +820,71 @@ def test_live_child_argv_uses_existing_component_runner():
     assert argv[-1] == "--approve-external-run"
 
 
+def test_live_child_argv_prefers_proposal_bound_activation_token():
+    plan = {
+        "controller_run_id": "main0",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest.json",
+            "rootless_config": "/config.json",
+            "image_set_manifest": "/images.json",
+            "results_dir": "/results",
+        },
+    }
+    lineage = {
+        "lineage_id": "a",
+        "parent": {"worker_dir": "/h0"},
+        "candidate": {
+            "worker_dir": "/c1",
+            "activation_binding": {"status": "singleton"},
+            "activation_token": "actual_new_tool",
+        },
+    }
+    stage = {
+        "name": "target",
+        "task_id": "task-t",
+        "activation_token": "stale_plan_token",
+    }
+
+    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+
+    assert argv[argv.index("--activation-token") + 1] == "actual_new_tool"
+
+
+def test_live_child_argv_does_not_guess_for_ambiguous_proposal_binding():
+    plan = {
+        "controller_run_id": "main0",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest.json",
+            "rootless_config": "/config.json",
+            "image_set_manifest": "/images.json",
+            "results_dir": "/results",
+        },
+    }
+    lineage = {
+        "lineage_id": "a",
+        "parent": {"worker_dir": "/h0"},
+        "candidate": {
+            "worker_dir": "/c1",
+            "activation_binding": {"status": "ambiguous"},
+        },
+    }
+    stage = {
+        "name": "target",
+        "task_id": "task-t",
+        "activation_token": "stale_plan_token",
+    }
+
+    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+
+    assert "--activation-token" not in argv
+
+
 def test_live_child_argv_runs_only_candidate_when_parent_is_reused():
     plan = {
         "controller_run_id": "main0",
