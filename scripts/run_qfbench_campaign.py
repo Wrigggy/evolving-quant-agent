@@ -7,6 +7,7 @@ import argparse
 import json
 import sys
 from copy import deepcopy
+from decimal import Decimal
 from pathlib import Path
 from typing import Callable, Mapping
 
@@ -30,6 +31,28 @@ def _read_json(path: Path) -> dict[str, object]:
 def _write_json(path: Path, value: Mapping[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+
+
+def _empty_cost() -> dict[str, object]:
+    return {
+        "provider_cost_usd": "0",
+        "completed_requests": 0,
+        "total_tokens": 0,
+    }
+
+
+def _add_cost(total: dict[str, object], child: Mapping[str, object]) -> None:
+    total["provider_cost_usd"] = format(
+        Decimal(str(total["provider_cost_usd"]))
+        + Decimal(str(child.get("provider_cost_usd", "0"))),
+        "f",
+    )
+    total["completed_requests"] = int(total["completed_requests"]) + int(
+        child.get("completed_requests", 0)
+    )
+    total["total_tokens"] = int(total["total_tokens"]) + int(
+        child.get("total_tokens", 0)
+    )
 
 
 def _reference_key(stage_name: str, task_id: str) -> str:
@@ -95,6 +118,7 @@ def _new_state(
             "pending_hold": None,
             "refinement_used": False,
             "round_results": [],
+            "cost": _empty_cost(),
         }
     if not arm_states:
         raise LineageError("campaign selection has no matching arms")
@@ -102,6 +126,7 @@ def _new_state(
         "schema_version": 1,
         "campaign_run_id": plan.get("campaign_run_id"),
         "status": "RUNNING",
+        "cost": _empty_cost(),
         "arms": arm_states,
     }
 
@@ -252,6 +277,7 @@ def _candidate_parent(candidate: Mapping[str, object]) -> dict[str, object]:
 
 
 def _apply_terminal_child(
+    campaign_state: dict[str, object],
     arm_state: dict[str, object],
     *,
     round_spec: Mapping[str, object],
@@ -263,6 +289,11 @@ def _apply_terminal_child(
     decision = str(child.get("decision"))
     round_id = str(round_spec["round_id"])
     lineage = child_plan["lineages"][0]
+    child_cost = child.get("cost")
+    if not isinstance(child_cost, Mapping):
+        raise LineageError("terminal child has no cost summary")
+    _add_cost(arm_state["cost"], child_cost)
+    _add_cost(campaign_state["cost"], child_cost)
     arm_state["round_results"].append(
         {
             "round_id": round_id,
@@ -343,6 +374,24 @@ def _prepare_round(
     return True
 
 
+def _provider_cap(
+    plan: Mapping[str, object],
+    arm: Mapping[str, object],
+    name: str,
+) -> Decimal | None:
+    value = arm.get(name)
+    limits = plan.get("limits")
+    if value is None and isinstance(limits, Mapping):
+        value = limits.get(name)
+    if value is None:
+        return None
+    return Decimal(str(value))
+
+
+def _cost_reached(cost: Mapping[str, object], cap: Decimal | None) -> bool:
+    return cap is not None and Decimal(str(cost["provider_cost_usd"])) >= cap
+
+
 def run_campaign(
     plan_path: str | Path,
     state_dir: str | Path,
@@ -375,6 +424,18 @@ def run_campaign(
             index = int(arm_state["next_round_index"])
             if index >= len(rounds):
                 arm_state["status"] = "COMPLETE"
+                break
+            arm_cap = _provider_cap(plan, arm, "arm_provider_cost_usd")
+            campaign_cap = _provider_cap(
+                plan, arm, "campaign_provider_cost_usd"
+            )
+            if _cost_reached(arm_state["cost"], arm_cap):
+                arm_state["status"] = "BUDGET_STOP"
+                break
+            if selected_arms is None and _cost_reached(
+                state["cost"], campaign_cap
+            ):
+                arm_state["status"] = "BUDGET_STOP"
                 break
             round_spec = rounds[index]
             if not _prepare_round(arm_state, round_spec):
@@ -415,6 +476,7 @@ def run_campaign(
             lineage_id = child_plan["lineages"][0]["lineage_id"]
             child = _child_lineage(child_result, lineage_id)
             _apply_terminal_child(
+                state,
                 arm_state,
                 round_spec=round_spec,
                 child_plan=child_plan,
@@ -427,6 +489,8 @@ def run_campaign(
     statuses = {value["status"] for value in state["arms"].values()}
     if statuses == {"COMPLETE"}:
         state["status"] = "COMPLETE"
+    elif "BUDGET_STOP" in statuses:
+        state["status"] = "BUDGET_STOP"
     elif any(value != "COMPLETE" for value in statuses):
         state["status"] = "ATTENTION"
     _write_json(state_path, state)

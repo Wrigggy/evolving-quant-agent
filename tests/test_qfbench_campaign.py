@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -42,7 +43,7 @@ def _lineage(
     }
 
 
-def _plan(tmp_path: Path, rounds):
+def _plan(tmp_path: Path, rounds, *, arm_cost_cap=None):
     value = {
         "schema_version": 1,
         "campaign_run_id": "campaign-01",
@@ -86,12 +87,14 @@ def _plan(tmp_path: Path, rounds):
             }
         ],
     }
+    if arm_cost_cap is not None:
+        value["limits"]["arm_provider_cost_usd"] = arm_cost_cap
     path = tmp_path / "campaign-plan.json"
     path.write_text(json.dumps(value))
     return path
 
 
-def _terminal(plan_path: Path, decision: str):
+def _terminal(plan_path: Path, decision: str, *, cost="0.01"):
     plan = json.loads(plan_path.read_text())
     lineage = plan["lineages"][0]
     candidate_version = lineage["proposal"]["candidate_version"]
@@ -122,6 +125,11 @@ def _terminal(plan_path: Path, decision: str):
                 ),
                 "candidate": candidate,
                 "observations": observations,
+                "cost": {
+                    "provider_cost_usd": cost,
+                    "completed_requests": 2,
+                    "total_tokens": 100,
+                },
             }
         },
     }
@@ -147,6 +155,11 @@ def test_promotion_updates_next_parent_and_task_references_then_resume_is_noop(
     result = run_campaign(plan_path, tmp_path / "state", child_controller=child)
 
     assert result["status"] == "COMPLETE"
+    assert result["cost"] == {
+        "provider_cost_usd": "0.02",
+        "completed_requests": 4,
+        "total_tokens": 200,
+    }
     assert result["arms"]["qrs"]["current_incumbent"]["version"] == "c1"
     assert len(calls) == 2
     assert calls[0]["controller_run_id"] == "campaign-01-qrs-r1"
@@ -302,6 +315,14 @@ def test_resume_imports_terminal_child_written_before_campaign_checkpoint(
         plan_path, tmp_path / "state", child_controller=must_not_run
     )
     assert result["status"] == "COMPLETE"
+    assert result["cost"]["provider_cost_usd"] == "0.01"
+    assert calls == 0
+
+    resumed = run_campaign(
+        plan_path, tmp_path / "state", child_controller=must_not_run
+    )
+    assert resumed["cost"]["provider_cost_usd"] == "0.01"
+    assert resumed["cost"]["completed_requests"] == 2
     assert calls == 0
 
 
@@ -347,3 +368,57 @@ def test_new_task_family_runs_paired_then_becomes_incumbent_reference(tmp_path):
     assert references["protection::new-protection"]["reference_version"] == (
         "c2"
     )
+
+
+def test_arm_cost_cap_stops_before_next_child_at_round_boundary(tmp_path):
+    plan_path = _plan(
+        tmp_path,
+        [
+            {"round_id": "r1", "lineage": _lineage("c1")},
+            {"round_id": "r2", "lineage": _lineage("c2")},
+        ],
+        arm_cost_cap="0.01",
+    )
+    calls = []
+
+    def child(plan_path, state_dir, **kwargs):
+        calls.append(json.loads(Path(plan_path).read_text()))
+        return _terminal(Path(plan_path), "ROLLBACK", cost="0.01")
+
+    result = run_campaign(plan_path, tmp_path / "state", child_controller=child)
+
+    assert result["status"] == "BUDGET_STOP"
+    assert result["arms"]["qrs"]["status"] == "BUDGET_STOP"
+    assert result["arms"]["qrs"]["next_round_index"] == 1
+    assert result["cost"] == {
+        "provider_cost_usd": "0.01",
+        "completed_requests": 2,
+        "total_tokens": 100,
+    }
+    assert len(calls) == 1
+
+
+def test_campaign_cost_cap_gates_later_arm_in_single_process(tmp_path):
+    plan_path = _plan(
+        tmp_path,
+        [{"round_id": "r1", "lineage": _lineage("c1")}],
+    )
+    plan = json.loads(plan_path.read_text())
+    plan["limits"]["campaign_provider_cost_usd"] = "0.01"
+    second_arm = deepcopy(plan["arms"][0])
+    second_arm["arm_id"] = "generic"
+    plan["arms"].append(second_arm)
+    plan_path.write_text(json.dumps(plan))
+    calls = []
+
+    def child(plan_path, state_dir, **kwargs):
+        calls.append(json.loads(Path(plan_path).read_text()))
+        return _terminal(Path(plan_path), "ROLLBACK", cost="0.01")
+
+    result = run_campaign(plan_path, tmp_path / "state", child_controller=child)
+
+    assert result["status"] == "BUDGET_STOP"
+    assert result["arms"]["qrs"]["status"] == "COMPLETE"
+    assert result["arms"]["generic"]["status"] == "BUDGET_STOP"
+    assert result["cost"]["provider_cost_usd"] == "0.01"
+    assert len(calls) == 1
