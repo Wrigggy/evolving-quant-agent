@@ -508,6 +508,9 @@ def test_live_quantcodeeval_candidate_stages_resume_without_dispatch(tmp_path):
         diagnostic_tags=("tests_failed",),
         cost=None,
     )
+    parent_target_payload = json.loads(parent_target.read_text())
+    parent_target_payload.pop("run_id")
+    parent_target.write_text(json.dumps(parent_target_payload))
     parent_protection = _qce_result(
         tmp_path / "parents/protection.json",
         run_id="qce-parent-t27",
@@ -547,6 +550,7 @@ def test_live_quantcodeeval_candidate_stages_resume_without_dispatch(tmp_path):
                     "benchmark": "quantcodeeval",
                     "task_id": "T26",
                     "parent_result": str(parent_target),
+                    "parent_run_id": "qce-parent-t26",
                     "official_property_total": 17,
                     "live_run_id": "qce-live-target",
                 },
@@ -555,6 +559,7 @@ def test_live_quantcodeeval_candidate_stages_resume_without_dispatch(tmp_path):
                     "benchmark": "quantcodeeval",
                     "task_id": "T26",
                     "parent_result": str(parent_target),
+                    "parent_run_id": "qce-parent-t26",
                     "official_property_total": 17,
                     "live_run_id": "qce-live-repeat",
                 },

@@ -34,6 +34,7 @@
           "benchmark": "quantcodeeval",
           "task_id": "T26",
           "parent_result": "/data/qea-julius-storage/runs/qce-t26-ap3-20260820-r3/engineering-release/h0/H0-RESULT.json",
+          "parent_run_id": "qce-t26-ap3-20260820-r3-h0",
           "official_property_total": 17,
           "live_run_id": "qce-lineage-qdr1-target-20260823-r1",
           "relation_observed": true
@@ -43,6 +44,7 @@
           "benchmark": "quantcodeeval",
           "task_id": "T26",
           "parent_result": "/data/qea-julius-storage/runs/qce-t26-ap3-20260820-r3/engineering-release/h0/H0-RESULT.json",
+          "parent_run_id": "qce-t26-ap3-20260820-r3-h0",
           "official_property_total": 17,
           "live_run_id": "qce-lineage-qdr1-repeat-20260823-r1",
           "relation_observed": true
