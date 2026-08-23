@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the thin Main-0 QFBench candidate lifecycle."""
+"""Run the thin Main-0 candidate lifecycle over retained official results."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from qea.qfbench_lineage import (  # noqa: E402
     LineageError,
     freeze_lineage,
+    import_comparison_observation,
     import_pilot_report,
     import_proposal_report,
     import_quantitative_protection_review,
@@ -22,6 +23,11 @@ from qea.qfbench_lineage import (  # noqa: E402
     new_lineage,
     new_proposal_lineage,
     save_lineage,
+)
+from qea.quantcodeeval_lineage_adapter import (  # noqa: E402
+    QuantCodeEvalLineageAdapterError,
+    normalize_quantcodeeval_lineage_observation,
+    quantcodeeval_lineage_score,
 )
 
 
@@ -302,6 +308,109 @@ def _quantitative_triage(stage: Mapping[str, object]) -> dict[str, object]:
             f"{stage.get('name')} has no explicit quantitative_triage result"
         )
     return dict(value)
+
+
+def _optional_mapping(
+    value: object, *, label: str
+) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise LineageError(f"{label} must be a JSON object")
+    return dict(value)
+
+
+def _quantcodeeval_comparison(
+    stage: Mapping[str, object],
+) -> dict[str, object]:
+    """Normalize one retained QuantCodeEval parent--candidate result pair."""
+
+    task_id = stage.get("task_id")
+    parent_source = stage.get("parent_result")
+    candidate_source = stage.get("candidate_result")
+    if not isinstance(task_id, str) or not task_id:
+        raise LineageError("QuantCodeEval stage has no task_id")
+    if not isinstance(parent_source, (str, Mapping)):
+        raise LineageError("QuantCodeEval stage has no parent_result")
+    if not isinstance(candidate_source, (str, Mapping)):
+        raise LineageError("QuantCodeEval stage has no candidate_result")
+    adapter_stage = str(stage.get("name"))
+    if adapter_stage == "protection_repeat":
+        adapter_stage = "protection"
+    property_total = stage.get("official_property_total")
+    parent_run_id = stage.get("parent_run_id")
+    candidate_run_id = stage.get("candidate_run_id")
+    if parent_run_id is not None and not isinstance(parent_run_id, str):
+        raise LineageError("QuantCodeEval parent_run_id must be a string")
+    if candidate_run_id is not None and not isinstance(candidate_run_id, str):
+        raise LineageError("QuantCodeEval candidate_run_id must be a string")
+    try:
+        parent_observation = normalize_quantcodeeval_lineage_observation(
+            parent_source,
+            task_id=task_id,
+            stage=adapter_stage,
+            run_id=parent_run_id,
+            cost=_optional_mapping(
+                stage.get("parent_cost"), label="QuantCodeEval parent_cost"
+            ),
+            official_property_total=property_total,
+        )
+        candidate_observation = normalize_quantcodeeval_lineage_observation(
+            candidate_source,
+            task_id=task_id,
+            stage=adapter_stage,
+            run_id=candidate_run_id,
+            cost=_optional_mapping(
+                stage.get("candidate_cost"),
+                label="QuantCodeEval candidate_cost",
+            ),
+            official_property_total=property_total,
+        )
+        parent_score = quantcodeeval_lineage_score(
+            parent_observation,
+            official_property_total=property_total,
+            require_accounting=False,
+        )
+        candidate_score = quantcodeeval_lineage_score(
+            candidate_observation,
+            official_property_total=property_total,
+        )
+    except QuantCodeEvalLineageAdapterError as exc:
+        raise LineageError(f"QuantCodeEval comparison is not ready: {exc}") from exc
+
+    comparison_run_id = stage.get("comparison_run_id")
+    if comparison_run_id is None:
+        comparison_run_id = candidate_observation.get("run_id")
+    if not isinstance(comparison_run_id, str) or not comparison_run_id:
+        raise LineageError("QuantCodeEval comparison has no run_id")
+    candidate_cost = candidate_observation.get("cost")
+    if not isinstance(candidate_cost, Mapping):
+        raise LineageError("QuantCodeEval candidate has no explicit cost")
+    report_path = (
+        candidate_source
+        if isinstance(candidate_source, str)
+        else f"<embedded:{comparison_run_id}:candidate>"
+    )
+    return {
+        "run_id": comparison_run_id,
+        "task_id": task_id,
+        "parent": parent_score,
+        "candidate": candidate_score,
+        "cost": dict(candidate_cost),
+        "report_path": report_path,
+        "provenance": {
+            "parent_result": (
+                parent_source if isinstance(parent_source, str) else "<embedded>"
+            ),
+            "parent_run_id": parent_observation.get("run_id"),
+            "parent_status": parent_observation.get("status"),
+            "candidate_result": report_path,
+            "candidate_run_id": candidate_observation.get("run_id"),
+            "candidate_status": candidate_observation.get("status"),
+            "official_property_total": property_total,
+            "cost_accounting": "candidate_only",
+        },
+    }
 
 
 def _quantitative_review(
@@ -623,6 +732,49 @@ def run_controller(
 
             stage_name = str(state["phase"]).lower()
             stage = _stage(lineage, stage_name)
+            if stage.get("benchmark") == "quantcodeeval":
+                comparison = _quantcodeeval_comparison(stage)
+                property_safe = None
+                quantitative_triage = None
+                quantitative_review = (
+                    state.get("quantitative_protection_review") is True
+                )
+                if stage_name in {"protection", "protection_repeat"} and (
+                    quantitative_review
+                ):
+                    quantitative_triage = _quantitative_triage(stage)
+                elif stage_name == "protection":
+                    property_safe = stage.get("property_set_safe")
+                    if not isinstance(property_safe, bool):
+                        raise LineageError(
+                            "QuantCodeEval protection needs explicit "
+                            "property_set_safe"
+                        )
+                state = import_comparison_observation(
+                    state,
+                    stage=stage_name,
+                    run_id=str(comparison["run_id"]),
+                    task_id=str(comparison["task_id"]),
+                    parent=comparison["parent"],
+                    candidate=comparison["candidate"],
+                    cost=comparison["cost"],
+                    benchmark="quantcodeeval",
+                    report_path=str(comparison["report_path"]),
+                    provenance=comparison["provenance"],
+                    relation_observed=stage.get("relation_observed"),
+                    property_set_safe=property_safe,
+                    quantitative_protection_triage=quantitative_triage,
+                )
+                save_lineage(state_path, state)
+                if (
+                    stop_after_stage == stage_name
+                    and state.get("stopped_after_stage") != stage_name
+                ):
+                    state["stopped_after_stage"] = stage_name
+                    save_lineage(state_path, state)
+                    paused_this_run = True
+                    break
+                continue
             parent_comparator = _parent_comparator(stage, state)
             report_path = _report_path(plan, lineage, stage)
             if not report_path.is_file():

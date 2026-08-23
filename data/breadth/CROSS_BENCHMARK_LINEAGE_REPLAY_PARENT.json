@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "benchmark": "quantcodeeval",
+  "run_id": "qce-public-probe-diagnostic-parent-20260813-r1",
+  "status": "complete",
+  "task_ids": [
+    "T12",
+    "T19"
+  ],
+  "score_summary": {
+    "scores": [
+      {
+        "task_id": "T12",
+        "domain": "factor_momentum",
+        "reward": 0.0,
+        "diagnostic_tags": [
+          "tests_failed"
+        ],
+        "verifier_exit_code": 0,
+        "tests_passed": 12,
+        "tests_failed": 4
+      },
+      {
+        "task_id": "T19",
+        "domain": "post_earnings_announcement_drift",
+        "reward": 1.0,
+        "diagnostic_tags": [],
+        "verifier_exit_code": 0,
+        "tests_passed": 18,
+        "tests_failed": 0
+      }
+    ]
+  },
+  "attempts": [
+    {
+      "attempt_id": "fd7698c1240becf831276e46709d3806c8637eb40b915af0da6ca9309a067105",
+      "task_id": "T12",
+      "answer_free_evidence": {
+        "benchmark": "quantcodeeval",
+        "diagnostic_tags": [
+          "properties_incomplete"
+        ],
+        "official_reward": 0.0,
+        "property_families": {
+          "type_a": {
+            "errors": 0,
+            "failed": 3,
+            "passed": 5,
+            "skipped": 0,
+            "total": 8
+          },
+          "type_b": {
+            "errors": 0,
+            "failed": 1,
+            "passed": 7,
+            "skipped": 0,
+            "total": 8
+          }
+        },
+        "schema_version": 1
+      }
+    },
+    {
+      "attempt_id": "28b51327ff7199e7bafb040e8133272fc41fe840ae0977bce54c47656e350369",
+      "task_id": "T19",
+      "answer_free_evidence": {
+        "benchmark": "quantcodeeval",
+        "diagnostic_tags": [],
+        "official_reward": 1.0,
+        "property_families": {
+          "type_a": {
+            "errors": 0,
+            "failed": 0,
+            "passed": 7,
+            "skipped": 0,
+            "total": 7
+          },
+          "type_b": {
+            "errors": 0,
+            "failed": 0,
+            "passed": 11,
+            "skipped": 0,
+            "total": 11
+          }
+        },
+        "schema_version": 1
+      }
+    }
+  ],
+  "cost_accounting": "reused_parent_not_charged",
+  "source_paths": {
+    "T12": "results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r1/evidence/iteration-0001/tasks/T12/evaluations/qce-public-probe-diagnostic-parent-20260813-r1/official_and_families.json",
+    "T19": "results/bc-mirror/qce-public-probe-autonomous-activation-20260813-r1/evidence/iteration-0001/tasks/T19/evaluations/qce-public-probe-diagnostic-parent-20260813-r1/official_and_families.json"
+  },
+  "boundary": "Answer-free retained parent observations only. No parent cost is assigned to this replay wrapper."
+}

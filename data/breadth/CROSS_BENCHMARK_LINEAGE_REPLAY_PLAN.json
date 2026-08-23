@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "controller_run_id": "cross-benchmark-lineage-replay-20260823-r1",
+  "mode": "replay",
+  "runtime": {},
+  "limits": {
+    "provider_cost_usd": 1.0
+  },
+  "lineages": [
+    {
+      "lineage_id": "search-v2-localvol-qpr",
+      "parent": {
+        "version": "quant-h0",
+        "worker_dir": "qea/worker_quant_h0"
+      },
+      "candidate": {
+        "version": "localvol-qrs-v2",
+        "worker_dir": "results/bc-mirror/qstate-v2-localvol-quant-20260821-r1/evolutions/iteration-0001/candidate"
+      },
+      "quantitative_protection_review": true,
+      "quantitative_review": {
+        "review_id": "qpr1-reviewer-20260823-r1",
+        "case_id": "search-v2-38-to-38-property-swap",
+        "result_path": "results/qpr1-reviewer-20260823-r1/RESULT.json"
+      },
+      "stages": [
+        {
+          "name": "target",
+          "task_id": "dupire-local-vol",
+          "replay_report": "results/bc-mirror/qstate-v2-target-localvol-20260822-r1/pilot-report.json",
+          "parent_arm": "h0",
+          "candidate_arm": "quant-state-v2",
+          "relation_observed": true
+        },
+        {
+          "name": "repeat",
+          "task_id": "dupire-local-vol",
+          "replay_report": "results/bc-mirror/qstate-v2-repeat-localvol-20260822-r1/pilot-report.json",
+          "parent_arm": "h0",
+          "candidate_arm": "quant-state-v2",
+          "relation_observed": true
+        },
+        {
+          "name": "protection",
+          "task_id": "localvol-barrier",
+          "replay_report": "results/bc-mirror/qstate-v2-matched-localvol-barrier-20260822-r1/pilot-report.json",
+          "parent_arm": "h0",
+          "candidate_arm": "quant-state-v2",
+          "relation_observed": true,
+          "quantitative_triage": {
+            "verdict": "INCONCLUSIVE",
+            "outcome_severity": "UNRESOLVED",
+            "next_evidence": "PAIRED_PROTECTION_REPEAT"
+          }
+        },
+        {
+          "name": "protection_repeat",
+          "task_id": "localvol-barrier",
+          "replay_report": "results/bc-mirror/qpr1-searchv2-localvol-barrier-protection-repeat-20260823-r1/pilot-report.json",
+          "parent_arm": "parent",
+          "candidate_arm": "candidate",
+          "relation_observed": true,
+          "quantitative_triage": {
+            "verdict": "INCONCLUSIVE",
+            "outcome_severity": "UNRESOLVED",
+            "decision_label": "STILL_INCONCLUSIVE"
+          }
+        }
+      ]
+    },
+    {
+      "lineage_id": "qce-t12-quant-invariant-seeded",
+      "parent": {
+        "version": "qce-public-probe-diagnostic-parent-20260813-r1",
+        "worker_dir": "results/bc-mirror/qce-manual-public-probe-expansion-20260813-r1/workers/H0"
+      },
+      "candidate": {
+        "version": "quant-invariant-seeded-v1",
+        "worker_dir": "results/bc-mirror/qce-quant-invariant-seeded-t12-20260813-r2/workers/H0"
+      },
+      "stages": [
+        {
+          "name": "target",
+          "benchmark": "quantcodeeval",
+          "task_id": "T12",
+          "parent_result": "data/breadth/CROSS_BENCHMARK_LINEAGE_REPLAY_PARENT.json",
+          "candidate_result": "results/bc-mirror/qce-quant-invariant-seeded-t12-20260813-r2/FULL-CANDIDATE-RESULT.json",
+          "official_property_total": 16,
+          "relation_observed": true
+        },
+        {
+          "name": "repeat",
+          "benchmark": "quantcodeeval",
+          "task_id": "T12",
+          "parent_result": "data/breadth/CROSS_BENCHMARK_LINEAGE_REPLAY_PARENT.json",
+          "candidate_result": "results/bc-mirror/qce-quant-invariant-seeded-t12-repeat1-20260813-r2/FULL-CANDIDATE-RESULT.json",
+          "official_property_total": 16,
+          "relation_observed": true
+        },
+        {
+          "name": "protection",
+          "benchmark": "quantcodeeval",
+          "task_id": "T19",
+          "parent_result": "data/breadth/CROSS_BENCHMARK_LINEAGE_REPLAY_PARENT.json",
+          "candidate_result": "results/bc-mirror/qce-quant-invariant-seeded-t19-protect-20260813-r2/FULL-CANDIDATE-RESULT.json",
+          "official_property_total": 18,
+          "property_set_safe": true,
+          "relation_observed": true
+        }
+      ],
+      "historical_boundary": "The candidate was investigator-seeded after mechanism localization. This controller replay is not a new autonomous search or benchmark evaluation."
+    }
+  ]
+}

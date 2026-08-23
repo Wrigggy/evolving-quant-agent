@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
 import pytest
 
+from qea.qfbench_lineage import LineageError
 from scripts.run_qfbench_lineage_controller import (
     build_child_argv,
     build_proposal_argv,
@@ -87,6 +90,45 @@ def _single_arm_report(
     path = root / "pilot-report.json"
     path.write_text(json.dumps(report))
     return path, report
+
+
+def _qce_result(
+    path: Path,
+    *,
+    run_id: str,
+    task_id: str,
+    passed: int | None,
+    failed: int | None,
+    reward: float,
+    diagnostic_tags=(),
+    verifier_exit_code: int | None = 0,
+    cost="0.005",
+):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "status": "complete",
+        "run_id": run_id,
+        "score_summary": {
+            "scores": [{
+                "task_id": task_id,
+                "domain": "portfolio",
+                "reward": reward,
+                "diagnostic_tags": list(diagnostic_tags),
+                "verifier_exit_code": verifier_exit_code,
+                "tests_passed": passed,
+                "tests_failed": failed,
+            }]
+        },
+    }
+    if cost is not None:
+        payload["cost_audit"] = {
+            "provider_cost_usd": cost,
+            "completed_request_count": 1,
+            "total_tokens": 50,
+            "cost_complete": True,
+        }
+    path.write_text(json.dumps(payload))
+    return path
 
 
 def test_property_set_safety_detects_failure_swap(tmp_path):
@@ -176,6 +218,281 @@ def test_replay_runs_to_frozen_without_child_dispatch(tmp_path):
     assert result["lineages"]["positive"]["decision"] == "PROMOTE"
     assert result["lineages"]["positive"]["phase"] == "FROZEN"
     assert again == result
+
+
+def test_one_controller_replays_qfbench_and_quantcodeeval_lineages(tmp_path):
+    qf_reports = tmp_path / "qf-reports"
+    qf_target, _ = _report(
+        qf_reports / "target", "qf-target", "task-t", (1, 2, 0), (2, 2, 1), {}
+    )
+    qf_repeat, _ = _report(
+        qf_reports / "repeat", "qf-repeat", "task-t", (1, 2, 0), (2, 2, 1), {}
+    )
+    qf_protect, _ = _report(
+        qf_reports / "protect", "qf-protect", "task-p", (2, 2, 1), (2, 2, 1), {}
+    )
+    qce_parent_target = _qce_result(
+        tmp_path / "qce/parent-target.json",
+        run_id="qce-parent-t26",
+        task_id="T26",
+        passed=None,
+        failed=None,
+        reward=0,
+        diagnostic_tags=("missing_artifact",),
+        verifier_exit_code=None,
+        cost=None,
+    )
+    qce_candidate_target = _qce_result(
+        tmp_path / "qce/candidate-target.json",
+        run_id="qce-candidate-target",
+        task_id="T26",
+        passed=16,
+        failed=1,
+        reward=0,
+        diagnostic_tags=("tests_failed",),
+    )
+    qce_candidate_repeat = _qce_result(
+        tmp_path / "qce/candidate-repeat.json",
+        run_id="qce-candidate-repeat",
+        task_id="T26",
+        passed=16,
+        failed=1,
+        reward=0,
+        diagnostic_tags=("tests_failed",),
+    )
+    qce_parent_protect = _qce_result(
+        tmp_path / "qce/parent-protect.json",
+        run_id="qce-parent-t27",
+        task_id="T27",
+        passed=14,
+        failed=0,
+        reward=1,
+        cost=None,
+    )
+    qce_candidate_protect = _qce_result(
+        tmp_path / "qce/candidate-protect.json",
+        run_id="qce-candidate-protect",
+        task_id="T27",
+        passed=14,
+        failed=0,
+        reward=1,
+    )
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "cross-benchmark-r1",
+        "mode": "replay",
+        "runtime": {},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [
+            {
+                "lineage_id": "qf",
+                "parent": {"version": "h0", "worker_dir": "/qf-h0"},
+                "candidate": {"version": "qf-c1", "worker_dir": "/qf-c1"},
+                "stages": [
+                    {
+                        "name": "target",
+                        "task_id": "task-t",
+                        "replay_report": str(qf_target),
+                        "parent_arm": "h0",
+                        "candidate_arm": "candidate",
+                    },
+                    {
+                        "name": "repeat",
+                        "task_id": "task-t",
+                        "replay_report": str(qf_repeat),
+                        "parent_arm": "h0",
+                        "candidate_arm": "candidate",
+                    },
+                    {
+                        "name": "protection",
+                        "task_id": "task-p",
+                        "replay_report": str(qf_protect),
+                        "parent_arm": "h0",
+                        "candidate_arm": "candidate",
+                    },
+                ],
+            },
+            {
+                "lineage_id": "qce",
+                "parent": {"version": "quant-h0", "worker_dir": "/qce-h0"},
+                "candidate": {"version": "qce-c1", "worker_dir": "/qce-c1"},
+                "stages": [
+                    {
+                        "name": "target",
+                        "benchmark": "quantcodeeval",
+                        "task_id": "T26",
+                        "parent_result": str(qce_parent_target),
+                        "candidate_result": str(qce_candidate_target),
+                        "official_property_total": 17,
+                    },
+                    {
+                        "name": "repeat",
+                        "benchmark": "quantcodeeval",
+                        "task_id": "T26",
+                        "parent_result": str(qce_parent_target),
+                        "candidate_result": str(qce_candidate_repeat),
+                        "official_property_total": 17,
+                    },
+                    {
+                        "name": "protection",
+                        "benchmark": "quantcodeeval",
+                        "task_id": "T27",
+                        "parent_result": str(qce_parent_protect),
+                        "candidate_result": str(qce_candidate_protect),
+                        "official_property_total": 14,
+                        "property_set_safe": True,
+                    },
+                ],
+            },
+        ],
+    }
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    def fail_if_called(_argv):
+        raise AssertionError("cross-benchmark replay must not dispatch a child")
+
+    result = run_controller(
+        plan_path, tmp_path / "state", runner=fail_if_called
+    )
+    again = run_controller(
+        plan_path, tmp_path / "state", runner=fail_if_called
+    )
+    qce = result["lineages"]["qce"]
+
+    assert result["lineages"]["qf"]["decision"] == "PROMOTE"
+    assert qce["decision"] == "PROMOTE"
+    assert qce["phase"] == "FROZEN"
+    assert qce["cost"] == {
+        "provider_cost_usd": "0.015",
+        "completed_requests": 3,
+        "total_tokens": 150,
+    }
+    assert qce["accounted_run_ids"] == [
+        "qce-candidate-target",
+        "qce-candidate-repeat",
+        "qce-candidate-protect",
+    ]
+    assert qce["observations"]["target"]["parent"] == {
+        "reward": 0.0,
+        "tests_passed": 0,
+        "tests_failed": 17,
+        "official_valid": True,
+        "verifier_executed": False,
+        "verifier_exit_code": None,
+        "selection_source": "official_worker_artifact_contract_zero",
+    }
+    assert qce["observations"]["target"]["provenance"][
+        "cost_accounting"
+    ] == "candidate_only"
+    assert again == result
+
+
+def test_quantcodeeval_infrastructure_incomplete_fails_closed(tmp_path):
+    parent = _qce_result(
+        tmp_path / "qce/parent.json",
+        run_id="qce-parent",
+        task_id="T26",
+        passed=None,
+        failed=None,
+        reward=0,
+        diagnostic_tags=("missing_artifact",),
+        verifier_exit_code=None,
+    )
+    candidate = tmp_path / "qce/candidate-incomplete.json"
+    candidate.write_text(json.dumps({
+        "status": "evaluation_failed",
+        "official_evaluated": False,
+        "run_id": "qce-candidate-incomplete",
+        "partial_cost_and_lifecycle_audit": {
+            "provider_cost_usd": "0.003",
+            "completed_request_count": 1,
+            "total_tokens": 40,
+            "cost_complete": True,
+        },
+    }))
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "qce-incomplete-r1",
+        "mode": "replay",
+        "runtime": {},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [{
+            "lineage_id": "qce",
+            "parent": {"version": "quant-h0", "worker_dir": "/qce-h0"},
+            "candidate": {"version": "qce-c1", "worker_dir": "/qce-c1"},
+            "stages": [
+                {
+                    "name": "target",
+                    "benchmark": "quantcodeeval",
+                    "task_id": "T26",
+                    "parent_result": str(parent),
+                    "candidate_result": str(candidate),
+                    "official_property_total": 17,
+                },
+                {"name": "repeat", "task_id": "T26"},
+                {"name": "protection", "task_id": "T27"},
+            ],
+        }],
+    }
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    with pytest.raises(LineageError, match="incomplete infrastructure"):
+        run_controller(plan_path, tmp_path / "state")
+
+
+def test_quantcodeeval_candidate_without_cost_is_not_lineage_ready(tmp_path):
+    parent = _qce_result(
+        tmp_path / "qce/parent.json",
+        run_id="qce-parent",
+        task_id="T26",
+        passed=None,
+        failed=None,
+        reward=0,
+        diagnostic_tags=("missing_artifact",),
+        verifier_exit_code=None,
+        cost=None,
+    )
+    candidate = _qce_result(
+        tmp_path / "qce/candidate.json",
+        run_id="qce-candidate",
+        task_id="T26",
+        passed=16,
+        failed=1,
+        reward=0,
+        diagnostic_tags=("tests_failed",),
+        cost=None,
+    )
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "qce-no-cost-r1",
+        "mode": "replay",
+        "runtime": {},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [{
+            "lineage_id": "qce",
+            "parent": {"version": "quant-h0", "worker_dir": "/qce-h0"},
+            "candidate": {"version": "qce-c1", "worker_dir": "/qce-c1"},
+            "stages": [
+                {
+                    "name": "target",
+                    "benchmark": "quantcodeeval",
+                    "task_id": "T26",
+                    "parent_result": str(parent),
+                    "candidate_result": str(candidate),
+                    "official_property_total": 17,
+                },
+                {"name": "repeat", "task_id": "T26"},
+                {"name": "protection", "task_id": "T27"},
+            ],
+        }],
+    }
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    with pytest.raises(LineageError, match="explicit cost accounting"):
+        run_controller(plan_path, tmp_path / "state")
 
 
 def test_live_child_argv_uses_existing_component_runner():

@@ -1,4 +1,4 @@
-"""Small candidate-lineage state machine for QFBench Main-0."""
+"""Small candidate-lineage state machine with shared official transitions."""
 
 from __future__ import annotations
 
@@ -368,18 +368,12 @@ def import_pilot_report(
 ) -> dict[str, object]:
     """Apply one completed target, repeat, or protection child report."""
 
-    if stage not in _STAGE_PHASE:
-        raise LineageError(f"unknown lineage stage: {stage}")
     if report.get("status") != "complete":
         raise LineageError("pilot report is not complete")
-    result = deepcopy(dict(state))
     run_id = report.get("run_id")
-    if run_id in result.get("accounted_run_ids", []):
-        return result
-    if result.get("phase") != _STAGE_PHASE[stage]:
-        raise LineageError(
-            f"cannot import {stage} while lineage phase is {result.get('phase')}"
-        )
+    if not isinstance(run_id, str) or not run_id:
+        raise LineageError("pilot report has no run_id")
+    result = dict(state)
     task_id = (
         result["protection_task_id"]
         if stage in {"protection", "protection_repeat"}
@@ -387,25 +381,131 @@ def import_pilot_report(
     )
     parent = _score(report, parent_arm, str(task_id))
     candidate = _score(report, candidate_arm, str(task_id))
-    _add_cost(result, report)
+    provenance = None
+    comparator_reuse = report.get("parent_comparator_reuse")
+    if isinstance(comparator_reuse, Mapping):
+        provenance = {"parent_comparator_reuse": dict(comparator_reuse)}
+    return import_comparison_observation(
+        state,
+        stage=stage,
+        run_id=run_id,
+        task_id=str(task_id),
+        parent=parent,
+        candidate=candidate,
+        cost=report.get("cost"),
+        benchmark="qfbench",
+        report_path=report_path,
+        provenance=provenance,
+        relation_observed=relation_observed,
+        property_set_safe=property_set_safe,
+        quantitative_protection_triage=quantitative_protection_triage,
+    )
+
+
+def _comparison_score(
+    value: Mapping[str, object], *, label: str
+) -> dict[str, object]:
+    """Validate one benchmark-independent official selection score."""
+
+    reward = value.get("reward")
+    passed = value.get("tests_passed")
+    failed = value.get("tests_failed")
+    if isinstance(reward, bool) or not isinstance(reward, (int, float)):
+        raise LineageError(f"{label} comparison score has no official reward")
+    if (
+        isinstance(passed, bool)
+        or not isinstance(passed, int)
+        or isinstance(failed, bool)
+        or not isinstance(failed, int)
+    ):
+        raise LineageError(f"{label} comparison score has no property counts")
+    if value.get("official_valid") is False:
+        raise LineageError(f"{label} comparison score is not official-valid")
+    result = {
+        "reward": float(reward),
+        "tests_passed": passed,
+        "tests_failed": failed,
+    }
+    for field in (
+        "official_valid",
+        "verifier_executed",
+        "verifier_exit_code",
+        "selection_source",
+    ):
+        if field in value:
+            result[field] = value[field]
+    return result
+
+
+def import_comparison_observation(
+    state: Mapping[str, object],
+    *,
+    stage: str,
+    run_id: str,
+    task_id: str,
+    parent: Mapping[str, object],
+    candidate: Mapping[str, object],
+    cost: Mapping[str, object] | None,
+    benchmark: str,
+    report_path: str,
+    provenance: Mapping[str, object] | None = None,
+    relation_observed: bool | None = None,
+    property_set_safe: bool | None = None,
+    quantitative_protection_triage: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Apply one official parent--candidate comparison to a lineage."""
+
+    if stage not in _STAGE_PHASE:
+        raise LineageError(f"unknown lineage stage: {stage}")
+    if not isinstance(run_id, str) or not run_id:
+        raise LineageError("comparison has no run_id")
+    if not isinstance(cost, Mapping):
+        raise LineageError("comparison has no candidate cost summary")
+    result = deepcopy(dict(state))
+    if run_id in result.get("accounted_run_ids", []):
+        existing = result.get("observations", {}).get(stage)
+        if isinstance(existing, Mapping) and existing.get("run_id") == run_id:
+            return result
+        raise LineageError(
+            f"comparison run_id {run_id!r} is already used by another stage"
+        )
+    if result.get("phase") != _STAGE_PHASE[stage]:
+        raise LineageError(
+            f"cannot import {stage} while lineage phase is {result.get('phase')}"
+        )
+    expected_task_id = (
+        result["protection_task_id"]
+        if stage in {"protection", "protection_repeat"}
+        else result["target_task_id"]
+    )
+    if task_id != expected_task_id:
+        raise LineageError(
+            f"comparison task {task_id!r} differs from active {stage} task"
+        )
+    normalized_parent = _comparison_score(parent, label="parent")
+    normalized_candidate = _comparison_score(candidate, label="candidate")
+    _add_cost(result, {"run_id": run_id, "cost": dict(cost)})
 
     observation = {
         "run_id": run_id,
         "report_path": report_path,
+        "benchmark": benchmark,
         "task_id": task_id,
-        "parent": parent,
-        "candidate": candidate,
+        "parent": normalized_parent,
+        "candidate": normalized_candidate,
         "relation_observed": relation_observed,
     }
-    comparator_reuse = report.get("parent_comparator_reuse")
-    if isinstance(comparator_reuse, Mapping):
-        observation["parent_comparator_reuse"] = deepcopy(
-            dict(comparator_reuse)
-        )
+    if isinstance(provenance, Mapping):
+        observation["provenance"] = deepcopy(dict(provenance))
+        comparator_reuse = provenance.get("parent_comparator_reuse")
+        if isinstance(comparator_reuse, Mapping):
+            observation["parent_comparator_reuse"] = deepcopy(
+                dict(comparator_reuse)
+            )
     result["observations"][stage] = observation
 
     if stage in {"target", "repeat"}:
-        passed = _gain(parent, candidate)
+        passed = _gain(normalized_parent, normalized_candidate)
         observation["gate_passed"] = passed
         if not passed:
             return _finish_candidate(
@@ -419,7 +519,7 @@ def import_pilot_report(
         result["phase"] = "REPEAT" if stage == "target" else "PROTECTION"
         return result
 
-    aggregate_safe = _aggregate_safe(parent, candidate)
+    aggregate_safe = _aggregate_safe(normalized_parent, normalized_candidate)
     observation["aggregate_safe"] = aggregate_safe
     observation["property_set_safe"] = property_set_safe
     quantitative_path = (

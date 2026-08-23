@@ -348,23 +348,29 @@ def quantcodeeval_lineage_score(
     observation: Mapping[str, object],
     *,
     official_property_total: int | None = None,
+    require_accounting: bool = True,
 ) -> dict[str, object]:
     """Project an official observation to a controller selection score.
 
     Missing-strategy zeroes retain ``verifier_exit_code=None`` and carry a
-    source marker because no verifier process executed.
+    source marker because no verifier process executed.  A reused parent may
+    omit historical cost with ``require_accounting=False``; it still needs an
+    explicit or recorded run ID.  New candidate observations require both.
     """
 
     metric = quantcodeeval_lineage_metric(
         observation,
         official_property_total=official_property_total,
     )
-    if (
-        not isinstance(observation.get("run_id"), str)
-        or not _cost_is_lineage_ready(observation.get("cost"))
+    if not isinstance(observation.get("run_id"), str):
+        raise QuantCodeEvalLineageAdapterError(
+            "QuantCodeEval observation lacks an explicit run ID"
+        )
+    if require_accounting and not _cost_is_lineage_ready(
+        observation.get("cost")
     ):
         raise QuantCodeEvalLineageAdapterError(
-            "QuantCodeEval observation lacks explicit run or cost accounting"
+            "QuantCodeEval observation lacks explicit cost accounting"
         )
     return {
         "task_id": observation["task_id"],

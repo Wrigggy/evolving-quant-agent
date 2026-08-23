@@ -201,6 +201,51 @@ def test_explicit_wrapper_supplies_missing_run_and_cost_without_inference():
     assert wrapped["lineage_ready"] is True
 
 
+def test_reused_parent_needs_run_id_but_not_historical_cost():
+    payload = {
+        "status": "complete",
+        "run_id": "qce-parent-t27",
+        "score_summary": {
+            "scores": [{
+                "task_id": "T27",
+                "domain": "portfolio",
+                "reward": 1.0,
+                "diagnostic_tags": [],
+                "verifier_exit_code": 0,
+                "tests_passed": 14,
+                "tests_failed": 0,
+            }]
+        },
+    }
+    observation = normalize_quantcodeeval_lineage_observation(
+        payload,
+        task_id="T27",
+        stage="protection",
+    )
+
+    assert observation["cost"] is None
+    assert observation["lineage_ready"] is False
+    assert quantcodeeval_lineage_score(
+        observation,
+        require_accounting=False,
+    )["tests_passed"] == 14
+    with pytest.raises(QuantCodeEvalLineageAdapterError, match="cost accounting"):
+        quantcodeeval_lineage_score(observation)
+
+    without_run = dict(payload)
+    without_run.pop("run_id")
+    no_run_observation = normalize_quantcodeeval_lineage_observation(
+        without_run,
+        task_id="T27",
+        stage="protection",
+    )
+    with pytest.raises(QuantCodeEvalLineageAdapterError, match="run ID"):
+        quantcodeeval_lineage_score(
+            no_run_observation,
+            require_accounting=False,
+        )
+
+
 @pytest.mark.parametrize("stage", ["target", "repeat", "protection"])
 def test_preserves_supported_lineage_stage(stage):
     payload = {

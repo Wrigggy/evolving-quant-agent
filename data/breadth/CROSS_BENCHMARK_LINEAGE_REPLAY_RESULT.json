@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "experiment_id": "cross-benchmark-lineage-replay-20260823-r1",
+  "date": "2026-08-23",
+  "status": "pass",
+  "question": "Can one fixed controller replay a retained QFBench quantitative-review lineage and a retained QuantCodeEval target-repeat-protection lineage without dispatching a new child or charging reused parent observations?",
+  "plan": "data/breadth/CROSS_BENCHMARK_LINEAGE_REPLAY_PLAN.json",
+  "reused_quantcodeeval_parent": "data/breadth/CROSS_BENCHMARK_LINEAGE_REPLAY_PARENT.json",
+  "execution": {
+    "mode": "replay",
+    "successful_controller_invocations": 2,
+    "second_invocation_identical_to_first": true,
+    "model_requests_during_replay": 0,
+    "worker_sessions_during_replay": 0,
+    "official_verifier_executions_during_replay": 0,
+    "external_child_dispatches": 0,
+    "dispatch_guard": "The supplied runner raises immediately if the replay attempts to dispatch any child."
+  },
+  "qfbench_lineage": {
+    "lineage_id": "search-v2-localvol-qpr",
+    "phase": "HOLD_FOR_REFINE",
+    "decision": "HOLD_FOR_REFINE",
+    "current_parent_version": "quant-h0",
+    "candidate_version": "localvol-qrs-v2",
+    "candidate_promoted": false,
+    "candidate_retained_for_refine": true,
+    "accounted_run_ids": [
+      "qstate-v2-target-localvol-20260822-r1",
+      "qstate-v2-repeat-localvol-20260822-r1",
+      "qstate-v2-matched-localvol-barrier-20260822-r1",
+      "qpr1-searchv2-localvol-barrier-protection-repeat-20260823-r1"
+    ],
+    "accounted_review_ids": [
+      "qpr1-reviewer-20260823-r1"
+    ],
+    "cost": {
+      "completed_requests": 268,
+      "total_tokens": 16153179,
+      "provider_cost_usd": "0.575478412"
+    }
+  },
+  "quantcodeeval_lineage": {
+    "lineage_id": "qce-t12-quant-invariant-seeded",
+    "phase": "FROZEN",
+    "decision": "PROMOTE",
+    "parent_version": "qce-public-probe-diagnostic-parent-20260813-r1",
+    "promoted_version": "quant-invariant-seeded-v1",
+    "same_candidate_version_across_all_stages": true,
+    "stages": {
+      "target": {
+        "task_id": "T12",
+        "parent": {
+          "reward": 0.0,
+          "tests_passed": 12,
+          "tests_failed": 4
+        },
+        "candidate": {
+          "reward": 1.0,
+          "tests_passed": 16,
+          "tests_failed": 0
+        },
+        "gate_passed": true
+      },
+      "repeat": {
+        "task_id": "T12",
+        "parent": {
+          "reward": 0.0,
+          "tests_passed": 12,
+          "tests_failed": 4
+        },
+        "candidate": {
+          "reward": 1.0,
+          "tests_passed": 16,
+          "tests_failed": 0
+        },
+        "gate_passed": true
+      },
+      "protection": {
+        "task_id": "T19",
+        "parent": {
+          "reward": 1.0,
+          "tests_passed": 18,
+          "tests_failed": 0
+        },
+        "candidate": {
+          "reward": 1.0,
+          "tests_passed": 18,
+          "tests_failed": 0
+        },
+        "aggregate_safe": true,
+        "property_set_safe": true,
+        "gate_passed": true
+      }
+    },
+    "accounted_run_ids": [
+      "qce-quant-invariant-seeded-t12-20260813-r2",
+      "qce-quant-invariant-seeded-t12-repeat1-20260813-r2",
+      "qce-quant-invariant-seeded-t19-protect-20260813-r2"
+    ],
+    "cost": {
+      "completed_requests": 60,
+      "total_tokens": 1430733,
+      "provider_cost_usd": "0.0584647056"
+    },
+    "cost_accounting_checks": {
+      "candidate_result_count": 3,
+      "all_candidate_cost_records_complete": true,
+      "only_candidate_results_charged": true,
+      "reused_parent_cost_charged": false,
+      "second_replay_added_cost": false
+    }
+  },
+  "source_artifacts": {
+    "qfbench_qpr_plan_source": "data/breadth/QPR_REAL_ARTIFACT_CONTROLLER_REPLAY_PLAN.json",
+    "qce_target": "results/bc-mirror/qce-quant-invariant-seeded-t12-20260813-r2/FULL-CANDIDATE-RESULT.json",
+    "qce_repeat": "results/bc-mirror/qce-quant-invariant-seeded-t12-repeat1-20260813-r2/FULL-CANDIDATE-RESULT.json",
+    "qce_protection": "results/bc-mirror/qce-quant-invariant-seeded-t19-protect-20260813-r2/FULL-CANDIDATE-RESULT.json"
+  },
+  "setup_note": {
+    "observed_issue": "The first parent wrapper draft retained only attempts and lacked the adapter's ordinary score_summary projection; its first projected diagnostic tag also used the historical family-summary label rather than the official-score allowlisted tests_failed label.",
+    "resolution": "Add a derived answer-free score_summary while preserving the original answer-free attempts and exact source paths. No controller, adapter, candidate result, or selection rule changed."
+  },
+  "interpretation": {
+    "observed": "The fixed controller can replay the two benchmark-specific child formats in one plan, retain the QFBench quantitative-review hold, promote the property-safe QuantCodeEval historical lineage, resume idempotently, and account only newly evaluated candidate runs.",
+    "boundary": "The QuantCodeEval candidate was investigator-seeded after mechanism localization. This is a controller integration replay over historical official results, not a new autonomous Evolver discovery, Worker evaluation, benchmark improvement, sealed gain, or generic-versus-quant comparison."
+  }
+}
