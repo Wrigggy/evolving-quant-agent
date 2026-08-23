@@ -61,12 +61,21 @@ def _plan(tmp_path: Path, rounds):
                 },
                 "initial_selection_references": [
                     {
+                        "stage": "target",
                         "task_id": "target-task",
                         "id": "h0-target",
                         "report_path": "reports/h0-target.json",
                         "arm": "h0",
                     },
                     {
+                        "stage": "repeat",
+                        "task_id": "target-task",
+                        "id": "h0-repeat",
+                        "report_path": "reports/h0-repeat.json",
+                        "arm": "h0-repeat",
+                    },
+                    {
+                        "stage": "protection",
                         "task_id": "protection-task",
                         "id": "h0-protection",
                         "report_path": "reports/h0-protection.json",
@@ -144,15 +153,32 @@ def test_promotion_updates_next_parent_and_task_references_then_resume_is_noop(
     assert calls[0]["lineages"][0]["proposal"]["live_run_id"] == (
         "campaign-01-qrs-r1-proposal"
     )
+    first_stages = calls[0]["lineages"][0]["stages"]
+    assert first_stages[0]["selection_reference"]["id"] == "h0-target"
+    assert first_stages[0]["selection_reference"]["report_path"] == (
+        "reports/h0-target.json"
+    )
+    assert first_stages[1]["selection_reference"]["id"] == "h0-repeat"
+    assert first_stages[1]["selection_reference"]["report_path"] == (
+        "reports/h0-repeat.json"
+    )
     second = calls[1]["lineages"][0]
     assert second["parent"]["version"] == "c1"
     target = second["stages"][0]
+    repeat = second["stages"][1]
     protection = second["stages"][2]
-    assert target["parent_arm"] == "c1-repeat"
+    assert target["parent_arm"] == "c1-target"
     assert target["selection_reference"]["id"] == (
-        "campaign-01-qrs-r1-repeat"
+        "campaign-01-qrs-r1-target"
     )
     assert target["selection_reference"]["reference_version"] == "c1"
+    assert repeat["parent_arm"] == "c1-repeat"
+    assert repeat["selection_reference"]["id"] == (
+        "campaign-01-qrs-r1-repeat"
+    )
+    assert repeat["selection_reference"]["report_path"] == (
+        "reports/campaign-01-qrs-r1-repeat.json"
+    )
     assert protection["parent_arm"] == "c1-protection"
     assert protection["selection_reference"]["id"] == (
         "campaign-01-qrs-r1-protection"
@@ -307,11 +333,17 @@ def test_new_task_family_runs_paired_then_becomes_incumbent_reference(tmp_path):
     assert all("selection_reference" not in stage for stage in second_stages)
     assert calls[1]["lineages"][0]["parent"]["version"] == "c1"
     references = result["arms"]["qrs"]["selection_references"]
-    assert references["new-target"] == {
+    assert references["repeat::new-target"] == {
+        "stage": "repeat",
         "task_id": "new-target",
         "id": "campaign-01-qrs-family-b-repeat",
         "report_path": "reports/campaign-01-qrs-family-b-repeat.json",
         "arm": "c2-repeat",
         "reference_version": "c2",
     }
-    assert references["new-protection"]["reference_version"] == "c2"
+    assert references["target::new-target"]["id"] == (
+        "campaign-01-qrs-family-b-target"
+    )
+    assert references["protection::new-protection"]["reference_version"] == (
+        "c2"
+    )

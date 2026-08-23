@@ -32,6 +32,10 @@ def _write_json(path: Path, value: Mapping[str, object]) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
 
 
+def _reference_key(stage_name: str, task_id: str) -> str:
+    return f"{stage_name}::{task_id}"
+
+
 def _reference_map(
     values: object, *, incumbent_version: str
 ) -> dict[str, dict[str, object]]:
@@ -44,9 +48,13 @@ def _reference_map(
         task_id = value.get("task_id")
         if not isinstance(task_id, str) or not task_id:
             raise LineageError("selection reference has no task_id")
+        stage_name = value.get("stage", value.get("name"))
+        key = task_id
+        if isinstance(stage_name, str) and stage_name:
+            key = _reference_key(stage_name, task_id)
         reference = dict(value)
         reference.setdefault("reference_version", incumbent_version)
-        result[task_id] = reference
+        result[key] = reference
     return result
 
 
@@ -152,7 +160,9 @@ def _build_child_plan(
         task_id = str(stage["task_id"])
         stage["live_run_id"] = f"{controller_run_id}-{stage_name}"
         stage["checkpoint_prefix"] = stage["live_run_id"]
-        reference = references.get(task_id)
+        reference = references.get(_reference_key(stage_name, task_id))
+        if not isinstance(reference, Mapping):
+            reference = references.get(task_id)
         incumbent_version = str(arm_state["current_incumbent"]["version"])
         if (
             isinstance(reference, Mapping)
@@ -217,7 +227,8 @@ def _promoted_references(
         if not isinstance(observation, Mapping):
             continue
         task_id = str(observation["task_id"])
-        result[task_id] = {
+        result[_reference_key(name, task_id)] = {
+            "stage": name,
             "task_id": task_id,
             "id": str(observation["run_id"]),
             "report_path": str(observation["report_path"]),
