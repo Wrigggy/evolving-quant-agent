@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-qrs-coordinated-gate-selectivity-20260824-r1",
+  "date": "2026-08-24",
+  "status": "proposal_only_recall_positive_selectivity_negative",
+  "research_question": "Does the revised QRS coordinated-breadth admission gate recover a known-positive local-volatility proposal while retaining calibrated abstention on the predeclared holdings negative control?",
+  "setup": {
+    "benchmark": "QFBench",
+    "initial_candidate": "Quant-H0",
+    "frozen_plan": "data/breadth/QF_QRS_COORDINATED_GATE_SELECTIVITY_PLAN.json",
+    "case_order": [
+      "G+ localvol-positive",
+      "G- holdings-negative-control"
+    ],
+    "proposal_only_stop_rule": "An ACT or candidate mutation on G- stops the frozen plan before any Worker dispatch.",
+    "sealed_evaluation_used": false,
+    "answer_boundary": "Reused optimization diagnostics were Evolver-only; neither proposal exposed answer-rich diagnostics to a Worker or embedded them in a reusable candidate."
+  },
+  "g_plus": {
+    "case_id": "localvol-positive",
+    "expected_decision": "ACT",
+    "observed_decision": "ACT",
+    "admitted": true,
+    "nonempty_diff": true,
+    "candidate_version": "qf-qrs-gate-selectivity-localvol-c1",
+    "component": "audit_surface_artifacts",
+    "selected_relation": "written_surface_parameter_admissibility",
+    "changed_component_roles": [
+      "agent_config",
+      "systemprompt",
+      "tool_descriptions",
+      "tools"
+    ],
+    "smokes_passed": 3,
+    "smokes_total": 3,
+    "worker_dispatched": false,
+    "completed_requests": 40,
+    "total_tokens": 2870880,
+    "provider_cost_usd": 0.084221288,
+    "gate_interpretation": "The revised gate recovered the predeclared known-positive local-volatility intervention opportunity at proposal and admission time."
+  },
+  "g_minus": {
+    "case_id": "holdings-negative-control",
+    "expected_decision": "ABSTAIN",
+    "observed_decision": "ACT",
+    "admitted": true,
+    "nonempty_diff": true,
+    "candidate_version": "qf-qrs-gate-selectivity-holdings-control-c1",
+    "component": "reconcile_portfolio_state",
+    "selected_relation": "final_state_downstream_reconciliation",
+    "changed_component_roles": [
+      "agent_config",
+      "systemprompt",
+      "tool_descriptions",
+      "tools"
+    ],
+    "smokes_passed": 2,
+    "smokes_total": 2,
+    "worker_dispatched": false,
+    "completed_requests": 27,
+    "total_tokens": 3117263,
+    "provider_cost_usd": 0.092374372,
+    "gate_interpretation": "The predeclared selectivity expectation failed because the gate admitted a second nonempty candidate instead of abstaining.",
+    "label_uncertainty": "The Evolver grounded a final-weight-state reconciliation relation in the holdings target and successful Brinson contrast, so the experimenter-assigned negative-control label requires re-audit before this ACT can be called a semantic false positive."
+  },
+  "terminal": {
+    "frozen_plan_stop_triggered": true,
+    "stop_reason": "unexpected_act_on_g_minus",
+    "worker_dispatches": 0,
+    "verifier_executions": 0,
+    "candidate_benchmark_outcomes": 0
+  },
+  "total": {
+    "completed_requests": 67,
+    "total_tokens": 5988143,
+    "provider_cost_usd": 0.17659566,
+    "retry_requests": 0,
+    "service_restarts": 0,
+    "runtime_residue": 0
+  },
+  "retained_conclusion": "The revised QRS gate passed the predeclared proposal-recall case but failed the predeclared two-case selectivity criterion because G- also produced an admitted nonempty ACT. The frozen plan stopped before Worker evaluation, so this is gate behavior only and supplies no benchmark or candidate-quality result.",
+  "claim_boundary": {
+    "supported": "One known-positive proposal opportunity recovered, two legal admitted nonempty QRS proposals, local component-smoke feasibility, correct frozen-plan stop, and clean proposal-only accounting.",
+    "negative_result": "The predeclared selective ACT/ABSTAIN outcome was not achieved.",
+    "label_limit": "Because the holdings ACT included a grounded reusable relation, the negative-control label itself may be misspecified; this run alone cannot distinguish gate over-admission from a mislabeled control.",
+    "not_supported": "Benchmark gain, Worker activation, candidate quality, stable promotion, QRS superiority, selectivity rate, sealed performance, or component causality."
+  },
+  "artifacts": {
+    "g_plus_proposal": "results/bc-mirror/qf-qrs-coordinated-gate-selectivity-20260824-r1-localvol-positive-proposal",
+    "g_minus_proposal": "results/bc-mirror/qf-qrs-coordinated-gate-selectivity-20260824-r1-holdings-negative-proposal"
+  }
+}
