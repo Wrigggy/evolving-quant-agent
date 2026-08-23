@@ -870,6 +870,38 @@ def test_live_child_argv_prefers_proposal_bound_activation_token():
     assert "property-P" not in argv
 
 
+def test_live_child_argv_uses_modified_component_binding():
+    plan = {
+        "controller_run_id": "main0",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest.json",
+            "rootless_config": "/config.json",
+            "image_set_manifest": "/images.json",
+            "results_dir": "/results",
+        },
+    }
+    lineage = {
+        "lineage_id": "a",
+        "parent": {"worker_dir": "/h0"},
+        "candidate": {
+            "worker_dir": "/c1",
+            "activation_binding": {
+                "status": "singleton",
+                "modified_registered_tools": ["audit_quant_state"],
+            },
+            "activation_token": "audit_quant_state",
+        },
+    }
+    stage = {"name": "target", "task_id": "task-t"}
+
+    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+
+    assert argv[argv.index("--activation-token") + 1] == "audit_quant_state"
+
+
 def test_live_child_argv_does_not_guess_for_ambiguous_proposal_binding():
     plan = {
         "controller_run_id": "main0",

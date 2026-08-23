@@ -271,7 +271,7 @@ def _budget_reached(state: Mapping[str, object]) -> bool:
     ) >= _decimal(state["cost_limit_usd"], label="cost limit")
 
 
-def _registered_tools(worker_dir: object) -> dict[str, str | None]:
+def _registered_tools(worker_dir: object) -> dict[str, dict[str, str | None]]:
     """Return the tools actually registered by one admitted Worker harness."""
 
     if not isinstance(worker_dir, str) or not worker_dir:
@@ -284,15 +284,89 @@ def _registered_tools(worker_dir: object) -> dict[str, str | None]:
         payload.get("tools"), list
     ):
         return {}
-    tools: dict[str, str | None] = {}
+    tools: dict[str, dict[str, str | None]] = {}
     for value in payload["tools"]:
         if not isinstance(value, Mapping):
             continue
         name = value.get("name")
         if isinstance(name, str) and name:
             path = value.get("yaml_path")
-            tools[name] = path if isinstance(path, str) and path else None
+            binding = value.get("binding")
+            tools[name] = {
+                "descriptor_path": (
+                    path if isinstance(path, str) and path else None
+                ),
+                "binding": (
+                    binding
+                    if isinstance(binding, str) and binding
+                    else None
+                ),
+            }
     return tools
+
+
+def _descriptor_snapshot(
+    worker_dir: object, descriptor_path: str | None
+) -> tuple[bool, object]:
+    """Read one registered descriptor for semantic parent/candidate comparison."""
+
+    if not isinstance(worker_dir, str) or not worker_dir or not descriptor_path:
+        return False, None
+    try:
+        payload = yaml.safe_load((Path(worker_dir) / descriptor_path).read_text())
+    except (OSError, yaml.YAMLError):
+        return False, None
+    return True, payload
+
+
+def _binding_source_snapshot(
+    worker_dir: object, binding: str | None
+) -> tuple[bool, str | None]:
+    """Read a registered local Python binding when its module maps directly."""
+
+    if not isinstance(worker_dir, str) or not worker_dir or not binding:
+        return False, None
+    module = binding.partition(":")[0]
+    if not module:
+        return False, None
+    source_path = Path(worker_dir).joinpath(*module.split(".")).with_suffix(".py")
+    try:
+        return True, source_path.read_text()
+    except OSError:
+        return False, None
+
+
+def _modified_registered_tools(
+    *,
+    parent_dir: object,
+    candidate_dir: object,
+    parent_tools: Mapping[str, Mapping[str, str | None]],
+    candidate_tools: Mapping[str, Mapping[str, str | None]],
+) -> dict[str, list[str]]:
+    """Find common registered tools whose callable contract or source changed."""
+
+    modified: dict[str, list[str]] = {}
+    for name in sorted(set(parent_tools) & set(candidate_tools)):
+        parent = parent_tools[name]
+        candidate = candidate_tools[name]
+        changed_surfaces: list[str] = []
+        if parent.get("binding") != candidate.get("binding"):
+            changed_surfaces.append("binding")
+        if _descriptor_snapshot(
+            parent_dir, parent.get("descriptor_path")
+        ) != _descriptor_snapshot(
+            candidate_dir, candidate.get("descriptor_path")
+        ):
+            changed_surfaces.append("descriptor")
+        if _binding_source_snapshot(
+            parent_dir, parent.get("binding")
+        ) != _binding_source_snapshot(
+            candidate_dir, candidate.get("binding")
+        ):
+            changed_surfaces.append("source")
+        if changed_surfaces:
+            modified[name] = changed_surfaces
+    return modified
 
 
 def _proposal_mechanism_claim(
@@ -326,27 +400,42 @@ def _proposal_mechanism_claim(
 def _activation_binding(
     *, parent_dir: object, candidate_dir: object
 ) -> dict[str, object]:
-    """Bind a singleton newly registered tool without guessing among tools."""
+    """Bind one added or modified registered tool without guessing among tools."""
 
     parent_tools = _registered_tools(parent_dir)
     candidate_tools = _registered_tools(candidate_dir)
     added = sorted(set(candidate_tools) - set(parent_tools))
+    modified = _modified_registered_tools(
+        parent_dir=parent_dir,
+        candidate_dir=candidate_dir,
+        parent_tools=parent_tools,
+        candidate_tools=candidate_tools,
+    )
+    changed = added + sorted(modified)
     binding: dict[str, object] = {
         "status": (
             "singleton"
-            if len(added) == 1
+            if len(changed) == 1
             else "none"
-            if not added
+            if not changed
             else "ambiguous"
         ),
         "new_registered_tools": added,
+        "modified_registered_tools": sorted(modified),
     }
-    if len(added) == 1:
-        token = added[0]
+    if len(changed) == 1:
+        token = changed[0]
+        change_kind = "added" if token in added else "modified"
+        tool = candidate_tools[token]
         binding["realized_component"] = {
             "kind": "tool",
             "token": token,
-            "descriptor_path": candidate_tools[token],
+            "change_kind": change_kind,
+            "changed_surfaces": (
+                ["registration"] if change_kind == "added" else modified[token]
+            ),
+            "descriptor_path": tool.get("descriptor_path"),
+            "binding": tool.get("binding"),
             "source": "admitted_candidate_registration",
         }
     return binding

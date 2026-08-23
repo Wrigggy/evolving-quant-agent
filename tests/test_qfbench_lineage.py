@@ -106,6 +106,35 @@ def _worker(root, tools):
     return root
 
 
+def _worker_with_registered_tool(
+    root,
+    *,
+    description="Audit quantitative state.",
+    source="def audit_quant_state():\n    return 1\n",
+):
+    root.mkdir(parents=True)
+    (root / "tool_descriptions").mkdir()
+    (root / "tools").mkdir()
+    (root / "agent.yaml").write_text(
+        "tools:\n"
+        "  - name: run_shell_command\n"
+        "    yaml_path: ./tool_descriptions/run_shell_command.tool.yaml\n"
+        "  - name: audit_quant_state\n"
+        "    yaml_path: ./tool_descriptions/audit_quant_state.tool.yaml\n"
+        "    binding: tools.audit:audit_quant_state\n"
+    )
+    (root / "tool_descriptions/run_shell_command.tool.yaml").write_text(
+        "type: tool\nname: run_shell_command\ndescription: Run shell.\n"
+    )
+    (root / "tool_descriptions/audit_quant_state.tool.yaml").write_text(
+        "type: tool\n"
+        "name: audit_quant_state\n"
+        f"description: {description}\n"
+    )
+    (root / "tools/audit.py").write_text(source)
+    return root
+
+
 def _apply(
     state,
     stage,
@@ -460,6 +489,7 @@ def test_admitted_act_attaches_report_candidate_and_accounts_once():
         "activation_binding": {
             "status": "none",
             "new_registered_tools": [],
+            "modified_registered_tools": [],
         },
     }
     assert again == state
@@ -501,6 +531,9 @@ def test_proposal_singleton_tool_binds_and_observes_activation(tmp_path):
 
     assert state["candidate"]["activation_token"] == "audit_quant_state"
     assert state["candidate"]["activation_binding"]["status"] == "singleton"
+    realized = state["candidate"]["realized_component"]
+    assert realized["change_kind"] == "added"
+    assert realized["changed_surfaces"] == ["registration"]
     assert (
         state["proposal"]["mechanism_claim"]["selected_relation"]["relation_id"]
         == "state_reconciliation"
@@ -567,6 +600,122 @@ def test_proposal_zero_or_multiple_new_tools_does_not_guess(tmp_path):
 
         assert state["candidate"]["activation_binding"]["status"] == expected
         assert "activation_token" not in state["candidate"]
+
+
+def test_proposal_single_modified_registered_tool_binds_and_resumes(tmp_path):
+    parent = _worker_with_registered_tool(tmp_path / "parent")
+    candidate = _worker_with_registered_tool(
+        tmp_path / "candidate",
+        source="def audit_quant_state():\n    return 2\n",
+    )
+    state = new_proposal_lineage(
+        lineage_id="modified",
+        parent_version="h0",
+        parent_path=str(parent),
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+    )
+    report = _proposal("ACT", True, str(candidate))
+    state = import_proposal_report(
+        state,
+        report=report,
+        report_path="/modified/proposal-report.json",
+        proposal_run_id="proposal-modified",
+        candidate_version="candidate-modified",
+    )
+    again = import_proposal_report(
+        state,
+        report=report,
+        report_path="/modified/proposal-report.json",
+        proposal_run_id="proposal-modified",
+        candidate_version="candidate-modified",
+    )
+
+    binding = state["candidate"]["activation_binding"]
+    assert binding["status"] == "singleton"
+    assert binding["new_registered_tools"] == []
+    assert binding["modified_registered_tools"] == ["audit_quant_state"]
+    assert state["candidate"]["activation_token"] == "audit_quant_state"
+    assert state["candidate"]["realized_component"]["change_kind"] == "modified"
+    assert state["candidate"]["realized_component"]["changed_surfaces"] == [
+        "source"
+    ]
+    assert again == state
+    assert state["cost"]["completed_requests"] == 4
+
+
+def test_proposal_descriptor_modification_binds_registered_tool(tmp_path):
+    parent = _worker_with_registered_tool(tmp_path / "parent")
+    candidate = _worker_with_registered_tool(
+        tmp_path / "candidate", description="Audit calibrated surfaces."
+    )
+    state = new_proposal_lineage(
+        lineage_id="descriptor-modified",
+        parent_version="h0",
+        parent_path=str(parent),
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+    )
+    state = import_proposal_report(
+        state,
+        report=_proposal("ACT", True, str(candidate)),
+        report_path="/descriptor-modified/proposal-report.json",
+        proposal_run_id="proposal-descriptor-modified",
+        candidate_version="candidate-descriptor-modified",
+    )
+
+    assert state["candidate"]["activation_token"] == "audit_quant_state"
+    assert state["candidate"]["realized_component"]["changed_surfaces"] == [
+        "descriptor"
+    ]
+
+
+def test_proposal_multiple_registered_tool_changes_remain_ambiguous(tmp_path):
+    parent = _worker_with_registered_tool(tmp_path / "parent")
+    candidate = _worker_with_registered_tool(
+        tmp_path / "candidate",
+        source="def audit_quant_state():\n    return 2\n",
+    )
+    with candidate.joinpath("agent.yaml").open("a") as stream:
+        stream.write(
+            "  - name: audit_second_state\n"
+            "    yaml_path: ./tool_descriptions/audit_second_state.tool.yaml\n"
+        )
+    candidate.joinpath(
+        "tool_descriptions/audit_second_state.tool.yaml"
+    ).write_text(
+        "type: tool\nname: audit_second_state\n"
+        "description: Audit a second state.\n"
+    )
+    state = new_proposal_lineage(
+        lineage_id="ambiguous-modified",
+        parent_version="h0",
+        parent_path=str(parent),
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+    )
+    state = import_proposal_report(
+        state,
+        report=_proposal("ACT", True, str(candidate)),
+        report_path="/ambiguous-modified/proposal-report.json",
+        proposal_run_id="proposal-ambiguous-modified",
+        candidate_version="candidate-ambiguous-modified",
+    )
+
+    binding = state["candidate"]["activation_binding"]
+    assert binding["status"] == "ambiguous"
+    assert binding["new_registered_tools"] == ["audit_second_state"]
+    assert binding["modified_registered_tools"] == ["audit_quant_state"]
+    assert "activation_token" not in state["candidate"]
 
 
 def test_abstain_is_a_terminal_proposal_without_candidate():
