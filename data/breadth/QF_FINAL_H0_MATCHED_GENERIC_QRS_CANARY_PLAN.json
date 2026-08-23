@@ -1,0 +1,338 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-24",
+  "status": "prepared_not_run",
+  "campaign_run_id": "qf-final-h0-matched-generic-qrs-20260824-r1",
+  "mode": "live",
+  "purpose": "Run the current final-code Generic and QRS Evolvers as two matched cumulative arms from Quant-H0 across holdings and local-volatility research families.",
+  "research_question": "Does operational Quant Research State reconstruction and conditioned experience retrieval improve cumulative full-harness search beyond generic access to the same quantitative runtime evidence?",
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/qf-final-h0-matched-20260824-r1",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/qf-final-h0-matched-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0"
+  },
+  "limits": {
+    "candidate_versions_per_round": 1,
+    "max_rounds_per_arm": 2,
+    "max_evolver_proposals": 4,
+    "max_new_initial_parent_worker_sessions": 0,
+    "max_candidate_worker_sessions": 12,
+    "max_candidate_verifier_executions": 12,
+    "provider_cost_usd": 0.55,
+    "arm_provider_cost_usd": 1.1,
+    "campaign_provider_cost_usd": 2.2,
+    "wall_time_hours": 8
+  },
+  "matched_contract": {
+    "initial_parent": "Quant-H0",
+    "same_initial_parent_worker": true,
+    "same_underlying_authorized_evidence_and_history": true,
+    "same_optimize_diagnostics": true,
+    "same_evolver_model_and_reasoning_effort": true,
+    "same_worker_model_and_normal_budget": true,
+    "same_full_harness_mutation_surface": true,
+    "same_official_verifier_and_selection_controller": true,
+    "same_cumulative_round_order": true,
+    "only_treatment": "The QRS arm must materialize an operational Quant Research State Card and use state-and-relation-conditioned experience retrieval and component routing. The generic arm receives the same raw authorized evidence and history but its evidence contract does not enable the State Card helper.",
+    "answer_boundary": "Optimization answers and expected-versus-observed diagnostics may be shown to the Evolver after a blind Worker attempt. They never enter a Worker run or a reusable candidate. Protection remains answer-free."
+  },
+  "execution": {
+    "arm_count": 2,
+    "rounds_per_arm": 2,
+    "round_order": [
+      "holdings-r1",
+      "localvol-r2"
+    ],
+    "cumulative_incumbent": true,
+    "stage_specific_initial_selection_references": true,
+    "paired_fallback_for_new_incumbent_task": true,
+    "resume_by_fixed_campaign_state": true,
+    "wall_time_enforcement": "systemd RuntimeMaxSec=8h",
+    "wrapper_wall_time_field_role": "metadata_only",
+    "advance_rule": "Within each round, only a strict official target gain with an anchored resolved-property footprint advances to an independent repeat. The repeat must reproduce that footprint before property-wise protection. Protection safety and matched-relation transfer are recorded separately.",
+    "sealed_evaluation_included": false,
+    "sealed_feedback_allowed": false
+  },
+  "arms": [
+    {
+      "arm_id": "generic",
+      "treatment": "generic",
+      "initial_incumbent": {
+        "version": "quant-h0",
+        "worker_dir": "/data/qea-julius-storage/deploy/qf-final-h0-matched-20260824-r1/qea/worker_quant_h0"
+      },
+      "initial_selection_references": [
+        {
+          "stage": "target",
+          "task_id": "13f-amendment-aware-crowding",
+          "id": "main0b-holdings-target-parent-20260823-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0b-holdings-target-20260823-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        },
+        {
+          "stage": "repeat",
+          "task_id": "13f-amendment-aware-crowding",
+          "id": "main0b-holdings-repeat-parent-20260823-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0b-holdings-repeat-20260823-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        },
+        {
+          "stage": "protection",
+          "task_id": "brinson-sector-attribution",
+          "id": "main0-thin-brinson-parent-20260822-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0-thin-holdings-protection-live-20260822-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        },
+        {
+          "stage": "target",
+          "task_id": "dupire-local-vol",
+          "id": "main0b-localvol-target-parent-20260823-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0b-localvol-target-20260823-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        },
+        {
+          "stage": "repeat",
+          "task_id": "dupire-local-vol",
+          "id": "main0b-localvol-repeat-parent-20260823-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0b-localvol-repeat-20260823-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        },
+        {
+          "stage": "protection",
+          "task_id": "localvol-barrier",
+          "id": "main0b-localvol-protection-parent-20260823-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0b-localvol-protection-20260823-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        }
+      ],
+      "rounds": [
+        {
+          "round_id": "holdings-r1",
+          "family": "holdings-final-state-reconciliation",
+          "on_hold": "retain_incumbent_and_continue",
+          "lineage": {
+            "repeat_consistency_policy": "resolved_property_footprint_v1",
+            "quantitative_protection_review": false,
+            "proposal": {
+              "candidate_version": "qf-final-h0-generic-holdings-c1",
+              "evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/holdings/generic/holdings_lineage_reconciliation",
+              "evolver_dir": "/data/qea-julius-storage/deploy/qf-final-h0-matched-20260824-r1/qea/evolve_agent_full",
+              "arm": "generic",
+              "reasoning_effort": "high"
+            },
+            "stages": [
+              {
+                "name": "target",
+                "task_id": "13f-amendment-aware-crowding",
+                "candidate_arm": "generic",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              },
+              {
+                "name": "repeat",
+                "task_id": "13f-amendment-aware-crowding",
+                "candidate_arm": "generic",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              },
+              {
+                "name": "protection",
+                "task_id": "brinson-sector-attribution",
+                "candidate_arm": "generic",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              }
+            ]
+          }
+        },
+        {
+          "round_id": "localvol-r2",
+          "family": "localvol-calibration-to-pricing",
+          "lineage": {
+            "repeat_consistency_policy": "resolved_property_footprint_v1",
+            "quantitative_protection_review": false,
+            "proposal": {
+              "candidate_version": "qf-final-h0-generic-localvol-c2",
+              "evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/localvol/generic/localvol_calibration_to_pricing",
+              "evolver_dir": "/data/qea-julius-storage/deploy/qf-final-h0-matched-20260824-r1/qea/evolve_agent_full",
+              "arm": "generic",
+              "reasoning_effort": "high"
+            },
+            "stages": [
+              {
+                "name": "target",
+                "task_id": "dupire-local-vol",
+                "candidate_arm": "generic",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              },
+              {
+                "name": "repeat",
+                "task_id": "dupire-local-vol",
+                "candidate_arm": "generic",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              },
+              {
+                "name": "protection",
+                "task_id": "localvol-barrier",
+                "candidate_arm": "generic",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "arm_id": "qrs",
+      "treatment": "quant-research-state",
+      "initial_incumbent": {
+        "version": "quant-h0",
+        "worker_dir": "/data/qea-julius-storage/deploy/qf-final-h0-matched-20260824-r1/qea/worker_quant_h0"
+      },
+      "initial_selection_references": [
+        {
+          "stage": "target",
+          "task_id": "13f-amendment-aware-crowding",
+          "id": "main0b-holdings-target-parent-20260823-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0b-holdings-target-20260823-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        },
+        {
+          "stage": "repeat",
+          "task_id": "13f-amendment-aware-crowding",
+          "id": "main0b-holdings-repeat-parent-20260823-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0b-holdings-repeat-20260823-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        },
+        {
+          "stage": "protection",
+          "task_id": "brinson-sector-attribution",
+          "id": "main0-thin-brinson-parent-20260822-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0-thin-holdings-protection-live-20260822-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        },
+        {
+          "stage": "target",
+          "task_id": "dupire-local-vol",
+          "id": "main0b-localvol-target-parent-20260823-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0b-localvol-target-20260823-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        },
+        {
+          "stage": "repeat",
+          "task_id": "dupire-local-vol",
+          "id": "main0b-localvol-repeat-parent-20260823-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0b-localvol-repeat-20260823-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        },
+        {
+          "stage": "protection",
+          "task_id": "localvol-barrier",
+          "id": "main0b-localvol-protection-parent-20260823-r1",
+          "report_path": "/data/qea-julius-storage/runs/main0b-localvol-protection-20260823-r1/pilot-report.json",
+          "arm": "parent",
+          "reference_version": "quant-h0"
+        }
+      ],
+      "rounds": [
+        {
+          "round_id": "holdings-r1",
+          "family": "holdings-final-state-reconciliation",
+          "on_hold": "retain_incumbent_and_continue",
+          "lineage": {
+            "repeat_consistency_policy": "resolved_property_footprint_v1",
+            "quantitative_protection_review": false,
+            "proposal": {
+              "candidate_version": "qf-final-h0-qrs-holdings-c1",
+              "evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/holdings/quant-state/holdings_lineage_reconciliation",
+              "evolver_dir": "/data/qea-julius-storage/deploy/qf-final-h0-matched-20260824-r1/qea/evolve_agent_full",
+              "arm": "quant-state",
+              "reasoning_effort": "high"
+            },
+            "stages": [
+              {
+                "name": "target",
+                "task_id": "13f-amendment-aware-crowding",
+                "candidate_arm": "quant-state",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              },
+              {
+                "name": "repeat",
+                "task_id": "13f-amendment-aware-crowding",
+                "candidate_arm": "quant-state",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              },
+              {
+                "name": "protection",
+                "task_id": "brinson-sector-attribution",
+                "candidate_arm": "quant-state",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              }
+            ]
+          }
+        },
+        {
+          "round_id": "localvol-r2",
+          "family": "localvol-calibration-to-pricing",
+          "lineage": {
+            "repeat_consistency_policy": "resolved_property_footprint_v1",
+            "quantitative_protection_review": false,
+            "proposal": {
+              "candidate_version": "qf-final-h0-qrs-localvol-c2",
+              "evidence": "/data/qea-julius-storage/evidence/quant-state-canary-views-20260821-r1/localvol/quant-state/localvol_calibration_to_pricing",
+              "evolver_dir": "/data/qea-julius-storage/deploy/qf-final-h0-matched-20260824-r1/qea/evolve_agent_full",
+              "arm": "quant-state",
+              "reasoning_effort": "high"
+            },
+            "stages": [
+              {
+                "name": "target",
+                "task_id": "dupire-local-vol",
+                "candidate_arm": "quant-state",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              },
+              {
+                "name": "repeat",
+                "task_id": "dupire-local-vol",
+                "candidate_arm": "quant-state",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              },
+              {
+                "name": "protection",
+                "task_id": "localvol-barrier",
+                "candidate_arm": "quant-state",
+                "worker_concurrency": 1,
+                "verifier_concurrency": 2
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "claim_boundary": "This is an adaptive development canary over previously used evidence and comparator tasks. It tests current-code cumulative autonomy and the matched Generic-versus-QRS treatment, not sealed or out-of-sample performance, QRS superiority, or benchmark-wide improvement."
+}
