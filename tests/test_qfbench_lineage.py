@@ -1,5 +1,8 @@
+import pytest
+
 from qea.qfbench_lineage import (
     freeze_lineage,
+    import_candidate_information_set_review,
     import_pilot_report,
     import_proposal_report,
     import_quantitative_protection_review,
@@ -1190,3 +1193,218 @@ def test_main0b_clear_protection_failure_holds_component_for_refinement(
     assert restored["current_parent"] == state["current_parent"]
     assert restored["candidate"] == state["candidate"]
     assert restored["hold"] == state["hold"]
+
+
+def _information_review_proposal_state(tmp_path):
+    parent = _worker(tmp_path / "information-parent", ("run_shell_command",))
+    candidate = _worker(
+        tmp_path / "information-candidate",
+        ("run_shell_command", "audit_public_output"),
+    )
+    state = new_proposal_lineage(
+        lineage_id="information-review",
+        parent_version="h0",
+        parent_path=str(parent),
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+        candidate_information_set_review=True,
+    )
+    report = _proposal("ACT", True, str(candidate))
+    report["summary"] = {
+        "discovery_hypothesis": {
+            "hypothesis": {
+                "worker_visible_claims": [
+                    {
+                        "claim_id": "public-output-positive",
+                        "claim": "Written output values must be positive.",
+                        "surfaces": ["tools"],
+                        "basis_refs": ["public:instruction"],
+                    }
+                ]
+            }
+        }
+    }
+    return import_proposal_report(
+        state,
+        report=report,
+        report_path="/proposal/proposal-report.json",
+        proposal_run_id="proposal-information-r1",
+        candidate_version="candidate-information-r1",
+    )
+
+
+def _information_review_package(state):
+    return {
+        "schema_version": 1,
+        "review_id": "information-review-r1",
+        "candidate_id": state["candidate"]["version"],
+        "candidate": {
+            "diff_ref": "candidate:diff",
+            "diff": "+ enforce positive written output\n",
+        },
+        "worker_visible_claims": state["proposal"]["worker_visible_claims"],
+        "public_sources": [
+            {
+                "ref": "public:instruction",
+                "source_type": "public_contract",
+                "excerpt": "Written output values must be positive.",
+            }
+        ],
+        "optimize_only_sources": [
+            {
+                "ref": "diagnostic:target",
+                "source_type": "optimize_only_diagnostic",
+                "worker_visible": False,
+                "excerpt": "The prior artifact failed a hidden property.",
+            }
+        ],
+    }
+
+
+def _information_review_payload(package, verdict):
+    if verdict == "PASS":
+        role = "PUBLIC_SUPPORT"
+        ref = "public:instruction"
+    elif verdict == "REJECT":
+        role = "OPTIMIZE_ONLY_ORIGIN"
+        ref = "diagnostic:target"
+    else:
+        role = "INSUFFICIENT_PUBLIC_SUPPORT"
+        ref = "candidate:diff"
+    return {
+        "schema_version": 1,
+        "review_id": package["review_id"],
+        "candidate_id": package["candidate_id"],
+        "claim_reviews": [
+            {
+                "claim_id": "public-output-positive",
+                "verdict": verdict,
+                "reason": f"fixture {verdict.lower()} boundary",
+                "source_basis": [{"ref": ref, "role": role}],
+            }
+        ],
+        "coverage_review": {
+            "verdict": "PASS",
+            "reason": "The supplied diff is fully covered by the claim.",
+            "source_basis": [
+                {"ref": "candidate:diff", "role": "CANDIDATE_EXPOSURE"}
+            ],
+            "undeclared_exposures": [],
+        },
+        "overall_verdict": verdict,
+    }
+
+
+def test_information_set_review_pass_enters_target_and_accounts_once(tmp_path):
+    state = _information_review_proposal_state(tmp_path)
+    package = _information_review_package(state)
+    payload = _information_review_payload(package, "PASS")
+
+    reviewed = import_candidate_information_set_review(
+        state,
+        review_id="information-review-r1",
+        review_path="/reviews/information-review-r1/RESULT.json",
+        review_package=package,
+        review_payload=payload,
+        review_accounting={
+            "provider_cost_usd": "0.01",
+            "completed_request_count": 1,
+            "total_tokens": 50,
+        },
+    )
+    resumed = import_candidate_information_set_review(
+        reviewed,
+        review_id="information-review-r1",
+        review_path="/reviews/information-review-r1/RESULT.json",
+        review_package=package,
+        review_payload=payload,
+        review_accounting={
+            "provider_cost_usd": "0.01",
+            "completed_request_count": 1,
+            "total_tokens": 50,
+        },
+    )
+
+    assert state["phase"] == "INFORMATION_SET_REVIEW"
+    assert reviewed["phase"] == "TARGET"
+    assert reviewed["current_parent"]["version"] == "h0"
+    assert reviewed["accounted_review_ids"] == ["information-review-r1"]
+    assert reviewed["cost"] == {
+        "provider_cost_usd": "0.03",
+        "completed_requests": 5,
+        "total_tokens": 250,
+    }
+    assert resumed == reviewed
+
+
+@pytest.mark.parametrize("verdict", ["REJECT", "INCONCLUSIVE"])
+def test_information_set_review_nonpass_holds_without_worker(tmp_path, verdict):
+    state = _information_review_proposal_state(tmp_path)
+    package = _information_review_package(state)
+
+    reviewed = import_candidate_information_set_review(
+        state,
+        review_id="information-review-r1",
+        review_path="/reviews/information-review-r1/RESULT.json",
+        review_package=package,
+        review_payload=_information_review_payload(package, verdict),
+        review_accounting={
+            "provider_cost_usd": "0.01",
+            "completed_request_count": 1,
+            "total_tokens": 50,
+        },
+    )
+
+    assert reviewed["phase"] == "HOLD_FOR_REFINE"
+    assert reviewed["decision"] == "HOLD_FOR_REFINE"
+    assert reviewed["current_parent"]["version"] == "h0"
+    assert reviewed["observations"] == {
+        "information_set_review": {
+            "review_id": "information-review-r1",
+            "review_path": "/reviews/information-review-r1/RESULT.json",
+            "overall_verdict": verdict,
+            "claim_reviews": _information_review_payload(package, verdict)[
+                "claim_reviews"
+            ],
+            "coverage_review": _information_review_payload(package, verdict)[
+                "coverage_review"
+            ],
+            "worker_visible": False,
+            "promotion_authority": False,
+        }
+    }
+
+
+def test_information_set_review_missing_claims_holds_admitted_act(tmp_path):
+    state = new_proposal_lineage(
+        lineage_id="information-review-missing-claims",
+        parent_version="h0",
+        parent_path=str(_worker(tmp_path / "missing-parent", ("shell",))),
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+        candidate_information_set_review=True,
+    )
+    report = _proposal(
+        "ACT",
+        True,
+        str(_worker(tmp_path / "missing-candidate", ("shell", "audit"))),
+    )
+
+    result = import_proposal_report(
+        state,
+        report=report,
+        report_path="/proposal/proposal-report.json",
+        proposal_run_id="proposal-missing-claims-r1",
+        candidate_version="candidate-missing-claims-r1",
+    )
+
+    assert result["phase"] == "HOLD_FOR_REFINE"
+    assert result["hold"]["reason"] == (
+        "information_set_review_missing_worker_visible_claims"
+    )

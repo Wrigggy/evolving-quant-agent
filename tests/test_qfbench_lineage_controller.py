@@ -7,7 +7,10 @@ import pytest
 
 from qea.qfbench_lineage import LineageError
 from scripts.run_qfbench_lineage_controller import (
+    _candidate_information_set_review_package,
+    _information_set_review_spec,
     _quantcodeeval_property_set_safe,
+    build_candidate_information_set_review_argv,
     build_child_argv,
     build_proposal_argv,
     build_quantcodeeval_child_argv,
@@ -1956,3 +1959,512 @@ def test_protection_repeat_argv_reuses_component_pilot():
     assert argv[1] == "/source/scripts/run_qfbench_component_pilot.py"
     assert argv[argv.index("--run-id") + 1] == "main0-a-protection_repeat"
     assert argv[argv.index("--task-id") + 1] == "localvol-barrier"
+
+
+def _information_review_workers(tmp_path):
+    parent = tmp_path / "workers/information-parent"
+    candidate = tmp_path / "workers/information-candidate"
+    for root in (parent, candidate):
+        (root / "tool_descriptions").mkdir(parents=True)
+        (root / "tools").mkdir()
+        (root / "systemprompt.md").write_text("Use public task instructions.\n")
+        (root / "tool_descriptions/run_shell_command.tool.yaml").write_text(
+            "type: tool\nname: run_shell_command\n"
+        )
+    parent.joinpath("agent.yaml").write_text(
+        "tools:\n  - name: run_shell_command\n"
+        "    yaml_path: ./tool_descriptions/run_shell_command.tool.yaml\n"
+    )
+    candidate.joinpath("agent.yaml").write_text(
+        "tools:\n  - name: run_shell_command\n"
+        "    yaml_path: ./tool_descriptions/run_shell_command.tool.yaml\n"
+        "  - name: audit_public_output\n"
+        "    yaml_path: ./tool_descriptions/audit_public_output.tool.yaml\n"
+        "    binding: tools.audit:audit_public_output\n"
+    )
+    candidate.joinpath(
+        "tool_descriptions/audit_public_output.tool.yaml"
+    ).write_text(
+        "type: tool\nname: audit_public_output\n"
+        "description: Check the public written-output relation.\n"
+    )
+    candidate.joinpath("tools/audit.py").write_text(
+        "def audit_public_output(values):\n"
+        "    return all(value > 0 for value in values)\n"
+    )
+    return parent, candidate
+
+
+def _information_review_sources():
+    return {
+        "public_sources": [
+            {
+                "ref": "public:instruction",
+                "source_type": "public_contract",
+                "excerpt": "Written output values must be positive.",
+            }
+        ],
+        "optimize_only_sources": [
+            {
+                "ref": "diagnostic:target",
+                "source_type": "optimize_only_diagnostic",
+                "worker_visible": False,
+                "excerpt": "The prior artifact failed one hidden property.",
+            }
+        ],
+    }
+
+
+def _write_information_review_result(result_dir, package, verdict="PASS"):
+    result_dir.mkdir(parents=True)
+    if verdict == "PASS":
+        ref, role = "public:instruction", "PUBLIC_SUPPORT"
+    elif verdict == "REJECT":
+        ref, role = "diagnostic:target", "OPTIMIZE_ONLY_ORIGIN"
+    else:
+        ref, role = "candidate:diff", "INSUFFICIENT_PUBLIC_SUPPORT"
+    result = {
+        "schema_version": 1,
+        "status": "complete",
+        "review_scope": "answer_rich_evolver_candidate_information_set",
+        "request": {
+            "request_count": 1,
+            "accounting": {
+                "provider_cost_usd": "0.01",
+                "prompt_tokens": 30,
+                "completion_tokens": 20,
+            },
+            "response_usage": {"total_tokens": 50},
+        },
+        "review": {
+            "schema_version": 1,
+            "review_id": package["review_id"],
+            "candidate_id": package["candidate_id"],
+            "claim_reviews": [
+                {
+                    "claim_id": "public-output-positive",
+                    "verdict": verdict,
+                    "reason": f"fixture {verdict.lower()} boundary",
+                    "source_basis": [{"ref": ref, "role": role}],
+                }
+            ],
+            "coverage_review": {
+                "verdict": "PASS",
+                "reason": "All changed rules are declared.",
+                "source_basis": [
+                    {"ref": "candidate:diff", "role": "CANDIDATE_EXPOSURE"}
+                ],
+                "undeclared_exposures": [],
+            },
+            "overall_verdict": verdict,
+        },
+        "worker_visible": False,
+        "promotion_authority": False,
+    }
+    result_dir.joinpath("RESULT.json").write_text(json.dumps(result))
+
+
+def _information_review_controller_plan(tmp_path, *, mode="live"):
+    parent, candidate = _information_review_workers(tmp_path)
+    proposal_path = tmp_path / "proposal/proposal-report.json"
+    proposal_path.parent.mkdir(parents=True)
+    proposal_path.write_text(
+        json.dumps(
+            {
+                "decision": "ACT",
+                "candidate_dir": str(candidate),
+                "admission": {"admitted": True},
+                "candidate_generation_throughput": {
+                    "provider_cost_usd": "0.02",
+                    "completed_request_count": 3,
+                    "total_tokens": 200,
+                },
+                "summary": {
+                    "discovery_hypothesis": {
+                        "hypothesis": {
+                            "worker_visible_claims": [
+                                {
+                                    "claim_id": "public-output-positive",
+                                    "claim": "Written output values must be positive.",
+                                    "surfaces": ["tools"],
+                                    "basis_refs": ["public:instruction"],
+                                }
+                            ]
+                        }
+                    }
+                },
+            }
+        )
+    )
+    target_path, _ = _report(
+        tmp_path / "information-target",
+        "information-target-r1",
+        "task-t",
+        (1, 2, 0),
+        (2, 2, 1),
+        {"h0": ["positive-output"]},
+    )
+    repeat_path, _ = _report(
+        tmp_path / "information-repeat",
+        "information-repeat-r1",
+        "task-t",
+        (1, 2, 0),
+        (2, 2, 1),
+        {"h0": ["positive-output"]},
+    )
+    protection_path, _ = _report(
+        tmp_path / "information-protection",
+        "information-protection-r1",
+        "task-p",
+        (2, 2, 1),
+        (2, 2, 1),
+        {},
+    )
+    review_spec = {
+        "enabled": True,
+        "feedback_mode": "answer_rich_evolver",
+        "review_id": "information-review-r1",
+        **_information_review_sources(),
+    }
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "information-controller-r1",
+        "mode": mode,
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "results_dir": str(tmp_path / "review-results"),
+        },
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [
+            {
+                "lineage_id": "information-lineage",
+                "parent": {"version": "h0", "worker_dir": str(parent)},
+                "proposal": {
+                    "replay_report": str(proposal_path),
+                    "replay_run_id": "information-proposal-r1",
+                    "candidate_version": "information-candidate-r1",
+                },
+                "candidate_information_set_review": review_spec,
+                "stages": [
+                    {
+                        "name": "target",
+                        "task_id": "task-t",
+                        "replay_report": str(target_path),
+                        "parent_arm": "h0",
+                        "candidate_arm": "candidate",
+                    },
+                    {
+                        "name": "repeat",
+                        "task_id": "task-t",
+                        "replay_report": str(repeat_path),
+                        "parent_arm": "h0",
+                        "candidate_arm": "candidate",
+                    },
+                    {
+                        "name": "protection",
+                        "task_id": "task-p",
+                        "replay_report": str(protection_path),
+                        "parent_arm": "h0",
+                        "candidate_arm": "candidate",
+                    },
+                ],
+            }
+        ],
+    }
+    path = tmp_path / "information-plan.json"
+    path.write_text(json.dumps(plan))
+    return path, plan
+
+
+def test_live_information_review_and_resume_account_once(tmp_path):
+    plan_path, plan = _information_review_controller_plan(tmp_path)
+    calls = []
+
+    def run_reviewer(argv):
+        calls.append(tuple(argv))
+        assert argv[1] == (
+            "/source/scripts/run_candidate_information_set_reviewer_canary.py"
+        )
+        package = json.loads(Path(argv[argv.index("--input") + 1]).read_text())
+        assert "search_arm" not in package
+        _write_information_review_result(
+            Path(argv[argv.index("--out") + 1]), package
+        )
+
+    first = run_controller(
+        plan_path,
+        tmp_path / "information-state",
+        approve_external_run=True,
+        runner=run_reviewer,
+    )
+    resumed = run_controller(
+        plan_path,
+        tmp_path / "information-state",
+        runner=lambda _argv: (_ for _ in ()).throw(
+            AssertionError("resume must not dispatch Reviewer or Worker")
+        ),
+    )
+
+    state = first["lineages"]["information-lineage"]
+    assert len(calls) == 1
+    assert state["phase"] == "FROZEN"
+    assert state["decision"] == "PROMOTE"
+    assert state["accounted_review_ids"] == ["information-review-r1"]
+    assert state["cost"] == {
+        "provider_cost_usd": "0.06",
+        "completed_requests": 10,
+        "total_tokens": 550,
+    }
+    assert resumed == first
+    assert plan["lineages"][0]["parent"]["version"] == "h0"
+
+
+@pytest.mark.parametrize("verdict", ["REJECT", "INCONCLUSIVE"])
+def test_replay_information_review_nonpass_never_dispatches_worker(
+    tmp_path, verdict
+):
+    plan_path, plan = _information_review_controller_plan(tmp_path, mode="replay")
+    review_id = plan["lineages"][0]["candidate_information_set_review"][
+        "review_id"
+    ]
+    state_dir = tmp_path / "information-replay-state"
+    # Build the exact controller package before placing the retained result.
+    parent = plan["lineages"][0]["parent"]
+    proposal = json.loads(
+        Path(plan["lineages"][0]["proposal"]["replay_report"]).read_text()
+    )
+    package = {
+        "schema_version": 1,
+        "review_id": review_id,
+        "candidate_id": "information-candidate-r1",
+        "candidate": _candidate_information_set_review_package(
+            {
+                "current_parent": parent,
+                "candidate": {
+                    "version": "information-candidate-r1",
+                    "worker_dir": proposal["candidate_dir"],
+                },
+                "proposal": {
+                    "worker_visible_claims": proposal["summary"][
+                        "discovery_hypothesis"
+                    ]["hypothesis"]["worker_visible_claims"]
+                },
+            },
+            plan["lineages"][0]["candidate_information_set_review"],
+        )[0]["candidate"],
+        "worker_visible_claims": proposal["summary"]["discovery_hypothesis"][
+            "hypothesis"
+        ]["worker_visible_claims"],
+        **_information_review_sources(),
+    }
+    _write_information_review_result(
+        Path(plan["runtime"]["results_dir"]) / review_id,
+        package,
+        verdict,
+    )
+
+    result = run_controller(
+        plan_path,
+        state_dir,
+        runner=lambda _argv: (_ for _ in ()).throw(
+            AssertionError("non-PASS review must not dispatch a Worker")
+        ),
+    )["lineages"]["information-lineage"]
+
+    assert result["phase"] == "HOLD_FOR_REFINE"
+    assert result["decision"] == "HOLD_FOR_REFINE"
+    assert result["current_parent"]["version"] == "h0"
+    assert result["accounted_run_ids"] == ["information-proposal-r1"]
+    assert result["accounted_review_ids"] == [review_id]
+
+
+def test_candidate_review_trusted_sources_must_be_disjoint(tmp_path):
+    parent, candidate = _information_review_workers(tmp_path)
+    sources = _information_review_sources()
+    sources["optimize_only_sources"][0]["ref"] = "public:instruction"
+    spec = {
+        "review_id": "disjoint-review",
+        **sources,
+    }
+    state = {
+        "current_parent": {"worker_dir": str(parent)},
+        "candidate": {"version": "candidate", "worker_dir": str(candidate)},
+        "proposal": {
+            "worker_visible_claims": [
+                {
+                    "claim_id": "positive",
+                    "claim": "Written output must be positive.",
+                    "surfaces": ["tools"],
+                    "basis_refs": ["public:instruction"],
+                }
+            ]
+        },
+    }
+
+    with pytest.raises(LineageError, match="must be disjoint"):
+        _candidate_information_set_review_package(state, spec)
+
+
+def test_information_review_missing_candidate_material_holds_without_call(
+    tmp_path,
+):
+    plan_path, plan = _information_review_controller_plan(tmp_path, mode="replay")
+    proposal_path = Path(
+        plan["lineages"][0]["proposal"]["replay_report"]
+    )
+    proposal = json.loads(proposal_path.read_text())
+    proposal["candidate_dir"] = str(tmp_path / "missing-admitted-candidate")
+    proposal_path.write_text(json.dumps(proposal))
+
+    result = run_controller(
+        plan_path,
+        tmp_path / "missing-material-state",
+        runner=lambda _argv: (_ for _ in ()).throw(
+            AssertionError("missing candidate material must not call Reviewer or Worker")
+        ),
+    )["lineages"]["information-lineage"]
+
+    assert result["phase"] == "HOLD_FOR_REFINE"
+    assert result["current_parent"]["version"] == "h0"
+    assert result["accounted_review_ids"] == []
+    assert result["hold"]["reason"] == (
+        "information_set_review_missing_candidate_material"
+    )
+
+
+def test_legacy_proposal_path_does_not_require_information_review(tmp_path):
+    plan_path, plan = _information_review_controller_plan(tmp_path, mode="replay")
+    del plan["lineages"][0]["candidate_information_set_review"]
+    plan_path.write_text(json.dumps(plan))
+
+    result = run_controller(
+        plan_path,
+        tmp_path / "legacy-state",
+        runner=lambda _argv: (_ for _ in ()).throw(
+            AssertionError("legacy replay path must not dispatch a child")
+        ),
+    )["lineages"]["information-lineage"]
+
+    assert result["phase"] == "FROZEN"
+    assert result["decision"] == "PROMOTE"
+    assert result["accounted_review_ids"] == []
+
+
+def test_worker_argv_never_contains_review_reason_or_diagnostic():
+    plan = {
+        "controller_run_id": "information-controller",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest",
+            "rootless_config": "/rootless",
+            "image_set_manifest": "/images",
+            "results_dir": "/results",
+        },
+    }
+    lineage = {
+        "lineage_id": "information-lineage",
+        "parent": {"worker_dir": "/h0"},
+        "candidate": {"worker_dir": "/candidate"},
+        "candidate_information_set_review": {
+            "reason": "secret-review-reason",
+            "optimize_only_sources": [
+                {"excerpt": "secret-diagnostic-answer"}
+            ],
+        },
+    }
+    argv = build_child_argv(
+        plan,
+        lineage,
+        {"name": "target", "task_id": "task-t"},
+        approve_external_run=True,
+    )
+
+    rendered = " ".join(argv)
+    assert "secret-review-reason" not in rendered
+    assert "secret-diagnostic-answer" not in rendered
+
+
+def test_information_review_live_argv_requires_explicit_approval(tmp_path):
+    plan = {
+        "runtime": {"python": "/python", "source_root": "/source"}
+    }
+    spec = {"backend": "openrouter"}
+    with pytest.raises(LineageError, match="was not approved"):
+        build_candidate_information_set_review_argv(
+            plan,
+            spec,
+            input_path=tmp_path / "input.json",
+            result_dir=tmp_path / "result",
+            approve_external_run=False,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("status", "failed", "is not complete"),
+        ("worker_visible", True, "must remain Worker-hidden"),
+        ("promotion_authority", True, "no promotion authority"),
+    ],
+)
+def test_information_review_rejects_invalid_wrapper_authority(
+    tmp_path, field, value, message
+):
+    plan_path, plan = _information_review_controller_plan(tmp_path, mode="replay")
+    review_id = plan["lineages"][0]["candidate_information_set_review"][
+        "review_id"
+    ]
+    parent = plan["lineages"][0]["parent"]
+    proposal = json.loads(
+        Path(plan["lineages"][0]["proposal"]["replay_report"]).read_text()
+    )
+    package = _candidate_information_set_review_package(
+        {
+            "current_parent": parent,
+            "candidate": {
+                "version": "information-candidate-r1",
+                "worker_dir": proposal["candidate_dir"],
+            },
+            "proposal": {
+                "worker_visible_claims": proposal["summary"][
+                    "discovery_hypothesis"
+                ]["hypothesis"]["worker_visible_claims"]
+            },
+        },
+        plan["lineages"][0]["candidate_information_set_review"],
+    )[0]
+    result_dir = Path(plan["runtime"]["results_dir"]) / review_id
+    _write_information_review_result(result_dir, package)
+    result_path = result_dir / "RESULT.json"
+    wrapper = json.loads(result_path.read_text())
+    wrapper[field] = value
+    result_path.write_text(json.dumps(wrapper))
+
+    with pytest.raises(LineageError, match=message):
+        run_controller(plan_path, tmp_path / f"invalid-{field}-state")
+
+
+def test_answer_free_information_review_requires_no_optimize_sources():
+    sources = _information_review_sources()
+    answer_free = {
+        "candidate_information_set_review": {
+            "enabled": True,
+            "feedback_mode": "answer_free",
+            "review_id": "public-only-review",
+            "public_sources": sources["public_sources"],
+            "optimize_only_sources": [],
+        }
+    }
+
+    spec = _information_set_review_spec(answer_free)
+
+    assert spec["feedback_mode"] == "answer_free"
+    assert spec["optimize_only_sources"] == []
+    answer_free["candidate_information_set_review"][
+        "optimize_only_sources"
+    ] = sources["optimize_only_sources"]
+    with pytest.raises(LineageError, match="cannot include optimize-only"):
+        _information_set_review_spec(answer_free)

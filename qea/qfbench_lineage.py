@@ -39,6 +39,7 @@ def new_lineage(
     worker_route: str,
     worker_budget: str,
     cost_limit_usd: float | str,
+    candidate_information_set_review: bool = False,
     quantitative_protection_review: bool = False,
     repeat_consistency_policy: str = "aggregate_only",
     retained_activation_token: str | None = None,
@@ -64,7 +65,7 @@ def new_lineage(
             )
         current_parent["retained_activation_token"] = retained_activation_token
 
-    return {
+    state = {
         "schema_version": 1,
         "lineage_id": lineage_id,
         "status": "running",
@@ -92,6 +93,9 @@ def new_lineage(
         "quantitative_protection_review": quantitative_protection_review,
         "repeat_consistency_policy": repeat_consistency_policy,
     }
+    if candidate_information_set_review:
+        state["candidate_information_set_review"] = True
+    return state
 
 
 def new_proposal_lineage(
@@ -104,6 +108,7 @@ def new_proposal_lineage(
     worker_route: str,
     worker_budget: str,
     cost_limit_usd: float | str,
+    candidate_information_set_review: bool = False,
     quantitative_protection_review: bool = False,
     repeat_consistency_policy: str = "aggregate_only",
     retained_activation_token: str | None = None,
@@ -121,6 +126,7 @@ def new_proposal_lineage(
         worker_route=worker_route,
         worker_budget=worker_budget,
         cost_limit_usd=cost_limit_usd,
+        candidate_information_set_review=candidate_information_set_review,
         quantitative_protection_review=quantitative_protection_review,
         repeat_consistency_policy=repeat_consistency_policy,
         retained_activation_token=retained_activation_token,
@@ -409,6 +415,32 @@ def _proposal_mechanism_claim(
         if field in hypothesis:
             claim[field] = deepcopy(hypothesis[field])
     return claim or None
+
+
+def _proposal_worker_visible_claims(
+    report: Mapping[str, object],
+) -> list[dict[str, object]] | None:
+    """Read the structured claim list from the admitted Evolver decision."""
+
+    summary = report.get("summary")
+    discovery = (
+        summary.get("discovery_hypothesis")
+        if isinstance(summary, Mapping)
+        else None
+    )
+    hypothesis = (
+        discovery.get("hypothesis") if isinstance(discovery, Mapping) else None
+    )
+    claims = (
+        hypothesis.get("worker_visible_claims")
+        if isinstance(hypothesis, Mapping)
+        else None
+    )
+    if not isinstance(claims, list) or not claims:
+        return None
+    if not all(isinstance(claim, Mapping) for claim in claims):
+        return None
+    return [deepcopy(dict(claim)) for claim in claims]
 
 
 def _activation_binding(
@@ -853,6 +885,9 @@ def import_proposal_report(
     mechanism_claim = _proposal_mechanism_claim(report)
     if mechanism_claim is not None:
         result["proposal"]["mechanism_claim"] = mechanism_claim
+    worker_visible_claims = _proposal_worker_visible_claims(report)
+    if worker_visible_claims is not None:
+        result["proposal"]["worker_visible_claims"] = worker_visible_claims
 
     if decision == "ABSTAIN":
         result["decision"] = "ABSTAIN"
@@ -884,13 +919,86 @@ def import_proposal_report(
         result["candidate"]["realized_component"] = deepcopy(dict(realized))
         result["candidate"]["activation_token"] = realized["token"]
     result["decision"] = None
-    result["phase"] = "TARGET"
+    if result.get("candidate_information_set_review") is True:
+        if worker_visible_claims is None:
+            return _hold_candidate_for_refine(
+                result,
+                reason="information_set_review_missing_worker_visible_claims",
+            )
+        result["phase"] = "INFORMATION_SET_REVIEW"
+    else:
+        result["phase"] = "TARGET"
     result["status"] = "running"
     if _budget_reached(result):
         result["decision"] = "BUDGET_STOP"
         result["phase"] = "BUDGET_STOP"
         result["status"] = "stopped"
     return result
+
+
+def hold_candidate_information_set_review(
+    state: Mapping[str, object], *, reason: str
+) -> dict[str, object]:
+    """Stop an opt-in candidate when its review package cannot be constructed."""
+
+    result = deepcopy(dict(state))
+    if result.get("phase") != "INFORMATION_SET_REVIEW":
+        raise LineageError(
+            "cannot hold information-set review outside INFORMATION_SET_REVIEW"
+        )
+    return _hold_candidate_for_refine(result, reason=reason)
+
+
+def import_candidate_information_set_review(
+    state: Mapping[str, object],
+    *,
+    review_id: str,
+    review_path: str,
+    review_package: Mapping[str, object],
+    review_payload: Mapping[str, object],
+    review_accounting: Mapping[str, object],
+) -> dict[str, object]:
+    """Import one pre-Worker answer-boundary review exactly once."""
+
+    from qea.candidate_information_set_review import (
+        validate_candidate_information_set_review,
+    )
+
+    result = deepcopy(dict(state))
+    accounted = result.setdefault("accounted_review_ids", [])
+    if review_id in accounted:
+        return result
+    if result.get("phase") != "INFORMATION_SET_REVIEW":
+        raise LineageError(
+            "cannot import candidate review outside INFORMATION_SET_REVIEW"
+        )
+    validated = validate_candidate_information_set_review(
+        review_payload, review_package
+    )
+    _add_review_cost(result, review_accounting)
+    accounted.append(review_id)
+    result["observations"]["information_set_review"] = {
+        "review_id": review_id,
+        "review_path": review_path,
+        "overall_verdict": validated["overall_verdict"],
+        "claim_reviews": deepcopy(validated["claim_reviews"]),
+        "coverage_review": deepcopy(validated["coverage_review"]),
+        "worker_visible": False,
+        "promotion_authority": False,
+    }
+    verdict = validated["overall_verdict"]
+    if verdict == "PASS":
+        result["phase"] = "TARGET"
+        result["status"] = "running"
+        if _budget_reached(result):
+            result["decision"] = "BUDGET_STOP"
+            result["phase"] = "BUDGET_STOP"
+            result["status"] = "stopped"
+        return result
+    return _hold_candidate_for_refine(
+        result,
+        reason=f"information_set_review_{str(verdict).lower()}",
+    )
 
 
 def import_pilot_report(

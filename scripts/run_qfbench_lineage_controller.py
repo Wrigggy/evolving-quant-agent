@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import subprocess
 import sys
@@ -15,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from qea.qfbench_lineage import (  # noqa: E402
     LineageError,
     freeze_lineage,
+    hold_candidate_information_set_review,
+    import_candidate_information_set_review,
     import_comparison_observation,
     import_pilot_report,
     import_proposal_report,
@@ -299,6 +302,282 @@ def _proposal_run_id(
         or proposal.get("replay_run_id")
         or f"{plan['controller_run_id']}-{lineage['lineage_id']}-proposal"
     )
+
+
+def _information_set_review_spec(
+    lineage: Mapping[str, object],
+) -> dict[str, object] | None:
+    """Return one trusted opt-in pre-Worker review specification."""
+
+    raw = lineage.get("candidate_information_set_review")
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise LineageError(
+            "candidate_information_set_review must be a JSON object"
+        )
+    if raw.get("enabled") is not True:
+        return None
+    feedback_mode = raw.get("feedback_mode")
+    if feedback_mode not in {"answer_free", "answer_rich_evolver"}:
+        raise LineageError(
+            "candidate information-set review requires answer_free or "
+            "answer_rich_evolver"
+        )
+    review_id = raw.get("review_id")
+    if not isinstance(review_id, str) or not review_id:
+        raise LineageError("candidate information-set review has no review_id")
+    for field in ("public_sources", "optimize_only_sources"):
+        if not isinstance(raw.get(field), list):
+            raise LineageError(
+                f"candidate information-set review {field} must be a list"
+            )
+    if feedback_mode == "answer_free" and raw["optimize_only_sources"]:
+        raise LineageError(
+            "answer-free candidate review cannot include optimize-only sources"
+        )
+    return dict(raw)
+
+
+def _worker_visible_surface(relative: str) -> str | None:
+    """Map one admitted candidate path to a Worker-visible harness surface."""
+
+    if relative == "systemprompt.md":
+        return "systemprompt"
+    if relative == "agent.yaml":
+        return "agent_config"
+    head = relative.split("/", 1)[0]
+    if head in {
+        "tool_descriptions",
+        "tools",
+        "validator",
+        "skills",
+        "memory",
+        "middleware",
+        "routing",
+    }:
+        return head
+    return None
+
+
+def _worker_visible_candidate_material(
+    parent_dir: object,
+    candidate_dir: object,
+) -> dict[str, object] | None:
+    """Build a text diff from the real admitted Worker-visible files."""
+
+    if not isinstance(parent_dir, str) or not isinstance(candidate_dir, str):
+        return None
+    parent_root = Path(parent_dir)
+    candidate_root = Path(candidate_dir)
+    if not parent_root.is_dir() or not candidate_root.is_dir():
+        return None
+
+    def snapshot(root: Path) -> dict[str, tuple[str, str]]:
+        values = {}
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or path.is_symlink():
+                continue
+            if "__pycache__" in path.parts or path.suffix == ".pyc":
+                continue
+            relative = path.relative_to(root).as_posix()
+            surface = _worker_visible_surface(relative)
+            if surface is None:
+                continue
+            values[relative] = (
+                surface,
+                path.read_text(encoding="utf-8", errors="replace"),
+            )
+        return values
+
+    parent = snapshot(parent_root)
+    candidate = snapshot(candidate_root)
+    changed_files = []
+    diff_parts = []
+    for relative in sorted(set(parent) | set(candidate)):
+        old_surface, old_text = parent.get(relative, (None, ""))
+        new_surface, new_text = candidate.get(relative, (None, ""))
+        if old_text == new_text:
+            continue
+        surface = new_surface or old_surface
+        change_type = (
+            "added"
+            if relative not in parent
+            else "removed"
+            if relative not in candidate
+            else "modified"
+        )
+        changed_files.append(
+            {
+                "ref": f"candidate:file:{relative}",
+                "path": relative,
+                "surface": surface,
+                "change_type": change_type,
+                "excerpt": new_text if change_type != "removed" else old_text,
+            }
+        )
+        diff_parts.extend(
+            difflib.unified_diff(
+                old_text.splitlines(keepends=True),
+                new_text.splitlines(keepends=True),
+                fromfile=f"parent/{relative}",
+                tofile=f"candidate/{relative}",
+            )
+        )
+    if not changed_files:
+        return None
+    return {
+        "diff_ref": "candidate:diff",
+        "diff": "".join(diff_parts),
+        "files": changed_files,
+    }
+
+
+def _candidate_information_set_review_package(
+    state: Mapping[str, object],
+    spec: Mapping[str, object],
+) -> tuple[dict[str, object] | None, str | None]:
+    """Construct the Reviewer package without trusting Evolver source labels."""
+
+    proposal = state.get("proposal")
+    candidate = state.get("candidate")
+    parent = state.get("current_parent")
+    claims = (
+        proposal.get("worker_visible_claims")
+        if isinstance(proposal, Mapping)
+        else None
+    )
+    if not isinstance(claims, list) or not claims:
+        return None, "information_set_review_missing_worker_visible_claims"
+    material = _worker_visible_candidate_material(
+        parent.get("worker_dir") if isinstance(parent, Mapping) else None,
+        candidate.get("worker_dir") if isinstance(candidate, Mapping) else None,
+    )
+    if material is None:
+        return None, "information_set_review_missing_candidate_material"
+    package = {
+        "schema_version": 1,
+        "review_id": spec["review_id"],
+        "candidate_id": candidate["version"],
+        "candidate": material,
+        "worker_visible_claims": claims,
+        "public_sources": spec["public_sources"],
+        "optimize_only_sources": spec["optimize_only_sources"],
+    }
+    from qea.candidate_information_set_review import (
+        CandidateInformationSetReviewError,
+        validate_candidate_information_set_review_package,
+    )
+
+    try:
+        validate_candidate_information_set_review_package(package)
+    except CandidateInformationSetReviewError as exc:
+        raise LineageError(f"invalid trusted candidate review package: {exc}") from exc
+    return package, None
+
+
+def _information_set_review_paths(
+    plan: Mapping[str, object],
+    spec: Mapping[str, object],
+    states_root: Path,
+) -> tuple[Path, Path, Path]:
+    review_id = str(spec["review_id"])
+    input_path = states_root / "review-inputs" / f"{review_id}.json"
+    result_dir = Path(str(plan["runtime"]["results_dir"])) / review_id
+    return input_path, result_dir, result_dir / "RESULT.json"
+
+
+def build_candidate_information_set_review_argv(
+    plan: Mapping[str, object],
+    spec: Mapping[str, object],
+    *,
+    input_path: Path,
+    result_dir: Path,
+    approve_external_run: bool,
+) -> tuple[str, ...]:
+    """Build the single external Candidate Reviewer invocation."""
+
+    if not approve_external_run:
+        raise LineageError("live candidate information-set review was not approved")
+    runtime = plan["runtime"]
+    argv = [
+        str(runtime["python"]),
+        str(
+            Path(str(runtime["source_root"]))
+            / "scripts/run_candidate_information_set_reviewer_canary.py"
+        ),
+        "--input",
+        str(input_path),
+        "--out",
+        str(result_dir),
+        "--backend",
+        str(spec.get("backend", "openrouter")),
+    ]
+    if spec.get("model"):
+        argv.extend(("--model", str(spec["model"])))
+    if spec.get("dotenv"):
+        argv.extend(("--dotenv", str(spec["dotenv"])))
+    return tuple(argv)
+
+
+def _candidate_information_set_review_result(
+    plan: Mapping[str, object],
+    spec: Mapping[str, object],
+    package: Mapping[str, object],
+    states_root: Path,
+    *,
+    approve_external_run: bool,
+    runner: Runner,
+) -> tuple[Path, dict[str, object], dict[str, object]]:
+    """Replay an existing fixed-ID result or run the one approved Reviewer call."""
+
+    input_path, result_dir, result_path = _information_set_review_paths(
+        plan, spec, states_root
+    )
+    input_path.parent.mkdir(parents=True, exist_ok=True)
+    input_path.write_text(json.dumps(package, indent=2) + "\n")
+    if not result_path.is_file():
+        if plan.get("mode") == "replay":
+            raise LineageError(
+                f"replay candidate information-set review is missing: {result_path}"
+            )
+        argv = build_candidate_information_set_review_argv(
+            plan,
+            spec,
+            input_path=input_path,
+            result_dir=result_dir,
+            approve_external_run=approve_external_run,
+        )
+        _run_child(runner, argv)
+    if not result_path.is_file():
+        raise LineageError(
+            f"candidate information-set Reviewer wrote no result: {result_path}"
+        )
+    wrapper = _json(result_path)
+    if wrapper.get("status") != "complete":
+        raise LineageError("candidate information-set result is not complete")
+    if wrapper.get("worker_visible") is not False:
+        raise LineageError(
+            "candidate information-set result must remain Worker-hidden"
+        )
+    if wrapper.get("promotion_authority") is not False:
+        raise LineageError(
+            "candidate information-set Reviewer must have no promotion authority"
+        )
+    request = wrapper.get("request")
+    if not isinstance(request, Mapping) or request.get("request_count") != 1:
+        raise LineageError(
+            "candidate information-set result must account for one request"
+        )
+    payload = wrapper.get("review")
+    if not isinstance(payload, Mapping):
+        raise LineageError("candidate information-set result has no review")
+    accounting = _review_accounting(wrapper)
+    if accounting is None:
+        raise LineageError(
+            "candidate information-set result has no request accounting"
+        )
+    return result_path, dict(payload), accounting
 
 
 def _report_path(
@@ -672,8 +951,11 @@ def _review_accounting(
         total_tokens = prompt_tokens + completion_tokens
         if isinstance(usage, Mapping) and usage.get("total_tokens") is not None:
             total_tokens = int(usage["total_tokens"])
+        provider_cost = accounting.get("provider_cost_usd")
+        if provider_cost is None and isinstance(usage, Mapping):
+            provider_cost = usage.get("cost", 0)
         return {
-            "provider_cost_usd": accounting.get("provider_cost_usd", 0),
+            "provider_cost_usd": provider_cost or 0,
             "completed_request_count": 1,
             "total_tokens": total_tokens,
         }
@@ -894,6 +1176,7 @@ def run_controller(
             target = _stage(lineage, "target")
             protection = _stage(lineage, "protection")
             proposal = lineage.get("proposal")
+            information_set_review = _information_set_review_spec(lineage)
             common = {
                 "lineage_id": lineage_id,
                 "parent_version": str(lineage["parent"]["version"]),
@@ -906,6 +1189,9 @@ def run_controller(
                 "worker_budget": "normal",
                 "cost_limit_usd": plan.get("limits", {}).get(
                     "provider_cost_usd", "1"
+                ),
+                "candidate_information_set_review": (
+                    information_set_review is not None
                 ),
                 "quantitative_protection_review": (
                     lineage.get("quantitative_protection_review") is True
@@ -963,12 +1249,57 @@ def run_controller(
                 paused_this_run = True
 
         while not paused_this_run and state.get("phase") in {
+            "INFORMATION_SET_REVIEW",
             "TARGET",
             "REPEAT",
             "PROTECTION",
             "PROTECTION_REVIEW",
             "PROTECTION_REPEAT",
         }:
+            if state.get("phase") == "INFORMATION_SET_REVIEW":
+                review_spec = _information_set_review_spec(lineage)
+                if review_spec is None:
+                    raise LineageError(
+                        "INFORMATION_SET_REVIEW has no enabled trusted plan"
+                    )
+                package, hold_reason = _candidate_information_set_review_package(
+                    state, review_spec
+                )
+                if package is None:
+                    state = hold_candidate_information_set_review(
+                        state, reason=str(hold_reason)
+                    )
+                    save_lineage(state_path, state)
+                    continue
+                review_path, review_payload, review_accounting = (
+                    _candidate_information_set_review_result(
+                        plan,
+                        review_spec,
+                        package,
+                        states_root,
+                        approve_external_run=approve_external_run,
+                        runner=child_runner,
+                    )
+                )
+                state = import_candidate_information_set_review(
+                    state,
+                    review_id=str(review_spec["review_id"]),
+                    review_path=str(review_path),
+                    review_package=package,
+                    review_payload=review_payload,
+                    review_accounting=review_accounting,
+                )
+                save_lineage(state_path, state)
+                if (
+                    stop_after_stage == "information_set_review"
+                    and state.get("stopped_after_stage")
+                    != "information_set_review"
+                ):
+                    state["stopped_after_stage"] = "information_set_review"
+                    save_lineage(state_path, state)
+                    paused_this_run = True
+                continue
+
             if state.get("phase") == "PROTECTION_REVIEW":
                 (
                     review_id,
@@ -1182,6 +1513,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--stop-after-stage",
         choices=(
             "proposal",
+            "information_set_review",
             "target",
             "repeat",
             "protection",
