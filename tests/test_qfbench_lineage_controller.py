@@ -1436,6 +1436,7 @@ def test_stop_after_proposal_resumes_without_reimporting_proposal(tmp_path):
     assert paused["accounted_run_ids"] == ["proposal-r1"]
     assert resumed["phase"] == "FROZEN"
     assert resumed["decision"] == "PROMOTE"
+    assert "stopped_after_stage" not in resumed
     assert resumed["archive"][0]["worker_dir"] == "/proposal-output/candidate"
     assert resumed["accounted_run_ids"].count("proposal-r1") == 1
 

@@ -888,6 +888,8 @@ def run_controller(
         state_path = states_root / f"{lineage_id}.json"
         if state_path.is_file():
             state = load_lineage(state_path)
+            if state.pop("stopped_after_stage", None) is not None:
+                save_lineage(state_path, state)
         else:
             target = _stage(lineage, "target")
             protection = _stage(lineage, "protection")
