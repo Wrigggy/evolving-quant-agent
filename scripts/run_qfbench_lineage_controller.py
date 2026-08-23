@@ -90,7 +90,9 @@ def build_child_argv(
         "--seed-worker",
         str(parent["worker_dir"]),
     ]
-    if not isinstance(stage.get("parent_comparator"), Mapping):
+    if not isinstance(stage.get("parent_comparator"), Mapping) and not isinstance(
+        stage.get("selection_reference"), Mapping
+    ):
         argv.extend(("--arm", f"{parent_arm}={parent['worker_dir']}"))
     argv.extend(("--arm", f"{candidate_arm}={candidate['worker_dir']}"))
     argv.extend(
@@ -320,11 +322,17 @@ def _parent_comparator(
 ) -> tuple[str, Path, dict[str, object]] | None:
     """Load one explicitly matched reusable parent observation."""
 
-    spec = stage.get("parent_comparator")
+    parent_spec = stage.get("parent_comparator")
+    selection_spec = stage.get("selection_reference")
+    if parent_spec is not None and selection_spec is not None:
+        raise LineageError(
+            "stage cannot declare both parent_comparator and selection_reference"
+        )
+    spec = selection_spec if selection_spec is not None else parent_spec
     if spec is None:
         return None
     if not isinstance(spec, Mapping):
-        raise LineageError("parent_comparator must be a JSON object")
+        raise LineageError("comparison reference must be a JSON object")
     comparator_id = spec.get("id")
     report_path = spec.get("report_path")
     if not isinstance(comparator_id, str) or not comparator_id:
@@ -332,15 +340,22 @@ def _parent_comparator(
     if not isinstance(report_path, str) or not report_path:
         raise LineageError("parent_comparator has no report_path")
     expected = {
-        "parent_version": state["current_parent"]["version"],
         "task_id": stage["task_id"],
         "worker_route": state["worker_route"],
         "worker_budget": state["worker_budget"],
     }
+    version_field = "parent_version"
+    expected_version = state["current_parent"]["version"]
+    if selection_spec is not None:
+        version_field = "reference_version"
+        expected_version = selection_spec.get("reference_version")
+        if not isinstance(expected_version, str) or not expected_version:
+            raise LineageError("selection_reference has no reference_version")
+    expected[version_field] = expected_version
     for field, value in expected.items():
         if spec.get(field) != value:
             raise LineageError(
-                f"parent_comparator {comparator_id!r} {field} does not match "
+                f"comparison reference {comparator_id!r} {field} does not match "
                 f"the active lineage"
             )
     path = Path(report_path)
@@ -1055,6 +1070,16 @@ def run_controller(
                     candidate_arm=candidate_arm,
                     task_id=str(stage["task_id"]),
                 )
+                selection_reference = stage.get("selection_reference")
+                if isinstance(selection_reference, Mapping):
+                    reuse = report.pop("parent_comparator_reuse")
+                    reuse["reference_version"] = selection_reference[
+                        "reference_version"
+                    ]
+                    reuse["current_parent_version"] = state["current_parent"][
+                        "version"
+                    ]
+                    report["selection_reference_reuse"] = reuse
             property_safe = None
             property_delta = None
             quantitative_triage = None

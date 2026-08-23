@@ -998,6 +998,51 @@ def test_live_child_argv_runs_only_candidate_when_parent_is_reused():
     assert argv[-1] == "--approve-external-run"
 
 
+def test_live_child_argv_runs_only_candidate_with_older_selection_reference():
+    plan = {
+        "controller_run_id": "refine",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest.json",
+            "rootless_config": "/config.json",
+            "image_set_manifest": "/images.json",
+            "results_dir": "/results",
+        },
+    }
+    lineage = {
+        "lineage_id": "refine",
+        "parent": {"worker_dir": "/c2"},
+        "candidate": {
+            "worker_dir": "/c3",
+            "activation_binding": {"status": "retained"},
+            "activation_token": "check_parameter_admissibility",
+        },
+    }
+    stage = {
+        "name": "target",
+        "task_id": "dupire-local-vol",
+        "parent_arm": "c1-reference",
+        "candidate_arm": "c3",
+        "selection_reference": {
+            "id": "c1-repeat",
+            "reference_version": "c1",
+        },
+    }
+
+    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+
+    arm_values = [
+        argv[index + 1] for index, value in enumerate(argv) if value == "--arm"
+    ]
+    assert argv[argv.index("--seed-worker") + 1] == "/c2"
+    assert arm_values == ["c3=/c3"]
+    assert argv[argv.index("--activation-token") + 1] == (
+        "check_parameter_admissibility"
+    )
+
+
 def test_replay_reuses_parent_and_accounts_only_candidate_calls(tmp_path):
     parent_target_path, _ = _single_arm_report(
         tmp_path / "parent-target",
@@ -1175,6 +1220,117 @@ def test_parent_comparator_version_must_match_active_parent(tmp_path):
         ValueError, match="parent_version does not match the active lineage"
     ):
         run_controller(plan_path, tmp_path / "state")
+
+
+def test_selection_reference_can_precede_active_refinement_parent(tmp_path):
+    reference_target_path, _ = _single_arm_report(
+        tmp_path / "reference-target",
+        "c1-target-r1",
+        "task-t",
+        "c1-reference",
+        (1, 2, 0),
+    )
+    reference_protection_path, _ = _single_arm_report(
+        tmp_path / "reference-protection",
+        "c1-protection-r1",
+        "task-p",
+        "c1-reference",
+        (2, 2, 1),
+    )
+    candidate_target_path, _ = _single_arm_report(
+        tmp_path / "candidate-target",
+        "c3-target-r1",
+        "task-t",
+        "c3",
+        (2, 2, 1),
+    )
+    candidate_repeat_path, _ = _single_arm_report(
+        tmp_path / "candidate-repeat",
+        "c3-repeat-r1",
+        "task-t",
+        "c3",
+        (2, 2, 1),
+    )
+    candidate_protection_path, _ = _single_arm_report(
+        tmp_path / "candidate-protection",
+        "c3-protection-r1",
+        "task-p",
+        "c3",
+        (2, 2, 1),
+    )
+
+    def reference(reference_id, report_path, task_id):
+        return {
+            "id": reference_id,
+            "report_path": str(report_path),
+            "reference_version": "c1",
+            "task_id": task_id,
+            "worker_route": "route-a",
+            "worker_budget": "normal",
+        }
+
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "refinement-selection-reference",
+        "mode": "replay",
+        "runtime": {"worker_route": "route-a"},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [
+            {
+                "lineage_id": "c2-to-c3",
+                "parent": {"version": "c2", "worker_dir": "/c2"},
+                "candidate": {"version": "c3", "worker_dir": "/c3"},
+                "stages": [
+                    {
+                        "name": "target",
+                        "task_id": "task-t",
+                        "replay_report": str(candidate_target_path),
+                        "parent_arm": "c1-reference",
+                        "candidate_arm": "c3",
+                        "selection_reference": reference(
+                            "c1-target", reference_target_path, "task-t"
+                        ),
+                    },
+                    {
+                        "name": "repeat",
+                        "task_id": "task-t",
+                        "replay_report": str(candidate_repeat_path),
+                        "parent_arm": "c1-reference",
+                        "candidate_arm": "c3",
+                        "selection_reference": reference(
+                            "c1-target", reference_target_path, "task-t"
+                        ),
+                    },
+                    {
+                        "name": "protection",
+                        "task_id": "task-p",
+                        "replay_report": str(candidate_protection_path),
+                        "parent_arm": "c1-reference",
+                        "candidate_arm": "c3",
+                        "selection_reference": reference(
+                            "c1-protection",
+                            reference_protection_path,
+                            "task-p",
+                        ),
+                    },
+                ],
+            }
+        ],
+    }
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    state = run_controller(plan_path, tmp_path / "state")["lineages"][
+        "c2-to-c3"
+    ]
+
+    assert state["decision"] == "PROMOTE"
+    assert state["observations"]["target"]["provenance"][
+        "selection_reference_reuse"
+    ]["reference_version"] == "c1"
+    assert state["observations"]["target"]["provenance"][
+        "selection_reference_reuse"
+    ]["current_parent_version"] == "c2"
 
 
 def _proposal_report(path: Path, *, decision: str, admitted):

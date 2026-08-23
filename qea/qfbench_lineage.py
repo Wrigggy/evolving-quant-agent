@@ -832,6 +832,11 @@ def import_pilot_report(
     comparator_reuse = report.get("parent_comparator_reuse")
     if isinstance(comparator_reuse, Mapping):
         provenance = {"parent_comparator_reuse": dict(comparator_reuse)}
+    selection_reference_reuse = report.get("selection_reference_reuse")
+    if isinstance(selection_reference_reuse, Mapping):
+        provenance = {
+            "selection_reference_reuse": dict(selection_reference_reuse)
+        }
     activations = report.get("activations")
     candidate_activation = (
         activations.get(candidate_arm) if isinstance(activations, Mapping) else None
