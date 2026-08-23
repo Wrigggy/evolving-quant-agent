@@ -1072,6 +1072,35 @@ def test_quant_v2_state_guided_act_retains_only_compact_card_reference(
     ).is_file()
 
 
+def test_quant_state_card_materializes_lineage_evidence_refs(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        materialize_quant_research_state_card,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_quant_state_card_contract(evidence)
+    _write_quant_component_catalog(evidence)
+    card = _quant_state_card()
+    relation = card["candidate_relations"][0]
+    relation.pop("applicability")
+    relation.pop("observed_evidence")
+    relation["status"] = "UNKNOWN"
+    relation["evidence_refs"] = [
+        "history/archive/entries/a0-qrs-target.json",
+        "history/archive/entries/a0-qrs-repeat.json",
+    ]
+
+    result = materialize_quant_research_state_card(card)
+
+    assert result["quant_research_state_card"] == (
+        "quant-research-state-card.json"
+    )
+    assert result["selected_relation_id"] == (
+        "estimator-parameter-identity"
+    )
+
+
 def test_quant_v2_state_guided_act_rejects_unmaterialized_or_label_only_routing(
     guarded_roots,
 ):

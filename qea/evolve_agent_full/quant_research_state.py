@@ -13,6 +13,12 @@ class QuantResearchStateCardError(ValueError):
 
 _UNSUPPORTED_TEXT = {"", "N-A", "UNKNOWN"}
 _OUTCOME_CLASSES = {"positive", "negative", "inactive", "unstable"}
+_RELATION_SUPPORT_FIELDS = (
+    "support",
+    "applicability",
+    "observed_evidence",
+    "evidence_refs",
+)
 
 
 def _normalize_value(value: object) -> Any:
@@ -157,9 +163,12 @@ def normalize_quant_research_state_card(
         )
     if not any(
         _has_support(selected.get(field))
-        for field in ("support", "applicability", "observed_evidence")
+        for field in _RELATION_SUPPORT_FIELDS
     ):
-        raise QuantResearchStateCardError("ACT selected relation has no support")
+        raise QuantResearchStateCardError(
+            "ACT selected relation has no support; provide applicability, "
+            "observed_evidence, evidence_refs, or support"
+        )
     residual_relation_id = _residual_relation_id(card)
     if residual_relation_id is not None:
         if residual_relation_id == relation_id:
@@ -180,10 +189,11 @@ def normalize_quant_research_state_card(
             )
         if not any(
             _has_support(residual.get(field))
-            for field in ("support", "applicability", "observed_evidence")
+            for field in _RELATION_SUPPORT_FIELDS
         ):
             raise QuantResearchStateCardError(
-                "residual-risk relation has no support"
+                "residual-risk relation has no support; provide applicability, "
+                "observed_evidence, evidence_refs, or support"
             )
     if _component_locus(card) is None:
         raise QuantResearchStateCardError("ACT requires a component locus")

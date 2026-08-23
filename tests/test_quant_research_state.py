@@ -112,6 +112,67 @@ def test_act_rejects_selected_relation_without_support():
         validate_quant_research_state_card(raw, action="ACT")
 
 
+def test_act_accepts_a01_lineage_relation_supported_by_evidence_refs():
+    """Retained runtime evidence can directly support a refinement relation."""
+
+    card = validate_quant_research_state_card(
+        {
+            "schema_version": 1,
+            "task_key": "qfbench:dupire-local-vol",
+            "candidate_relations": [
+                {
+                    "relation_id": (
+                        "loosenable-parameter-and-table-completeness"
+                    ),
+                    "relation_family": "calibration-parameter-admissibility",
+                    "status": "UNKNOWN",
+                    "evidence_refs": [
+                        "history/archive/entries/a0-qrs-target.json",
+                        "history/archive/entries/a0-qrs-repeat.json",
+                        (
+                            "history/archive/objects/"
+                            "a0-qrs-repeat-worker-trace.jsonl"
+                        ),
+                    ],
+                    "discriminating_observation": (
+                        "compare strict parameter bounds and required-column "
+                        "completeness across the retained lineage"
+                    ),
+                }
+            ],
+            "selected_intervention": {
+                "relation_id": (
+                    "loosenable-parameter-and-table-completeness"
+                ),
+                "state_locus": "evaluation_reconciliation",
+                "component_locus": "tools",
+                "predicted_transition": (
+                    "the checker rejects loosened bounds and incomplete "
+                    "required columns"
+                ),
+            },
+        },
+        action="ACT",
+    )
+
+    assert card["candidate_relations"][0]["evidence_refs"] == [
+        "history/archive/entries/a0-qrs-target.json",
+        "history/archive/entries/a0-qrs-repeat.json",
+        "history/archive/objects/a0-qrs-repeat-worker-trace.jsonl",
+    ]
+
+
+def test_act_rejects_placeholder_only_evidence_refs():
+    raw = _state_card()
+    relation = raw["candidate_relations"][0]
+    relation["applicability"] = "UNKNOWN"
+    relation["observed_evidence"] = []
+    relation["evidence_refs"] = ["UNKNOWN", "N-A"]
+
+    with pytest.raises(QuantResearchStateCardError, match="no support"):
+        validate_quant_research_state_card(raw, action="ACT")
+
+
 def test_act_rejects_missing_component_locus():
     raw = _state_card()
     raw["selected_intervention"].pop("component_locus")
