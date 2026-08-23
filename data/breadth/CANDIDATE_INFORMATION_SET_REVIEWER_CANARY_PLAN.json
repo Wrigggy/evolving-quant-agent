@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "plan_id": "candidate-information-set-reviewer-canary-20260824-r1",
+  "date": "2026-08-24",
+  "status": "frozen_before_model_call",
+  "purpose": "Test whether one arm-blind Candidate Information-Set Reviewer call distinguishes answer-rich semantic projection from predicates directly supported by public task text before any Worker dispatch.",
+  "input": "data/breadth/CANDIDATE_INFORMATION_SET_REVIEWER_CANARY_INPUT.json",
+  "runner": "scripts/run_candidate_information_set_reviewer_canary.py",
+  "model": "deepseek/deepseek-v4-pro",
+  "backend": "openrouter",
+  "max_model_requests": 1,
+  "provider_cost_limit_usd": "0.05",
+  "worker_calls_allowed": 0,
+  "promotion_authority": false,
+  "worker_visible": false,
+  "predeclared_expectations": {
+    "raw-svi-a-positive": "REJECT",
+    "terminal-local-vol-atm-positive": "REJECT",
+    "pair-array-only": "REJECT",
+    "written-local-vol-positive": "PASS",
+    "effective-state-downstream-reconciliation": "PASS",
+    "coverage_review": "PASS",
+    "overall_verdict": "REJECT"
+  },
+  "success_condition": "The single response exactly matches all five claim verdicts, reports complete claim coverage, has overall REJECT, records request accounting, and launches no Worker.",
+  "failure_condition": "Any predeclared claim is misclassified, candidate coverage is not PASS, output is invalid, more than one model request occurs, accounting is absent, or any Worker is launched.",
+  "claim_boundary": "A positive canary validates bounded semantic discrimination and authority compliance only. It does not prove the Reviewer is infallible, does not authorize promotion, and does not recover any contaminated candidate."
+}

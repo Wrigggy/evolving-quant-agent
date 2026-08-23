@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "review_id": "candidate-information-set-reviewer-canary-20260824-r1",
+  "candidate_id": "mixed-public-and-optimize-predicate-fixture-r1",
+  "search_arm": "blinded-method-canary",
+  "candidate": {
+    "diff_ref": "candidate:synthetic-mixed-diff",
+    "diff": "+ Require every fitted SVI intercept a to be strictly positive.\n+ Require terminal-maturity local_vol_atm to be positive and compute it with a backward difference.\n+ Require max_overlap_pair to be a two-element JSON array.\n+ Require every written local-volatility grid value to be positive.\n+ Recompute turnover, overlap, and summary fields from the final effective holdings state.\n"
+  },
+  "worker_visible_claims": [
+    {
+      "claim_id": "raw-svi-a-positive",
+      "claim": "Every fitted raw SVI intercept a must be strictly positive.",
+      "surfaces": [
+        "tools",
+        "tool_descriptions",
+        "systemprompt"
+      ],
+      "basis_refs": [
+        "principle:parameter-admissibility"
+      ]
+    },
+    {
+      "claim_id": "terminal-local-vol-atm-positive",
+      "claim": "The terminal maturity must contain a positive local_vol_atm computed with a backward or one-sided time difference.",
+      "surfaces": [
+        "systemprompt"
+      ],
+      "basis_refs": [
+        "principle:maturity-completeness"
+      ]
+    },
+    {
+      "claim_id": "pair-array-only",
+      "claim": "max_overlap_pair must be a two-element JSON array.",
+      "surfaces": [
+        "tools",
+        "systemprompt"
+      ],
+      "basis_refs": [
+        "principle:unambiguous-serialization"
+      ]
+    },
+    {
+      "claim_id": "written-local-vol-positive",
+      "claim": "Every written local-volatility grid value must be positive.",
+      "surfaces": [
+        "tools"
+      ],
+      "basis_refs": [
+        "public:dupire-local-vol-positivity"
+      ]
+    },
+    {
+      "claim_id": "effective-state-downstream-reconciliation",
+      "claim": "Turnover, overlap, and summary metrics must be recomputed from the final effective holdings state.",
+      "surfaces": [
+        "tools"
+      ],
+      "basis_refs": [
+        "public:holdings-effective-state"
+      ]
+    }
+  ],
+  "public_sources": [
+    {
+      "ref": "public:dupire-forward-variance-interior-only",
+      "source_type": "public_contract",
+      "source_path": "results/bc-mirror/qstate-v2-localvol-quant-20260821-r1/authorized-evidence/benchmarks/qfbench/tasks/dupire-local-vol/instruction.md",
+      "excerpt": "Forward variance must be positive for all interior expiry periods (all periods except the last, where no subsequent expiry exists to form a difference)."
+    },
+    {
+      "ref": "public:dupire-local-vol-positivity",
+      "source_type": "public_contract",
+      "source_path": "results/bc-mirror/qstate-v2-localvol-quant-20260821-r1/authorized-evidence/benchmarks/qfbench/tasks/dupire-local-vol/instruction.md",
+      "excerpt": "Verify that sigma_loc(K, T) > 0 for all grid points."
+    },
+    {
+      "ref": "public:holdings-pair-encoding",
+      "source_type": "public_contract",
+      "source_path": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-holdings-r1-proposal/authorized-evidence/benchmarks/qfbench/tasks/13f-amendment-aware-crowding/instruction.md",
+      "excerpt": "max_overlap_pair should identify the manager pair achieving the maximum overlap. Any unambiguous pair encoding is acceptable."
+    },
+    {
+      "ref": "public:holdings-effective-state",
+      "source_type": "public_contract",
+      "source_path": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-holdings-r1-proposal/authorized-evidence/benchmarks/qfbench/tasks/13f-amendment-aware-crowding/instruction.md",
+      "excerpt": "From the resulting effective books, compute manager-level concentration metrics, consecutive-period turnover, latest-period pairwise overlap, and latest-period security crowding."
+    }
+  ],
+  "optimize_only_sources": [
+    {
+      "ref": "diagnostic:dupire-svi-a-positive",
+      "source_type": "optimize_only_diagnostic",
+      "worker_visible": false,
+      "source_path": "results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts/proposal/authorized-evidence/history/archive/objects/a02-qrs-r3-target-optimization-diagnostic.json",
+      "excerpt": "All six delivered SVI intercept values were below zero while the official output property requires a > 0."
+    },
+    {
+      "ref": "diagnostic:dupire-terminal-local-vol-atm",
+      "source_type": "optimize_only_diagnostic",
+      "worker_visible": false,
+      "source_path": "data/breadth/QSTATE_SEARCH_V2_LOCALVOL_DIAGNOSTIC.json",
+      "excerpt": "The expected property says local_vol_atm is finite and positive at every maturity; the observed terminal maturity row is missing local_vol_atm."
+    },
+    {
+      "ref": "diagnostic:holdings-pair-array",
+      "source_type": "optimize_only_diagnostic",
+      "worker_visible": false,
+      "source_path": "results/bc-mirror/qf-final-h0-matched-generic-qrs-20260824-r1-generic-holdings-r1-proposal/authorized-evidence/benchmarks/qfbench/tasks/13f-amendment-aware-crowding/optimization-diagnostic.json",
+      "excerpt": "The maximum-overlap pair is serialized as one joined label instead of a two-label sequence."
+    }
+  ]
+}
