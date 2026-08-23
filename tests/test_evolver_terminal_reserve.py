@@ -334,17 +334,30 @@ def test_recorded_abstain_enters_tool_free_final_turn_and_preserves_usage_audit(
         "unlocked": False,
         "hypothesis": {"abstain_reason": "typed evidence remains insufficient"},
     }
-    (terminal_root / "discovery-hypothesis.json").write_text(
-        json.dumps(decision, sort_keys=True) + "\n"
+    tool_params = ToolCallParams(
+        agent_state=state,
+        sandbox=None,
+        tool_name="decide_candidate",
+        parameters={"discovery": {"decision": "ABSTAIN"}},
+        tool_call_id="decision-1",
+        execution_params={},
     )
+
+    def record_abstain(_params):
+        (terminal_root / "discovery-hypothesis.json").write_text(
+            json.dumps(decision, sort_keys=True) + "\n"
+        )
+        return {"decision": "ABSTAIN", "unlocked": False}
+
+    tool_output = middleware.wrap_tool_call(tool_params, record_abstain)
     middleware.after_tool(
         AfterToolHookInput(
             agent_state=state,
             sandbox=None,
             tool_name="decide_candidate",
             tool_call_id="decision-1",
-            tool_input={"discovery": decision["hypothesis"]},
-            tool_output={"decision": "ABSTAIN", "unlocked": False},
+            tool_input=tool_params.parameters,
+            tool_output=tool_output,
         )
     )
     final_messages = middleware.before_model(
@@ -387,6 +400,148 @@ def test_recorded_abstain_enters_tool_free_final_turn_and_preserves_usage_audit(
     assert post["reported_input_tokens"] == 12_345
     assert post["reported_output_tokens"] == 321
     assert post["reported_total_tokens"] == 12_666
+
+
+def test_failed_terminal_abstain_keeps_decision_phase_instead_of_reusing_old_act(
+    terminal_root,
+):
+    middleware = DiscoveryTerminalReserve()
+    state = _State()
+    initial = _boundary_messages(100)
+    middleware.before_agent(SimpleNamespace(agent_state=state, messages=initial))
+    act = {
+        "schema_version": 4,
+        "protocol": "quant_property_v2",
+        "decision": "ACT",
+        "unlocked": True,
+        "hypothesis": {"primary_components": ["tools"]},
+    }
+    (terminal_root / "discovery-hypothesis.json").write_text(
+        json.dumps(act, sort_keys=True) + "\n"
+    )
+    compacted = middleware.before_model(
+        _before(state, _boundary_messages(550_000))
+    ).messages
+    assert compacted is not None
+    assert "ACT is forbidden" in compacted[-1].get_text_content()
+
+    tool_params = ToolCallParams(
+        agent_state=state,
+        sandbox=None,
+        tool_name="decide_candidate",
+        parameters={"discovery": {"decision": "ABSTAIN"}},
+        tool_call_id="decision-failed",
+        execution_params={},
+    )
+    tool_output = middleware.wrap_tool_call(
+        tool_params,
+        lambda _params: {"error": "retained history evidence is incomplete"},
+    )
+    middleware.after_tool(
+        AfterToolHookInput(
+            agent_state=state,
+            sandbox=None,
+            tool_name="decide_candidate",
+            tool_call_id="decision-failed",
+            tool_input=tool_params.parameters,
+            tool_output=tool_output,
+        )
+    )
+
+    retry = middleware.before_model(
+        _before(state, compacted, iteration=18)
+    ).messages
+    assert retry is not None
+    assert "ACT is forbidden" in retry[-1].get_text_content()
+    assert "all required final component smokes" not in retry[-1].get_text_content()
+    audit = json.loads((terminal_root / "terminal-reserve.json").read_text())
+    assert audit["phase"] == "decision"
+    assert audit["terminal_model_calls"] == 0
+    failed_event = next(
+        event
+        for event in audit["events"]
+        if event["kind"] == "decision_not_recorded"
+    )
+    assert failed_event["tool_failed"] is True
+    assert failed_event["retained_decision"] == "ACT"
+
+    abstain = {
+        "schema_version": 4,
+        "protocol": "quant_property_v2",
+        "decision": "ABSTAIN",
+        "unlocked": False,
+        "hypothesis": {"abstain_reason": "intervention window closed"},
+    }
+    retry_params = ToolCallParams(
+        agent_state=state,
+        sandbox=None,
+        tool_name="decide_candidate",
+        parameters={"discovery": {"decision": "ABSTAIN"}},
+        tool_call_id="decision-retry",
+        execution_params={},
+    )
+
+    def record_retry(_params):
+        (terminal_root / "discovery-hypothesis.json").write_text(
+            json.dumps(abstain, sort_keys=True) + "\n"
+        )
+        return {"decision": "ABSTAIN", "unlocked": False}
+
+    retry_output = middleware.wrap_tool_call(retry_params, record_retry)
+    middleware.after_tool(
+        AfterToolHookInput(
+            agent_state=state,
+            sandbox=None,
+            tool_name="decide_candidate",
+            tool_call_id="decision-retry",
+            tool_input=retry_params.parameters,
+            tool_output=retry_output,
+        )
+    )
+    audit = json.loads((terminal_root / "terminal-reserve.json").read_text())
+    assert audit["phase"] == "final"
+    assert audit["requires_terminal_abstain"] is False
+
+
+def test_final_phase_rechecks_missing_act_component_smoke(terminal_root):
+    middleware = DiscoveryTerminalReserve()
+    state = _State()
+    initial = _boundary_messages(100)
+    middleware.before_agent(SimpleNamespace(agent_state=state, messages=initial))
+    act = {
+        "schema_version": 4,
+        "protocol": "quant_property_v2",
+        "decision": "ACT",
+        "unlocked": True,
+        "hypothesis": {"primary_components": ["tools"]},
+    }
+    (terminal_root / "discovery-hypothesis.json").write_text(
+        json.dumps(act, sort_keys=True) + "\n"
+    )
+    candidate = Path(os.environ["QEA_CANDIDATE_ROOT"])
+    (candidate / "tools").mkdir(exist_ok=True)
+    (candidate / "tools" / "public_behavior_probe.py").write_text(
+        "def probe():\n    return True\n"
+    )
+
+    # Reproduce the observed stale transition: an ACT lacking its final smoke
+    # was already labeled final before the next bounded turn.
+    middleware._phase = "final"
+    compacted = middleware.before_model(
+        _before(state, _boundary_messages(550_000))
+    ).messages
+
+    assert compacted is not None
+    terminal = compacted[-1].get_text_content()
+    assert "still lacks a passed primary-component smoke for: tools" in terminal
+    assert "all required final component smokes" not in terminal
+    audit = json.loads((terminal_root / "terminal-reserve.json").read_text())
+    assert audit["phase"] == "component_smoke"
+    assert any(
+        event["kind"] == "terminal_final_reopened"
+        and event["phase"] == "component_smoke"
+        for event in audit["events"]
+    )
 
 
 def test_recorded_quant_act_with_candidate_change_enters_final_turn(terminal_root):

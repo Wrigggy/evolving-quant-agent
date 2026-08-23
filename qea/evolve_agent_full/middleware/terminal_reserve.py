@@ -250,6 +250,7 @@ class DiscoveryTerminalReserve(Middleware):
         self._last_compact: dict[str, object] | None = None
         self._initial_candidate_sha256: str | None = None
         self._requires_terminal_abstain = False
+        self._pending_terminal_decision: dict[str, object] | None = None
         self._model_guard: dict[str, object] | None = None
         self._bound_executor: object | None = None
         self._lock = threading.RLock()
@@ -884,6 +885,17 @@ class DiscoveryTerminalReserve(Middleware):
                     "access_record_count": access["record_count"],
                     "access_bytes_returned": access["bytes_returned"],
                 }
+            elif self._phase == "final":
+                refreshed_phase = self._terminal_phase()
+                if refreshed_phase != "final":
+                    self._phase = refreshed_phase
+                    self._event(
+                        "terminal_final_reopened",
+                        phase=refreshed_phase,
+                        missing_components=list(
+                            self._missing_final_component_smokes()
+                        ),
+                    )
 
             compacted = self._compact_messages(
                 hook_input.messages,
@@ -1032,7 +1044,18 @@ class DiscoveryTerminalReserve(Middleware):
                     else ""
                 )
                 if decision == "ABSTAIN":
-                    return call_next(params)
+                    prior_state = self._decision_state()
+                    self._pending_terminal_decision = {
+                        "tool_call_id": params.tool_call_id,
+                        "prior_state": (
+                            dict(prior_state) if prior_state is not None else None
+                        ),
+                    }
+                    try:
+                        return call_next(params)
+                    except Exception:
+                        self._pending_terminal_decision = None
+                        raise
                 self._blocked_tool_calls["decide_candidate:non_abstain"] += 1
                 self._event(
                     "blocked_terminal_decision",
@@ -1087,9 +1110,24 @@ class DiscoveryTerminalReserve(Middleware):
                 return HookResult.no_changes()
             if self._phase != "decision" or hook_input.tool_name != _ALLOWED_TERMINAL_TOOL:
                 return HookResult.no_changes()
+            pending = self._pending_terminal_decision
+            self._pending_terminal_decision = None
             state = self._decision_state()
-            if state is not None:
-                self._phase = "final"
+            output = hook_input.tool_output
+            tool_failed = isinstance(output, Mapping) and (
+                bool(output.get("error")) or output.get("tool_blocked") is True
+            )
+            prior_state = pending.get("prior_state") if pending is not None else None
+            recorded_new_abstain = (
+                pending is not None
+                and pending.get("tool_call_id") == hook_input.tool_call_id
+                and not tool_failed
+                and state is not None
+                and state.get("decision") == "ABSTAIN"
+                and state != prior_state
+            )
+            if recorded_new_abstain:
+                self._phase = self._terminal_phase()
                 self._event(
                     "decision_recorded",
                     decision=state["decision"],
@@ -1097,7 +1135,13 @@ class DiscoveryTerminalReserve(Middleware):
                     state_sha256=_sha256(_canonical_bytes(state)),
                 )
             else:
-                self._event("decision_not_recorded")
+                self._event(
+                    "decision_not_recorded",
+                    tool_failed=tool_failed,
+                    retained_decision=(
+                        state.get("decision") if state is not None else None
+                    ),
+                )
             return HookResult.no_changes()
 
     def after_model(self, hook_input: AfterModelHookInput) -> HookResult:
