@@ -1,0 +1,313 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-24",
+  "status": "frozen_proposal_and_review_staged_not_run",
+  "controller_run_id": "qf-public-only-holdings-lineage-20260824-r1",
+  "mode": "live",
+  "orchestration": "existing_lineage_controller_with_staged_stops",
+  "purpose": "Run one separate public-only holdings lineage from the current Quant-H0 backbone. The first invocation may run only the proposal and must stop. A separately resumed invocation may run only the mandatory arm-blind Candidate Information-Set Review and must stop. A blind target Worker is conditional on an admitted proposal, complete Worker-visible claim inventory, singleton callable-component activation binding, and Reviewer PASS; it is not dispatched by either staged invocation frozen here.",
+  "deploy_source_freeze": {
+    "deploy_id": "qf-public-only-holdings-lineage-20260824-r1",
+    "source_revision": "FUTURE_COMMIT:qf-public-only-holdings-lineage-20260824-r1",
+    "resolution": "Deploy the future repository commit that first contains this frozen plan under the exact deploy_id, then record the resolved revision in operational evidence without editing this plan.",
+    "launch_before_resolution_allowed": false
+  },
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/qf-public-only-holdings-lineage-20260824-r1",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/qf-public-only-holdings-lineage-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0"
+  },
+  "states_root": "/data/qea-julius-storage/runs/qf-public-only-holdings-lineage-20260824-r1-controller-state",
+  "predecessor_prescreen": {
+    "experiment_id": "qf-public-only-holdings-h0-prescreen-20260824-r1",
+    "report_path": "/data/qea-julius-storage/runs/qf-public-only-holdings-h0-prescreen-20260824-r1/pilot-report.json",
+    "result": {
+      "valid_worker_execution": true,
+      "official_tests_passed": 47,
+      "official_tests_total": 51,
+      "official_reward": 0.0,
+      "completed_requests": 47,
+      "total_tokens": 2464576,
+      "provider_cost_usd": 0.06199192
+    },
+    "frozen_thresholds": {
+      "max_completed_requests": 40,
+      "max_total_tokens": 3000000,
+      "provider_cost_usd": 0.15
+    },
+    "request_threshold_audit": {
+      "status": "BREACHED",
+      "excess_completed_requests": 7,
+      "interpretation": "The completed prescreen remains a valid target-selection observation, but its request threshold breach is retained and cannot be hidden by starting this lineage. The threshold was a post-run audit threshold, not a mid-turn interrupt. No follow-on dispatch occurred under the prescreen plan."
+    },
+    "new_lineage_accounting": "The prescreen's 47 requests, 2,464,576 tokens, and $0.061991920 are predecessor setup accounting only. They are referenced but not charged again to this separate lineage, whose counters begin at zero."
+  },
+  "frozen_inputs": {
+    "current_quant_h0": {
+      "version": "quant-h0",
+      "worker_dir": "/data/qea-julius-storage/deploy/qf-public-only-holdings-lineage-20260824-r1/qea/worker_quant_h0"
+    },
+    "public_trajectory_evidence_id": "qf-public-only-holdings-public-trajectory-evidence-20260824-r1",
+    "public_trajectory_evidence": "/data/qea-julius-storage/evidence/qf-public-only-holdings-public-trajectory-evidence-20260824-r1",
+    "evidence_contract": {
+      "feedback_mode": "answer_free",
+      "candidate_history_exposed": false,
+      "optimization_diagnostics": [],
+      "required_evidence": [
+        "the verbatim public holdings task contract",
+        "the fresh Quant-H0 answer-free Worker trace, final text, process summary, and produced public artifacts",
+        "the public protection-task contract"
+      ],
+      "forbidden_evidence": [
+        "official score, reward, passed count, failed count, or official property identity",
+        "verifier output, CTRF, checker behavior, expected value, or expected-versus-observed diagnostic",
+        "optimization-diagnostic.json or any optimize-only source",
+        "any prior holdings candidate, proposal, candidate trace, candidate result, or component history"
+      ]
+    }
+  },
+  "staged_execution": [
+    {
+      "order": 1,
+      "stage": "proposal",
+      "authorized_in_this_freeze": true,
+      "required_stop_after_stage": "proposal",
+      "proceed_to_separate_review_resume_when": "ACT is legal and admitted, the candidate diff is non-empty, every decision-changing Worker-visible exposure has a declared claim with public provenance, admission smokes pass, and the controller records a singleton callable-component activation binding",
+      "stop_when": "ABSTAIN, invalid or non-admitted ACT, empty or role-mismatched mutation, missing or incomplete Worker-visible claims, non-singleton activation binding, budget threshold breach, or runtime invalidity"
+    },
+    {
+      "order": 2,
+      "stage": "information_set_review",
+      "authorized_in_this_freeze": true,
+      "required_stop_after_stage": "information_set_review",
+      "precondition": "A retained stage-1 audit satisfies every proposal proceed condition and the same fixed-ID controller state is resumed.",
+      "proceed_to_separately_authorized_target_when": "The arm-blind Reviewer returns complete coverage PASS and overall PASS for the full candidate diff and all declared claims.",
+      "stop_when": "REJECT, INCONCLUSIVE, incomplete coverage, missing candidate material, missing claim inventory, invalid Reviewer wrapper, budget threshold breach, or runtime invalidity"
+    },
+    {
+      "order": 3,
+      "stage": "target",
+      "authorized_in_this_freeze": false,
+      "conditional_run_id": "qf-public-only-holdings-target-20260824-r1",
+      "precondition": "A separately retained stage-2 Reviewer PASS and an explicit later target launch decision.",
+      "proceed_when": "The blind candidate Worker strictly exceeds the fresh 47/51 Quant-H0 selection reference, the singleton callable component activates, and the controller anchors a non-empty resolved-property footprint.",
+      "stop_when": "invalid Worker/verifier observation, no strict gain, missing activation, introduced official failure, or unbound resolved-property footprint"
+    },
+    {
+      "order": 4,
+      "stage": "repeat",
+      "authorized_in_this_freeze": false,
+      "conditional_run_id": "qf-public-only-holdings-repeat-20260824-r1",
+      "precondition": "A retained positive target result and a separately frozen repeat launch.",
+      "proceed_when": "An independent repeat reproduces strict gain, callable-component activation, and the target's anchored resolved-property footprint under resolved_property_footprint_v1."
+    },
+    {
+      "order": 5,
+      "stage": "protection",
+      "authorized_in_this_freeze": false,
+      "conditional_run_id": "qf-public-only-holdings-protection-20260824-r1",
+      "precondition": "A retained consistent repeat and a separately frozen protection launch.",
+      "proceed_when": "The answer-free protection comparison is aggregate noninferior, introduces no official failure, and reports relation applicability or scoped non-activation separately from safety."
+    }
+  ],
+  "controller_invocations": {
+    "proposal_stop": [
+      "/home/julius/qea/runtime/venvs/rootless/bin/python",
+      "/data/qea-julius-storage/deploy/qf-public-only-holdings-lineage-20260824-r1/scripts/run_qfbench_lineage_controller.py",
+      "--plan",
+      "/data/qea-julius-storage/deploy/qf-public-only-holdings-lineage-20260824-r1/data/breadth/QF_PUBLIC_ONLY_HOLDINGS_LINEAGE_R1_PLAN.json",
+      "--state-dir",
+      "/data/qea-julius-storage/runs/qf-public-only-holdings-lineage-20260824-r1-controller-state",
+      "--lineage",
+      "qf-public-only-holdings-public-trajectory-r1",
+      "--stop-after-stage",
+      "proposal",
+      "--approve-external-run"
+    ],
+    "review_stop_resume": [
+      "/home/julius/qea/runtime/venvs/rootless/bin/python",
+      "/data/qea-julius-storage/deploy/qf-public-only-holdings-lineage-20260824-r1/scripts/run_qfbench_lineage_controller.py",
+      "--plan",
+      "/data/qea-julius-storage/deploy/qf-public-only-holdings-lineage-20260824-r1/data/breadth/QF_PUBLIC_ONLY_HOLDINGS_LINEAGE_R1_PLAN.json",
+      "--state-dir",
+      "/data/qea-julius-storage/runs/qf-public-only-holdings-lineage-20260824-r1-controller-state",
+      "--lineage",
+      "qf-public-only-holdings-public-trajectory-r1",
+      "--stop-after-stage",
+      "information_set_review",
+      "--approve-external-run"
+    ],
+    "target_invocation": null,
+    "repeat_invocation": null,
+    "protection_invocation": null
+  },
+  "limits": {
+    "provider_cost_usd": 0.23,
+    "lineage_candidate_versions": 1,
+    "proposal_stage": {
+      "max_evolver_proposals": 1,
+      "max_completed_requests": 50,
+      "max_total_tokens": 5000000,
+      "provider_cost_usd": 0.18,
+      "hard_wall_time_seconds": 10800,
+      "max_reviewer_requests": 0,
+      "max_worker_sessions": 0,
+      "max_verifier_executions": 0
+    },
+    "proposal_plus_review_cumulative": {
+      "max_evolver_proposals": 1,
+      "max_reviewer_requests": 1,
+      "max_completed_requests": 51,
+      "max_total_tokens": 5040000,
+      "provider_cost_usd": 0.23,
+      "hard_wall_time_seconds": 11700,
+      "max_worker_sessions": 0,
+      "max_verifier_executions": 0
+    },
+    "conditional_target_not_authorized": {
+      "max_candidate_worker_sessions": 1,
+      "max_candidate_verifier_executions": 1,
+      "suggested_additional_completed_requests": 50,
+      "suggested_additional_total_tokens": 3000000,
+      "suggested_additional_provider_cost_usd": 0.15,
+      "suggested_hard_wall_time_seconds": 5400
+    },
+    "repeat_and_protection": "IDs are reserved, but budgets and launch authority must be frozen only after a positive target; neither stage may dispatch from this plan."
+  },
+  "limit_enforcement": {
+    "hard_wall": "Run each staged controller invocation in a dedicated systemd service with RuntimeMaxSec equal to its frozen hard wall. This is the only mid-run hard limit exposed by the existing runner.",
+    "request_token_and_cost_thresholds": "Audit after each completed stage because the existing Evolver and Reviewer calls are not safely interruptible mid-turn. A breach is retained explicitly and stops before any subsequent stage.",
+    "proposal_stop": "The first invocation must use --stop-after-stage proposal even after ACT.",
+    "review_stop": "The separately resumed invocation must use --stop-after-stage information_set_review even after PASS.",
+    "no_implicit_retry": "An invalid proposal or Reviewer observation ends the staged run. Any recovery requires a separately frozen run identity."
+  },
+  "lineages": [
+    {
+      "lineage_id": "qf-public-only-holdings-public-trajectory-r1",
+      "family": "holdings-effective-state-downstream-reconciliation",
+      "treatment": "quant-research-state-public-trajectory",
+      "parent": {
+        "version": "quant-h0",
+        "worker_dir": "/data/qea-julius-storage/deploy/qf-public-only-holdings-lineage-20260824-r1/qea/worker_quant_h0"
+      },
+      "proposal": {
+        "live_run_id": "qf-public-only-holdings-proposal-20260824-r1",
+        "candidate_version": "qf-public-only-holdings-c1",
+        "evidence": "/data/qea-julius-storage/evidence/qf-public-only-holdings-public-trajectory-evidence-20260824-r1",
+        "evolver_dir": "/data/qea-julius-storage/deploy/qf-public-only-holdings-lineage-20260824-r1/qea/evolve_agent_full",
+        "arm": "quant-state",
+        "reasoning_effort": "high"
+      },
+      "candidate_information_set_review": {
+        "enabled": true,
+        "feedback_mode": "answer_free",
+        "review_id": "qf-public-only-holdings-information-set-review-20260824-r1",
+        "backend": "openrouter",
+        "model": "deepseek/deepseek-v4-pro",
+        "token_file": "/home/julius/qea/runtime/secrets/model-token",
+        "arm_blind": true,
+        "public_sources": [
+          {
+            "ref": "public:13f-effective-filing-state",
+            "source_type": "public_contract",
+            "source_path": "benchmarks/qfbench/tasks/13f-amendment-aware-crowding/instruction.md",
+            "excerpt": "For each `(CIK, period_end)`, reconstruct the effective filing state from the relevant filing history, taking amendments into account."
+          },
+          {
+            "ref": "public:13f-effective-book",
+            "source_type": "public_contract",
+            "source_path": "benchmarks/qfbench/tasks/13f-amendment-aware-crowding/instruction.md",
+            "excerpt": "From that effective state, build the cleaned long-only holdings book for each manager-period. Use a consistent treatment of amendments, duplicate positions, canonical issuer/class labels, and non-eligible rows. The cleaning audit should count each rejected raw row once."
+          },
+          {
+            "ref": "public:13f-derived-analytics",
+            "source_type": "public_contract",
+            "source_path": "benchmarks/qfbench/tasks/13f-amendment-aware-crowding/instruction.md",
+            "excerpt": "From the resulting effective books, compute:\n- manager-level concentration metrics,\n- consecutive-period turnover using the order in `target_periods.csv`,\n- latest-period pairwise overlap across managers,\n- latest-period security crowding."
+          },
+          {
+            "ref": "public:13f-semantic-encoding-flexibility",
+            "source_type": "public_contract",
+            "source_path": "benchmarks/qfbench/tasks/13f-amendment-aware-crowding/instruction.md",
+            "excerpt": "Use the required filenames, columns, and JSON keys. The verifier is semantic rather than byte-exact: harmless differences in CSV row order, JSON key order, numeric print precision, blank vs null, non-amendment display conventions, representative issuer/class label choice, and unambiguous list/pair encodings are acceptable."
+          }
+        ],
+        "optimize_only_sources": []
+      },
+      "candidate_policy": {
+        "complete_worker_visible_claim_inventory_required": true,
+        "every_claim_requires_exact_supplied_public_provenance": true,
+        "singleton_callable_component_activation_binding_required_before_review": true,
+        "allowed_scope": "A bounded component may reconcile the public effective filing state through the cleaned holdings book into the explicitly listed downstream analytics, while preserving the public contract's representational flexibility.",
+        "forbidden_worker_visible_content": [
+          "an exact or hidden turnover formula",
+          "a verifier-derived canonical or representative issuer/class label",
+          "a mandatory pair/list serialization or container shape",
+          "an official property identity, pass/fail bit, score, reward, checker predicate, expected value, or diagnostic-derived convention"
+        ],
+        "review_coverage_rule": "The complete admitted Worker-visible diff across prompt, agent config, tools, tool descriptions, validators, skills, memory, middleware, and routing must be covered. Any undeclared decision-changing exposure prevents PASS.",
+        "trace_support_boundary": "The answer-free H0 trace and artifacts may localize uncertainty and motivate hypotheses, but cannot supply public support for a new normative Worker rule."
+      },
+      "repeat_consistency_policy": "resolved_property_footprint_v1",
+      "stages": [
+        {
+          "name": "target",
+          "task_id": "13f-amendment-aware-crowding",
+          "live_run_id": "qf-public-only-holdings-target-20260824-r1",
+          "checkpoint_prefix": "qf-public-only-holdings-target-20260824-r1",
+          "parent_arm": "quant-h0",
+          "candidate_arm": "public-holdings-c1",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2,
+          "selection_reference": {
+            "id": "qf-public-only-holdings-h0-prescreen-20260824-r1",
+            "report_path": "/data/qea-julius-storage/runs/qf-public-only-holdings-h0-prescreen-20260824-r1/pilot-report.json",
+            "reference_version": "quant-h0",
+            "task_id": "13f-amendment-aware-crowding",
+            "worker_route": "deepseek-v4-flash-main0",
+            "worker_budget": "normal",
+            "tests_passed": 47,
+            "tests_total": 51,
+            "reward": 0.0,
+            "selection_only": true,
+            "worker_visible": false
+          }
+        },
+        {
+          "name": "repeat",
+          "task_id": "13f-amendment-aware-crowding",
+          "live_run_id": "qf-public-only-holdings-repeat-20260824-r1",
+          "checkpoint_prefix": "qf-public-only-holdings-repeat-20260824-r1",
+          "parent_arm": "quant-h0",
+          "candidate_arm": "public-holdings-c1",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2,
+          "conditional_not_authorized": true
+        },
+        {
+          "name": "protection",
+          "task_id": "brinson-sector-attribution",
+          "live_run_id": "qf-public-only-holdings-protection-20260824-r1",
+          "checkpoint_prefix": "qf-public-only-holdings-protection-20260824-r1",
+          "parent_arm": "quant-h0",
+          "candidate_arm": "public-holdings-c1",
+          "worker_concurrency": 1,
+          "verifier_concurrency": 2,
+          "conditional_not_authorized": true
+        }
+      ]
+    }
+  ],
+  "answer_boundary": "The proposal receives only the constructed public-contract plus answer-free fresh-H0 trajectory evidence. The Information-Set Reviewer receives only the complete candidate diff, declared Worker-visible claims, and the four exact public holdings excerpts; it is arm-blind and receives no optimize-only source. The fresh official H0 report is controller-only target selection_reference and enters neither proposal evidence, Reviewer package, nor any Worker argv. Reviewer reasons remain Worker-hidden. Candidate target, repeat, and protection Workers remain answer-blind.",
+  "claim_boundary": {
+    "after_proposal": "A legal admitted ACT supports only a public-only proposal observation and candidate construction. It does not establish Reviewer PASS, Worker activation, official gain, or candidate quality.",
+    "after_review": "Reviewer PASS supports eligibility for a separately launched blind target Worker only. It is not promotion authority or a benchmark result.",
+    "after_conditional_target": "Strict official gain with singleton component activation and a non-empty anchored resolved-property footprint supports one fresh mechanism-associated target improvement. Repeat and protection remain required before any stability or safe-reuse claim.",
+    "not_supported": "Main-experiment readiness, stable baseline, QRS superiority, broad transfer, sealed performance, or benchmark-wide improvement."
+  }
+}
