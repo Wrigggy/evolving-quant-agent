@@ -1,5 +1,29 @@
 # QEA Repository Memory
 
+## 2026-08-24 public-only FX Quant-H0 prescreen R1 stopped without a valid result
+
+The frozen `qf-public-only-fx-h0-prescreen-20260824-r1` preflight made zero
+model requests. Its one live Quant-H0 attempt on `fx-forward-cross-rate` ended
+as `model_empty_response` with 0 turns, 0 tool calls, 0 tool errors, 0 files,
+an empty artifact list, and empty raw trace and final text. All three provider
+requests were nevertheless completed; they used 9,516 input, 32,305 output,
+and 41,821 total tokens for $0.022160676, with zero retries and zero
+unreconciled attempts or requests. The third request recorded 32,000 output
+tokens, but no content or tool call materialized in the Worker result.
+
+The trusted verifier scored the empty submission at 0/16 with reward 0. This
+score is retained as an empty-submission verifier response, not as a Quant-H0
+capability baseline or an FX target-selection observation. No `results.json`
+existed, so the public rounding audit is `N/A`. The service reported success,
+`NRestarts=0`, completed cleanup, and zero related residue.
+
+The terminal decision is `STOP_NO_RESULT`. R1 does not diagnose a root cause
+beyond the observed model-empty response and does not change main-experiment
+readiness. Any recovery must be a separately frozen R2 rather than an implicit
+retry. Compact result:
+`data/breadth/QF_PUBLIC_ONLY_FX_H0_PRESCREEN_R1_RESULT.json`; full decision:
+`docs/decisions/2026-08-24-public-only-fx-h0-prescreen-r1-result.md`.
+
 ## 2026-08-24 Candidate Information-Set Reviewer canary retained
 
 One arm-blind `deepseek/deepseek-v4-pro` Reviewer request exactly matched the

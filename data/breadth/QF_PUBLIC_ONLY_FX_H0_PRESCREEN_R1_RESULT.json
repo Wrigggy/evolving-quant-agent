@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-public-only-fx-h0-prescreen-20260824-r1",
+  "date": "2026-08-24",
+  "status": "invalid_setup_no_result_model_empty_response",
+  "research_question": "Can one fresh Quant-H0 Worker produce a valid public-only official observation on fx-forward-cross-rate before any candidate proposal or target selection?",
+  "setup": {
+    "benchmark": "QFBench",
+    "task_id": "fx-forward-cross-rate",
+    "arm": "Quant-H0",
+    "frozen_plan": "data/breadth/QF_PUBLIC_ONLY_FX_H0_PRESCREEN_PLAN.json",
+    "source_artifacts": "results/bc-mirror/qf-public-only-fx-h0-prescreen-20260824-r1",
+    "worker_sessions_planned": 1,
+    "official_verifier_executions_planned": 1,
+    "evolver_calls": 0,
+    "reviewer_calls": 0,
+    "candidate_workers": 0,
+    "sealed_evaluation_used": false
+  },
+  "preflight": {
+    "status": "preflight_complete",
+    "model_requests": 0
+  },
+  "live_attempt": {
+    "attempt_count": 1,
+    "worker_outcome": "model_empty_response",
+    "turns": 0,
+    "tool_calls": 0,
+    "tool_errors": 0,
+    "files": 0,
+    "artifacts": [],
+    "raw_trace_empty": true,
+    "final_text_empty": true,
+    "valid_worker_result": false
+  },
+  "request_accounting": {
+    "completed_requests": 3,
+    "input_tokens": 9516,
+    "output_tokens": 32305,
+    "total_tokens": 41821,
+    "provider_cost_usd": 0.022160676,
+    "rate_limited_retries": 0,
+    "unreconciled_attempts": 0,
+    "unreconciled_requests": 0,
+    "third_request": {
+      "request_state": "completed",
+      "output_tokens": 32000,
+      "worker_materialization": "model_empty_response"
+    }
+  },
+  "official_evaluation": {
+    "empty_submission": true,
+    "tests_passed": 0,
+    "tests_total": 16,
+    "reward": 0.0,
+    "verifier_exit_code": 0,
+    "valid_baseline": false,
+    "valid_target_selection_observation": false,
+    "interpretation": "The trusted verifier scored an empty submission. The measured 0/16 and reward 0 are retained, but they do not measure Quant-H0 Worker capability and cannot serve as a baseline or target-selection result."
+  },
+  "public_rounding_audit": {
+    "status": "N/A",
+    "reason": "The Worker produced no artifacts/results.json."
+  },
+  "runtime": {
+    "service_result": "success",
+    "service_restarts": 0,
+    "worker_cleaned_up": true,
+    "related_residue": 0
+  },
+  "terminal": {
+    "decision": "STOP_NO_RESULT",
+    "follow_on_dispatch": false,
+    "recovery_rule": "Any R2 recovery must be separately frozen before launch; this R1 result does not authorize an implicit retry."
+  },
+  "retained_conclusion": "R1 is a fully accounted invalid setup outcome: provider requests completed, but no Worker turn, tool action, file, or artifact materialized. The empty-artifact official score is not a Quant-H0 baseline.",
+  "claim_boundary": {
+    "supported": "One preflight with zero model requests, one invalid live attempt, exact provider accounting, empty Worker trace and artifact observations, trusted empty-submission verifier response, terminal stop, service completion, and cleanup.",
+    "not_supported": "Quant-H0 capability, a valid QFBench baseline, FX target selection, public-rounding localization, candidate quality, harness improvement, benchmark gain, main-experiment readiness, or a causal diagnosis beyond the observed model-empty response.",
+    "next_experiment": "A recovery can only be evaluated under a separately frozen R2 plan."
+  }
+}

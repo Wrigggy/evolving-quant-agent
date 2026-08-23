@@ -200,3 +200,19 @@ five claim verdicts, coverage and overall verdict, the zero-call setup failure,
 authority limits, cleanup, and main-readiness boundary. Full interpretation is
 in
 \path{docs/decisions/2026-08-24-candidate-information-set-reviewer-canary-result.md}.
+
+\subsection{Public-only FX Quant-H0 prescreen R1 record}
+
+The frozen setup is retained at
+\path{data/breadth/QF_PUBLIC_ONLY_FX_H0_PRESCREEN_PLAN.json}. The complete local
+mirror at
+\path{results/bc-mirror/qf-public-only-fx-h0-prescreen-20260824-r1/} contains
+the zero-model preflight, one Worker execution record, empty raw trace and final
+text, request accounting, trusted empty-submission evaluation, service health,
+and cleanup evidence. The compact result at
+\path{data/breadth/QF_PUBLIC_ONLY_FX_H0_PRESCREEN_R1_RESULT.json} records the
+invalid \texttt{model\_empty\_response}, exact request cost, non-eligibility of
+the 0/16 score as baseline or target-selection evidence, non-applicable public
+rounding audit, \texttt{STOP\_NO\_RESULT}, and separately frozen R2 boundary.
+Full interpretation is in
+\path{docs/decisions/2026-08-24-public-only-fx-h0-prescreen-r1-result.md}.
