@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "controller_run_id": "qpr-real-artifact-controller-replay-20260823-r1",
+  "mode": "replay",
+  "runtime": {},
+  "limits": {
+    "provider_cost_usd": 1.0
+  },
+  "lineages": [
+    {
+      "lineage_id": "search-v2-localvol-qpr",
+      "parent": {
+        "version": "quant-h0",
+        "worker_dir": "qea/worker_quant_h0"
+      },
+      "candidate": {
+        "version": "localvol-qrs-v2",
+        "worker_dir": "results/bc-mirror/qstate-v2-localvol-quant-20260821-r1/evolutions/iteration-0001/candidate"
+      },
+      "quantitative_protection_review": true,
+      "quantitative_review": {
+        "review_id": "qpr1-reviewer-20260823-r1",
+        "case_id": "search-v2-38-to-38-property-swap",
+        "result_path": "results/qpr1-reviewer-20260823-r1/RESULT.json"
+      },
+      "stages": [
+        {
+          "name": "target",
+          "task_id": "dupire-local-vol",
+          "replay_report": "results/bc-mirror/qstate-v2-target-localvol-20260822-r1/pilot-report.json",
+          "parent_arm": "h0",
+          "candidate_arm": "quant-state-v2",
+          "relation_observed": true
+        },
+        {
+          "name": "repeat",
+          "task_id": "dupire-local-vol",
+          "replay_report": "results/bc-mirror/qstate-v2-repeat-localvol-20260822-r1/pilot-report.json",
+          "parent_arm": "h0",
+          "candidate_arm": "quant-state-v2",
+          "relation_observed": true
+        },
+        {
+          "name": "protection",
+          "task_id": "localvol-barrier",
+          "replay_report": "results/bc-mirror/qstate-v2-matched-localvol-barrier-20260822-r1/pilot-report.json",
+          "parent_arm": "h0",
+          "candidate_arm": "quant-state-v2",
+          "relation_observed": true,
+          "quantitative_triage": {
+            "verdict": "INCONCLUSIVE",
+            "outcome_severity": "UNRESOLVED",
+            "next_evidence": "PAIRED_PROTECTION_REPEAT"
+          }
+        },
+        {
+          "name": "protection_repeat",
+          "task_id": "localvol-barrier",
+          "replay_report": "results/bc-mirror/qpr1-searchv2-localvol-barrier-protection-repeat-20260823-r1/pilot-report.json",
+          "parent_arm": "parent",
+          "candidate_arm": "candidate",
+          "relation_observed": true,
+          "quantitative_triage": {
+            "verdict": "INCONCLUSIVE",
+            "outcome_severity": "UNRESOLVED",
+            "decision_label": "STILL_INCONCLUSIVE"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -64,6 +64,8 @@ def build_child_argv(
         or f"{plan['controller_run_id']}-{lineage['lineage_id']}-{stage['name']}"
     )
     checkpoint = str(stage.get("checkpoint_prefix") or run_id)
+    parent_arm = str(stage.get("parent_arm", "parent"))
+    candidate_arm = str(stage.get("candidate_arm", "candidate"))
     argv = [
         str(runtime["python"]),
         str(Path(str(runtime["source_root"])) / "scripts/run_qfbench_component_pilot.py"),
@@ -81,20 +83,23 @@ def build_child_argv(
         str(runtime["results_dir"]),
         "--seed-worker",
         str(parent["worker_dir"]),
-        "--arm",
-        f"parent={parent['worker_dir']}",
-        "--arm",
-        f"candidate={candidate['worker_dir']}",
-        "--task-id",
-        str(stage["task_id"]),
-        "--checkpoint-prefix",
-        checkpoint,
-        "--worker-concurrency",
-        str(stage.get("worker_concurrency", 1)),
-        "--verifier-concurrency",
-        str(stage.get("verifier_concurrency", 2)),
-        "--approve-external-run",
     ]
+    if not isinstance(stage.get("parent_comparator"), Mapping):
+        argv.extend(("--arm", f"{parent_arm}={parent['worker_dir']}"))
+    argv.extend(("--arm", f"{candidate_arm}={candidate['worker_dir']}"))
+    argv.extend(
+        [
+            "--task-id",
+            str(stage["task_id"]),
+            "--checkpoint-prefix",
+            checkpoint,
+            "--worker-concurrency",
+            str(stage.get("worker_concurrency", 1)),
+            "--verifier-concurrency",
+            str(stage.get("verifier_concurrency", 2)),
+            "--approve-external-run",
+        ]
+    )
     if stage.get("activation_token"):
         argv.extend(("--activation-token", str(stage["activation_token"])))
     return tuple(argv)
@@ -188,6 +193,106 @@ def _report_path(
     return Path(str(plan["runtime"]["results_dir"])) / run_id / "pilot-report.json"
 
 
+def _parent_comparator(
+    stage: Mapping[str, object],
+    state: Mapping[str, object],
+) -> tuple[str, Path, dict[str, object]] | None:
+    """Load one explicitly matched reusable parent observation."""
+
+    spec = stage.get("parent_comparator")
+    if spec is None:
+        return None
+    if not isinstance(spec, Mapping):
+        raise LineageError("parent_comparator must be a JSON object")
+    comparator_id = spec.get("id")
+    report_path = spec.get("report_path")
+    if not isinstance(comparator_id, str) or not comparator_id:
+        raise LineageError("parent_comparator has no id")
+    if not isinstance(report_path, str) or not report_path:
+        raise LineageError("parent_comparator has no report_path")
+    expected = {
+        "parent_version": state["current_parent"]["version"],
+        "task_id": stage["task_id"],
+        "worker_route": state["worker_route"],
+        "worker_budget": state["worker_budget"],
+    }
+    for field, value in expected.items():
+        if spec.get(field) != value:
+            raise LineageError(
+                f"parent_comparator {comparator_id!r} {field} does not match "
+                f"the active lineage"
+            )
+    path = Path(report_path)
+    if not path.is_file():
+        raise LineageError(f"parent comparator is missing: {path}")
+    report = _json(path)
+    if report.get("status") != "complete":
+        raise LineageError("parent comparator report is not complete")
+    return comparator_id, path, report
+
+
+def compose_reused_parent_report(
+    *,
+    parent_comparator: tuple[str, Path, Mapping[str, object]],
+    candidate_report: Mapping[str, object],
+    parent_arm: str,
+    candidate_arm: str,
+    task_id: str,
+) -> dict[str, object]:
+    """Compose a normal comparison while charging only the new candidate arm."""
+
+    comparator_id, parent_path, parent_report = parent_comparator
+    if candidate_report.get("status") != "complete":
+        raise LineageError("candidate-only pilot report is not complete")
+    if parent_arm == candidate_arm:
+        raise LineageError("parent and candidate arm labels must differ")
+
+    def arm_value(
+        report: Mapping[str, object], section: str, arm: str
+    ) -> object:
+        values = report.get(section)
+        if not isinstance(values, Mapping) or arm not in values:
+            raise LineageError(f"pilot report has no {arm!r} {section}")
+        return values[arm]
+
+    # Validate that both reports actually carry the task before composing them.
+    _tests_failed(parent_report, parent_arm, task_id)
+    _tests_failed(candidate_report, candidate_arm, task_id)
+    cost = candidate_report.get("cost")
+    if not isinstance(cost, Mapping):
+        raise LineageError("candidate-only pilot report has no cost summary")
+    run_id = candidate_report.get("run_id")
+    if not isinstance(run_id, str) or not run_id:
+        raise LineageError("candidate-only pilot report has no run_id")
+
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "status": "complete",
+        "task_ids": [task_id],
+        "summaries": {
+            parent_arm: arm_value(parent_report, "summaries", parent_arm),
+            candidate_arm: arm_value(
+                candidate_report, "summaries", candidate_arm
+            ),
+        },
+        "activations": {
+            parent_arm: arm_value(parent_report, "activations", parent_arm),
+            candidate_arm: arm_value(
+                candidate_report, "activations", candidate_arm
+            ),
+        },
+        "cost": dict(cost),
+        "parent_comparator_reuse": {
+            "id": comparator_id,
+            "report_path": str(parent_path),
+            "parent_run_id": parent_report.get("run_id"),
+            "candidate_run_id": run_id,
+            "cost_accounting": "candidate_only",
+        },
+    }
+
+
 def _quantitative_triage(stage: Mapping[str, object]) -> dict[str, object]:
     """Return the explicitly supplied deterministic protection result."""
 
@@ -230,6 +335,23 @@ def _quantitative_review(
     wrapped = payload.get("review")
     if isinstance(wrapped, Mapping):
         payload = dict(wrapped)
+    reviews = payload.get("reviews")
+    if not isinstance(reviews, list):
+        raise LineageError("quantitative review result has no reviews list")
+    matching_reviews = [
+        value
+        for value in reviews
+        if isinstance(value, Mapping) and value.get("case_id") == case_id
+    ]
+    if len(matching_reviews) != 1:
+        raise LineageError(
+            "quantitative review result must contain exactly one review for "
+            f"case_id {case_id!r}; found {len(matching_reviews)}"
+        )
+    payload = {
+        **payload,
+        "reviews": [dict(matching_reviews[0])],
+    }
     return review_id, case_id, path, payload, accounting
 
 
@@ -343,6 +465,33 @@ def property_set_safe(
     )
     candidate_failed = failed_properties(
         report_path, report, arm=candidate_arm, task_id=task_id
+    )
+    return candidate_failed.issubset(parent_failed)
+
+
+def property_set_safe_from_reports(
+    *,
+    parent_report_path: Path,
+    parent_report: Mapping[str, object],
+    parent_arm: str,
+    candidate_report_path: Path,
+    candidate_report: Mapping[str, object],
+    candidate_arm: str,
+    task_id: str,
+) -> bool:
+    """Compare failed properties when parent and candidate ran separately."""
+
+    parent_failed = failed_properties(
+        parent_report_path,
+        parent_report,
+        arm=parent_arm,
+        task_id=task_id,
+    )
+    candidate_failed = failed_properties(
+        candidate_report_path,
+        candidate_report,
+        arm=candidate_arm,
+        task_id=task_id,
     )
     return candidate_failed.issubset(parent_failed)
 
@@ -474,6 +623,7 @@ def run_controller(
 
             stage_name = str(state["phase"]).lower()
             stage = _stage(lineage, stage_name)
+            parent_comparator = _parent_comparator(stage, state)
             report_path = _report_path(plan, lineage, stage)
             if not report_path.is_file():
                 if plan.get("mode") == "replay":
@@ -489,9 +639,18 @@ def run_controller(
                     approve_external_run=approve_external_run,
                 )
                 _run_child(child_runner, argv)
-            report = _json(report_path)
+            child_report = _json(report_path)
             parent_arm = str(stage.get("parent_arm", "parent"))
             candidate_arm = str(stage.get("candidate_arm", "candidate"))
+            report = child_report
+            if parent_comparator is not None:
+                report = compose_reused_parent_report(
+                    parent_comparator=parent_comparator,
+                    candidate_report=child_report,
+                    parent_arm=parent_arm,
+                    candidate_arm=candidate_arm,
+                    task_id=str(stage["task_id"]),
+                )
             property_safe = None
             quantitative_triage = None
             quantitative_review = (
@@ -502,13 +661,25 @@ def run_controller(
             ):
                 quantitative_triage = _quantitative_triage(stage)
             elif stage_name == "protection":
-                property_safe = property_set_safe(
-                    report_path,
-                    report,
-                    parent_arm=parent_arm,
-                    candidate_arm=candidate_arm,
-                    task_id=str(stage["task_id"]),
-                )
+                if parent_comparator is None:
+                    property_safe = property_set_safe(
+                        report_path,
+                        report,
+                        parent_arm=parent_arm,
+                        candidate_arm=candidate_arm,
+                        task_id=str(stage["task_id"]),
+                    )
+                else:
+                    _, parent_report_path, parent_report = parent_comparator
+                    property_safe = property_set_safe_from_reports(
+                        parent_report_path=parent_report_path,
+                        parent_report=parent_report,
+                        parent_arm=parent_arm,
+                        candidate_report_path=report_path,
+                        candidate_report=child_report,
+                        candidate_arm=candidate_arm,
+                        task_id=str(stage["task_id"]),
+                    )
             state = import_pilot_report(
                 state,
                 stage=stage_name,

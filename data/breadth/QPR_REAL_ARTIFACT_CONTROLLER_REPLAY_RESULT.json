@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qpr-real-artifact-controller-replay-20260823-r1",
+  "date": "2026-08-23",
+  "status": "pass_after_observed_batch_selection_fix",
+  "question": "Can the thin controller reproduce the retained Search-v2 quantitative protection path from real artifacts, pause after the first protection observation, and resume without another model or Worker call?",
+  "plan": "data/breadth/QPR_REAL_ARTIFACT_CONTROLLER_REPLAY_PLAN.json",
+  "execution": {
+    "mode": "replay",
+    "successful_controller_invocations": 2,
+    "failed_pre_fix_resume_invocations": 1,
+    "model_requests_during_replay": 0,
+    "worker_sessions_during_replay": 0,
+    "official_verifier_executions_during_replay": 0,
+    "external_child_dispatches": 0
+  },
+  "first_invocation": {
+    "stop_after_stage": "protection",
+    "phase": "PROTECTION_REVIEW",
+    "decision": null,
+    "current_parent_version": "quant-h0",
+    "accounted_run_ids": [
+      "qstate-v2-target-localvol-20260822-r1",
+      "qstate-v2-repeat-localvol-20260822-r1",
+      "qstate-v2-matched-localvol-barrier-20260822-r1"
+    ],
+    "accounted_review_ids": [],
+    "cost": {
+      "completed_requests": 201,
+      "total_tokens": 11654192,
+      "provider_cost_usd": "0.400868176"
+    }
+  },
+  "resume_invocation": {
+    "phase": "HOLD_FOR_REFINE",
+    "decision": "HOLD_FOR_REFINE",
+    "hold_reason": "quantitative_protection_still_inconclusive",
+    "current_parent_version": "quant-h0",
+    "current_parent_unchanged": true,
+    "candidate_version": "localvol-qrs-v2",
+    "candidate_retained": true,
+    "candidate_archived": false,
+    "candidate_promoted": false,
+    "accounted_run_ids": [
+      "qstate-v2-target-localvol-20260822-r1",
+      "qstate-v2-repeat-localvol-20260822-r1",
+      "qstate-v2-matched-localvol-barrier-20260822-r1",
+      "qpr1-searchv2-localvol-barrier-protection-repeat-20260823-r1"
+    ],
+    "accounted_review_ids": [
+      "qpr1-reviewer-20260823-r1"
+    ],
+    "cost": {
+      "completed_requests": 268,
+      "total_tokens": 16153179,
+      "provider_cost_usd": "0.575478412"
+    }
+  },
+  "idempotent_accounting_checks": {
+    "all_run_ids_unique": true,
+    "review_id_count": 1,
+    "first_three_child_costs_not_readded_on_resume": true,
+    "final_cost_equals_four_retained_child_reports_plus_one_retained_reviewer": true
+  },
+  "observed_integration_issue": {
+    "trigger": "The retained QPR-1 RESULT contains four Reviewer cases in one response, while the controller fixture contained one case.",
+    "failure_before_fix": "The controller passed the complete batch to a validator expecting the single case selected by the plan.",
+    "minimal_fix": "Select exactly one review matching quantitative_review.case_id before validation; zero or multiple matches are rejected.",
+    "scope": "Controller result import only; no Reviewer artifact, benchmark result, or promotion rule changed."
+  },
+  "source_artifacts": {
+    "target": "results/bc-mirror/qstate-v2-target-localvol-20260822-r1/pilot-report.json",
+    "repeat": "results/bc-mirror/qstate-v2-repeat-localvol-20260822-r1/pilot-report.json",
+    "first_protection": "results/bc-mirror/qstate-v2-matched-localvol-barrier-20260822-r1/pilot-report.json",
+    "reviewer": "results/qpr1-reviewer-20260823-r1/RESULT.json",
+    "protection_repeat": "results/bc-mirror/qpr1-searchv2-localvol-barrier-protection-repeat-20260823-r1/pilot-report.json"
+  },
+  "interpretation": {
+    "observed": "The real retained lineage can pause at PROTECTION_REVIEW and resume to HOLD_FOR_REFINE with the incumbent unchanged and one-time accounting.",
+    "not_established": "This replay makes no new model, Worker, official-score, stability, promotion, or benchmark-improvement claim."
+  }
+}

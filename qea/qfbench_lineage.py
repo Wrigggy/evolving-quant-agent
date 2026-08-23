@@ -397,6 +397,11 @@ def import_pilot_report(
         "candidate": candidate,
         "relation_observed": relation_observed,
     }
+    comparator_reuse = report.get("parent_comparator_reuse")
+    if isinstance(comparator_reuse, Mapping):
+        observation["parent_comparator_reuse"] = deepcopy(
+            dict(comparator_reuse)
+        )
     result["observations"][stage] = observation
 
     if stage in {"target", "repeat"}:

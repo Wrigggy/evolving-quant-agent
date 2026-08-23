@@ -1,10 +1,13 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts.run_qfbench_lineage_controller import (
     build_child_argv,
     build_proposal_argv,
     property_set_safe,
+    property_set_safe_from_reports,
     run_controller,
 )
 
@@ -45,6 +48,47 @@ def _report(root: Path, run_id: str, task: str, parent, candidate, failures):
     return path, report
 
 
+def _single_arm_report(
+    root: Path,
+    run_id: str,
+    task: str,
+    arm: str,
+    score,
+    failures=(),
+    *,
+    cost="0.004",
+):
+    attempt_id = f"{run_id}-{arm}"
+    ctrf = root / "attempts" / attempt_id / "verifier/ctrf.json"
+    ctrf.parent.mkdir(parents=True, exist_ok=True)
+    ctrf.write_text(json.dumps({"results": {"tests": [
+        {"name": name, "status": "failed"} for name in failures
+    ]}}))
+    report = {
+        "status": "complete",
+        "run_id": run_id,
+        "summaries": {arm: {"scores": [{
+            "task_id": task,
+            "reward": score[2],
+            "tests_passed": score[0],
+            "tests_failed": score[1] - score[0],
+            "verifier_exit_code": 0,
+        }]}},
+        "activations": {arm: {"attempts": [{
+            "task_id": task,
+            "attempt_id": attempt_id,
+        }]}},
+        "cost": {
+            "provider_cost_usd": cost,
+            "completed_request_count": 1,
+            "total_tokens": 25,
+        },
+    }
+    path = root / "pilot-report.json"
+    path.write_text(json.dumps(report))
+    return path, report
+
+
 def test_property_set_safety_detects_failure_swap(tmp_path):
     path, report = _report(
         tmp_path,
@@ -63,6 +107,34 @@ def test_property_set_safety_detects_failure_swap(tmp_path):
         task_id="task-p",
     )
 
+
+def test_reused_parent_property_safety_reads_each_report(tmp_path):
+    parent_path, parent_report = _single_arm_report(
+        tmp_path / "parent",
+        "parent-r1",
+        "task-p",
+        "h0",
+        (38, 39, 0.96),
+        failures=("barrier",),
+    )
+    candidate_path, candidate_report = _single_arm_report(
+        tmp_path / "candidate",
+        "candidate-r1",
+        "task-p",
+        "candidate",
+        (38, 39, 0.96),
+        failures=("vanilla",),
+    )
+
+    assert not property_set_safe_from_reports(
+        parent_report_path=parent_path,
+        parent_report=parent_report,
+        parent_arm="h0",
+        candidate_report_path=candidate_path,
+        candidate_report=candidate_report,
+        candidate_arm="candidate",
+        task_id="task-p",
+    )
 
 def test_replay_runs_to_frozen_without_child_dispatch(tmp_path):
     reports = tmp_path / "reports"
@@ -132,6 +204,220 @@ def test_live_child_argv_uses_existing_component_runner():
     assert "parent=/h0" in argv
     assert "candidate=/c1" in argv
     assert argv[-1] == "--approve-external-run"
+
+
+def test_live_child_argv_runs_only_candidate_when_parent_is_reused():
+    plan = {
+        "controller_run_id": "main0",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest.json",
+            "rootless_config": "/config.json",
+            "image_set_manifest": "/images.json",
+            "results_dir": "/results",
+        },
+    }
+    lineage = {
+        "lineage_id": "a",
+        "parent": {"worker_dir": "/h0"},
+        "candidate": {"worker_dir": "/c1"},
+    }
+    stage = {
+        "name": "target",
+        "task_id": "task-t",
+        "parent_arm": "h0",
+        "candidate_arm": "candidate",
+        "parent_comparator": {"id": "h0-task-t-r1"},
+    }
+
+    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+
+    arm_values = [
+        argv[index + 1] for index, value in enumerate(argv) if value == "--arm"
+    ]
+    assert arm_values == ["candidate=/c1"]
+    assert argv[-1] == "--approve-external-run"
+
+
+def test_replay_reuses_parent_and_accounts_only_candidate_calls(tmp_path):
+    parent_target_path, _ = _single_arm_report(
+        tmp_path / "parent-target",
+        "parent-target-r1",
+        "task-t",
+        "h0",
+        (1, 2, 0),
+        cost="0.02",
+    )
+    parent_protect_path, _ = _single_arm_report(
+        tmp_path / "parent-protect",
+        "parent-protect-r1",
+        "task-p",
+        "h0",
+        (2, 2, 1),
+        cost="0.02",
+    )
+    candidate_target_path, _ = _single_arm_report(
+        tmp_path / "candidate-target",
+        "candidate-target-r1",
+        "task-t",
+        "candidate",
+        (2, 2, 1),
+    )
+    candidate_repeat_path, _ = _single_arm_report(
+        tmp_path / "candidate-repeat",
+        "candidate-target-r2",
+        "task-t",
+        "candidate",
+        (2, 2, 1),
+    )
+    candidate_protect_path, _ = _single_arm_report(
+        tmp_path / "candidate-protect",
+        "candidate-protect-r1",
+        "task-p",
+        "candidate",
+        (2, 2, 1),
+    )
+
+    def comparator(comparator_id, report_path, task_id):
+        return {
+            "id": comparator_id,
+            "report_path": str(report_path),
+            "parent_version": "h0",
+            "task_id": task_id,
+            "worker_route": "route-a",
+            "worker_budget": "normal",
+        }
+
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "reuse-r1",
+        "mode": "replay",
+        "runtime": {"worker_route": "route-a"},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [{
+            "lineage_id": "reuse",
+            "parent": {"version": "h0", "worker_dir": "/h0"},
+            "candidate": {"version": "c1", "worker_dir": "/c1"},
+            "stages": [
+                {
+                    "name": "target",
+                    "task_id": "task-t",
+                    "replay_report": str(candidate_target_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                    "parent_comparator": comparator(
+                        "h0-task-t-r1", parent_target_path, "task-t"
+                    ),
+                },
+                {
+                    "name": "repeat",
+                    "task_id": "task-t",
+                    "replay_report": str(candidate_repeat_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                    "parent_comparator": comparator(
+                        "h0-task-t-r1", parent_target_path, "task-t"
+                    ),
+                },
+                {
+                    "name": "protection",
+                    "task_id": "task-p",
+                    "replay_report": str(candidate_protect_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                    "parent_comparator": comparator(
+                        "h0-task-p-r1", parent_protect_path, "task-p"
+                    ),
+                },
+            ],
+        }],
+    }
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    def fail_if_called(_argv):
+        raise AssertionError("replay must not dispatch a child")
+
+    result = run_controller(
+        plan_path, tmp_path / "state", runner=fail_if_called
+    )
+    again = run_controller(
+        plan_path, tmp_path / "state", runner=fail_if_called
+    )
+    state = result["lineages"]["reuse"]
+
+    assert state["phase"] == "FROZEN"
+    assert state["decision"] == "PROMOTE"
+    assert state["cost"] == {
+        "provider_cost_usd": "0.012",
+        "completed_requests": 3,
+        "total_tokens": 75,
+    }
+    assert state["accounted_run_ids"] == [
+        "candidate-target-r1",
+        "candidate-target-r2",
+        "candidate-protect-r1",
+    ]
+    assert state["observations"]["target"]["parent_comparator_reuse"][
+        "id"
+    ] == "h0-task-t-r1"
+    assert state["observations"]["protection"][
+        "parent_comparator_reuse"
+    ]["cost_accounting"] == "candidate_only"
+    assert again == result
+
+
+def test_parent_comparator_version_must_match_active_parent(tmp_path):
+    parent_path, _ = _single_arm_report(
+        tmp_path / "parent", "parent-r1", "task-t", "h0", (1, 2, 0)
+    )
+    candidate_path, _ = _single_arm_report(
+        tmp_path / "candidate",
+        "candidate-r1",
+        "task-t",
+        "candidate",
+        (2, 2, 1),
+    )
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "reuse-r1",
+        "mode": "replay",
+        "runtime": {"worker_route": "route-a"},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [{
+            "lineage_id": "mismatch",
+            "parent": {"version": "promoted-parent", "worker_dir": "/parent"},
+            "candidate": {"version": "c2", "worker_dir": "/c2"},
+            "stages": [
+                {
+                    "name": "target",
+                    "task_id": "task-t",
+                    "replay_report": str(candidate_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                    "parent_comparator": {
+                        "id": "stale-h0-task-t",
+                        "report_path": str(parent_path),
+                        "parent_version": "h0",
+                        "task_id": "task-t",
+                        "worker_route": "route-a",
+                        "worker_budget": "normal",
+                    },
+                },
+                {"name": "repeat", "task_id": "task-t"},
+                {"name": "protection", "task_id": "task-p"},
+            ],
+        }],
+    }
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    with pytest.raises(
+        ValueError, match="parent_version does not match the active lineage"
+    ):
+        run_controller(plan_path, tmp_path / "state")
 
 
 def _proposal_report(path: Path, *, decision: str, admitted):
@@ -342,14 +628,24 @@ def test_qpr_replay_resumes_review_and_existing_protection_repeat(tmp_path):
         },
         "review": {
             "schema_version": 1,
-            "reviews": [{
-                "case_id": "search-v2-protection",
-                "outcome_severity": "UNRESOLVED",
-                "causal_attribution": "UNRESOLVED",
-                "quantitative_diagnosis": "NUMERIC_TOLERANCE_ONLY",
-                "next_evidence": "PAIRED_PROTECTION_REPEAT",
-                "evidence_refs": ["search-v2:protect-r1"],
-            }],
+            "reviews": [
+                {
+                    "case_id": "same-harness-control",
+                    "outcome_severity": "WITHIN_PROVISIONAL_VARIABILITY",
+                    "causal_attribution": "WORKER_TRAJECTORY",
+                    "quantitative_diagnosis": "NUMERIC_TOLERANCE_ONLY",
+                    "next_evidence": "NO_EXTRA_RUN",
+                    "evidence_refs": ["control:h0-r1", "control:h0-r2"],
+                },
+                {
+                    "case_id": "search-v2-protection",
+                    "outcome_severity": "UNRESOLVED",
+                    "causal_attribution": "UNRESOLVED",
+                    "quantitative_diagnosis": "NUMERIC_TOLERANCE_ONLY",
+                    "next_evidence": "PAIRED_PROTECTION_REPEAT",
+                    "evidence_refs": ["search-v2:protect-r1"],
+                },
+            ],
         },
     }))
     plan = {
