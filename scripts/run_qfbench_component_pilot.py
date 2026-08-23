@@ -146,6 +146,58 @@ def _activation_payload(run_dir: Path, checkpoint: str, token: str | None) -> di
     }
 
 
+def _worker_execution_payload(run_dir: Path, checkpoint: str) -> dict[str, object]:
+    """Classify the observed empty-before-start Worker failure for selection."""
+
+    attempts: list[dict[str, object]] = []
+    for attempt_path in sorted(run_dir.glob("attempts/*/attempt.json")):
+        attempt = json.loads(attempt_path.read_text())
+        if attempt.get("checkpoint") != checkpoint:
+            continue
+        execution_path = attempt_path.with_name("worker-execution.json")
+        if not execution_path.is_file():
+            continue
+        execution = json.loads(execution_path.read_text())
+        summary = execution.get("summary")
+        summary = summary if isinstance(summary, Mapping) else {}
+        artifacts = execution.get("artifacts")
+        artifacts = artifacts if isinstance(artifacts, list) else []
+        invalid = (
+            summary.get("outcome") == "model_empty_response"
+            and summary.get("turns") == 0
+            and summary.get("files") == 0
+            and not artifacts
+        )
+        item = {
+            "attempt_id": attempt.get("attempt_id"),
+            "task_id": attempt.get("task_id"),
+            "outcome": summary.get("outcome"),
+            "turns": summary.get("turns"),
+            "files": summary.get("files"),
+            "artifact_count": len(artifacts),
+            "valid_for_selection": not invalid,
+        }
+        if invalid:
+            item["invalid_reason"] = "model_empty_response_before_worker_progress"
+        attempts.append(item)
+    return {
+        "checkpoint": checkpoint,
+        "valid_for_selection": all(
+            bool(item["valid_for_selection"]) for item in attempts
+        ),
+        "attempts": attempts,
+    }
+
+
+def _report_status(worker_executions: Mapping[str, object]) -> str:
+    if any(
+        isinstance(value, Mapping) and value.get("valid_for_selection") is False
+        for value in worker_executions.values()
+    ):
+        return "invalid_worker_execution"
+    return "complete"
+
+
 def _cost_payload(
     run_dir: Path,
     *,
@@ -527,6 +579,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     summaries: dict[str, object] = {}
     activations: dict[str, object] = {}
+    worker_executions: dict[str, object] = {}
     validated_a6_identity: dict[str, object] | None = None
     try:
         if a6_identity is not None:
@@ -593,12 +646,16 @@ def main(argv: list[str] | None = None) -> int:
             activations[label] = _activation_payload(
                 run_dir, checkpoint, args.activation_token
             )
+            worker_executions[label] = _worker_execution_payload(
+                run_dir, checkpoint
+            )
             _atomic_json(run_dir / "pilot-progress.json", {
                 "schema_version": 1,
                 "run_id": args.run_id,
                 "completed_arms": list(summaries),
                 "summaries": summaries,
                 "activations": activations,
+                "worker_executions": worker_executions,
                 "status": "running",
             })
     finally:
@@ -607,10 +664,11 @@ def main(argv: list[str] | None = None) -> int:
     report = {
         "schema_version": 1,
         "run_id": args.run_id,
-        "status": "complete",
+        "status": _report_status(worker_executions),
         "task_ids": list(task_ids),
         "summaries": summaries,
         "activations": activations,
+        "worker_executions": worker_executions,
         "cost": _cost_payload(
             run_dir,
             checkpoints=tuple(

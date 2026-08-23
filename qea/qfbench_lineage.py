@@ -1016,6 +1016,15 @@ def import_pilot_report(
 ) -> dict[str, object]:
     """Apply one completed target, repeat, or protection child report."""
 
+    if report.get("status") == "invalid_worker_execution":
+        return _import_invalid_worker_observation(
+            state,
+            stage=stage,
+            report=report,
+            report_path=report_path,
+            parent_arm=parent_arm,
+            candidate_arm=candidate_arm,
+        )
     if report.get("status") != "complete":
         raise LineageError("pilot report is not complete")
     run_id = report.get("run_id")
@@ -1063,6 +1072,85 @@ def import_pilot_report(
         property_set_safe=property_set_safe,
         quantitative_protection_triage=quantitative_protection_triage,
     )
+
+
+def _import_invalid_worker_observation(
+    state: Mapping[str, object],
+    *,
+    stage: str,
+    report: Mapping[str, object],
+    report_path: str,
+    parent_arm: str,
+    candidate_arm: str,
+) -> dict[str, object]:
+    """Retain an infrastructure-invalid Worker run without score selection."""
+
+    if stage not in _STAGE_PHASE:
+        raise LineageError(f"unknown lineage stage: {stage}")
+    run_id = report.get("run_id")
+    if not isinstance(run_id, str) or not run_id:
+        raise LineageError("pilot report has no run_id")
+    cost = report.get("cost")
+    if not isinstance(cost, Mapping):
+        raise LineageError("invalid Worker report has no cost summary")
+    result = deepcopy(dict(state))
+    if run_id in result.get("accounted_run_ids", []):
+        existing = result.get("observations", {}).get(stage)
+        if isinstance(existing, Mapping) and existing.get("run_id") == run_id:
+            return result
+        raise LineageError(
+            f"comparison run_id {run_id!r} is already used by another stage"
+        )
+    if result.get("phase") != _STAGE_PHASE[stage]:
+        raise LineageError(
+            f"cannot import {stage} while lineage phase is {result.get('phase')}"
+        )
+
+    executions = report.get("worker_executions")
+    invalid_attempts: list[dict[str, object]] = []
+    if isinstance(executions, Mapping):
+        for arm in (parent_arm, candidate_arm):
+            arm_execution = executions.get(arm)
+            if not isinstance(arm_execution, Mapping):
+                continue
+            attempts = arm_execution.get("attempts")
+            if not isinstance(attempts, list):
+                continue
+            invalid_attempts.extend(
+                {"arm": arm, **deepcopy(dict(attempt))}
+                for attempt in attempts
+                if isinstance(attempt, Mapping)
+                and attempt.get("valid_for_selection") is False
+            )
+    if not invalid_attempts:
+        raise LineageError(
+            "invalid Worker report has no invalid compared-arm execution"
+        )
+
+    task_id = (
+        result["protection_task_id"]
+        if stage in {"protection", "protection_repeat"}
+        else result["target_task_id"]
+    )
+    _add_cost(result, {"run_id": run_id, "cost": dict(cost)})
+    result["observations"][stage] = {
+        "run_id": run_id,
+        "report_path": report_path,
+        "benchmark": "qfbench",
+        "task_id": task_id,
+        "observation_kind": "infrastructure_invalid",
+        "selection_valid": False,
+        "invalid_worker_executions": invalid_attempts,
+    }
+    result["decision"] = "INVALID_OBSERVATION"
+    result["phase"] = "HOLD_FOR_REFINE"
+    result["status"] = "infrastructure_invalid"
+    result["hold"] = {
+        "candidate_version": result["candidate"]["version"],
+        "kind": "infrastructure_invalid_observation",
+        "reason": "model_empty_response_before_worker_progress",
+    }
+    return result
 
 
 def _comparison_score(

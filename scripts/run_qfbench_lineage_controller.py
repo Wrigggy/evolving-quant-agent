@@ -641,7 +641,7 @@ def _parent_comparator(
     if not path.is_file():
         raise LineageError(f"parent comparator is missing: {path}")
     report = _json(path)
-    if report.get("status") != "complete":
+    if report.get("status") not in {"complete", "invalid_worker_execution"}:
         raise LineageError("parent comparator report is not complete")
     return comparator_id, path, report
 
@@ -657,7 +657,11 @@ def compose_reused_parent_report(
     """Compose a normal comparison while charging only the new candidate arm."""
 
     comparator_id, parent_path, parent_report = parent_comparator
-    if candidate_report.get("status") != "complete":
+    parent_status = parent_report.get("status")
+    candidate_status = candidate_report.get("status")
+    if parent_status not in {"complete", "invalid_worker_execution"}:
+        raise LineageError("parent comparator pilot report is not complete")
+    if candidate_status not in {"complete", "invalid_worker_execution"}:
         raise LineageError("candidate-only pilot report is not complete")
     if parent_arm == candidate_arm:
         raise LineageError("parent and candidate arm labels must differ")
@@ -680,10 +684,14 @@ def compose_reused_parent_report(
     if not isinstance(run_id, str) or not run_id:
         raise LineageError("candidate-only pilot report has no run_id")
 
-    return {
+    result = {
         "schema_version": 1,
         "run_id": run_id,
-        "status": "complete",
+        "status": (
+            "invalid_worker_execution"
+            if "invalid_worker_execution" in {parent_status, candidate_status}
+            else "complete"
+        ),
         "task_ids": [task_id],
         "summaries": {
             parent_arm: arm_value(parent_report, "summaries", parent_arm),
@@ -706,6 +714,18 @@ def compose_reused_parent_report(
             "cost_accounting": "candidate_only",
         },
     }
+    invalid_executions = {}
+    if parent_status == "invalid_worker_execution":
+        invalid_executions[parent_arm] = arm_value(
+            parent_report, "worker_executions", parent_arm
+        )
+    if candidate_status == "invalid_worker_execution":
+        invalid_executions[candidate_arm] = arm_value(
+            candidate_report, "worker_executions", candidate_arm
+        )
+    if invalid_executions:
+        result["worker_executions"] = invalid_executions
+    return result
 
 
 def _quantitative_triage(stage: Mapping[str, object]) -> dict[str, object]:
@@ -1413,6 +1433,25 @@ def run_controller(
                         "version"
                     ]
                     report["selection_reference_reuse"] = reuse
+            if report.get("status") == "invalid_worker_execution":
+                state = import_pilot_report(
+                    state,
+                    stage=stage_name,
+                    report=report,
+                    report_path=str(report_path),
+                    parent_arm=parent_arm,
+                    candidate_arm=candidate_arm,
+                )
+                save_lineage(state_path, state)
+                if (
+                    stop_after_stage == stage_name
+                    and state.get("stopped_after_stage") != stage_name
+                ):
+                    state["stopped_after_stage"] = stage_name
+                    save_lineage(state_path, state)
+                    paused_this_run = True
+                    break
+                continue
             property_safe = None
             property_delta = None
             quantitative_triage = None
