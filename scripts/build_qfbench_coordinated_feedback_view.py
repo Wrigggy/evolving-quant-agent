@@ -178,6 +178,19 @@ def main(argv: list[str] | None = None) -> int:
     prediction = proposal.get("prediction")
     if not isinstance(prediction, dict):
         raise ValueError("source run has no Evolver prediction")
+    state_cards = sorted(
+        source_run.glob("evolutions/*/quant-research-state-card.json")
+    )
+    if len(state_cards) > 1:
+        raise ValueError("source run has multiple Quant Research State Cards")
+    state_card_evidence_path = None
+    if state_cards:
+        state_card_name = f"{label}-quant-research-state-card.json"
+        _write_json(
+            objects / state_card_name,
+            _without_hashes(_json(state_cards[0])),
+        )
+        state_card_evidence_path = f"history/archive/objects/{state_card_name}"
     trace_text = trace_path.read_text(encoding="utf-8")
     entry = {
         "schema_version": 1,
@@ -209,6 +222,11 @@ def main(argv: list[str] | None = None) -> int:
         entry["evolver_only_optimization_diagnostic"] = diagnostic_evidence_path
     if parent_candidate_evidence_path is not None:
         entry["parent_candidate_snapshot"] = parent_candidate_evidence_path
+    if state_card_evidence_path is not None:
+        entry["prior_quant_research_state_card"] = state_card_evidence_path
+        entry["evidence_paths"]["quant_research_state_card"] = (
+            state_card_evidence_path
+        )
     _write_json(entry_path, entry)
     diff = proposal.get("diff")
     if not isinstance(diff, str) or not diff.strip():

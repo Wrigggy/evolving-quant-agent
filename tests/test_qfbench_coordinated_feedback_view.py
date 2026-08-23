@@ -171,3 +171,48 @@ def test_chains_two_worker_entries_with_artifacts_diagnostics_and_exact_parents(
             ).read_text()
         )
         assert diagnostic["worker_visible"] is False
+
+
+def test_chained_refinement_retains_projected_quant_research_state_card(tmp_path):
+    source_run = _scored_run(tmp_path, "run-state-card", "artifact\n")
+    _write(
+        source_run
+        / "evolutions/iteration-0001/quant-research-state-card.json",
+        {
+            "schema_version": 1,
+            "selected_relation": {
+                "relation_id": "calibrated_surface_parameter_strict_positivity"
+            },
+        },
+    )
+    destination = tmp_path / "feedback-state-card"
+
+    assert main(
+        [
+            "--base-view",
+            str(_base_view(tmp_path)),
+            "--source-run",
+            str(source_run),
+            "--component-token",
+            "component-run-state-card",
+            "--destination",
+            str(destination),
+            "--round-label",
+            "round-state-card",
+        ]
+    ) == 0
+
+    entry = json.loads(
+        (
+            destination
+            / "history/archive/entries/round-state-card.json"
+        ).read_text()
+    )
+    state_card_path = entry["prior_quant_research_state_card"]
+    assert entry["evidence_paths"]["quant_research_state_card"] == (
+        state_card_path
+    )
+    retained = json.loads((destination / state_card_path).read_text())
+    assert retained["selected_relation"]["relation_id"] == (
+        "calibrated_surface_parameter_strict_positivity"
+    )
