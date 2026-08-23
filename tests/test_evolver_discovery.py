@@ -622,12 +622,110 @@ def test_discovery_pilot_missing_terminal_decision_never_reaches_admission(
         decision=None,
         backbone=tmp_path / "backbone",
         candidate=tmp_path / "candidate",
+        mutation_metrics={},
+        search_operator=None,
     )
 
     assert called is False
     assert admission["admitted"] is False
     assert admission["not_applicable"] is True
     assert "fail-closed" in admission["reason"]
+
+
+def test_refine_act_with_observed_empty_diff_never_reaches_admission(
+    tmp_path, monkeypatch
+):
+    import scripts.run_qfbench_discovery_pilot as pilot
+
+    def forbidden_admission(*args, **kwargs):
+        raise AssertionError("empty REFINE must not reach structural admission")
+
+    monkeypatch.setattr(pilot, "admit_candidate", forbidden_admission)
+
+    admission = pilot._candidate_admission(
+        decision="ACT",
+        backbone=tmp_path / "backbone",
+        candidate=tmp_path / "candidate",
+        mutation_metrics={
+            "measurement_only": True,
+            "changed_file_count": 0,
+            "declared_roles": [
+                "systemprompt",
+                "tool_descriptions",
+                "tools",
+            ],
+            "component_roles": [],
+            "declared_roles_match_actual": False,
+        },
+        search_operator="REFINE",
+    )
+
+    assert admission["admitted"] is False
+    assert "did not materialize" in admission["failure"]
+
+
+def test_act_with_role_mismatch_never_reaches_admission(tmp_path, monkeypatch):
+    import scripts.run_qfbench_discovery_pilot as pilot
+
+    def forbidden_admission(*args, **kwargs):
+        raise AssertionError("role-mismatched ACT must not reach admission")
+
+    monkeypatch.setattr(pilot, "admit_candidate", forbidden_admission)
+
+    admission = pilot._candidate_admission(
+        decision="ACT",
+        backbone=tmp_path / "backbone",
+        candidate=tmp_path / "candidate",
+        mutation_metrics={
+            "changed_file_count": 1,
+            "declared_roles_match_actual": False,
+        },
+        search_operator="COMPOSE",
+    )
+
+    assert admission["admitted"] is False
+    assert "declared-role-aligned" in admission["failure"]
+
+
+def test_unchanged_reuse_remains_eligible_for_structural_admission(
+    tmp_path, monkeypatch
+):
+    import scripts.run_qfbench_discovery_pilot as pilot
+    from qea.candidate_admission import CandidateAdmissionRecord
+
+    called = False
+
+    def admitted_reuse(*args, **kwargs):
+        nonlocal called
+        called = True
+        return CandidateAdmissionRecord(
+            admitted=True,
+            candidate_digest="candidate",
+            policy_digest="policy",
+            files=(),
+            checks=("file_manifest",),
+        )
+
+    monkeypatch.setattr(pilot, "admit_candidate", admitted_reuse)
+    monkeypatch.setattr(
+        pilot.AdmissionPolicy,
+        "qfbench_full",
+        classmethod(lambda cls: object()),
+    )
+
+    admission = pilot._candidate_admission(
+        decision="ACT",
+        backbone=tmp_path / "backbone",
+        candidate=tmp_path / "candidate",
+        mutation_metrics={
+            "changed_file_count": 0,
+            "declared_roles_match_actual": False,
+        },
+        search_operator="REUSE",
+    )
+
+    assert called is True
+    assert admission["admitted"] is True
 
 
 def test_coordinated_probe_selects_only_the_admitted_target():

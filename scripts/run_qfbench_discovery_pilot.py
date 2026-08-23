@@ -143,8 +143,10 @@ def _candidate_admission(
     decision: str | None,
     backbone: Path,
     candidate: Path,
+    mutation_metrics: Mapping[str, object],
+    search_operator: object,
 ) -> dict[str, object]:
-    """Admit only an explicitly recorded ACT; all other states are fail-closed."""
+    """Admit one executable ACT whose claimed mutation actually materialized."""
 
     if decision == "ABSTAIN":
         return {
@@ -159,6 +161,27 @@ def _candidate_admission(
             "reason": (
                 "Evolver did not record a valid ACT or ABSTAIN decision; "
                 "candidate admission is fail-closed"
+            ),
+        }
+    operator = (
+        search_operator.strip().upper()
+        if isinstance(search_operator, str)
+        else None
+    )
+    changed_file_count = mutation_metrics.get("changed_file_count")
+    role_match = mutation_metrics.get("declared_roles_match_actual")
+    unchanged_reuse = operator == "REUSE" and changed_file_count == 0
+    if not unchanged_reuse and (
+        not isinstance(changed_file_count, int)
+        or isinstance(changed_file_count, bool)
+        or changed_file_count <= 0
+        or role_match is not True
+    ):
+        return {
+            "admitted": False,
+            "failure": (
+                "MutationContractError: ACT mutation did not materialize as "
+                "a non-empty, declared-role-aligned candidate diff"
             ),
         }
     try:
@@ -755,6 +778,8 @@ def main(argv: list[str] | None = None) -> int:
             decision=decision,
             backbone=backbone,
             candidate=proposal.candidate_dir,
+            mutation_metrics=mutation_metrics,
+            search_operator=hypothesis.get("search_operator"),
         )
         proposal_cost = _cost(run_dir)
         worker_probe: dict[str, object] = {
