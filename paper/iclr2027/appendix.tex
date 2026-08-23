@@ -118,3 +118,19 @@ candidate; it also records exact per-run and cumulative accounting, the sole
 persistent official property, terminal rollback, skipped repeat/protection,
 and claim boundary. Full interpretation is in
 \path{docs/decisions/2026-08-24-qf-a01-qrs-refinement-result.md}.
+
+\subsection{A0.2 QRS refinement R4 record}
+
+The frozen R4 plan is retained at
+\path{data/breadth/QF_A02_QRS_REFINEMENT_R4_PLAN.json}. The complete local
+mirror at
+\path{results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts/}
+contains the proposal, target, repeat, protection, and terminal controller
+reports together with the three fresh-Worker raw traces and official
+evaluations. The compact result at
+\path{data/breadth/QF_A02_QRS_REFINEMENT_R4_RESULT.json} records the c2
+backbone, c1 selection references, c3 standard-SVI profile, identical target
+and repeat property footprint, non-SVI protection profile observations,
+per-stage cost, terminal resume, cleanup, and claim boundary. Full
+interpretation is in
+\path{docs/decisions/2026-08-24-qf-a02-qrs-refinement-r4-result.md}.

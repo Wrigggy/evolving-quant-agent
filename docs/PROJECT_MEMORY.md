@@ -1,5 +1,41 @@
 # QEA Repository Memory
 
+## 2026-08-24 A0.2 QRS refinement R4 promoted
+
+R4 autonomously refined the R3 c2 checker into
+`qf-a02-localvol-qrs-c3-r4`. The admitted candidate added a signature-gated
+standard-SVI parameterization profile that automatically applies
+non-weakenable strict positivity to `a`, `b`, and `sigma`, while treating
+`rho` and `m` as signed-free. The proposal used 24 requests, 2,714,302 tokens,
+and $0.086027048.
+
+Against the retained c1 67/68, reward-zero selection reference, c3 reached
+68/68 and reward one on both target and independent repeat. Both runs resolved
+the same sole `test_svi_a_positive` property with no introduced failure, the
+checker identified the SVI profile and auto-covered `a`, and the repeat policy
+returned `CONSISTENT`. The target used 40 requests, 3,302,024 tokens, and
+$0.099933064; repeat used 38 requests, 2,197,372 tokens, and $0.071670192.
+Neither run showed a checker violation followed by refitting, so this supports
+profile activation plus repeated property-correction association, not fully
+isolated semantic causality.
+
+On `localvol-barrier`, c3 changed the retained c1 reference from 38/39, reward
+0.96, to 39/39, reward one with no new failed property. The checker examined
+four non-SVI tables, each with `standard_parameterization=null` and zero
+violation. This supports protection safety and absence of false SVI matching;
+the +1 cannot be attributed to the SVI relation. Protection used 27 requests,
+1,712,327 tokens, and $0.063065884.
+
+The controller returned `PROMOTE` for `repeat_and_protection_safe`, set c3 as
+the current parent, and entered `FROZEN`. Terminal resume added zero work or
+cost and the active marker was cleared. R4 totaled 129 completed requests,
+9,926,025 tokens, and $0.320696188; cleanup left zero related containers,
+networks, or processes. This is one positive development-family refinement,
+not QRS superiority, sealed evidence, benchmark-wide improvement, broad
+transfer, or complete causal isolation. Compact result:
+`data/breadth/QF_A02_QRS_REFINEMENT_R4_RESULT.json`; full decision:
+`docs/decisions/2026-08-24-qf-a02-qrs-refinement-r4-result.md`.
+
 ## 2026-08-24 A0.1 QRS refinement retained negative
 
 The local-vol QRS refinement lineage reached a valid target-stage rollback

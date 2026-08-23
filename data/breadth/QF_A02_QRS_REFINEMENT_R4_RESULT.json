@@ -1,0 +1,209 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-a02-localvol-qrs-refine-20260824-r4",
+  "date": "2026-08-24",
+  "status": "promoted_after_consistent_repeat_and_safe_protection",
+  "research_question": "Can the Evolver use the R3 runtime evidence to refine caller-selected admissibility predicates into a standard-SVI profile that repeatedly resolves the retained SVI-a failure?",
+  "setup": {
+    "benchmark": "QFBench",
+    "refinement_backbone": "qf-a01-localvol-qrs-c2-r3",
+    "selection_reference": "qf-a0-localvol-qrs-c1",
+    "candidate_version": "qf-a02-localvol-qrs-c3-r4",
+    "target_task": "dupire-local-vol",
+    "protection_task": "localvol-barrier",
+    "worker_route": "deepseek-v4-flash-main0",
+    "worker_budget": "normal",
+    "answer_boundary": "R3 property-level optimization evidence was available only to the Evolver; all target, repeat, and protection Workers remained answer-blind.",
+    "sealed_evaluation_used": false,
+    "frozen_plan": "data/breadth/QF_A02_QRS_REFINEMENT_R4_PLAN.json"
+  },
+  "proposal": {
+    "run_id": "qf-a02-localvol-qrs-refine-proposal-20260824-r4",
+    "decision": "ACT",
+    "search_operator": "REFINE",
+    "admitted": true,
+    "candidate_version": "qf-a02-localvol-qrs-c3-r4",
+    "changed_files": [
+      "systemprompt.md",
+      "tool_descriptions/check_parameter_admissibility.tool.yaml",
+      "tools/admissibility.py"
+    ],
+    "declared_roles_match_actual": true,
+    "component": "check_parameter_admissibility",
+    "relation_id": "standard_svi_parameter_admissibility_coverage",
+    "candidate_change": "Add a signature-gated standard SVI profile that automatically applies non-weakenable strict positivity to a, b, and sigma while leaving rho and m signed-free, independent of caller enumeration.",
+    "completed_requests": 24,
+    "total_tokens": 2714302,
+    "provider_cost_usd": 0.086027048
+  },
+  "target": {
+    "run_id": "qf-a02-localvol-qrs-refine-target-20260824-r4",
+    "selection_reference": {
+      "version": "qf-a0-localvol-qrs-c1",
+      "tests_passed": 67,
+      "tests_failed": 1,
+      "reward": 0.0,
+      "failed_properties": [
+        "test_outputs.py::TestSVIParams::test_svi_a_positive"
+      ]
+    },
+    "candidate": {
+      "version": "qf-a02-localvol-qrs-c3-r4",
+      "tests_passed": 68,
+      "tests_failed": 0,
+      "reward": 1.0,
+      "failed_properties": []
+    },
+    "property_delta": {
+      "resolved": [
+        "test_outputs.py::TestSVIParams::test_svi_a_positive"
+      ],
+      "introduced": []
+    },
+    "mechanism_observation": {
+      "component_activated": true,
+      "standard_parameterization": "svi",
+      "auto_strict_positive_columns": [
+        "a",
+        "b",
+        "sigma"
+      ],
+      "violations_observed": false,
+      "refit_after_violation_observed": false,
+      "relation_footprint": "ANCHORED"
+    },
+    "completed_requests": 40,
+    "total_tokens": 3302024,
+    "provider_cost_usd": 0.099933064
+  },
+  "repeat": {
+    "run_id": "qf-a02-localvol-qrs-refine-repeat-20260824-r4",
+    "selection_reference": {
+      "version": "qf-a0-localvol-qrs-c1",
+      "tests_passed": 67,
+      "tests_failed": 1,
+      "reward": 0.0,
+      "failed_properties": [
+        "test_outputs.py::TestSVIParams::test_svi_a_positive"
+      ]
+    },
+    "candidate": {
+      "version": "qf-a02-localvol-qrs-c3-r4",
+      "tests_passed": 68,
+      "tests_failed": 0,
+      "reward": 1.0,
+      "failed_properties": []
+    },
+    "property_delta": {
+      "resolved": [
+        "test_outputs.py::TestSVIParams::test_svi_a_positive"
+      ],
+      "introduced": []
+    },
+    "mechanism_observation": {
+      "component_activated": true,
+      "standard_parameterization": "svi",
+      "auto_strict_positive_columns": [
+        "a",
+        "b",
+        "sigma"
+      ],
+      "violations_observed": false,
+      "refit_after_violation_observed": false,
+      "semantic_repeat_verdict": "CONSISTENT",
+      "semantic_repeat_reason": "repeat_relation_footprint_reproduced"
+    },
+    "completed_requests": 38,
+    "total_tokens": 2197372,
+    "provider_cost_usd": 0.071670192
+  },
+  "protection": {
+    "run_id": "qf-a02-localvol-qrs-refine-protection-20260824-r4",
+    "selection_reference": {
+      "version": "qf-a0-localvol-qrs-c1",
+      "tests_passed": 38,
+      "tests_failed": 1,
+      "reward": 0.96,
+      "failed_properties": [
+        "test_outputs.py::TestBarrierResults::test_barrier_outputs_reasonable"
+      ]
+    },
+    "candidate": {
+      "version": "qf-a02-localvol-qrs-c3-r4",
+      "tests_passed": 39,
+      "tests_failed": 0,
+      "reward": 1.0,
+      "failed_properties": []
+    },
+    "aggregate_safe": true,
+    "property_set_safe": true,
+    "introduced_failed_properties": [],
+    "component_activated": true,
+    "profile_observations": [
+      {
+        "table": "cleaned_quotes.csv",
+        "standard_parameterization": null,
+        "violations": 0
+      },
+      {
+        "table": "surface_nodes.csv",
+        "standard_parameterization": null,
+        "violations": 0
+      },
+      {
+        "table": "call_surface.csv",
+        "standard_parameterization": null,
+        "violations": 0
+      },
+      {
+        "table": "local_vol_surface.csv",
+        "standard_parameterization": null,
+        "violations": 0
+      }
+    ],
+    "scientific_interpretation": "The SVI profile did not fire on any protection table, which supports absence of false profile matching. The 38/39 to 39/39 gain is a safe observed Worker outcome but cannot be attributed to the SVI relation.",
+    "completed_requests": 27,
+    "total_tokens": 1712327,
+    "provider_cost_usd": 0.063065884
+  },
+  "terminal": {
+    "controller_decision": "PROMOTE",
+    "controller_reason": "repeat_and_protection_safe",
+    "status": "frozen",
+    "phase": "FROZEN",
+    "current_parent": "qf-a02-localvol-qrs-c3-r4",
+    "terminal_resume": {
+      "performed": true,
+      "new_child_dispatches": 0,
+      "added_requests": 0,
+      "added_tokens": 0,
+      "added_provider_cost_usd": 0.0,
+      "active_marker_present_after_resume": false
+    }
+  },
+  "total": {
+    "completed_requests": 129,
+    "total_tokens": 9926025,
+    "provider_cost_usd": 0.320696188
+  },
+  "cleanup": {
+    "containers_remaining": 0,
+    "networks_remaining": 0,
+    "related_processes_remaining": 0
+  },
+  "retained_conclusion": "R4 autonomously refined c2 into a valid c3 standard-SVI profile, associated activation with the same SVI-a property correction on target and repeat, passed property-safe protection, and reached PROMOTE/FROZEN.",
+  "claim_boundary": {
+    "supported": "One autonomous c2-to-c3 refinement, activated standard-SVI profile, repeated relation-consistent official binary gain on one development task, safe protection, promotion, terminal resume, and cleanup.",
+    "causal_limit": "Neither target Worker observed a checker violation followed by refitting, so the evidence associates profile activation and repeated SVI-a correction but does not isolate the checker as the complete cause.",
+    "protection_limit": "The protection gain is not SVI-relation transfer because all four checked non-SVI tables had standard_parameterization null.",
+    "not_supported": "QRS superiority, sealed performance, benchmark-wide improvement, broad transfer, or fully isolated semantic causality."
+  },
+  "artifacts": {
+    "mirror": "results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts",
+    "controller": "results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts/controller/CONTROLLER-RESULT.json",
+    "proposal_report": "results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts/proposal/proposal-report.json",
+    "target_report": "results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts/target/pilot-report.json",
+    "repeat_report": "results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts/repeat/pilot-report.json",
+    "protection_report": "results/bc-mirror/qf-a02-localvol-qrs-refine-20260824-r4-artifacts/protection/pilot-report.json"
+  }
+}
