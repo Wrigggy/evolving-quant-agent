@@ -1,0 +1,76 @@
+{
+  "allowed_model": "deepseek/deepseek-v4-flash-0731",
+  "allowed_path_prefix": "/v1",
+  "capacity": {
+    "cpu_count": 48,
+    "memory_mb": 98304,
+    "pids_limit": 8192,
+    "sandboxes": 24,
+    "tmpfs_mb": 40960
+  },
+  "docker_host": "unix:///run/user/1013/docker.sock",
+  "evolver_resources": {
+    "cpu_count": 2,
+    "memory_mb": 4096,
+    "pids_limit": 512,
+    "timeout_seconds": 3600,
+    "writable_tmpfs_mb": {
+      "/qea": 2048,
+      "/tmp": 512
+    }
+  },
+  "expected_uid": 1013,
+  "fallback_providers": [
+    "baseten",
+    "gmicloud",
+    "deepinfra"
+  ],
+  "headroom": {
+    "max_load_1m": 56,
+    "min_available_memory_mb": 16384,
+    "min_free_disk_mb": 20480,
+    "min_free_inodes": 10000
+  },
+  "proxy_resources": {
+    "cpu_count": 2,
+    "memory_mb": 4096,
+    "pids_limit": 128,
+    "timeout_seconds": 3600,
+    "writable_tmpfs_mb": {
+      "/run/qea-secrets": 16,
+      "/tmp": 128
+    }
+  },
+  "public_root": "/home/julius/qea/runtime/qfbench-public/024921eb-base85",
+  "required_provider": "deepseek",
+  "schema_version": 4,
+  "token_file": "/home/julius/qea/runtime/secrets/model-token",
+  "trusted_root": "/home/julius/qea/runtime/trusted-verifier/024921eb-base85",
+  "upstream_base_url": "https://openrouter.ai/api/v1",
+  "verifier_concurrency": 1,
+  "verifier_limits": {
+    "pids_limit": 256,
+    "timeout_seconds": 5400,
+    "writable_tmpfs_mb": {
+      "/app": 2048,
+      "/logs": 128,
+      "/opt/qea/uv-cache": 256,
+      "/opt/qea/uv-tools": 64,
+      "/qea": 512,
+      "/tests": 128,
+      "/tmp": 256
+    }
+  },
+  "worker_concurrency": 1,
+  "worker_limits": {
+    "pids_limit": 256,
+    "timeout_seconds": 5400,
+    "writable_tmpfs_mb": {
+      "/app": 2048,
+      "/qea": 512,
+      "/tmp": 256
+    }
+  },
+  "scheduler_epoch": "quantcodeeval-engineering-canary",
+  "worker_launch_interval_seconds": 2
+}
