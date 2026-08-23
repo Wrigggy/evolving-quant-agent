@@ -918,6 +918,15 @@ def build_coordinated_evolver_view(
             "copy expected values or task-specific answers into the candidate; the "
             "Worker remains blind to these diagnostics."
         )
+        instruction += (
+            " Before ACT, enumerate every predicate or instruction that the "
+            "candidate will expose to the Worker in worker_visible_claims. Give "
+            "each claim an exact public-contract basis or a named "
+            "benchmark-independent principle. An optimize-only diagnostic may "
+            "help localize a claim, but it cannot be that claim's sole basis. "
+            "Remove or generalize a claim that cannot satisfy this boundary, or "
+            "ABSTAIN."
+        )
     if search_treatment == "quant-state":
         instruction += (
             " Before ACT, use materialize_quant_research_state_card to reconstruct "
@@ -997,6 +1006,9 @@ def build_coordinated_evolver_view(
             ),
             "optimization_answers_exposed_to_evolver": bool(diagnostics),
             "optimization_answers_exposed_to_worker": False,
+            "worker_visible_claim_provenance_required_for_act": (
+                bool(diagnostics)
+            ),
             "history_required": False,
             "max_primary_components": 2,
             "max_declared_components": 9,

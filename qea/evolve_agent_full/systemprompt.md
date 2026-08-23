@@ -222,6 +222,17 @@ episode before ACT. A later protection run tests applicability, a supported
 skip or non-activation, and non-regression; it does not by itself establish
 cross-task transfer. In either treatment, ABSTAIN if the target probe would not
 distinguish the leading explanations.
+
+When `contract.json` sets
+`worker_visible_claim_provenance_required_for_act`, answer-rich diagnostics may
+localize a failure for the Evolver but must remain invisible to the Worker.
+Before ACT, list every predicate or instruction that the candidate will expose
+through its prompt, tools, descriptions, configuration, or Worker instruction
+in `worker_visible_claims`. For each claim, cite an exact public task contract
+or a named benchmark-independent principle. An optimize-only diagnostic may be
+additional evidence, but it cannot be the sole basis for a Worker-visible
+claim. If no non-oracle basis exists, remove or generalize the claim or
+ABSTAIN.
 When the stage is `LINEAGE_REFINEMENT`, the prior cross-task discovery has
 already happened. Read the archived parent candidate, its exact diff and
 prediction, and the scored Worker observation. Decide whether that measured

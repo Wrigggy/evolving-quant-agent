@@ -854,6 +854,52 @@ def _quant_v2_decision():
     }
 
 
+def _enable_answer_rich_claim_boundary(evidence: Path) -> None:
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["feedback_tier"] = "answer_rich_optimization_v1"
+    contract["optimization_answers_exposed_to_evolver"] = True
+    contract["optimization_answers_exposed_to_worker"] = False
+    contract["worker_visible_claim_provenance_required_for_act"] = True
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+
+
+def _write_optimize_only_diagnostic(evidence: Path, task_id: str) -> str:
+    relative = f"benchmarks/qfbench/tasks/{task_id}/optimization-diagnostic.json"
+    path = evidence / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "task_id": task_id,
+                "feedback_mode": "answer_rich_evolver",
+                "worker_visible": False,
+                "observed_failure_families": ["hidden_convention"],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return relative
+
+
+def _worker_visible_claim(
+    *, claim_id: str, claim: str, kind: str, basis_ref: str
+) -> dict:
+    return {
+        "claim_id": claim_id,
+        "claim": claim,
+        "surfaces": ["tools", "tool_descriptions"],
+        "basis_refs": [
+            {
+                "kind": kind,
+                "ref": basis_ref,
+                "support": "the cited basis supplies this Worker-visible predicate",
+            }
+        ],
+    }
+
+
 def test_quant_v2_uses_exact_history_and_unlocks_binding_components(guarded_roots):
     from qea.evolve_agent_full.tools.guarded_workspace import (
         GuardedWorkspaceError,
@@ -899,6 +945,125 @@ def test_quant_v2_act_requires_research_state_transition(guarded_roots):
 
     with pytest.raises(GuardedWorkspaceError, match="research_state_transition"):
         decide_candidate(discovery=decision)
+
+
+@pytest.mark.parametrize(
+    ("task_id", "claim_id", "claim"),
+    [
+        (
+            "dupire-local-vol",
+            "svi-a-positive",
+            "Every fitted SVI intercept a must be strictly positive.",
+        ),
+        (
+            "13f-amendment-aware-crowding",
+            "pair-array-convention",
+            "Every JSON pair field must be encoded as a two-element array.",
+        ),
+    ],
+)
+def test_answer_rich_contract_rejects_worker_claim_with_only_optimize_basis(
+    guarded_roots, task_id, claim_id, claim
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_answer_rich_claim_boundary(evidence)
+    diagnostic = _write_optimize_only_diagnostic(evidence, task_id)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path=diagnostic)
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", diagnostic]
+    decision["worker_visible_claims"] = [
+        _worker_visible_claim(
+            claim_id=claim_id,
+            claim=claim,
+            kind="optimize_only_diagnostic",
+            basis_ref=diagnostic,
+        )
+    ]
+
+    with pytest.raises(
+        GuardedWorkspaceError, match="only optimize-only diagnostic basis"
+    ):
+        decide_candidate(discovery=decision)
+
+
+def test_answer_rich_contract_accepts_public_local_vol_positivity_claim(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_answer_rich_claim_boundary(evidence)
+    instruction = "benchmarks/qfbench/tasks/dupire-local-vol/instruction.md"
+    instruction_path = evidence / instruction
+    instruction_path.parent.mkdir(parents=True, exist_ok=True)
+    instruction_path.write_text(
+        "Verify that local volatility is strictly positive at every grid point.\n",
+        encoding="utf-8",
+    )
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path=instruction)
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", instruction]
+    decision["worker_visible_claims"] = [
+        _worker_visible_claim(
+            claim_id="local-vol-positive",
+            claim="Every written local-volatility value must be strictly positive.",
+            kind="public_contract",
+            basis_ref=instruction,
+        )
+    ]
+
+    result = decide_candidate(discovery=decision)
+
+    assert result["worker_visible_claims"][0]["basis_refs"][0]["kind"] == (
+        "public_contract"
+    )
+
+
+def test_answer_rich_contract_accepts_benchmark_independent_reconciliation_claim(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_answer_rich_claim_boundary(evidence)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    decision["worker_visible_claims"] = [
+        _worker_visible_claim(
+            claim_id="written-object-reconciliation",
+            claim=(
+                "Recompute completion checks from the exact written artifacts "
+                "rather than only from an in-memory object."
+            ),
+            kind="benchmark_independent",
+            basis_ref="principle:written-object-reconciliation",
+        )
+    ]
+
+    result = decide_candidate(discovery=decision)
+
+    assert result["worker_visible_claims"][0]["basis_refs"][0]["ref"] == (
+        "principle:written-object-reconciliation"
+    )
 
 
 def _enable_quant_state_card_contract(
@@ -1555,8 +1720,13 @@ def test_quant_v2_forbids_legacy_unlock_and_schema_matches_quant_hypotheses(
     hypothesis_schema = schema["properties"]["discovery"]["properties"][
         "hypotheses_considered"
     ]["items"]
+    claims_schema = schema["properties"]["discovery"]["properties"][
+        "worker_visible_claims"
+    ]
     assert "prediction" in hypothesis_schema["required"]
     assert "failure_type_id" not in hypothesis_schema["required"]
+    assert claims_schema["minItems"] == 1
+    assert "basis_refs" in claims_schema["items"]["required"]
     assert "failure_prediction" not in schema_text
     with pytest.raises(GuardedWorkspaceError, match="legacy unlock is forbidden"):
         unlock_candidate(

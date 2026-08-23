@@ -440,7 +440,10 @@ def test_coordinated_view_rejects_one_task(tmp_path):
         )
 
 
-def test_coordinated_view_keeps_optimize_diagnostic_evolver_only(tmp_path):
+@pytest.mark.parametrize("search_treatment", ["generic", "quant-state"])
+def test_coordinated_view_keeps_optimize_diagnostic_evolver_only(
+    tmp_path, search_treatment
+):
     corpus = tmp_path / "breadth"
     build_cross_benchmark_experience(
         destination=corpus,
@@ -490,6 +493,7 @@ def test_coordinated_view_keeps_optimize_diagnostic_evolver_only(tmp_path):
         optimization_diagnostic_paths={
             "qfbench:zero-coupon-bootstrapping": diagnostic
         },
+        search_treatment=search_treatment,
     )
 
     contract = json.loads((tmp_path / "coordinated/contract.json").read_text())
@@ -497,6 +501,9 @@ def test_coordinated_view_keeps_optimize_diagnostic_evolver_only(tmp_path):
     assert contract["optimization_answers_exposed_to_evolver"] is True
     assert contract["optimization_answers_exposed_to_worker"] is False
     assert contract["feedback_tier"] == "answer_rich_optimization_v1"
+    assert contract["worker_visible_claim_provenance_required_for_act"] is True
+    assert "worker_visible_claims" in contract["evolver_instruction"]
+    assert "cannot be that claim's sole basis" in contract["evolver_instruction"]
     assert (
         tmp_path
         / "coordinated/benchmarks/qfbench/tasks/zero-coupon-bootstrapping/optimization-diagnostic.json"
@@ -564,6 +571,9 @@ def test_coordinated_search_treatments_share_evidence_but_not_relation_helpers(
     assert generic_contract["quant_research_state_card_required_for_act"] is False
     assert quant_contract["quant_research_state_card_required_for_act"] is True
     assert quant_v2_contract["quant_research_state_card_required_for_act"] is True
+    assert generic_contract["worker_visible_claim_provenance_required_for_act"] is False
+    assert quant_contract["worker_visible_claim_provenance_required_for_act"] is False
+    assert "worker_visible_claims" not in generic_contract["evolver_instruction"]
     assert generic_contract["quant_residual_risk_relation_enabled"] is False
     assert quant_contract["quant_residual_risk_relation_enabled"] is False
     assert quant_v2_contract["quant_residual_risk_relation_enabled"] is True

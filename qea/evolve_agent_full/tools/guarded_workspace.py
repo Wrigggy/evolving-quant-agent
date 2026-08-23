@@ -135,6 +135,10 @@ _QUANT_RESEARCH_STATES = frozenset(
         "research_artifact_completion",
     }
 )
+_WORKER_VISIBLE_SURFACES = _COMPONENT_ROLES | frozenset({"worker_instruction"})
+_WORKER_VISIBLE_BASIS_KINDS = frozenset(
+    {"public_contract", "benchmark_independent", "optimize_only_diagnostic"}
+)
 
 
 class GuardedWorkspaceError(ValueError):
@@ -381,6 +385,146 @@ def _evidence_kind(relative: str) -> str:
     if name == "contract.json":
         return "contract"
     return "other"
+
+
+def _worker_visible_basis_visibility(relative: str) -> str:
+    """Classify an exact evidence path for the predicate-provenance boundary."""
+
+    path, normalized = _resolve("evidence", relative, must_exist=True)
+    pure = PurePosixPath(normalized)
+    if pure.name == "optimization-diagnostic.json":
+        return "optimize_only_diagnostic"
+    if path.suffix == ".json":
+        try:
+            payload = json.loads(_read_text(path))
+        except json.JSONDecodeError:
+            payload = None
+        if (
+            isinstance(payload, Mapping)
+            and payload.get("feedback_mode") == "answer_rich_evolver"
+            and payload.get("worker_visible") is False
+        ):
+            return "optimize_only_diagnostic"
+    if pure.name in {"instruction.md", "public_clauses.json"}:
+        return "public_contract"
+    if pure.parts and pure.parts[0] == "contracts":
+        return "public_contract"
+    return "other"
+
+
+def _normalize_worker_visible_claims(
+    raw_claims: object,
+    *,
+    declared_components: set[str],
+    accessed_evidence: set[str],
+) -> list[dict[str, Any]]:
+    if not isinstance(raw_claims, list) or not raw_claims:
+        raise GuardedWorkspaceError(
+            "ACT requires non-empty worker_visible_claims under answer-rich search"
+        )
+    normalized_claims: list[dict[str, Any]] = []
+    claim_ids: set[str] = set()
+    for claim_index, raw_claim in enumerate(raw_claims):
+        if not isinstance(raw_claim, Mapping):
+            raise GuardedWorkspaceError(
+                f"worker_visible_claims[{claim_index}] must be an object"
+            )
+        claim_id = _text(
+            raw_claim.get("claim_id"),
+            label=f"worker_visible_claims[{claim_index}].claim_id",
+        )
+        if _PROBE_ID.fullmatch(claim_id) is None:
+            raise GuardedWorkspaceError(
+                f"worker_visible_claims[{claim_index}].claim_id is invalid"
+            )
+        if claim_id in claim_ids:
+            raise GuardedWorkspaceError(f"duplicate Worker-visible claim: {claim_id}")
+        claim_ids.add(claim_id)
+        surfaces = _text_list(
+            raw_claim.get("surfaces"),
+            label=f"worker_visible_claims[{claim_index}].surfaces",
+            minimum=1,
+        )
+        if any(surface not in _WORKER_VISIBLE_SURFACES for surface in surfaces):
+            raise GuardedWorkspaceError(
+                f"worker_visible_claims[{claim_index}] names an unknown surface"
+            )
+        undeclared = sorted(
+            surface
+            for surface in surfaces
+            if surface != "worker_instruction" and surface not in declared_components
+        )
+        if undeclared:
+            raise GuardedWorkspaceError(
+                f"worker_visible_claims[{claim_index}] uses undeclared component "
+                + ", ".join(undeclared)
+            )
+        raw_bases = raw_claim.get("basis_refs")
+        if not isinstance(raw_bases, list) or not raw_bases:
+            raise GuardedWorkspaceError(
+                f"worker_visible_claims[{claim_index}].basis_refs must be non-empty"
+            )
+        normalized_bases: list[dict[str, str]] = []
+        has_worker_safe_basis = False
+        for basis_index, raw_basis in enumerate(raw_bases):
+            if not isinstance(raw_basis, Mapping):
+                raise GuardedWorkspaceError(
+                    "worker_visible_claims basis entries must be objects"
+                )
+            label = (
+                f"worker_visible_claims[{claim_index}].basis_refs[{basis_index}]"
+            )
+            kind = _text(raw_basis.get("kind"), label=f"{label}.kind").casefold()
+            if kind not in _WORKER_VISIBLE_BASIS_KINDS:
+                raise GuardedWorkspaceError(f"{label}.kind is unsupported")
+            basis_ref = _text(raw_basis.get("ref"), label=f"{label}.ref")
+            support = _text(raw_basis.get("support"), label=f"{label}.support")
+            if kind == "benchmark_independent":
+                if not basis_ref.startswith(("principle:", "reference:")):
+                    raise GuardedWorkspaceError(
+                        f"{label}.ref must use principle: or reference:"
+                    )
+                if basis_ref.startswith("reference:"):
+                    reference_path = basis_ref.removeprefix("reference:")
+                    _resolve("reference", reference_path, must_exist=True)
+                has_worker_safe_basis = True
+            else:
+                _, normalized_ref = _resolve(
+                    "evidence", basis_ref, must_exist=True
+                )
+                if normalized_ref not in accessed_evidence:
+                    raise GuardedWorkspaceError(
+                        f"{label}.ref must be read before decision"
+                    )
+                observed_kind = _worker_visible_basis_visibility(normalized_ref)
+                if observed_kind != kind:
+                    raise GuardedWorkspaceError(
+                        f"{label}.kind does not match evidence visibility "
+                        f"({observed_kind})"
+                    )
+                basis_ref = normalized_ref
+                if kind == "public_contract":
+                    has_worker_safe_basis = True
+            normalized_bases.append(
+                {"kind": kind, "ref": basis_ref, "support": support}
+            )
+        if not has_worker_safe_basis:
+            raise GuardedWorkspaceError(
+                f"worker_visible_claims[{claim_index}] has only optimize-only "
+                "diagnostic basis"
+            )
+        normalized_claims.append(
+            {
+                "claim_id": claim_id,
+                "claim": _text(
+                    raw_claim.get("claim"),
+                    label=f"worker_visible_claims[{claim_index}].claim",
+                ),
+                "surfaces": surfaces,
+                "basis_refs": normalized_bases,
+            }
+        )
+    return normalized_claims
 
 
 def _json_facts(text: str) -> dict[str, Any]:
@@ -2061,6 +2205,16 @@ def _decide_quant_property_candidate(
             raise GuardedWorkspaceError(
                 f"ACT may change at most {max_declared} component roles"
             )
+        raw_worker_visible_claims = discovery.get("worker_visible_claims")
+        claim_provenance_required = (
+            contract.get("worker_visible_claim_provenance_required_for_act") is True
+        )
+        if claim_provenance_required or raw_worker_visible_claims is not None:
+            normalized["worker_visible_claims"] = _normalize_worker_visible_claims(
+                raw_worker_visible_claims,
+                declared_components=set(components),
+                accessed_evidence=accessed,
+            )
         preferred_map = contract.get("preferred_primary_components", {})
         preferred = []
         if isinstance(preferred_map, Mapping):
@@ -2211,6 +2365,9 @@ def _decide_quant_property_candidate(
             "max_worker_probes_this_round": contract.get(
                 "max_worker_probes_this_round"
             ),
+            "worker_visible_claim_provenance_required_for_act": contract.get(
+                "worker_visible_claim_provenance_required_for_act"
+            ),
         },
     }
     path = _result_path(_DISCOVERY_STATE_NAME)
@@ -2239,6 +2396,7 @@ def _decide_quant_property_candidate(
         "selected_relation": normalized.get("selected_relation"),
         "residual_risk_relation": normalized.get("residual_risk_relation"),
         "component_routing": normalized.get("component_routing"),
+        "worker_visible_claims": normalized.get("worker_visible_claims"),
     }
 
 
