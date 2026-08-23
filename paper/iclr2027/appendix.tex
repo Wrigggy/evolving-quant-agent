@@ -69,3 +69,19 @@ resume. The live QFBench parent-reuse canary is retained at
 controller result, and candidate-only child report are referenced there. The
 full setup, scores, costs, interpretation, and claim boundary are in
 \path{docs/decisions/2026-08-23-lineage-scale-runway-result.md}.
+
+\subsection{QuantCodeEval live lineage record}
+
+The live controller state is retained at
+\path{results/bc-mirror/qce-lineage-live-canary-20260823-r1/CONTROLLER-RESULT.json}.
+The candidate-only target and repeat reports are retained at
+\path{results/bc-mirror/qce-lineage-qdr1-target-20260823-r1/FULL-CANDIDATE-RESULT.json}
+and
+\path{results/bc-mirror/qce-lineage-qdr1-repeat-20260823-r1/FULL-CANDIDATE-RESULT.json}.
+The compact record at
+\path{data/quantcodeeval/QCE_LINEAGE_LIVE_CANARY_RESULT.json} records the
+reused parent, official property counts, failed-property identities, component
+realization, child-only cost, restart/resume behavior, zero-cost setup failures,
+cleanup, pending protection state, and claim boundary. Full interpretation is
+in
+\path{docs/decisions/2026-08-23-quantcodeeval-live-lineage-canary-result.md}.

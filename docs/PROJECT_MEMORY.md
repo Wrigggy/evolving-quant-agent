@@ -1,5 +1,37 @@
 # QEA Repository Memory
 
+## 2026-08-23 QuantCodeEval live lineage target and repeat retained
+
+The shared lineage controller completed a live candidate-only QuantCodeEval
+T26 target and independent repeat while reusing the retained Quant-H0 12/17,
+reward-zero parent. The retained investigator-seeded QDR-1 candidate reached
+16/17 on target and 14/17 on repeat; both rewards remained zero. In both fresh
+candidate Workers, `check_quant_relations` activated and the final audit
+reported all six declared relations realized with zero errors, warnings, or
+information-time residual. The target failed A10; the repeat failed A10, B5,
+and B9. A clean candidate audit is therefore mechanism evidence rather than a
+complete official-correctness certificate.
+
+The two candidate runs used 109 completed requests, 9,657,209 tokens, and
+$0.213035236, with zero retry or unreconciled request. An initial controller
+import exposed a missing explicit retained-parent run ID. The already completed
+child was reused across service restart at zero new attempt and cost; after the
+run ID was supplied, resume imported the target once, advanced to repeat without
+rerunning target, then imported the independent repeat once. Two preceding
+wrong-model and wrong-public-panel setup failures each made zero model or
+Worker calls and are not benchmark outcomes. All services and runtime resources
+were cleaned up without residue.
+
+The controller is now in `PROTECTION`, stopped after repeat. No T27 protection
+child ran because no matched Quant-H0 T27 comparator was available. This is
+live QCE dispatch, child reuse, transition/accounting resume, repeated property-
+level improvement, and actual relation-realization evidence. It is not binary
+gain, a stable 16/17 candidate, protection-safe promotion, autonomous new
+Evolver discovery, sealed evaluation, or benchmark-wide improvement. Full
+decision: `docs/decisions/2026-08-23-quantcodeeval-live-lineage-canary-result.md`;
+compact result:
+`data/quantcodeeval/QCE_LINEAGE_LIVE_CANARY_RESULT.json`.
+
 ## 2026-08-23 lineage scale runway retained
 
 The fixed controller now consumes retained QFBench and QuantCodeEval

@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-23",
+  "status": "target_repeat_complete_protection_pending",
+  "experiment_id": "qce-lineage-live-canary-20260823-r1",
+  "question": "Can the shared live lineage controller dispatch a QuantCodeEval candidate-only child, reuse a completed Quant-H0 parent, import the result exactly once across restart, run an independent repeat, and preserve property-level and cost accounting before protection?",
+  "task": "T26",
+  "setup": {
+    "parent_version": "quant-h0-ap3-r3",
+    "parent_run": "qce-t26-ap3-20260820-r3-h0",
+    "parent_score": "12/17",
+    "parent_reward": 0.0,
+    "candidate_version": "qdr1-relation-audit-v1",
+    "candidate_origin": "retained investigator-seeded QDR-1 candidate",
+    "new_arms": ["candidate target", "candidate repeat"]
+  },
+  "target": {
+    "run_id": "qce-lineage-qdr1-target-20260823-r1",
+    "parent": {"tests_passed": 12, "tests_failed": 5, "reward": 0.0},
+    "candidate": {
+      "tests_passed": 16,
+      "tests_failed": 1,
+      "reward": 0.0,
+      "failed_properties": ["A10"]
+    },
+    "component": {
+      "name": "check_quant_relations",
+      "activated_in_worker": true,
+      "final_relations_realized": "6/6",
+      "final_errors": 0,
+      "final_warnings": 0,
+      "max_information_time_residual": 0.0
+    },
+    "new_work": {
+      "worker_attempts": 1,
+      "completed_requests": 55,
+      "total_tokens": 5352374,
+      "provider_cost_usd": "0.119301288",
+      "rate_limit_retries": 0,
+      "unreconciled_requests": 0
+    }
+  },
+  "target_import_and_resume": {
+    "initial_import_status": "setup_error",
+    "cause": "The completed parent observation lacked the explicit parent_run_id required by the live adapter.",
+    "child_auto_restart_reused_completed_result": true,
+    "new_worker_attempts_after_child_restart": 0,
+    "new_cost_after_child_restart_usd": "0",
+    "repair": "Supply the explicit retained parent_run_id.",
+    "controller_resume": "Imported the target and its cost once, then advanced to REPEAT without rerunning the target child."
+  },
+  "repeat": {
+    "run_id": "qce-lineage-qdr1-repeat-20260823-r1",
+    "parent": {"tests_passed": 12, "tests_failed": 5, "reward": 0.0},
+    "candidate": {
+      "tests_passed": 14,
+      "tests_failed": 3,
+      "reward": 0.0,
+      "failed_properties": ["A10", "B5", "B9"]
+    },
+    "component": {
+      "name": "check_quant_relations",
+      "activated_in_worker": true,
+      "final_relations_realized": "6/6",
+      "final_errors": 0,
+      "final_warnings": 0,
+      "max_information_time_residual": 0.0
+    },
+    "new_work": {
+      "worker_attempts": 1,
+      "completed_requests": 54,
+      "total_tokens": 4304835,
+      "provider_cost_usd": "0.093733948",
+      "rate_limit_retries": 0,
+      "unreconciled_requests": 0
+    }
+  },
+  "controller_state": {
+    "phase": "PROTECTION",
+    "decision": null,
+    "stopped_after_stage": "repeat",
+    "target_gate_passed": true,
+    "repeat_gate_passed": true,
+    "protection_task": "T27",
+    "protection_dispatched": false,
+    "protection_blocker": "No matched Quant-H0 T27 comparator was available.",
+    "terminal": false
+  },
+  "total_new_work": {
+    "worker_attempts": 2,
+    "completed_requests": 109,
+    "total_tokens": 9657209,
+    "provider_cost_usd": "0.213035236",
+    "rate_limit_retries": 0,
+    "unreconciled_requests": 0
+  },
+  "setup_failures": [
+    {
+      "failure": "runtime config selected the wrong model",
+      "model_requests": 0,
+      "worker_attempts": 0,
+      "provider_cost_usd": "0",
+      "benchmark_outcome": false
+    },
+    {
+      "failure": "public role identity mismatch because the intended T26/T27 panel was not selected",
+      "model_requests": 0,
+      "worker_attempts": 0,
+      "provider_cost_usd": "0",
+      "benchmark_outcome": false
+    }
+  ],
+  "runtime": {
+    "services_after_completion": 0,
+    "containers_after_completion": 0,
+    "networks_after_completion": 0,
+    "active_processes_after_completion": 0
+  },
+  "artifacts": {
+    "plan": "data/quantcodeeval/QCE_LINEAGE_LIVE_TARGET_CANARY_PLAN.json",
+    "controller": "results/bc-mirror/qce-lineage-live-canary-20260823-r1/CONTROLLER-RESULT.json",
+    "target_result": "results/bc-mirror/qce-lineage-qdr1-target-20260823-r1/FULL-CANDIDATE-RESULT.json",
+    "repeat_result": "results/bc-mirror/qce-lineage-qdr1-repeat-20260823-r1/FULL-CANDIDATE-RESULT.json"
+  },
+  "claim_supported": "Live QuantCodeEval candidate-only dispatch, completed-child reuse, transition and cost-accounting resume, repeated property-level improvement over the retained 12/17 parent, and actual relation-component realization in both fresh candidate Workers.",
+  "claim_boundary": "The candidate received reward zero in both runs, moved from 16/17 to 14/17 on repeat, and has not run matched T27 protection. This is not a binary gain, stable 16/17 result, protection-safe promotion, autonomous new Evolver discovery, sealed result, or benchmark-wide improvement."
+}

@@ -389,3 +389,29 @@ candidate was investigator-seeded and replayed from historical official
 observations; the live QFBench arm used an already retained candidate. Neither
 result is a new autonomous search, benchmark improvement, sealed gain, or
 generic-versus-QRS comparison.}
+
+\Measured{The next canary exercised the QuantCodeEval child path live on T26
+with the retained QDR-1 candidate and a reused 12/17 Quant-$H_0$ parent.} The
+candidate changed the target by \QCELiveTarget{} and an independent repeat by
+\QCELiveRepeat{}; all three official rewards remained zero. In both fresh
+candidate Workers, \texttt{check\_quant\_relations} activated and the final
+audit reported \QCELiveRelationAudit{}, with zero errors, warnings, and
+information-time residual. The target failed A10, while the repeat failed A10,
+B5, and B9. The two children used \QCELiveRequests{} completed requests,
+\QCELiveTokens{} tokens, and \QCELiveCost{}, with \QCELiveRetries{} retries or
+unreconciled requests.
+
+The first target import rejected a missing explicit retained-parent run ID.
+The completed child survived the service restart and was reused with no new
+attempt or cost; after the run ID was supplied, resume imported the target once
+and advanced to repeat without redispatch. The controller then imported the
+repeat once and stopped in \texttt{PROTECTION}. No T27 protection child was
+launched because no matched Quant-$H_0$ T27 comparator was available. Two
+earlier wrong-model and wrong-public-panel setup attempts made zero model or
+Worker calls and are not benchmark results.
+
+\Boundary{This is live QCE dispatch, completed-child reuse, resumable
+transition/accounting, repeated property-level improvement, and actual
+relation-component realization. It is not a binary gain, stable 16/17 result,
+protection-safe promotion, autonomous new Evolver discovery, sealed result, or
+benchmark-wide improvement.}
