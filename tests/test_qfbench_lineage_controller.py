@@ -7,8 +7,10 @@ import pytest
 
 from qea.qfbench_lineage import LineageError
 from scripts.run_qfbench_lineage_controller import (
+    _quantcodeeval_property_set_safe,
     build_child_argv,
     build_proposal_argv,
+    build_quantcodeeval_child_argv,
     property_set_safe,
     property_set_safe_from_reports,
     run_controller,
@@ -493,6 +495,262 @@ def test_quantcodeeval_candidate_without_cost_is_not_lineage_ready(tmp_path):
 
     with pytest.raises(LineageError, match="explicit cost accounting"):
         run_controller(plan_path, tmp_path / "state")
+
+
+def test_live_quantcodeeval_candidate_stages_resume_without_dispatch(tmp_path):
+    parent_target = _qce_result(
+        tmp_path / "parents/target.json",
+        run_id="qce-parent-t26",
+        task_id="T26",
+        passed=15,
+        failed=2,
+        reward=0,
+        diagnostic_tags=("tests_failed",),
+        cost=None,
+    )
+    parent_protection = _qce_result(
+        tmp_path / "parents/protection.json",
+        run_id="qce-parent-t27",
+        task_id="T27",
+        passed=13,
+        failed=1,
+        reward=0,
+        diagnostic_tags=("tests_failed",),
+        cost=None,
+    )
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "qce-live-r1",
+        "mode": "live",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "results_dir": str(tmp_path / "results"),
+            "quantcodeeval_config": "/config.json",
+            "quantcodeeval_release": "/release",
+            "quantcodeeval_worker_image": "worker:fixed",
+            "quantcodeeval_verifier_image": "verifier:fixed",
+            "quantcodeeval_proxy_image": "proxy:fixed",
+        },
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [{
+            "lineage_id": "qce-live",
+            "parent": {"version": "quant-h0", "worker_dir": "/qce-h0"},
+            "candidate": {
+                "version": "qce-c1",
+                "worker_dir": "/qce-c1",
+                "activation_run": "/activation",
+            },
+            "stages": [
+                {
+                    "name": "target",
+                    "benchmark": "quantcodeeval",
+                    "task_id": "T26",
+                    "parent_result": str(parent_target),
+                    "official_property_total": 17,
+                    "live_run_id": "qce-live-target",
+                },
+                {
+                    "name": "repeat",
+                    "benchmark": "quantcodeeval",
+                    "task_id": "T26",
+                    "parent_result": str(parent_target),
+                    "official_property_total": 17,
+                    "live_run_id": "qce-live-repeat",
+                },
+                {
+                    "name": "protection",
+                    "benchmark": "quantcodeeval",
+                    "task_id": "T27",
+                    "parent_result": str(parent_protection),
+                    "official_property_total": 14,
+                    "live_run_id": "qce-live-protection",
+                },
+            ],
+        }],
+    }
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+    calls = []
+
+    def fake_runner(argv):
+        argv = list(argv)
+        calls.append(argv)
+        run_dir = Path(argv[argv.index("--run-dir") + 1])
+        task_id = argv[argv.index("--task") + 1]
+        if task_id == "T26":
+            passed, failed, reward = 16, 1, 0
+        else:
+            passed, failed, reward = 14, 0, 1
+        _qce_result(
+            run_dir / "FULL-CANDIDATE-RESULT.json",
+            run_id=run_dir.name,
+            task_id=task_id,
+            passed=passed,
+            failed=failed,
+            reward=reward,
+            diagnostic_tags=(() if failed == 0 else ("tests_failed",)),
+        )
+
+    result = run_controller(
+        plan_path,
+        tmp_path / "state",
+        approve_external_run=True,
+        runner=fake_runner,
+    )
+    again = run_controller(
+        plan_path,
+        tmp_path / "state",
+        approve_external_run=True,
+        runner=fake_runner,
+    )
+
+    state = result["lineages"]["qce-live"]
+    assert state["decision"] == "PROMOTE"
+    assert state["phase"] == "FROZEN"
+    assert state["accounted_run_ids"] == [
+        "qce-live-target",
+        "qce-live-repeat",
+        "qce-live-protection",
+    ]
+    assert state["cost"] == {
+        "provider_cost_usd": "0.015",
+        "completed_requests": 3,
+        "total_tokens": 150,
+    }
+    assert state["observations"]["protection"]["property_set_safe"] is True
+    assert len(calls) == 3
+    assert again == result
+
+
+def test_live_quantcodeeval_evaluation_failure_remains_infrastructure(tmp_path):
+    parent = _qce_result(
+        tmp_path / "parent.json",
+        run_id="qce-parent-t26",
+        task_id="T26",
+        passed=15,
+        failed=2,
+        reward=0,
+        diagnostic_tags=("tests_failed",),
+        cost=None,
+    )
+    plan = {
+        "controller_run_id": "qce-live-failure",
+        "mode": "live",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "results_dir": str(tmp_path / "results"),
+            "quantcodeeval_config": "/config.json",
+            "quantcodeeval_release": "/release",
+            "quantcodeeval_worker_image": "worker:fixed",
+            "quantcodeeval_verifier_image": "verifier:fixed",
+            "quantcodeeval_proxy_image": "proxy:fixed",
+        },
+        "lineages": [{
+            "lineage_id": "qce-live",
+            "parent": {"version": "quant-h0", "worker_dir": "/qce-h0"},
+            "candidate": {
+                "version": "qce-c1",
+                "worker_dir": "/qce-c1",
+                "activation_run": "/activation",
+            },
+            "stages": [
+                {
+                    "name": "target",
+                    "benchmark": "quantcodeeval",
+                    "task_id": "T26",
+                    "parent_result": str(parent),
+                    "official_property_total": 17,
+                    "live_run_id": "qce-live-failed-target",
+                },
+                {"name": "repeat", "task_id": "T26"},
+                {"name": "protection", "task_id": "T27"},
+            ],
+        }],
+    }
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    def failed_runner(argv):
+        argv = list(argv)
+        run_dir = Path(argv[argv.index("--run-dir") + 1])
+        run_dir.mkdir(parents=True)
+        (run_dir / "FULL-CANDIDATE-RESULT.json").write_text(json.dumps({
+            "status": "evaluation_failed",
+            "official_evaluated": False,
+            "run_id": run_dir.name,
+            "partial_cost_and_lifecycle_audit": {
+                "provider_cost_usd": "0.003",
+                "completed_request_count": 1,
+                "total_tokens": 40,
+                "cost_complete": True,
+            },
+        }))
+        return type("Result", (), {"returncode": 1})()
+
+    with pytest.raises(LineageError, match="incomplete infrastructure"):
+        run_controller(
+            plan_path,
+            tmp_path / "state",
+            approve_external_run=True,
+            runner=failed_runner,
+        )
+
+
+def test_quantcodeeval_protection_infers_only_conclusive_count_cases():
+    def comparison(parent_failed, candidate_failed):
+        return {
+            "parent": {"tests_failed": parent_failed},
+            "candidate": {"tests_failed": candidate_failed},
+        }
+
+    assert _quantcodeeval_property_set_safe({}, comparison(3, 0))
+    assert not _quantcodeeval_property_set_safe({}, comparison(0, 1))
+    assert _quantcodeeval_property_set_safe(
+        {"property_set_safe": True}, comparison(2, 1)
+    )
+    with pytest.raises(LineageError, match="needs explicit property_set_safe"):
+        _quantcodeeval_property_set_safe({}, comparison(2, 1))
+
+
+def test_live_quantcodeeval_child_requires_approval_and_fixed_run_dir(tmp_path):
+    plan = {
+        "controller_run_id": "main0",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "results_dir": str(tmp_path / "results"),
+            "quantcodeeval_config": "/config.json",
+            "quantcodeeval_release": "/release",
+            "quantcodeeval_worker_image": "worker:fixed",
+            "quantcodeeval_verifier_image": "verifier:fixed",
+            "quantcodeeval_proxy_image": "proxy:fixed",
+        },
+    }
+    lineage = {
+        "lineage_id": "qce",
+        "candidate": {"activation_run": "/activation"},
+    }
+    stage = {
+        "name": "target",
+        "task_id": "T26",
+        "live_run_id": "qce-target-fixed",
+    }
+
+    with pytest.raises(LineageError, match="was not approved"):
+        build_quantcodeeval_child_argv(
+            plan, lineage, stage, approve_external_run=False
+        )
+    argv = build_quantcodeeval_child_argv(
+        plan, lineage, stage, approve_external_run=True
+    )
+
+    assert argv[1] == "/source/scripts/run_quantcodeeval_v2_candidate.py"
+    run_dir = argv[argv.index("--run-dir") + 1]
+    assert run_dir == str(tmp_path / "results/qce-target-fixed")
+    assert argv[argv.index("--activation-run") + 1] == "/activation"
+    assert argv[argv.index("--task") + 1] == "T26"
 
 
 def test_live_child_argv_uses_existing_component_runner():

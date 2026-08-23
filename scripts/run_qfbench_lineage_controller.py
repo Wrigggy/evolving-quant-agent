@@ -111,6 +111,86 @@ def build_child_argv(
     return tuple(argv)
 
 
+def _quantcodeeval_live_run_id(
+    plan: Mapping[str, object],
+    lineage: Mapping[str, object],
+    stage: Mapping[str, object],
+) -> str:
+    return str(
+        stage.get("live_run_id")
+        or f"{plan['controller_run_id']}-{lineage['lineage_id']}-{stage['name']}"
+    )
+
+
+def _quantcodeeval_live_result_path(
+    plan: Mapping[str, object],
+    lineage: Mapping[str, object],
+    stage: Mapping[str, object],
+) -> Path:
+    run_id = _quantcodeeval_live_run_id(plan, lineage, stage)
+    return (
+        Path(str(plan["runtime"]["results_dir"]))
+        / run_id
+        / "FULL-CANDIDATE-RESULT.json"
+    )
+
+
+def build_quantcodeeval_child_argv(
+    plan: Mapping[str, object],
+    lineage: Mapping[str, object],
+    stage: Mapping[str, object],
+    *,
+    approve_external_run: bool,
+) -> tuple[str, ...]:
+    """Build one existing QuantCodeEval v2 candidate invocation."""
+
+    if not approve_external_run:
+        raise LineageError("live QuantCodeEval child execution was not approved")
+    runtime = plan["runtime"]
+    candidate = lineage["candidate"]
+    activation_run = stage.get("activation_run") or candidate.get(
+        "activation_run"
+    )
+    if not isinstance(activation_run, str) or not activation_run:
+        raise LineageError("live QuantCodeEval stage has no activation_run")
+    argv = [
+        str(runtime["python"]),
+        str(
+            Path(str(runtime["source_root"]))
+            / "scripts/run_quantcodeeval_v2_candidate.py"
+        ),
+        "--config",
+        str(runtime["quantcodeeval_config"]),
+        "--release",
+        str(runtime["quantcodeeval_release"]),
+        "--activation-run",
+        activation_run,
+        "--run-dir",
+        str(_quantcodeeval_live_result_path(plan, lineage, stage).parent),
+        "--worker-image",
+        str(runtime["quantcodeeval_worker_image"]),
+        "--verifier-image",
+        str(runtime["quantcodeeval_verifier_image"]),
+        "--proxy-image",
+        str(runtime["quantcodeeval_proxy_image"]),
+        "--task",
+        str(stage["task_id"]),
+    ]
+    task_panel = stage.get("task_panel") or runtime.get(
+        "quantcodeeval_task_panel"
+    )
+    if task_panel:
+        argv.extend(("--task-panel", str(task_panel)))
+    if stage.get("source_h0_evaluation_id"):
+        argv.extend(
+            (
+                "--source-h0-evaluation-id",
+                str(stage["source_h0_evaluation_id"]),
+            )
+        )
+    return tuple(argv)
+
+
 def build_proposal_argv(
     plan: Mapping[str, object],
     lineage: Mapping[str, object],
@@ -411,6 +491,68 @@ def _quantcodeeval_comparison(
             "cost_accounting": "candidate_only",
         },
     }
+
+
+def _quantcodeeval_stage_with_live_result(
+    plan: Mapping[str, object],
+    lineage: Mapping[str, object],
+    stage: Mapping[str, object],
+    *,
+    approve_external_run: bool,
+    runner: Runner,
+) -> dict[str, object]:
+    """Resolve a retained result or run one fixed-ID candidate child."""
+
+    resolved = dict(stage)
+    if isinstance(stage.get("candidate_result"), (str, Mapping)):
+        return resolved
+    result_path = _quantcodeeval_live_result_path(plan, lineage, stage)
+    if not result_path.is_file():
+        if plan.get("mode") == "replay":
+            raise LineageError(
+                f"replay QuantCodeEval candidate is missing: {result_path}"
+            )
+        argv = build_quantcodeeval_child_argv(
+            plan,
+            lineage,
+            stage,
+            approve_external_run=approve_external_run,
+        )
+        child = runner(argv)
+        return_code = getattr(child, "returncode", 0)
+        if return_code and not result_path.is_file():
+            raise RuntimeError(
+                f"QuantCodeEval child runner exited with code {return_code}"
+            )
+    if not result_path.is_file():
+        raise LineageError(
+            f"QuantCodeEval child did not write its result: {result_path}"
+        )
+    resolved["candidate_result"] = str(result_path)
+    return resolved
+
+
+def _quantcodeeval_property_set_safe(
+    stage: Mapping[str, object],
+    comparison: Mapping[str, object],
+) -> bool:
+    """Use conclusive counts, otherwise require the declared property verdict."""
+
+    parent = comparison["parent"]
+    candidate = comparison["candidate"]
+    candidate_failed = candidate["tests_failed"]
+    parent_failed = parent["tests_failed"]
+    if candidate_failed == 0:
+        return True
+    if parent_failed == 0:
+        return False
+    declared = stage.get("property_set_safe")
+    if not isinstance(declared, bool):
+        raise LineageError(
+            "QuantCodeEval protection with nonzero parent and candidate "
+            "failures needs explicit property_set_safe"
+        )
+    return declared
 
 
 def _quantitative_review(
@@ -733,7 +875,21 @@ def run_controller(
             stage_name = str(state["phase"]).lower()
             stage = _stage(lineage, stage_name)
             if stage.get("benchmark") == "quantcodeeval":
-                comparison = _quantcodeeval_comparison(stage)
+                resolved_stage = _quantcodeeval_stage_with_live_result(
+                    plan,
+                    {
+                        **lineage,
+                        "parent": state["current_parent"],
+                        "candidate": {
+                            **dict(lineage.get("candidate", {})),
+                            **state["candidate"],
+                        },
+                    },
+                    stage,
+                    approve_external_run=approve_external_run,
+                    runner=child_runner,
+                )
+                comparison = _quantcodeeval_comparison(resolved_stage)
                 property_safe = None
                 quantitative_triage = None
                 quantitative_review = (
@@ -744,12 +900,9 @@ def run_controller(
                 ):
                     quantitative_triage = _quantitative_triage(stage)
                 elif stage_name == "protection":
-                    property_safe = stage.get("property_set_safe")
-                    if not isinstance(property_safe, bool):
-                        raise LineageError(
-                            "QuantCodeEval protection needs explicit "
-                            "property_set_safe"
-                        )
+                    property_safe = _quantcodeeval_property_set_safe(
+                        stage, comparison
+                    )
                 state = import_comparison_observation(
                     state,
                     stage=stage_name,
