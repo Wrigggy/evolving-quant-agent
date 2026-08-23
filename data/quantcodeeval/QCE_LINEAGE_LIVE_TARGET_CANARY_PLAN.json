@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-23",
+  "status": "bounded_live_engineering_canary",
+  "controller_run_id": "qce-lineage-live-canary-20260823-r1",
+  "mode": "live",
+  "purpose": "Verify QuantCodeEval candidate child dispatch, official-result import, fixed-stage resume, and candidate-only accounting on T26.",
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/parent-reuse-canary-20260823-r1",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "quantcodeeval_config": "/data/qea-julius-storage/deploy/ap3-20260820/configs/qfbench_rootless_canary.json",
+    "quantcodeeval_release": "/data/qea-julius-storage/runs/qce-t26-ap3-20260820-r3/engineering-release",
+    "quantcodeeval_worker_image": "qea-qce-worker-ap3:20260823",
+    "quantcodeeval_verifier_image": "qea-rootless-verifier-8308e30fae771c6b:latest",
+    "quantcodeeval_proxy_image": "qea-rootless-proxy-ffadc27899f76e67:latest"
+  },
+  "limits": {
+    "provider_cost_usd": 0.3
+  },
+  "lineages": [
+    {
+      "lineage_id": "qdr1-t26-live",
+      "parent": {
+        "version": "quant-h0-ap3-r3",
+        "worker_dir": "/data/qea-julius-storage/runs/qce-t26-ap3-20260820-r3/engineering-release/h0/workers/H0"
+      },
+      "candidate": {
+        "version": "qdr1-relation-audit-v1",
+        "worker_dir": "/data/qea-julius-storage/runs/qce-t26-qdr1-diagnostic-refinement-20260820-r1/evolver/evolutions/iteration-0001/candidate",
+        "activation_run": "/data/qea-julius-storage/runs/qce-t26-qdr1-diagnostic-refinement-20260820-r1/evolver"
+      },
+      "stages": [
+        {
+          "name": "target",
+          "benchmark": "quantcodeeval",
+          "task_id": "T26",
+          "parent_result": "/data/qea-julius-storage/runs/qce-t26-ap3-20260820-r3/engineering-release/h0/H0-RESULT.json",
+          "official_property_total": 17,
+          "live_run_id": "qce-lineage-qdr1-target-20260823-r1",
+          "relation_observed": true
+        },
+        {
+          "name": "repeat",
+          "benchmark": "quantcodeeval",
+          "task_id": "T26",
+          "parent_result": "/data/qea-julius-storage/runs/qce-t26-ap3-20260820-r3/engineering-release/h0/H0-RESULT.json",
+          "official_property_total": 17,
+          "live_run_id": "qce-lineage-qdr1-repeat-20260823-r1",
+          "relation_observed": true
+        },
+        {
+          "name": "protection",
+          "benchmark": "quantcodeeval",
+          "task_id": "T27",
+          "parent_result": "/data/qea-julius-storage/runs/qce-t27-parent-pending/H0-RESULT.json",
+          "live_run_id": "qce-lineage-qdr1-protection-20260823-r1",
+          "relation_observed": false,
+          "blocked_until_parent_comparator": true
+        }
+      ]
+    }
+  ],
+  "execution_boundary": {
+    "stop_after_stage": "target",
+    "reason": "T27 has no matched blind Quant-H0 parent comparator yet. The first live canary validates only T26 child dispatch and resume."
+  },
+  "claim_boundary": "This is a live controller integration canary using a retained autonomous candidate, not a new Evolver proposal, stable gain, protection result, sealed evaluation, or benchmark-level claim."
+}
