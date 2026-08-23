@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "experiment_id": "candidate-information-set-reviewer-canary-20260824-r1",
+  "date": "2026-08-24",
+  "status": "complete_predeclared_semantic_discrimination_pass",
+  "research_question": "Can one arm-blind, non-promoting Candidate Information-Set Reviewer call distinguish optimize-only semantic projection from predicates directly grounded in public task evidence before any Worker dispatch?",
+  "setup": {
+    "model": "deepseek/deepseek-v4-pro",
+    "resolved_model": "deepseek/deepseek-v4-pro-20260813",
+    "backend": "openrouter",
+    "reviewer_worker_visible": false,
+    "promotion_authority": false,
+    "worker_calls_allowed": 0,
+    "frozen_plan": "data/breadth/CANDIDATE_INFORMATION_SET_REVIEWER_CANARY_PLAN.json",
+    "frozen_input": "data/breadth/CANDIDATE_INFORMATION_SET_REVIEWER_CANARY_INPUT.json",
+    "measured_artifact": "results/bc-mirror/candidate-information-set-reviewer-canary-20260824-r1/RESULT.json"
+  },
+  "setup_failure": {
+    "status": "retained_zero_call_setup_failure",
+    "failure": "The rootless runtime virtual environment did not include the optional openai package required by the first runner implementation.",
+    "model_requests": 0,
+    "result_artifacts": 0,
+    "scientific_interpretation": "Infrastructure-only setup failure; not a Reviewer outcome.",
+    "repair": "The runner was changed to use the Python standard-library HTTP client for the bounded OpenRouter request, then the same frozen plan and input were rerun."
+  },
+  "request": {
+    "request_count": 1,
+    "model": "deepseek/deepseek-v4-pro",
+    "response_usage": {
+      "prompt_tokens": 2277,
+      "completion_tokens": 10673,
+      "total_tokens": 12950
+    },
+    "provider_accounting": {
+      "prompt_tokens": 2331,
+      "completion_tokens": 12509,
+      "provider_cost_usd": 0.02263536
+    },
+    "wall_seconds": 137.959
+  },
+  "claim_reviews": [
+    {
+      "claim_id": "raw-svi-a-positive",
+      "expected": "REJECT",
+      "observed": "REJECT",
+      "reason_class": "optimize_only_origin_without_public_support"
+    },
+    {
+      "claim_id": "terminal-local-vol-atm-positive",
+      "expected": "REJECT",
+      "observed": "REJECT",
+      "reason_class": "optimize_only_origin_not_entailed_by_public_positivity"
+    },
+    {
+      "claim_id": "pair-array-only",
+      "expected": "REJECT",
+      "observed": "REJECT",
+      "reason_class": "public_contradiction_and_optimize_only_origin"
+    },
+    {
+      "claim_id": "written-local-vol-positive",
+      "expected": "PASS",
+      "observed": "PASS",
+      "reason_class": "direct_public_support"
+    },
+    {
+      "claim_id": "effective-state-downstream-reconciliation",
+      "expected": "PASS",
+      "observed": "PASS",
+      "reason_class": "direct_public_support"
+    }
+  ],
+  "summary": {
+    "contaminated_claims_rejected": 3,
+    "public_claims_passed": 2,
+    "claim_verdicts_matching_predeclaration": 5,
+    "claim_count": 5,
+    "coverage_expected": "PASS",
+    "coverage_observed": "PASS",
+    "overall_expected": "REJECT",
+    "overall_observed": "REJECT",
+    "success_condition_met": true
+  },
+  "cleanup": {
+    "worker_dispatches": 0,
+    "verifier_executions": 0,
+    "related_processes_remaining": 0,
+    "related_containers_remaining": 0,
+    "related_networks_remaining": 0
+  },
+  "retained_conclusion": "One bounded arm-blind Reviewer call matched all five predeclared semantic-provenance verdicts, passed candidate-claim coverage, returned overall REJECT, respected zero-Worker and zero-promotion authority, and left no runtime residue.",
+  "claim_boundary": {
+    "supported": "Single-call bounded semantic discrimination on one synthetic mixed fixture, schema compliance, complete declared-claim coverage, exact predeclared verdict match, authority compliance, request accounting, and cleanup.",
+    "not_supported": "Reviewer infallibility, population precision or recall, recovery or reauthorization of any of the six contaminated candidates, candidate promotion, benchmark gain, or main-experiment readiness.",
+    "main_readiness": "NO-GO until the Reviewer is wired into the controller as a mandatory pre-Worker gate and one fresh public-only candidate passes that gate and obtains a retained official gain with a blind Worker."
+  }
+}

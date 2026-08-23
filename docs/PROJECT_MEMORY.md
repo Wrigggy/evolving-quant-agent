@@ -1,5 +1,37 @@
 # QEA Repository Memory
 
+## 2026-08-24 Candidate Information-Set Reviewer canary retained
+
+One arm-blind `deepseek/deepseek-v4-pro` Reviewer request exactly matched the
+five predeclared predicate-provenance decisions on a mixed fixture: it rejected
+raw SVI `a>0`, terminal `local_vol_atm>0` plus a one-sided difference, and a
+two-element pair-array requirement; it passed written local-vol grid positivity
+and effective-state downstream reconciliation. Claim coverage was `PASS` and
+overall verdict was `REJECT`. The Reviewer remained Worker-invisible and had no
+promotion authority.
+
+Response usage was 12,950 total tokens (2,277 prompt and 10,673 completion),
+while provider accounting separately reported 2,331 prompt and 12,509
+completion tokens. The request cost $0.02263536 and took 137.959 seconds. The
+run dispatched zero Worker or verifier and left zero related process,
+container, or network residue.
+
+The first invocation is retained as a zero-call setup failure: the rootless
+runtime virtual environment lacked the optional `openai` package, so it made
+zero model requests and produced zero result. A standard-library HTTP runner
+repair then executed the same frozen plan and input.
+
+This is one positive bounded canary for single-call semantic discrimination,
+schema and coverage compliance, narrow authority, accounting, and cleanup. It
+does not prove Reviewer infallibility, recover any of the six contaminated
+candidates, authorize promotion, or establish benchmark gain. Main-experiment
+readiness remains `NO-GO` until the Reviewer is a mandatory controller-level
+pre-Worker gate and one fresh public-only candidate passes it and obtains a
+retained official gain with a blind Worker. Compact result:
+`data/breadth/CANDIDATE_INFORMATION_SET_REVIEWER_CANARY_RESULT.json`; full
+decision:
+`docs/decisions/2026-08-24-candidate-information-set-reviewer-canary-result.md`.
+
 ## 2026-08-24 development-candidate provenance audit: 6/6 contaminated
 
 A retrospective read-only audit reconstructed the answer provenance of all six
