@@ -738,3 +738,33 @@ zero residue were verified. \Boundary{This supports legal public-only proposal
 construction and the frozen gate stop only. The text scan is not an
 Information-Set Reviewer verdict; no Worker activation, official gain,
 candidate quality, or harness improvement was measured.}
+
+\Measured{A Reviewer-only R2 replay then evaluated the same prompt-family
+candidate under corrected review eligibility.} Overall verdict was
+\HoldingsReviewOverall{}. Coverage was \HoldingsReviewCoverage{} with no
+undeclared exposures. At claim level, cross-table key canonicalization was
+\HoldingsReviewCanonicalization{}, numeric-column coercion was
+\HoldingsReviewNumericCoercion{}, and filing-total reconciliation was
+\HoldingsReviewReconciliation{}. The controller selected
+\HoldingsReviewDecision{} for reason
+\texttt{information\_set\_review\_inconclusive}; Reviewer count was one, while
+Worker, verifier, and new-Evolver counts were zero.
+
+Response usage recorded \HoldingsReviewResponsePrompt{} prompt and
+\HoldingsReviewResponseCompletion{} completion tokens
+(\HoldingsReviewResponseTokens{} total). Provider accounting separately
+recorded \HoldingsReviewProviderPrompt{} prompt and
+\HoldingsReviewProviderCompletion{} completion tokens
+(\HoldingsReviewProviderTokens{} total). Both surfaces are retained; the
+controller used response usage. Reviewer cost was \HoldingsReviewCost{} over
+\HoldingsReviewWall{}. With R1 inherited, cumulative accounting was
+\HoldingsReviewCumulativeRequests{} requests,
+\HoldingsReviewCumulativeTokens{} tokens, and
+\HoldingsReviewCumulativeCost{}.
+
+Two terminal resumes added zero dispatch, request, token, or cost. The first
+cleared only the stopped-stage marker; the second left the post-marker state
+and result unchanged. Systemd completed with zero restarts and residue.
+\Boundary{R2 does not rewrite R1's frozen stop. It corrects prompt-family
+review eligibility, but the candidate still did not pass. No Worker uptake,
+official gain, promotion, or main-readiness result exists.}

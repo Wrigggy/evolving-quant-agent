@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-public-only-holdings-information-set-review-replay-20260824-r2",
+  "review_id": "qf-public-only-holdings-information-set-review-20260824-r2",
+  "date": "2026-08-24",
+  "status": "review_complete_candidate_hold_inconclusive",
+  "research_question": "After correcting prompt-family review eligibility without rewriting the frozen R1 decision, does the existing public-only holdings candidate pass the arm-blind Candidate Information-Set Review?",
+  "setup": {
+    "benchmark": "QFBench",
+    "task_id": "13f-amendment-aware-crowding",
+    "candidate_id": "qf-public-only-holdings-c1",
+    "candidate_source_run": "qf-public-only-holdings-proposal-20260824-r1",
+    "review_scope": "answer_free_candidate_information_set",
+    "review_artifact": "results/bc-mirror/qf-public-only-holdings-information-set-review-20260824-r2/RESULT.json",
+    "controller_artifacts": "results/bc-mirror/qf-public-only-holdings-information-set-review-replay-20260824-r2-controller-state",
+    "reviewer_worker_visible": false,
+    "reviewer_promotion_authority": false,
+    "reviewer_only_replay": true
+  },
+  "review": {
+    "overall_verdict": "INCONCLUSIVE",
+    "coverage": {
+      "verdict": "PASS",
+      "undeclared_exposures": []
+    },
+    "claim_reviews": [
+      {
+        "claim_id": "cross_table_key_canonicalization",
+        "verdict": "INCONCLUSIVE",
+        "interpretation": "The public contract implies comparable keys and exact universe coverage but does not directly entail the candidate's specific pre-filter inventory and canonicalization procedure."
+      },
+      {
+        "claim_id": "numeric_column_coercion",
+        "verdict": "INCONCLUSIVE",
+        "interpretation": "The public contract requires numeric analytics but does not directly prescribe the candidate's missing-value sentinel and explicit dtype-coercion procedure."
+      },
+      {
+        "claim_id": "filing_totals_reconciliation",
+        "verdict": "PASS",
+        "interpretation": "The public contract directly requires holdings totals to reconcile with summary-page data and requires the associated reconciliation outputs."
+      }
+    ]
+  },
+  "controller": {
+    "decision": "HOLD_FOR_REFINE",
+    "phase": "HOLD_FOR_REFINE",
+    "reason": "information_set_review_inconclusive",
+    "reviewer_requests": 1,
+    "worker_sessions": 0,
+    "verifier_executions": 0,
+    "new_evolver_proposals": 0,
+    "candidate_passed": false
+  },
+  "review_request": {
+    "request_count": 1,
+    "response_usage": {
+      "prompt_tokens": 4569,
+      "completion_tokens": 12888,
+      "total_tokens": 17457
+    },
+    "provider_accounting": {
+      "prompt_tokens": 4565,
+      "completion_tokens": 15390,
+      "total_tokens": 19955
+    },
+    "accounting_difference": {
+      "prompt_tokens": -4,
+      "completion_tokens": 2502,
+      "total_tokens": 2498,
+      "controller_token_surface": "response_usage",
+      "interpretation": "Both token surfaces are retained; the controller added response-usage tokens to lineage cost."
+    },
+    "provider_cost_usd": 0.02853378,
+    "wall_seconds": 163.786
+  },
+  "lineage_accounting": {
+    "inherited_r1": {
+      "completed_requests": 22,
+      "total_tokens": 2093270,
+      "provider_cost_usd": 0.061361376
+    },
+    "cumulative_after_review": {
+      "completed_requests": 23,
+      "total_tokens": 2110727,
+      "provider_cost_usd": 0.089895156
+    },
+    "token_rule": "2,093,270 inherited tokens plus 17,457 Reviewer response-usage tokens."
+  },
+  "r1_r2_decision_boundary": {
+    "r1_frozen_decision": "NON-SINGLETON -> STOP",
+    "r1_rewritten": false,
+    "r2_correction": "Prompt-family candidates are eligible for Candidate Information-Set Review without pretending that a prompt mutation is a registered callable-tool activation.",
+    "r2_result": "Review executed, but the candidate did not receive PASS and remains held for refinement."
+  },
+  "terminal_resume_audit": {
+    "first_resume": {
+      "action": "Cleared only the stopped_after_stage marker.",
+      "new_dispatches": 0,
+      "new_completed_requests": 0,
+      "new_tokens": 0,
+      "new_provider_cost_usd": 0.0,
+      "result_changed": false
+    },
+    "second_resume": {
+      "state_changed": false,
+      "result_changed": false,
+      "new_dispatches": 0,
+      "new_completed_requests": 0,
+      "new_tokens": 0,
+      "new_provider_cost_usd": 0.0,
+      "interpretation": "Post-marker controller state and result remained identical."
+    }
+  },
+  "runtime": {
+    "systemd_result": "success",
+    "service_restarts": 0,
+    "related_residue": 0
+  },
+  "retained_conclusion": "R2 corrects prompt-family review eligibility and demonstrates one bounded arm-blind review with complete declared-claim coverage. Two claims remained insufficiently supported by the supplied public contract, so the candidate is held for refinement and no Worker or verifier was dispatched.",
+  "claim_boundary": {
+    "supported": "One Reviewer-only replay, claim-level and coverage verdicts, calibrated INCONCLUSIVE handling, controller hold, dual token accounting, cumulative lineage cost, terminal resume idempotence, and cleanup.",
+    "not_supported": "Reviewer infallibility, candidate PASS, complete semantic provenance, Worker uptake, process or official gain, candidate promotion, stable reuse, or main-experiment readiness.",
+    "next_candidate_status": "Held for refinement; no existing result authorizes Worker dispatch."
+  }
+}

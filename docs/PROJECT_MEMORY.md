@@ -1,5 +1,35 @@
 # QEA Repository Memory
 
+## 2026-08-24 public-only holdings R2 Reviewer held the candidate
+
+The R2 Reviewer-only replay corrected prompt-family review eligibility without
+rewriting R1's frozen `NON-SINGLETON -> STOP` result. One arm-blind Candidate
+Information-Set Reviewer request returned overall `INCONCLUSIVE`. Coverage was
+`PASS` with no undeclared exposures; cross-table key canonicalization and
+numeric-column coercion were `INCONCLUSIVE`, while filing-total reconciliation
+was `PASS`. The controller chose `HOLD_FOR_REFINE` with reason
+`information_set_review_inconclusive`.
+
+R2 dispatched zero Worker, verifier, or new Evolver proposal. It used one
+Reviewer request, response usage of 4,569 prompt plus 12,888 completion tokens
+(17,457 total), $0.02853378, and 163.786 seconds. Provider accounting
+separately reported 4,565 prompt plus 15,390 completion tokens; both surfaces
+are retained, while the controller uses response usage for lineage totals.
+
+Inherited R1 accounting was 22 requests, 2,093,270 tokens, and $0.061361376;
+cumulative accounting after review was 23 requests, 2,110,727 tokens, and
+$0.089895156. The first terminal resume cleared only the stopped-stage marker
+with zero new work or cost, and the second resume left post-marker state and
+result unchanged. Systemd reported success, `NRestarts=0`, and zero residue.
+
+This supports calibrated Reviewer `INCONCLUSIVE`, coverage-versus-support
+separation, controller hold, dual accounting, and terminal idempotence. The
+candidate did not pass; there is no Worker uptake, gain, promotion, or
+main-readiness claim. Compact result:
+`data/breadth/QF_PUBLIC_ONLY_HOLDINGS_INFORMATION_SET_REVIEW_R2_RESULT.json`;
+full decision:
+`docs/decisions/2026-08-24-public-only-holdings-information-set-review-r2-result.md`.
+
 ## 2026-08-24 public-only holdings proposal admitted, then stopped at binding gate
 
 The proposal stage of `qf-public-only-holdings-lineage-20260824-r1` returned a

@@ -653,3 +653,28 @@ explicit staged protocol. A future experiment would need a newly frozen design
 choice---either a callable singleton component compatible with the existing
 gate or a different predeclared activation observable for prompt-only
 interventions---before any Reviewer or Worker dispatch.
+
+R2 resolves the procedural issue without manufacturing a positive candidate
+result. Prompt-family mutations do not need a fictitious callable-tool binding
+to be eligible for semantic provenance review; they need a complete exposure
+inventory and an appropriate prompt-family activation observable later. That
+correction leaves the historical R1 stop intact and permits the Reviewer to
+answer the separate provenance question.
+
+The review illustrates why coverage and support must remain distinct. The
+Reviewer judged every decision-changing prompt rule to be declared, yet judged
+two rules to be only plausible engineering practice rather than directly
+entailed by the supplied public contract. Calibrated
+\texttt{INCONCLUSIVE} prevents a coverage pass from being mistaken for
+permission to expose those rules to a blind Worker. The single reconciliation
+claim passed because its required comparison and outputs were explicit in the
+public task.
+
+The two token ledgers also require explicit semantics. Provider accounting
+reported 19,955 tokens, while response usage reported 17,457; the controller
+consistently used the latter for cumulative lineage cost, producing 2,110,727
+tokens after inheriting R1. Recording both avoids silently presenting unlike
+surfaces as an arithmetic discrepancy. Finally, two zero-work terminal resumes
+show that clearing a stale stage marker does not reopen a held candidate or
+duplicate cost. This is controller idempotence, not evidence of candidate
+progress.
