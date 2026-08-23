@@ -497,11 +497,37 @@ failed. A gate that increases recall without an independently credible control
 does not yet establish useful selectivity.
 
 The holdings result also cautions against treating experimenter labels as
-ground truth. Its proposed reconciliation tool was not arbitrary: the Evolver
-identified a complete weight-state artifact, counts-derived turnover,
-self-referential summary checks, and a successful Brinson contrast. This may be
-a plausible untested opportunity rather than pure over-admission. The next
-methodological step is therefore to audit the control definition or use a
-cleaner counterexample before tuning the gate again. Because the frozen plan
-correctly stopped before Worker evaluation, neither interpretation can borrow
-benchmark evidence from this canary.
+ground truth. Two independent read-only audits classified it as an invalid
+semantic negative control: the Evolver identified a complete weight-state
+artifact, counts-derived turnover, self-referential summary checks, and a
+successful Brinson contrast, which together define a plausible reconciliation
+stress case. The canary therefore does not measure semantic over-admission;
+another genuinely unsupported counterexample is required before tuning or
+claiming selectivity.
+
+This audit does not rescue the concrete holdings candidate. Its general
+reconciliation hypothesis is separable from a task-specific serialization
+rule: the public contract permits any unambiguous pair encoding, but the
+candidate mandates a two-element array based on answer-rich diagnostics. Such
+feedback may guide Evolver diagnosis, but it cannot be embedded as a stricter
+Worker-facing requirement when the public contract does not support it. The
+candidate should therefore remain unrun and unretained until that convention is
+removed. This distinction preserves both findings: the frozen procedural
+ACT/ABSTAIN criterion failed, yet the ACT itself is not evidence that the gate
+selected an implausible relation.
+
+The local-vol positive case exposes the complementary failure mode: a valid
+research diagnosis can still produce an invalid reusable component. Answer-rich
+optimization feedback may tell the Evolver that the hidden failure is
+\texttt{a==0} and that the verifier expects \texttt{a>0}, but the public task
+does not state that predicate. Persisting strict \texttt{a>0} and exact-bound
+rejection in a Worker-visible checker, descriptor, and prompt turns permitted
+Evolver supervision into leaked Worker supervision. Structural admission and
+passing component smokes cannot detect that epistemic provenance error.
+
+Accordingly, the gate canary retains only G+ proposal eligibility, not a valid
+candidate. Future construction must translate answer-rich evidence into a
+publicly grounded general audit or require an explicit provenance review before
+Worker dispatch; it cannot copy a hidden property into the harness. Together
+the two audits show why proposal recall, semantic control validity, and
+candidate answer-boundary integrity are three separate gates.

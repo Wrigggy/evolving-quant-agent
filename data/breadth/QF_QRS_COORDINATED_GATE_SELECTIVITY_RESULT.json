@@ -78,6 +78,13 @@
     "service_restarts": 0,
     "runtime_residue": 0
   },
+  "superseding_interpretation": {
+    "source": "post-run independent read-only answer-boundary and control-validity audits",
+    "g_plus": "The revised gate recovered proposal eligibility on the local-volatility case, but the concrete candidate is not runnable or retainable: the public instruction does not specify SVI a>0, while the Evolver-only optimization diagnostic revealed the hidden a==0/a>0 predicate and the candidate embedded strict a>0 plus exact-bound rejection in Worker-visible tool code, description, and prompt.",
+    "g_minus": "The holdings case is INVALID_SEMANTIC_NEGATIVE_CONTROL and a plausible final-state reconciliation stress case, so its ACT is not evidence of over-admission. Its concrete candidate is also not runnable or retainable unchanged because it turns the public allowance of any unambiguous pair encoding into an answer-derived two-element-array requirement.",
+    "candidate_disposition": "Do not run or retain either concrete candidate. Preserve G+ only as proposal-eligibility recovery and preserve the frozen procedural selectivity failure; redesign candidate construction so answer-rich diagnostics can guide diagnosis without entering Worker-visible reusable components.",
+    "measured_fields_changed": false
+  },
   "retained_conclusion": "The revised QRS gate passed the predeclared proposal-recall case but failed the predeclared two-case selectivity criterion because G- also produced an admitted nonempty ACT. The frozen plan stopped before Worker evaluation, so this is gate behavior only and supplies no benchmark or candidate-quality result.",
   "claim_boundary": {
     "supported": "One known-positive proposal opportunity recovered, two legal admitted nonempty QRS proposals, local component-smoke feasibility, correct frozen-plan stop, and clean proposal-only accounting.",

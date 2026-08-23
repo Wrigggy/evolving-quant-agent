@@ -1,6 +1,6 @@
 # QEA Repository Memory
 
-## 2026-08-24 QRS coordinated-gate selectivity canary retained
+## 2026-08-24 QRS coordinated-gate selectivity canary retained and re-audited
 
 The proposal-only G+/G- canary recovered the predeclared positive
 local-volatility opportunity but failed its frozen two-case selectivity
@@ -8,20 +8,45 @@ criterion. G+ returned a legal admitted nonempty `ACT`, created
 `audit_surface_artifacts`, and passed 3/3 grouped component smokes. It used 40
 completed requests, 2,870,880 tokens, and $0.084221288.
 
+A post-run answer-boundary audit supersedes any implication that the concrete
+G+ candidate was eligible for Worker evaluation. The public local-vol
+instruction does not state the hidden SVI predicate `a>0`. The Evolver-only
+optimization diagnostic exposed the `a==0` failure and expected `a>0`, after
+which the candidate wrote strict `a>0` and exact-bound rejection into
+Worker-visible tool code, its descriptor, and the system prompt. This creates
+an answer-rich-to-candidate-to-blind-Worker leakage path. Retain G+ only as
+proposal-eligibility recovery under the revised gate; do not run or retain its
+concrete candidate.
+
 G- was predeclared to return calibrated `ABSTAIN`, but instead returned a legal
 admitted nonempty `ACT`, created `reconcile_portfolio_state`, and passed 2/2
 grouped smokes. It used 27 requests, 3,117,263 tokens, and $0.092374372. The
 frozen plan stopped on this unexpected ACT and launched no Worker. The
-predeclared selectivity outcome is therefore negative. However, the Evolver
-grounded a final-weight-state reconciliation relation in the holdings target
-and successful Brinson contrast, so the experimenter-assigned negative-control
-label requires re-audit before calling the ACT a semantic false positive.
+predeclared procedural selectivity outcome is therefore negative.
+
+Two subsequent independent read-only audits classify holdings as
+`INVALID_SEMANTIC_NEGATIVE_CONTROL`, not evidence of gate over-admission. The
+Evolver grounded a plausible final-weight-state reconciliation stress case in
+the holdings target and successful Brinson contrast, so this case cannot
+measure semantic ACT/ABSTAIN selectivity. At the same time, the proposed
+candidate is not eligible to run or retain unchanged: it tightens the public
+contract's `any unambiguous pair encoding is acceptable` rule into a required
+two-element array, a convention supplied by answer-rich optimization evidence.
+The reusable reconciliation mechanism and the answer-derived serialization
+patch must therefore be separated before any future evaluation.
+
+Consequently, neither concrete candidate is authorized for a Worker run or
+retention. G+ fails the answer boundary through the hidden SVI predicate; G-
+fails it through the answer-derived pair serialization convention. These
+candidate-integrity findings do not change the measured ACT decisions, smoke
+results, accounting, or frozen procedural stop.
 
 The canary totaled 67 requests, 5,988,143 tokens, and $0.176595660, with zero
 retry, Worker call, verifier execution, service restart, or runtime residue.
 This supports one recovered proposal opportunity and correct frozen-plan
-stopping, not benchmark gain, Worker activation, candidate quality, stable
-promotion, QRS superiority, sealed performance, or a general selectivity rate.
+stopping. It does not support gate over-admission, semantic selectivity,
+benchmark gain, Worker activation, candidate quality, stable promotion, QRS
+superiority, or sealed performance.
 Compact result:
 `data/breadth/QF_QRS_COORDINATED_GATE_SELECTIVITY_RESULT.json`; full decision:
 `docs/decisions/2026-08-24-qf-qrs-coordinated-gate-selectivity-result.md`.

@@ -3,6 +3,19 @@
 Date: 2026-08-24
 Status: retained proposal-only canary; recall positive, predeclared selectivity negative
 
+Superseding interpretation: two independent read-only audits classify G- as
+`INVALID_SEMANTIC_NEGATIVE_CONTROL`. The frozen procedural criterion still
+failed, but the G- ACT is not evidence of semantic over-admission. Its candidate
+must not be run or retained unchanged because it embeds an answer-rich
+serialization convention that is stricter than the public contract.
+
+A separate answer-boundary audit rejects the concrete G+ candidate as well.
+The public instruction does not specify SVI `a>0`; the optimize-only diagnostic
+revealed the hidden `a==0`/`a>0` predicate, and the candidate copied strict
+`a>0` plus exact-bound rejection into Worker-visible tool code, description,
+and prompt. G+ remains evidence that the revised gate recovered proposal
+eligibility, not that it constructed an evaluation-eligible candidate.
+
 ## Decision
 
 Retain the two-case gate canary as a mixed proposal-level result. G+ recovered
@@ -13,12 +26,11 @@ nonempty `ACT`, whereas the frozen selectivity criterion required calibrated
 no Worker.
 
 The canary supports recovered proposal recall on one known-positive case, but
-it fails the predeclared two-case selectivity test. It does not yet establish
-that G- was a semantic false positive: the Evolver grounded a reusable
-final-weight-state reconciliation relation in both the holdings target and the
-successful Brinson contrast. The experimenter-assigned negative-control label
-therefore needs re-audit before attributing the result entirely to gate
-over-admission.
+it fails the predeclared two-case procedural selectivity test. Two subsequent
+read-only audits agree that G- is not a valid semantic negative control. The
+Evolver grounded a plausible final-weight-state reconciliation stress case in
+both the holdings target and successful Brinson contrast, so its ACT does not
+show that the revised gate indiscriminately over-admitted a mechanism.
 
 ## Frozen setup
 
@@ -46,6 +58,17 @@ requests, 2,870,880 tokens, and $0.084221288. This satisfies the G+ proposal
 recall criterion. It does not show Worker activation or benchmark improvement
 because the plan never reached the Worker stage.
 
+The later answer-boundary audit found that this candidate must not reach that
+stage. The public task asks for the surface artifacts and observable diagnostics
+but does not state the strict SVI condition `a>0`. The answer-rich optimization
+diagnostic exposed that the hidden failure was `a==0` and the expected predicate
+was `a>0`. The candidate then hard-coded `a>0` and exact-bound rejection into
+`audit_surface_artifacts`, its Worker-visible description, and the system
+prompt. Although the Evolver was permitted to use the diagnostic for diagnosis,
+the hidden answer could not be persisted in a reusable candidate or passed to a
+blind Worker. Therefore G+ retains only the measured proposal-eligibility
+recovery; its concrete candidate is rejected and must not be run or retained.
+
 ## G-: holdings selectivity control
 
 Instead of the expected `ABSTAIN`, the Evolver returned an admitted, nonempty
@@ -59,13 +82,22 @@ Both grouped component smokes passed. The proposal used 27 completed requests,
 3,117,263 tokens, and $0.092374372. Under the frozen experimental definition,
 this is a failed G- selectivity outcome, so no Worker was dispatched.
 
-The scientific interpretation is less binary than the protocol verdict. The
-proposal cited a well-formed final weight-state artifact, counts-derived
+The proposal cited a well-formed final weight-state artifact, counts-derived
 turnover, self-referential summary validation, and the successful Brinson
-trajectory as a contrast satisfying the same reconciliation family. That does
-not prove the candidate would improve the official task, but it makes the
-negative-control label contestable. A label audit should distinguish a genuine
-reusable-but-unproven opportunity from indiscriminate gate admission.
+trajectory as a contrast satisfying the same reconciliation family. Both
+read-only audits therefore classify the case as
+`INVALID_SEMANTIC_NEGATIVE_CONTROL`: it is a plausible reconciliation stress
+case, not a clean situation in which calibrated abstention is semantically
+required.
+
+The audits also found a separate research-integrity defect in the candidate.
+The public instruction says that any unambiguous manager-pair encoding is
+acceptable, while the candidate requires a two-element array. That stricter
+serialization convention came from answer-rich optimization evidence rather
+than the public contract. The candidate must not be run or retained unchanged.
+Only the general final-state reconciliation mechanism remains a legitimate
+hypothesis; it must be separated from the answer-derived pair-encoding rule
+before any future Worker evaluation.
 
 ## Accounting and operations
 
@@ -80,12 +112,28 @@ allowed both Evolvers to produce locally executable candidates. However, the
 predeclared outcome was selective `ACT`/`ABSTAIN`, not simply two valid diffs.
 Because G- also acted, the selectivity gate failed by its frozen criterion.
 
+That procedural failure is not a semantic precision result. The negative
+control was invalid, so the experiment cannot determine whether the revised
+gate over-admits unsupported candidates. Conversely, a plausible relation and
+passing smokes do not make the concrete G- candidate runnable: its answer-rich
+pair-serialization requirement violates the reusable-candidate boundary.
+
+The same structural-admission-versus-research-integrity distinction applies to
+G+. Admission and local smokes show that the gate can produce an executable
+mutation, but they do not certify that its semantics came from public evidence.
+Here the decisive strict-SVI predicate came from the answer-rich diagnostic and
+crossed into Worker-visible surfaces. Neither concrete candidate is therefore
+eligible for target evaluation, even though the frozen plan stopped first on
+the G- procedural event.
+
 This is proposal-level search behavior only. It supports neither benchmark
 gain, Worker activation, candidate quality, stable promotion, QRS superiority,
 a population precision/selectivity estimate, sealed performance, nor component
-causality. The G- result should be retained rather than relabeled after the
-fact; any re-audit changes the interpretation of the control, not the measured
-unexpected `ACT`.
+causality. The measured unexpected `ACT` and frozen stop remain unchanged; the
+superseding audit changes only their scientific interpretation and rejects the
+unchanged G- candidate from further evaluation. The G+ answer-boundary audit
+likewise rejects its concrete candidate without changing the measured proposal
+decision, admission, smokes, or accounting.
 
 ## Artifacts
 

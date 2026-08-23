@@ -160,3 +160,13 @@ G+ and G- decisions, admitted component identities, smoke counts, exact
 proposal accounting, frozen-plan stop, zero Worker dispatch, control-label
 uncertainty, and claim boundary. Full interpretation is in
 \path{docs/decisions/2026-08-24-qf-qrs-coordinated-gate-selectivity-result.md}.
+Two subsequent read-only audits supersede the initial control-label uncertainty:
+G- is an invalid semantic negative control and a plausible reconciliation
+stress case, while its concrete candidate is not runnable unchanged because it
+embeds an answer-derived two-element-array convention absent from the public
+contract. A separate answer-boundary audit also rejects G+: the public task does
+not specify SVI \texttt{a>0}, but the candidate copied that diagnostic-only
+predicate and exact-bound rejection into Worker-visible surfaces. Neither
+concrete candidate is runnable or retainable; G+ remains proposal-eligibility
+recovery only. The compact JSON records this superseding interpretation while
+its measured proposal fields remain unchanged.
