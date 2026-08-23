@@ -1635,6 +1635,20 @@ def _decide_quant_property_candidate(
             raise GuardedWorkspaceError(
                 "this round must inspect an exact prior entry, diff, or candidate source"
             )
+        required_entries = contract.get(
+            "required_runtime_experience_entries", []
+        )
+        if isinstance(required_entries, list):
+            missing_entries = sorted(
+                str(value)
+                for value in required_entries
+                if str(value) not in normalized_refs
+            )
+            if missing_entries:
+                raise GuardedWorkspaceError(
+                    "this round must inspect every retained runtime-experience "
+                    "entry: " + ", ".join(missing_entries)
+                )
 
     selected = discovery.get("selected_hypothesis_id")
     selected_id = (
