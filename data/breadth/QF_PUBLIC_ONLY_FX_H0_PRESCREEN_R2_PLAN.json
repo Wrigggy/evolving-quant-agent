@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-24",
+  "status": "frozen_not_run",
+  "experiment_id": "qf-public-only-fx-h0-prescreen-20260824-r2",
+  "purpose": "Run one separately frozen setup recovery after the R1 Quant-H0 pre-screen ended in model_empty_response. R2 repeats the same public task and execution treatment under a new run identity; it is not an experimental repeat and launches no Evolver, Reviewer, candidate Worker, task repeat, or protection task.",
+  "recovery_from": {
+    "plan": "data/breadth/QF_PUBLIC_ONLY_FX_H0_PRESCREEN_PLAN.json",
+    "run_id": "qf-public-only-fx-h0-prescreen-20260824-r1",
+    "terminal_decision": "STOP_NO_RESULT",
+    "observed_outcome": "model_empty_response",
+    "worker_turns": 0,
+    "worker_tool_calls": 0,
+    "worker_files": 0,
+    "worker_artifacts": 0,
+    "official_empty_output_tests_passed": 0,
+    "official_empty_output_tests_total": 16,
+    "completed_requests": 3,
+    "total_tokens": 41821,
+    "provider_cost_usd": 0.022160676,
+    "final_request_output_tokens": 32000,
+    "cleanup": "clean",
+    "interpretation": "The official empty-output score is not a Quant-H0 capability observation and cannot be used for the public rounding audit, proposal selection, or any benchmark claim."
+  },
+  "recovery_identity": {
+    "classification": "separately_frozen_setup_recovery_not_repeat",
+    "same_as_r1": [
+      "model",
+      "provider",
+      "worker_route",
+      "rootless runtime configuration",
+      "QFBench source and image set",
+      "Quant-H0 worker",
+      "fx-forward-cross-rate public task",
+      "normal Worker budget",
+      "official verifier"
+    ],
+    "changed_from_r1": [
+      "experiment_id",
+      "deploy source_root",
+      "run_id",
+      "checkpoint_prefix",
+      "run-scoped result paths"
+    ],
+    "automatic_r3_allowed": false
+  },
+  "scope": {
+    "benchmark": "QFBench",
+    "task_id": "fx-forward-cross-rate",
+    "arm": "Quant-H0",
+    "worker_sessions": 1,
+    "official_verifier_executions": 1,
+    "sealed_evaluation_used": false,
+    "result_role": "adaptive development target setup recovery only"
+  },
+  "selection_evidence": {
+    "public_instruction": "results/bc-mirror/mtevo-carry-basis-20260821-r1/authorized-evidence/benchmarks/qfbench/tasks/fx-forward-cross-rate/instruction.md",
+    "retained_h0_artifact": "results/bc-mirror/mtevo-carry-basis-20260821-r1/authorized-evidence/benchmarks/qfbench/tasks/fx-forward-cross-rate/artifacts/results.json",
+    "retained_official_aggregate": "results/bc-mirror/mtevo-carry-basis-20260821-r1/authorized-evidence/benchmarks/qfbench/tasks/fx-forward-cross-rate/public_evaluation.json",
+    "retained_observation": "A prior valid Quant-H0 observation scored 36/37 and serialized forward_cross_rates_3M values beyond four decimal places while the public instruction says cross rates are rounded to four decimal places.",
+    "r1_effect": "R1 adds no valid task observation and does not replace the retained selection evidence.",
+    "selection_only": true,
+    "worker_visible": false
+  },
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/qf-public-only-fx-h0-prescreen-20260824-r2",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/qf-public-only-fx-h0-prescreen-20260824-r2/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0"
+  },
+  "run": {
+    "run_id": "qf-public-only-fx-h0-prescreen-20260824-r2",
+    "runner": "scripts/run_qfbench_component_pilot.py",
+    "checkpoint_prefix": "qf-public-only-fx-h0-prescreen-20260824-r2",
+    "seed_worker": "/data/qea-julius-storage/deploy/qf-public-only-fx-h0-prescreen-20260824-r2/qea/worker_quant_h0",
+    "arm_label": "quant-h0",
+    "arm_worker": "/data/qea-julius-storage/deploy/qf-public-only-fx-h0-prescreen-20260824-r2/qea/worker_quant_h0",
+    "task_id": "fx-forward-cross-rate",
+    "worker_concurrency": 1,
+    "verifier_concurrency": 2,
+    "expected_attempts": 1,
+    "expected_report": "/data/qea-julius-storage/runs/qf-public-only-fx-h0-prescreen-20260824-r2/pilot-report.json",
+    "expected_artifact_glob": "/data/qea-julius-storage/runs/qf-public-only-fx-h0-prescreen-20260824-r2/attempts/*/artifacts/results.json"
+  },
+  "launch_argv": [
+    "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "/data/qea-julius-storage/deploy/qf-public-only-fx-h0-prescreen-20260824-r2/scripts/run_qfbench_component_pilot.py",
+    "--qfbench-root",
+    "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "--qfbench-manifest",
+    "/data/qea-julius-storage/deploy/qf-public-only-fx-h0-prescreen-20260824-r2/data/qfbench/MANIFEST_85_BASELINE.json",
+    "--rootless-config",
+    "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "--rootless-image-set-manifest",
+    "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "--run-id",
+    "qf-public-only-fx-h0-prescreen-20260824-r2",
+    "--results-dir",
+    "/data/qea-julius-storage/runs",
+    "--seed-worker",
+    "/data/qea-julius-storage/deploy/qf-public-only-fx-h0-prescreen-20260824-r2/qea/worker_quant_h0",
+    "--arm",
+    "quant-h0=/data/qea-julius-storage/deploy/qf-public-only-fx-h0-prescreen-20260824-r2/qea/worker_quant_h0",
+    "--task-id",
+    "fx-forward-cross-rate",
+    "--checkpoint-prefix",
+    "qf-public-only-fx-h0-prescreen-20260824-r2",
+    "--worker-concurrency",
+    "1",
+    "--verifier-concurrency",
+    "2",
+    "--approve-external-run"
+  ],
+  "limits": {
+    "max_worker_sessions": 1,
+    "max_official_verifier_executions": 1,
+    "max_completed_requests": 40,
+    "max_total_tokens": 3000000,
+    "provider_cost_usd": 0.15,
+    "wall_time_hours": 1.5,
+    "no_replacement_model_or_provider": true,
+    "no_follow_on_dispatch_in_this_plan": true
+  },
+  "limit_enforcement": {
+    "wall_time": "systemd RuntimeMaxSec=5400",
+    "worker_and_verifier_count": "fixed by the single-arm single-task runner invocation",
+    "requests_tokens_and_provider_cost": "post-run audit thresholds; the existing Worker call is not interrupted mid-turn by these accounting thresholds",
+    "threshold_breach": "retain the completed accounting and stop with no follow-on dispatch"
+  },
+  "post_run_public_audit": {
+    "input": "the unique completed Quant-H0 output/results.json produced by this run",
+    "rule": "rounding_mismatch_present when at least one numeric bid, ask, or mid value under forward_cross_rates_3M differs from the same value rounded to four decimal places",
+    "answer_access": "public instruction and Worker artifact only; do not read or construct an optimize-only expected-value diagnostic",
+    "effect": "This audit may select a later proposal experiment but does not change this official pre-screen result."
+  },
+  "terminal_decisions": [
+    {
+      "when": "the Worker or official verifier is incomplete, invalid, or missing its required report or artifact",
+      "decision": "STOP_NO_RESULT",
+      "next_dispatch": null
+    },
+    {
+      "when": "official score is 37/37 with reward 1",
+      "decision": "CLOSE_FX_NO_HEADROOM",
+      "next_dispatch": null
+    },
+    {
+      "when": "official score is below 37/37 and rounding_mismatch_present is true",
+      "decision": "ELIGIBLE_FOR_SEPARATE_PUBLIC_ONLY_PROPOSAL_PLAN",
+      "next_dispatch": null
+    },
+    {
+      "when": "official score is below 37/37 and rounding_mismatch_present is false",
+      "decision": "STOP_TARGET_NOT_PUBLICLY_LOCALIZED",
+      "next_dispatch": null
+    }
+  ],
+  "second_invalid_stop": {
+    "when": "R2 again ends in model_empty_response or any other incomplete or invalid Worker/verifier outcome",
+    "decision": "STOP_NO_RESULT",
+    "automatic_r3": false,
+    "next_dispatch": null
+  },
+  "answer_boundary": "The R2 Quant-H0 Worker receives only the public task, public task data, and the unchanged Quant-H0 harness. R1 execution evidence and retained selection evidence are not Worker-visible. This plan generates no Evolver diagnostic, exposes no official answer or expected value, and launches no reusable candidate.",
+  "claim_boundary": "R2 is one setup recovery after an invalid empty-response run, not a repeat. A valid completion measures one fresh Quant-H0 official observation and whether its own public artifact still exhibits the predeclared rounding mismatch. An invalid completion is retained only as a second setup failure and ends this recovery path without automatic R3."
+}
