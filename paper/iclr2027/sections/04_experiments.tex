@@ -177,11 +177,11 @@ launch materializer are implemented locally. The Primitive protocol canary has
 passed 3/3 valid strict-telemetry cells. Retained mini runs R1--R3 did not
 complete the positive Review path: R1 was setup-invalid, R2 ended in a legal
 fail-closed abstention under an oversized and compaction-corrupted evidence
-view, and R3 received a genuine but non-PASS Review. The main run, no-State
-ablation, source-faithful AHE reproduction, and feedback-sealed panel remain
-prospective. Main launch is blocked until one fresh policy-corrected candidate
-passes Candidate Information-Set Review, reaches 12 matched cells as the exact
-reviewed snapshot, hands off answer-free history, and cleanly resumes. Its
-matched terminal may be \texttt{PROMOTE} or a scientifically valid
-\texttt{RETAIN}/\texttt{ROLLBACK}; retained utility gain is a Main outcome, not
-an engineering-readiness requirement.}
+view, and R3 received a genuine but non-PASS Review. The separately frozen
+policy-v2 R2 qualification later cleared that engineering prerequisite by
+passing Review, all 12 exact-snapshot matched cells, answer-free handoff,
+zero-work resume, and cleanup, but it retained the parent for no stable gain.
+The main run, no-State ablation, source-faithful AHE reproduction, and
+feedback-sealed panel remain prospective. Main launch still requires separate
+authority, a fresh Main identity and evidence, and its own frozen budget; no
+qualification material may seed it.}

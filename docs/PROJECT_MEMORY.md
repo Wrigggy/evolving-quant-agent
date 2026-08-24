@@ -1,5 +1,50 @@
 # QEA Repository Memory
 
+## 2026-08-25 Reviewer-policy-v2 qualification R2 passed; no stable gain
+
+The separately frozen engineering recovery
+`qf-qrs-reviewer-policy-v2-qualification-20260825-r2` rebuilt four fresh
+Primitive-H0 histories and a fresh answer-free trajectory bank without R1
+scientific material. Metadata strata and lexicographic task identity selected
+the crypto focus, CIR and historical-VaR anchors, and controller-only copula
+sentinel without score, reward, failure, headroom, trace, artifact, or outcome
+inputs. The actual panel-one Evolver view contained exactly the focus plus two
+anchors; copula remained controller-only.
+
+One fresh workflow-global `ACT` changed only the six-stage skill and system
+prompt. Its two `task_agnostic_harness_policy` claims were grounded in the
+frozen framework plus fresh answer-free crypto and CIR observations. The exact
+run-scoped read-only snapshot received one genuine Candidate Information-Set
+Review: overall `PASS`, coverage `PASS`, both claims `PASS`, and zero undeclared
+exposure. This verdict establishes admissibility for dispatch, not claim truth
+or utility.
+
+All twelve matched cells then completed on CIR / crypto focus / historical
+VaR. Repetition one was parent `[1,0,1]` versus candidate `[1,1,1]`;
+repetition two was `[1,1,1]` versus `[1,1,1]`. Neither repetition regressed,
+but strict focus gain occurred only once, so the scheduler correctly recorded
+`RETAIN_NO_STABLE_GAIN` and preserved the frozen Primitive parent. The
+answer-free handoff carried zero candidate entries; no later panel or sealed
+task ran.
+
+Terminal accounting was 16 QFBench cells, 9 actions, 434 completed requests,
+10,595,215 tokens, and USD 0.412509508. A same-stop resume exited zero and
+created zero cell, action, request, token, or cost; final process, container,
+network, volume, transient-unit/timer, and follow-on residue were all zero.
+R2 is therefore retained as `ENGINEERING_QUALIFICATION_PASS` with utility
+`RETAIN_NO_STABLE_GAIN`.
+
+The positive engineering path clears the live policy-v2 qualification
+prerequisite, but R2 itself has `main_authority=false`. Main remains formally
+`NO-GO` until a separate launch decision freezes a fresh Main identity,
+evidence, and budget. No R2 Worker history, candidate, claim, evidence-access
+state, score, verdict, snapshot, or panel decision may seed Main; the retained
+result may establish only that the engineering prerequisite completed. Compact
+record:
+`data/breadth/QF_QRS_REVIEWER_POLICY_V2_QUALIFICATION_R2_RESULT.json`; dated
+decision:
+`docs/decisions/2026-08-25-qrs-reviewer-policy-v2-qualification-r2-result.md`.
+
 ## 2026-08-25 Reviewer-policy-v2 qualification R1 failed before Review
 
 The separately frozen engineering qualification

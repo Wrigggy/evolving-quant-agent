@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "record_kind": "qrs_reviewer_policy_v2_engineering_qualification_r2_result",
+  "experiment_id": "qf-qrs-reviewer-policy-v2-qualification-20260825-r2",
+  "run_id": "qf-qrs-reviewer-policy-v2-qualification-20260825-r2",
+  "date": "2026-08-25",
+  "status": "retained_engineering_qualification_pass_no_stable_gain",
+  "research_question": "Can the separately frozen Reviewer-policy-v2 recovery traverse a fresh answer-free proposal, exact-snapshot Review PASS, all twelve matched cells, retain or promote under the repeated gate, carry only answer-free incumbent history, reconcile accounting and cleanup, and resume at the same stop with zero work?",
+  "setup": {
+    "benchmark": "QFBench",
+    "frozen_plan": "data/breadth/QF_QRS_REVIEWER_POLICY_V2_QUALIFICATION_R2_PLAN.json",
+    "launch_decision": "docs/decisions/2026-08-25-qrs-reviewer-policy-v2-qualification-r2-launch.md",
+    "remote_run_root": "/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r2",
+    "remote_proposal_root": "/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r2-panel-01-proposal",
+    "remote_review_root": "/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r2-panel-01-review",
+    "remote_materialization_root": "/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r2-materialization",
+    "parent_version": "quant-h0-s6-primitive-v1-fresh-reviewer-policy-v2-r2",
+    "candidate_version": "reviewer-policy-v2-qualification-r2-p1",
+    "worker_route": "deepseek-v4-flash-main0",
+    "stop_after_panel": 1,
+    "engineering_canary_only": true,
+    "main_authority": false,
+    "sealed_tasks_used": false,
+    "later_panels_dispatched": false,
+    "automatic_retry_authorized": false
+  },
+  "independence": {
+    "separately_frozen_from_r1": true,
+    "fresh_h0_cells": 4,
+    "fresh_trajectory_bank": true,
+    "fresh_proposal": true,
+    "fresh_candidate": true,
+    "fresh_claim_inventory": true,
+    "fresh_evidence_access_state": true,
+    "fresh_reviewer_call": true,
+    "r1_scientific_material_paths_in_evolver_input": 0,
+    "r1_scientific_material_reused": false,
+    "r1_only_permitted_use": "Aggregate completed-request, token, and provider-cost totals sized the conservative qualification envelope; no R1 task outcome, path, trace, candidate, claim, diff, snapshot, score, verdict, access state, or scientific interpretation entered R2.",
+    "interpretation": "R2 is a separately frozen setup recovery, not a resume or repeat of R1. R1 and R2 cannot be pooled as scientific repetitions."
+  },
+  "task_partition": {
+    "selection_authority": "data/qfbench/MANIFEST_85_BASELINE.json",
+    "selection_rule": "Metadata strata and lexicographic-first eligible task_id after subtracting earlier-mini tasks.",
+    "selection_used_score_reward_headroom_or_outcome": false,
+    "fresh_h0_bank_tasks": [
+      {
+        "task_id": "crypto-funding-rate-basis-carry",
+        "role": "panel_1_focus_visible_and_matched",
+        "family": "execution_microstructure"
+      },
+      {
+        "task_id": "cir-bond-pricing",
+        "role": "cross_family_anchor_visible_and_matched",
+        "family": "rates_fx_macro"
+      },
+      {
+        "task_id": "historical-var-data-prep",
+        "role": "cross_family_anchor_visible_and_matched",
+        "family": "risk_credit"
+      },
+      {
+        "task_id": "copula-equity-fitting",
+        "role": "controller_only_h0_bank_sentinel",
+        "family": "risk_credit"
+      }
+    ],
+    "actual_panel_1_evolver_visible_tasks": [
+      "crypto-funding-rate-basis-carry",
+      "cir-bond-pricing",
+      "historical-var-data-prep"
+    ],
+    "actual_panel_1_matched_tasks": [
+      "crypto-funding-rate-basis-carry",
+      "cir-bond-pricing",
+      "historical-var-data-prep"
+    ],
+    "controller_only_task_not_visible_or_matched": "copula-equity-fitting",
+    "sealed_placeholder_dispatches": 0
+  },
+  "answer_free_evidence_audit": {
+    "status": "PASS",
+    "panel_evidence_root": "/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r2/trajectory-bank/evolver-answer-free/panel-evidence/panel-01-execution_microstructure",
+    "actual_evolver_input_task_set_matches_frozen_focus_plus_anchors": true,
+    "official_score_reward_verifier_expected_or_failed_property_material_found": 0,
+    "r1_or_prior_mini_scientific_material_found": 0,
+    "interpretation": "The Evolver received fresh public contracts, fresh answer-free H0 histories and Worker artifacts, the frozen workflow framework, and the fresh frozen parent. Official outcomes remained controller-only."
+  },
+  "proposal": {
+    "evolver_calls": 1,
+    "decision": "ACT",
+    "admitted": true,
+    "workflow_scope": "workflow_global",
+    "claim_scope": "task_agnostic_harness_policy",
+    "claim_ids": [
+      "state_exit_verification",
+      "revision_recording"
+    ],
+    "development_observation_families": [
+      "execution_microstructure",
+      "rates_fx_macro"
+    ],
+    "changed_files": [
+      "skills/quant-research-six-stage-workflow/SKILL.md",
+      "systemprompt.md"
+    ],
+    "forbidden_task_specific_formula_output_constant_routing_or_evaluator_patch_found": false,
+    "candidate_worker_dispatches_before_review": 0
+  },
+  "candidate_information_set_review": {
+    "reviewer_calls": 1,
+    "worker_visible": false,
+    "promotion_authority": false,
+    "overall_verdict": "PASS",
+    "coverage_verdict": "PASS",
+    "claim_verdicts": {
+      "state_exit_verification": "PASS",
+      "revision_recording": "PASS"
+    },
+    "undeclared_exposures": [],
+    "reviewed_snapshot_path": "/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r2/scheduler-state/panel-1-controller/reviewed-candidates/qf-qrs-reviewer-policy-v2-qualification-20260825-r2-panel-01/qf-qrs-reviewer-policy-v2-qualification-20260825-r2-panel-01-review",
+    "reviewed_snapshot_directory_mode": "0555",
+    "reviewed_snapshot_file_mode": "0444",
+    "matched_worker_used_exact_reviewed_snapshot": true,
+    "semantics": "PASS establishes information admissibility, answer-boundary safety, declared-source support, and coverage for dispatch. It does not establish claim truth, candidate utility, benchmark gain, or promotion."
+  },
+  "matched_gate": {
+    "status": "complete",
+    "tasks": {
+      "focus": [
+        "crypto-funding-rate-basis-carry"
+      ],
+      "anchors": [
+        "cir-bond-pricing",
+        "historical-var-data-prep"
+      ]
+    },
+    "arms": [
+      "parent",
+      "candidate"
+    ],
+    "repetitions": 2,
+    "planned_cells": 12,
+    "completed_valid_cells": 12,
+    "replacement_or_recovery_cells": 0,
+    "vectors": [
+      {
+        "repetition": 1,
+        "parent": {
+          "cir-bond-pricing": 1.0,
+          "crypto-funding-rate-basis-carry": 0.0,
+          "historical-var-data-prep": 1.0
+        },
+        "candidate": {
+          "cir-bond-pricing": 1.0,
+          "crypto-funding-rate-basis-carry": 1.0,
+          "historical-var-data-prep": 1.0
+        },
+        "parent_property_counts": {
+          "cir-bond-pricing": "35/35",
+          "crypto-funding-rate-basis-carry": "41/63",
+          "historical-var-data-prep": "12/12"
+        },
+        "candidate_property_counts": {
+          "cir-bond-pricing": "35/35",
+          "crypto-funding-rate-basis-carry": "63/63",
+          "historical-var-data-prep": "12/12"
+        },
+        "focus_strict_gain": true,
+        "regressions": []
+      },
+      {
+        "repetition": 2,
+        "parent": {
+          "cir-bond-pricing": 1.0,
+          "crypto-funding-rate-basis-carry": 1.0,
+          "historical-var-data-prep": 1.0
+        },
+        "candidate": {
+          "cir-bond-pricing": 1.0,
+          "crypto-funding-rate-basis-carry": 1.0,
+          "historical-var-data-prep": 1.0
+        },
+        "parent_property_counts": {
+          "cir-bond-pricing": "35/35",
+          "crypto-funding-rate-basis-carry": "63/63",
+          "historical-var-data-prep": "12/12"
+        },
+        "candidate_property_counts": {
+          "cir-bond-pricing": "35/35",
+          "crypto-funding-rate-basis-carry": "63/63",
+          "historical-var-data-prep": "12/12"
+        },
+        "focus_strict_gain": false,
+        "regressions": []
+      }
+    ],
+    "repeated_focus_strict_gain": false,
+    "panel_decision": "RETAIN_NO_STABLE_GAIN",
+    "decision_reason": "regression_or_no_strict_focus_mean_gain",
+    "retained_parent": "quant-h0-s6-primitive-v1-fresh-reviewer-policy-v2-r2",
+    "candidate_promoted": false,
+    "interpretation": "The first repetition contains a focus win without anchor regression; the second repetition is a tie on all three tasks. The gain does not repeat, so no stable utility claim is supported."
+  },
+  "answer_free_handoff": {
+    "status": "complete",
+    "kind": "retained_incumbent_history_carry",
+    "carried_candidate_entry_count": 0,
+    "current_parent_unchanged": true,
+    "panel_2_proposal_reviewer_or_worker_dispatches": 0,
+    "interpretation": "The scheduler materialized only the answer-free retained-incumbent carry required before the panel-one stop."
+  },
+  "run_accounting": {
+    "qfbench_cells": {
+      "fresh_h0_bank": 4,
+      "matched": 12,
+      "total": 16
+    },
+    "accounted_action_count": 9,
+    "completed_requests": 434,
+    "total_tokens": 10595215,
+    "provider_cost_usd": 0.412509508,
+    "matched_repetition_1": {
+      "cells": 6,
+      "completed_requests": 143,
+      "total_tokens": 2332258,
+      "provider_cost_usd": 0.104332776,
+      "cost_complete": true,
+      "unreconciled_requests": 0,
+      "unreconciled_attempts": 0
+    },
+    "matched_repetition_2": {
+      "cells": 6,
+      "completed_requests": 159,
+      "total_tokens": 3045948,
+      "provider_cost_usd": 0.117637784,
+      "cost_complete": true,
+      "unreconciled_requests": 0,
+      "unreconciled_attempts": 0
+    },
+    "within_frozen_hard_envelope": true
+  },
+  "same_stop_resume": {
+    "requested_stop_after_panel": 1,
+    "resume_exit_code": 0,
+    "stopped_after_panel_marker": 1,
+    "scheduler_status_while_paused": "RUNNING",
+    "scheduler_status_interpretation": "RUNNING plus stopped_after_panel=1 is the implemented explicit-pause representation, not a live process or stale failure.",
+    "new_actions": 0,
+    "new_qfbench_cells": 0,
+    "new_completed_requests": 0,
+    "new_tokens": 0,
+    "new_provider_cost_usd": 0.0,
+    "before_after_structural_fields_equal": [
+      "qfbench_cells_accounted=16",
+      "accounted_action_count=9",
+      "completed_requests=434",
+      "total_tokens=10595215",
+      "provider_cost_usd=0.412509508",
+      "panel_result_count=1",
+      "panel_decision=RETAIN_NO_STABLE_GAIN"
+    ],
+    "status": "PASS_ZERO_WORK"
+  },
+  "cleanup": {
+    "final_live_residue": {
+      "run_processes": 0,
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "transient_services_or_timers": 0,
+      "follow_on_dispatches": 0
+    },
+    "retained_artifacts_are_not_live_residue": "The canonical run, proposal, Review, matched, scheduler, and read-only candidate records remain intentionally as retained evidence."
+  },
+  "decision": {
+    "engineering_qualification": "ENGINEERING_QUALIFICATION_PASS",
+    "reviewer_policy_v2_qualified_for_the_scoped_admissibility_path": true,
+    "exact_snapshot_to_matched_scheduler_path_qualified": true,
+    "utility": "NO_STABLE_GAIN",
+    "panel_decision": "RETAIN_NO_STABLE_GAIN",
+    "candidate_promoted": false,
+    "additional_policy_qualification_canary_required": false,
+    "main": "NO_GO_PENDING_SEPARATE_AUTHORITY",
+    "main_authority_in_this_run": false,
+    "main_transition_rule": "A separate frozen Main launch decision, run identity, fresh Main evidence, and Main budget are still required. The R2 qualification plan cannot authorize Main.",
+    "r2_scientific_material_reusable_in_main": false,
+    "r2_main_reuse_boundary": "No R2 Worker history, candidate, claim, evidence-access state, score, verdict, snapshot, or panel decision may seed Main. This retained result may establish only that the engineering qualification prerequisite completed."
+  },
+  "claim_boundary": {
+    "supports": "One fresh task-agnostic two-claim ACT crossed an answer-free overall-and-coverage Reviewer PASS on the exact read-only candidate snapshot; all twelve frozen focus-plus-anchor matched cells completed; the scheduler correctly retained the Primitive parent when strict focus gain failed to repeat; accounting, answer-free zero-entry carry, same-stop zero-work resume, and cleanup completed.",
+    "does_not_support": "Reviewer PASS is not claim truth or utility. The single first-repetition focus win did not repeat. There is no stable candidate gain, promotion, reusable candidate, QRS superiority, representative benchmark improvement, sealed result, Main result, or authority to launch Main from this qualification record."
+  }
+}
