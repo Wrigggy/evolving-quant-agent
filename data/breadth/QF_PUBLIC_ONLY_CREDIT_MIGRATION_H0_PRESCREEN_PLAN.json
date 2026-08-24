@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-24",
+  "status": "frozen_not_run",
+  "experiment_id": "qf-public-only-credit-migration-h0-prescreen-20260824-r1",
+  "purpose": "Measure one fresh normal-budget Quant-H0 official result on credit-migration-matrix after the FX target closed at full score and the holdings lineage stopped. This pre-screen launches no Evolver, Information-Set Reviewer, candidate Worker, repeat, protection task, or automatic proposal.",
+  "scope": {
+    "benchmark": "QFBench",
+    "task_id": "credit-migration-matrix",
+    "arm": "Quant-H0",
+    "worker_sessions": 1,
+    "official_verifier_executions": 1,
+    "sealed_evaluation_used": false,
+    "result_role": "adaptive development target pre-screen only"
+  },
+  "selection_evidence": {
+    "selection_role": "historical public-artifact screening only; not a fresh Quant-H0 result and not Worker-visible",
+    "retained_baseline_result": "results/bc-mirror/qfbench-rootless-base-85x5-official-deepseek-v4-flash-0731-all12x3-20260804/result.json",
+    "retained_failing_attempt": "results/bc-mirror/qfbench-rootless-base-85x5-official-deepseek-v4-flash-0731-all12x3-20260804/attempts/9a48409b9307fe0957967b535d1d7b3add2d294df70aac289a9b73860087c1b3",
+    "retained_success_attempt": "results/bc-mirror/qfbench-rootless-base-85x5-official-deepseek-v4-flash-0731-all12x3-20260804/attempts/889a8ce867183c59a0ab57045ac03b2591f4faf910bdb82d9bbe65dc5c7f7535",
+    "public_instruction_record": "results/bc-mirror/qfbench-rootless-evolution-30x15x40-v4-flash-0731-10iter-20260805/evidence/iteration-01-rich/tasks/credit-migration-matrix/instruction.md",
+    "retained_public_observation": "The retained failing public artifacts report summary.total_transitions=22956 while the integer AAA-through-CCC counts in cohort_sizes.csv sum to 22935 and cohort_default_rates.csv reports the same 22935 total issuers. The retained successful attempt reports 22935 on all three public count surfaces. These values select a public count-mass reconciliation pre-screen only; no expected value or official property identity is inferred or exposed.",
+    "fresh_h0_required": "The retained attempts used the old shell baseline rather than the current Quant-H0 harness, and the retained five samples include both failing and full outcomes. They cannot replace one fresh current-harness pre-screen.",
+    "selection_only": true,
+    "worker_visible": false
+  },
+  "deploy_source_freeze": {
+    "deploy_id": "qf-public-only-credit-migration-h0-prescreen-20260824-r1",
+    "source_revision": "FUTURE_COMMIT:qf-public-only-credit-migration-h0-prescreen-20260824-r1",
+    "resolution": "Deploy the future repository commit that first contains this frozen plan and the then-current runner under the exact deploy_id. Record that commit in operational evidence without editing this plan.",
+    "launch_before_resolution_allowed": false
+  },
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/qf-public-only-credit-migration-h0-prescreen-20260824-r1",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/qf-public-only-credit-migration-h0-prescreen-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0"
+  },
+  "run": {
+    "run_id": "qf-public-only-credit-migration-h0-prescreen-20260824-r1",
+    "runner": "scripts/run_qfbench_component_pilot.py",
+    "checkpoint_prefix": "qf-public-only-credit-migration-h0-prescreen-20260824-r1",
+    "seed_worker": "/data/qea-julius-storage/deploy/qf-public-only-credit-migration-h0-prescreen-20260824-r1/qea/worker_quant_h0",
+    "arm_label": "quant-h0",
+    "arm_worker": "/data/qea-julius-storage/deploy/qf-public-only-credit-migration-h0-prescreen-20260824-r1/qea/worker_quant_h0",
+    "task_id": "credit-migration-matrix",
+    "worker_concurrency": 1,
+    "verifier_concurrency": 2,
+    "expected_attempts": 1,
+    "expected_report": "/data/qea-julius-storage/runs/qf-public-only-credit-migration-h0-prescreen-20260824-r1/pilot-report.json",
+    "expected_attempt_glob": "/data/qea-julius-storage/runs/qf-public-only-credit-migration-h0-prescreen-20260824-r1/attempts/*",
+    "expected_answer_free_evidence": [
+      "raw-trace.jsonl",
+      "final.txt",
+      "artifacts/average_transition_matrix.csv",
+      "artifacts/cumulative_default_probs.csv",
+      "artifacts/markov_test.csv",
+      "artifacts/generator_matrix.csv",
+      "artifacts/cohort_sizes.csv",
+      "artifacts/transition_matrix_deviation.csv",
+      "artifacts/cohort_default_rates.csv",
+      "artifacts/summary.json"
+    ],
+    "artifact_missingness_rule": "A valid execution may still omit a required public deliverable, but missing or ill-typed count artifacts make the exact public mass audit not evaluable. They do not by themselves authorize a quantitative-reconciliation proposal from this pre-screen."
+  },
+  "launch_argv": [
+    "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "/data/qea-julius-storage/deploy/qf-public-only-credit-migration-h0-prescreen-20260824-r1/scripts/run_qfbench_component_pilot.py",
+    "--qfbench-root",
+    "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "--qfbench-manifest",
+    "/data/qea-julius-storage/deploy/qf-public-only-credit-migration-h0-prescreen-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "--rootless-config",
+    "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "--rootless-image-set-manifest",
+    "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "--run-id",
+    "qf-public-only-credit-migration-h0-prescreen-20260824-r1",
+    "--results-dir",
+    "/data/qea-julius-storage/runs",
+    "--seed-worker",
+    "/data/qea-julius-storage/deploy/qf-public-only-credit-migration-h0-prescreen-20260824-r1/qea/worker_quant_h0",
+    "--arm",
+    "quant-h0=/data/qea-julius-storage/deploy/qf-public-only-credit-migration-h0-prescreen-20260824-r1/qea/worker_quant_h0",
+    "--task-id",
+    "credit-migration-matrix",
+    "--checkpoint-prefix",
+    "qf-public-only-credit-migration-h0-prescreen-20260824-r1",
+    "--worker-concurrency",
+    "1",
+    "--verifier-concurrency",
+    "2",
+    "--approve-external-run"
+  ],
+  "limits": {
+    "max_worker_sessions": 1,
+    "max_official_verifier_executions": 1,
+    "max_completed_requests": 40,
+    "max_total_tokens": 3000000,
+    "provider_cost_usd": 0.15,
+    "hard_wall_time_seconds": 5400,
+    "no_replacement_model_or_provider": true,
+    "no_follow_on_dispatch_in_this_plan": true
+  },
+  "limit_enforcement": {
+    "wall_time": "systemd RuntimeMaxSec=5400 is the hard 90-minute wall",
+    "worker_and_verifier_count": "fixed by the single-arm single-task runner invocation",
+    "requests_tokens_and_provider_cost": "post-run audit thresholds; the existing Worker call is not interrupted mid-turn by these accounting thresholds",
+    "threshold_breach": "retain the completed accounting and stop with no follow-on dispatch"
+  },
+  "post_run_public_audit": {
+    "status": "deterministic_answer_free_post_run_only",
+    "required_artifacts": [
+      "artifacts/cohort_sizes.csv",
+      "artifacts/cohort_default_rates.csv",
+      "artifacts/summary.json"
+    ],
+    "count_columns": [
+      "AAA",
+      "AA",
+      "A",
+      "BBB",
+      "BB",
+      "B",
+      "CCC"
+    ],
+    "well_typed_rule": "All seven cohort rows, integer count columns, per-year total_issuers, and integer summary.total_transitions must be present and parseable before the audit is evaluable.",
+    "count_mass_mismatch_present_when": "Either summary.total_transitions differs exactly from the sum of AAA-through-CCC counts across cohort_sizes.csv, or any cohort_default_rates.csv total_issuers differs exactly from the same year's AAA-through-CCC cohort-size sum.",
+    "public_basis": "The public instruction defines each annual corrected count matrix as issuer transitions after rating mapping, censor exclusion, and hidden-default correction; cohort_sizes.csv reports starting issuers after mapping and withdrawal exclusion; cohort_default_rates.csv reports total issuers; summary.json reports total_transitions.",
+    "forbidden_inputs": "Do not read official property identities, verifier output, expected values, reference answers, optimize diagnostics, or prior candidate material. Historical numeric values are not audit constants.",
+    "effect": "The audit only classifies whether a valid below-full fresh H0 result has exact public-localized count-mass headroom. It does not change the official result or dispatch a proposal."
+  },
+  "terminal_decisions": [
+    {
+      "when": "the Worker or official verifier is incomplete or invalid, the required report is missing, the Worker observation is empty, or the official aggregate is internally inconsistent",
+      "decision": "STOP_NO_RESULT",
+      "classification": "invalid",
+      "next_dispatch": null
+    },
+    {
+      "when": "the valid fresh official result is 107/107 with reward 1",
+      "decision": "CLOSE_CREDIT_MIGRATION_NO_HEADROOM",
+      "classification": "full",
+      "next_dispatch": null
+    },
+    {
+      "when": "the valid fresh official result is below 107/107 and the answer-free post-run audit finds count_mass_mismatch_present",
+      "decision": "ELIGIBLE_FOR_SEPARATE_PUBLIC_ONLY_CREDIT_MIGRATION_PROPOSAL_PLAN",
+      "classification": "public_mass_headroom",
+      "next_dispatch": null
+    },
+    {
+      "when": "the valid fresh official result is below 107/107 but the answer-free post-run audit finds no count_mass_mismatch_present or is not evaluable",
+      "decision": "STOP_CREDIT_MIGRATION_NOT_PUBLICLY_LOCALIZED",
+      "classification": "below_full_without_public_mass_mismatch",
+      "next_dispatch": null
+    }
+  ],
+  "follow_on_clean_evidence_design": {
+    "status": "future_design_only_not_implemented_not_authorized_by_this_plan",
+    "precondition": "Only the public_mass_headroom terminal decision permits drafting a separate proposal and mandatory arm-blind review plan; it does not dispatch either stage.",
+    "target_task_id": "credit-migration-matrix",
+    "protection_task_id": "historical-var-data-prep",
+    "protection_role": "public contract only during proposal; no protection Worker before a separately frozen repeated positive target result",
+    "candidate_mechanism_scope": "Reconcile one public corrected count tensor through cohort totals, transition-matrix denominators, default-rate totals, and summary totals. Candidate checks must derive relations from the public task contract and current public artifacts rather than historical constants.",
+    "evolver_allowed_inputs": [
+      "the verbatim public target and protection task contracts",
+      "the fresh Quant-H0 raw-trace.jsonl and final text produced by this pre-screen",
+      "the fresh Quant-H0 public output artifacts actually produced by this pre-screen"
+    ],
+    "evolver_forbidden_inputs": [
+      "official score, reward, passed count, or failed count",
+      "official property identities, pass/fail vectors, verifier output, checker behavior, or verifier logs",
+      "expected values, reference answers, or expected-versus-observed comparisons",
+      "optimization-diagnostic.json or any optimize-only diagnostic",
+      "the historical values 22956, 22935, or 21 as candidate rules",
+      "any prior candidate, proposal, candidate trace, or candidate outcome"
+    ],
+    "evolver_boundary": "The fresh trace and artifacts may localize an observed public count inconsistency, but they are not authority for a new convention. Every decision-changing Worker-visible claim must bind to the supplied public contracts, and official failed properties remain hidden.",
+    "reviewer_requirement": "Any admitted nonempty candidate must receive one mandatory arm-blind cumulative Quant-H0-to-candidate Information-Set Review. REJECT or INCONCLUSIVE stops with zero Worker; PASS establishes cleanliness eligibility only.",
+    "candidate_claim_boundary": "A later candidate may require count-mass conservation, row-stochastic transition construction, censor exclusion, hidden-default correction, and absorbing-default treatment exactly as publicly defined. It may not hard-code a dataset total, an expected matrix cell, an official property identity, or an unstated rating convention."
+  },
+  "answer_boundary": "The fresh Quant-H0 Worker receives only the public credit-migration-matrix task, its public task data, and the unchanged Quant-H0 harness. Selection evidence, historical observations, protection design, official answers, verifier feedback, and follow-on design are not Worker-visible.",
+  "claim_boundary": "A completed pre-screen is one fresh stochastic Quant-H0 official observation plus one deterministic public-artifact mass audit, used only to classify the target as invalid, full, public-mass-localized, or below-full without public mass localization. It is not a candidate result, harness improvement, proposal result, Reviewer result, repeat, protection result, stable baseline estimate, or main-experiment readiness result."
+}
