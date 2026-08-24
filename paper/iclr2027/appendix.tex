@@ -630,3 +630,61 @@ policy-corrected overall Review PASS must still reach the exact snapshot, all
 12 matched cells, handoff, and resume. The matched terminal may be PROMOTE or a
 scientifically valid RETAIN/ROLLBACK; mini engineering clearance does not
 require retained gain.
+
+\subsection{Reviewer-policy-v2 qualification R1 retained failure record}
+
+The frozen setup is
+\path{data/breadth/QF_QRS_REVIEWER_POLICY_V2_QUALIFICATION_PLAN.json}; the
+compact result is
+\path{data/breadth/QF_QRS_REVIEWER_POLICY_V2_QUALIFICATION_R1_RESULT.json};
+and the dated decision is
+\path{docs/decisions/2026-08-25-qrs-reviewer-policy-v2-qualification-r1-result.md}.
+The executed run identity was
+\texttt{qf-qrs-reviewer-policy-v2-qualification-20260825-r1}, and the deployed
+source revision was
+\texttt{701ceac236e454b94f08eb7ed5fc8e9ba322fa31}. Canonical remote artifacts
+remain below
+\path{/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r1/}
+and its \texttt{-panel-01-proposal} sibling.
+
+All four fresh Primitive-H0 cells and histories were valid: crypto funding
+62/63, CIR 35/35, copula 28/28, and historical VaR 12/12. The official values
+were controller-only. The audited panel-1 Evolver tree exposed exactly crypto,
+CIR, and historical VaR, while copula stayed controller-only; the proposal's
+41 non-log authorized-evidence files matched that tree and contained no
+official/verifier/expected/failed-property/optimization-diagnostic material.
+
+The Evolver returned one admitted workflow-global ACT with one task-agnostic
+claim grounded in the frozen framework plus answer-free crypto and CIR traces.
+It changed only
+\path{skills/quant-research-six-stage-workflow/SKILL.md}. The controller's
+pre-Review copy matched that candidate, used read-only directories/files, and
+contained no symlink. It remains at the run-scoped
+\path{scheduler-state/panel-1-controller/reviewed-candidates/} path only as
+forensic identity evidence; zero Reviewer calls mean it was never reviewed or
+accepted.
+
+Package construction selected CIR raw-trace lines 20, 24, 28, 30, and 32,
+whose complete JSONL records were 1,128, 13,117, 5,262, 12,729, and 3,606
+bytes. Their serialized excerpt was 35,891 bytes, above the 24,000-byte bound
+in \path{scripts/run_qfbench_lineage_controller.py}. The resulting
+\texttt{LineageError} escaped because the package-builder call lay outside the
+controller's lineage-error handler and the global scheduler caught only
+\texttt{GlobalSchedulerError}. The service exited one; no Review package,
+Reviewer verdict, candidate Worker, matched cell, panel decision, handoff, or
+resume was produced.
+
+The four H0 cells used 96 requests, 2,025,035 tokens, and \$0.087611724; the
+Evolver used 22 requests, 2,123,105 tokens, and \$0.063318604. The exact child-
+artifact aggregate is 118 requests, 4,148,140 tokens, and \$0.150930328. The
+global scheduler remained stale at \texttt{RUNNING/PANELS} with only the H0
+portion imported, so this aggregate is a forensic reconstruction rather than
+a terminal scheduler reconciliation.
+
+All 19 created child lifecycle records were cleaned by exact ID. The crash-left
+health timer was stopped manually; the final audit found zero related process,
+container, network, volume, transient unit, or follow-on dispatch. The run
+trees and read-only candidate copy remain intentional forensic artifacts. R1
+is terminal engineering failure, cannot resume or seed a later run, and leaves
+Main no-go. It supports neither Reviewer-policy-v2 qualification nor any
+candidate, matched, benchmark, promotion, sealed, or QRS-effectiveness claim.

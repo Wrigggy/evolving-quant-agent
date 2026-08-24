@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "record_kind": "qrs_reviewer_policy_v2_engineering_qualification_result",
+  "experiment_id": "qf-qrs-reviewer-policy-v2-qualification-20260825-r1",
+  "run_id": "qf-qrs-reviewer-policy-v2-qualification-20260825-r1",
+  "date": "2026-08-25",
+  "status": "retained_engineering_failure_before_reviewer",
+  "research_question": "Can Reviewer policy v2 admit a fresh answer-free task-agnostic workflow claim, bind the exact frozen candidate snapshot, and traverse the complete 12-cell matched scheduler path without exposing answers to a Worker?",
+  "setup": {
+    "benchmark": "QFBench",
+    "frozen_plan": "data/breadth/QF_QRS_REVIEWER_POLICY_V2_QUALIFICATION_PLAN.json",
+    "launch_decision": "docs/decisions/2026-08-25-qrs-reviewer-policy-v2-qualification-r1-launch.md",
+    "deployed_source_revision": "701ceac236e454b94f08eb7ed5fc8e9ba322fa31",
+    "launch_authorization_revision": "b79ac23b6dc40cdc4b85905b219f422aafcc6128",
+    "remote_run_root": "/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r1",
+    "remote_proposal_root": "/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r1-panel-01-proposal",
+    "remote_materialization_root": "/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r1-materialization",
+    "parent_version": "quant-h0-s6-primitive-v1-fresh-reviewer-policy-v2-r1",
+    "worker_route": "deepseek-v4-flash-main0",
+    "stop_after_panel": 1,
+    "engineering_canary_only": true,
+    "main_authority": false,
+    "sealed_tasks_used": false,
+    "later_panels_dispatched": false,
+    "automatic_retry_authorized": false
+  },
+  "h0_bank": {
+    "fresh_worker_verifier_cells": 4,
+    "valid_worker_verifier_cells": 4,
+    "valid_runtime_histories": 4,
+    "task_results": [
+      {
+        "task_id": "crypto-funding-rate-basis-carry",
+        "domain": "execution_microstructure",
+        "tests_passed": 62,
+        "tests_failed": 1,
+        "reward": 0.0
+      },
+      {
+        "task_id": "cir-bond-pricing",
+        "domain": "rates_fx_macro",
+        "tests_passed": 35,
+        "tests_failed": 0,
+        "reward": 1.0
+      },
+      {
+        "task_id": "copula-equity-fitting",
+        "domain": "risk_credit",
+        "tests_passed": 28,
+        "tests_failed": 0,
+        "reward": 1.0
+      },
+      {
+        "task_id": "historical-var-data-prep",
+        "domain": "risk_credit",
+        "tests_passed": 12,
+        "tests_failed": 0,
+        "reward": 1.0
+      }
+    ],
+    "score_visibility": "Official outcomes remained controller-only and were not included in Evolver evidence, candidate material, Reviewer input, or any later Worker input.",
+    "interpretation": "These are four valid fresh canary observations used to construct an answer-free trajectory bank, not a stable baseline or an evolved comparison."
+  },
+  "answer_free_evidence_audit": {
+    "status": "PASS",
+    "panel_evidence_root": "/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r1/trajectory-bank/evolver-answer-free/panel-evidence/panel-01-execution_microstructure",
+    "visible_tasks": [
+      "crypto-funding-rate-basis-carry",
+      "cir-bond-pricing",
+      "historical-var-data-prep"
+    ],
+    "controller_only_tasks": [
+      "copula-equity-fitting"
+    ],
+    "authorized_evidence_file_count_excluding_access_log": 41,
+    "proposal_authorized_evidence_matches_panel_tree": true,
+    "forbidden_evaluator_fields_found": 0,
+    "forbidden_material_absent": [
+      "official_score_or_reward",
+      "verifier_output_or_failed_property",
+      "expected_value_or_hidden_test",
+      "optimization_diagnostic",
+      "prior_mini_material",
+      "sealed_identity_or_outcome"
+    ],
+    "worker_created_results_files_interpretation": "Files named artifacts/results.json were blind Worker deliverables, not official evaluator outputs."
+  },
+  "proposal": {
+    "evolver_calls": 1,
+    "decision": "ACT",
+    "admitted": true,
+    "candidate_version": "reviewer-policy-v2-qualification-r1-p1",
+    "claim_count": 1,
+    "claim_id": "s3_s4_convention_binding",
+    "claim_scope": "task_agnostic_harness_policy",
+    "basis_kinds": [
+      "framework_reference",
+      "answer_free_development_observation",
+      "answer_free_development_observation"
+    ],
+    "development_observation_families": [
+      "execution_microstructure",
+      "rates_fx_macro"
+    ],
+    "changed_files": [
+      "skills/quant-research-six-stage-workflow/SKILL.md"
+    ],
+    "unchanged_surfaces": [
+      "systemprompt.md",
+      "agent.yaml",
+      "tools",
+      "tool_descriptions"
+    ],
+    "candidate_summary": "The task-agnostic skill change asks S3 to pin public-text-grounded operational conventions before S4 and asks S4 to re-confirm that its first execution realizes that lock.",
+    "candidate_worker_dispatches_before_review": 0
+  },
+  "candidate_snapshot": {
+    "status": "forensic_pre_review_snapshot_only",
+    "path": "/data/qea-julius-storage/runs/qf-qrs-reviewer-policy-v2-qualification-20260825-r1/scheduler-state/panel-1-controller/reviewed-candidates/qf-qrs-reviewer-policy-v2-qualification-20260825-r1-panel-01/qf-qrs-reviewer-policy-v2-qualification-20260825-r1-panel-01-review",
+    "content_matches_evolver_candidate": true,
+    "directory_mode": "0555",
+    "file_mode": "0444",
+    "symlink_count": 0,
+    "reviewer_accepted": false,
+    "interpretation": "The controller copied and froze the exact candidate before package construction. Because no Reviewer call occurred, this retained tree is forensic evidence and must not be described as a reviewed, accepted, or PASS candidate."
+  },
+  "failure": {
+    "stage": "candidate_information_set_review_package_materialization",
+    "exception": "LineageError: workflow trajectory excerpt exceeds the Review bound",
+    "source_file": "scripts/run_qfbench_lineage_controller.py",
+    "excerpt_function_lines": "633-667",
+    "bound_check_line": 665,
+    "raise_line": 666,
+    "trajectory_ref": "benchmarks/qfbench/tasks/cir-bond-pricing/worker_trace.jsonl",
+    "cited_line_numbers": [
+      20,
+      24,
+      28,
+      30,
+      32
+    ],
+    "cited_source_line_bytes": [
+      1128,
+      13117,
+      5262,
+      12729,
+      3606
+    ],
+    "serialized_excerpt_bytes": 35891,
+    "serialized_excerpt_limit_bytes": 24000,
+    "excess_bytes": 11891,
+    "source_content_role": "Fresh answer-free Worker assistant turns containing content and structured tool calls, including code; not official, verifier, expected-value, reward, score, or hidden diagnostic material.",
+    "control_flow_failure": {
+      "controller_package_builder_line": 1834,
+      "controller_package_builder_lineage_error_caught": false,
+      "global_scheduler_caught_exception_type": "GlobalSchedulerError only",
+      "lineage_error_converted_to_hold": false,
+      "systemd_exit_code": 1
+    },
+    "interpretation": "A claim-local citation to five answer-free JSONL turns exceeded the byte cap because the packager serialized whole turns. The package was never completed, and the uncaught LineageError prevented a controlled HOLD and terminal scheduler record."
+  },
+  "downstream_execution": {
+    "review_package_materialized": false,
+    "reviewer_calls": 0,
+    "review_verdict": null,
+    "candidate_worker_cells": 0,
+    "matched_cells_completed": 0,
+    "matched_cells_planned": 12,
+    "panel_decision": null,
+    "answer_free_handoff": false,
+    "same_stop_resume": false,
+    "binary_reward_comparison_available": false
+  },
+  "run_accounting": {
+    "h0_bank": {
+      "completed_requests": 96,
+      "total_tokens": 2025035,
+      "provider_cost_usd": 0.087611724,
+      "unreconciled_requests": 0,
+      "unreconciled_attempts": 0
+    },
+    "evolver_proposal": {
+      "completed_requests": 22,
+      "total_tokens": 2123105,
+      "provider_cost_usd": 0.063318604,
+      "noncompleted_requests": 0
+    },
+    "candidate_reviewer": {
+      "completed_requests": 0,
+      "total_tokens": 0,
+      "provider_cost_usd": 0.0
+    },
+    "candidate_matched_workers": {
+      "cells": 0,
+      "completed_requests": 0,
+      "total_tokens": 0,
+      "provider_cost_usd": 0.0
+    },
+    "forensic_actual_total": {
+      "completed_requests": 118,
+      "total_tokens": 4148140,
+      "provider_cost_usd": 0.150930328
+    },
+    "stale_scheduler_state": {
+      "status": "RUNNING",
+      "phase": "PANELS",
+      "completed_requests": 96,
+      "total_tokens": 2025035,
+      "provider_cost_usd": 0.087611724,
+      "omitted_completed_proposal_requests": 22,
+      "terminal_reconciliation_complete": false
+    },
+    "interpretation": "The exact actual total is reconstructed from the four completed H0 reports and the completed proposal report. The uncaught exception prevented the global scheduler from importing the proposal accounting or writing a terminal reconciliation."
+  },
+  "cleanup": {
+    "child_lifecycle_records": 19,
+    "child_lifecycle_records_cleaned_by_exact_id": 19,
+    "manual_health_timer_stop_required": true,
+    "health_timer_stopped_manually": true,
+    "final_live_audit_time": "2026-08-25T04:08:39+08:00",
+    "final_live_residue": {
+      "run_processes": 0,
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0,
+      "transient_services_or_timers": 0,
+      "follow_on_dispatches": 0
+    },
+    "retained_artifacts_are_not_live_residue": "The run directories, controller state, proposal artifacts, and read-only pre-Review candidate snapshot remain intentionally as forensic evidence."
+  },
+  "decision": {
+    "qualification_gate": "FAIL_ENGINEERING_PRE_REVIEW",
+    "reviewer_policy_v2_qualified": false,
+    "matched_scheduler_path_qualified": false,
+    "main": "NO_GO",
+    "r1_resume_allowed": false,
+    "r1_reuse_allowed": false,
+    "automatic_retry_allowed": false,
+    "future_repair_rule": "Any correction requires a separately frozen source, plan, run identity, launch decision, and fresh evidence; R1 state, candidate, claim, snapshot, access state, score, or decision cannot be resumed or reused.",
+    "reason": "R1 reached a fresh answer-free admitted ACT but failed while constructing the bounded Reviewer package. No Reviewer judgment or candidate Worker execution exists, terminal accounting was stale, and the complete qualification path was not exercised."
+  },
+  "claim_boundary": {
+    "supports": "Four fresh valid Primitive-H0 cells, an answer-free trajectory-bank evidence boundary, one admitted task-agnostic single-skill ACT, exact pre-Review candidate freezing, reconstructable child accounting, exact-ID child cleanup, and final manually completed zero-live-residue cleanup were observed.",
+    "does_not_support": "No Reviewer call or verdict exists; policy v2 was not qualified. No candidate Worker, matched comparison, binary reward result, panel decision, handoff, resume, reusable candidate, benchmark gain, promotion, sealed result, main readiness, or QRS-effectiveness claim exists."
+  }
+}

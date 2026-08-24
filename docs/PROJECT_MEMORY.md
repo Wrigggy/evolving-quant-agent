@@ -1,5 +1,36 @@
 # QEA Repository Memory
 
+## 2026-08-25 Reviewer-policy-v2 qualification R1 failed before Review
+
+The separately frozen engineering qualification
+`qf-qrs-reviewer-policy-v2-qualification-20260825-r1` completed four valid
+fresh Primitive-H0 cells and an answer-free trajectory bank whose panel-1
+Evolver tree passed the post-H0 evidence audit. One Evolver returned an admitted
+workflow-global `ACT` with a single task-agnostic claim and a candidate that
+changed only the six-stage skill. The controller copied an exact read-only
+candidate tree, retained now only as a forensic pre-Review snapshot.
+
+Review package construction then failed before any Reviewer call. The claim's
+CIR observation cited five answer-free raw JSONL turns whose whole-line
+serialization was 35,891 bytes, above the 24,000-byte package excerpt bound.
+The resulting `LineageError` was not caught by the package/controller boundary,
+so the systemd service exited 1 and the global scheduler state remained stale
+at `RUNNING/PANELS` with H0-only accounting. Reviewer calls, candidate Worker
+cells, and matched cells were all zero; there is no Review verdict, candidate
+quality result, binary comparison, panel decision, handoff, or resume.
+
+The child-artifact aggregate is 118 completed requests, 4,148,140 tokens, and
+USD 0.150930328. All 19 created child lifecycle records were cleaned by exact
+ID. After the crash-left health timer was stopped manually, the final live
+audit found zero process, container, network, volume, transient-unit, or
+follow-on-dispatch residue. R1 is retained as
+`FAIL_ENGINEERING_PRE_REVIEW`; Main remains `NO-GO`, and R1 cannot be resumed
+or reused. Any repair requires a separately frozen source, plan, run identity,
+authority decision, and fresh evidence. Compact record:
+`data/breadth/QF_QRS_REVIEWER_POLICY_V2_QUALIFICATION_R1_RESULT.json`; dated
+decision:
+`docs/decisions/2026-08-25-qrs-reviewer-policy-v2-qualification-r1-result.md`.
+
 ## 2026-08-25 QRS mini scheduler R1--R3 retained; Main remains NO-GO
 
 The three separately frozen mini scheduler attempts are now retained with
