@@ -7,6 +7,13 @@ trainable-model proposals under fixed research scaffolds
 object is the Worker harness, while quantitative invariants provide an
 observation of predicted Research State changes in that harness.
 
+QuantaAlpha treats each end-to-end alpha-mining run as a trajectory, localizes
+suboptimal steps for targeted revision, and recombines useful trajectory
+segments \citep{han2026quantaalpha}. We adopt the useful idea that a research
+trajectory should have localizable structure, but not its factor-mining object:
+our fixed S1--S6 interface is only observation scaffolding, while QRS evolves
+the persistent Worker harness and leaves concrete stage implementations open.
+
 \paragraph{Harness optimization.}
 AHE evolves a decoupled coding-agent harness from layered trajectory evidence,
 edit predictions, and next-round task deltas \citep{lin2026ahe}.

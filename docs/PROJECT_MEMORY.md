@@ -1,5 +1,41 @@
 # QEA Repository Memory
 
+## 2026-08-24 Quant-H0-S6 split into Core substrate and Full workflow baseline
+
+The previously implemented detailed `qea/worker_quant_h0_s6` is now treated as
+**S6-Full**, a disclosed human-authored quant-workflow baseline. A new
+`qea/worker_quant_h0_s6_core` keeps the same model, runtime, shell descriptor,
+trusted reusable-capability boundary, six Research State names, concise
+markers, `NOT_APPLICABLE`, and S5 revisit semantics, but removes detailed
+data-audit, early-artifact, perturbation, schema, finite-value, and
+reconciliation advice. Core fixes the state interface while leaving concrete
+stage implementations available to QRS harness evolution.
+
+This is a construct decision, not a decision to preserve easy benchmark
+headroom. If Core genuinely improves Quant-H0, that human-scaffold gain must be
+reported and harder public development tasks re-screened; Core must not be
+weakened merely to make QRS look better. If Full materially exceeds Core, that
+gain belongs to human workflow engineering and Full remains a strong reported
+baseline or ablation rather than silently becoming the QRS starting harness.
+
+The frozen three-arm canary in
+`data/breadth/QF_QUANT_H0_S6_MATCHED_CANARY_PLAN.json` uses two fresh
+repetitions over stable rates headroom, complex holdings work, and an FX
+full-score overhead control. It contains no Evolver, candidate, Reviewer, or
+promotion. Local Core/canary tests pass; no paid Worker or verifier has run.
+The full rationale is recorded in
+`docs/decisions/2026-08-24-quant-h0-s6-core-full-construct-calibration.md`.
+
+The multi-agent prompt and information-flow audit still leaves the QRS main
+`NO-GO`: Review is opt-in on legacy paths; preconstructed and selected-probe
+candidate dispatches can bypass it; Review is not bound to an immutable exact
+effective Worker snapshot; reused Review results are not bound to candidate
+content; public support can be supplied as plan text rather than re-read from
+trusted files; and the executable Evolver profile still mixes QRS, Generic,
+legacy, and answer-rich protocols. These do not block the H0-only construct
+canary, but they block every changed QRS candidate. Full layer-by-layer audit:
+`docs/decisions/2026-08-24-qrs-prompt-and-information-flow-audit.md`.
+
 ## 2026-08-24 Quant-H0-S6 reusable-capability rule and workflow skill implemented
 
 A new `qea/worker_quant_h0_s6` identity now preserves historical Quant-H0 and

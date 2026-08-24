@@ -11,7 +11,7 @@ The harness may contain prompts, executable tools, memory, middleware,
 validators, routing, and research workflow. One execution of task $q$ produces
 a trajectory $\tau_{i,q}$ and artifact $a_{i,q}$.
 
-The main method starts from Quant-H0-S6, a newly frozen baseline containing the
+The main method starts from Quant-H0-S6-Core, a newly frozen baseline containing the
 Quant Research Worker identity, one shell tool, and six concise observable
 stage checkpoints. The system prompt makes the generalization object explicit:
 the Worker must complete the current public task using reusable research
@@ -21,19 +21,27 @@ public data, or a predeclared public reference states them.
 
 The same minimum provenance rule is injected by the trusted Worker runtime, so
 an evolved candidate cannot remove it by editing its own prompt. This
-instruction-level boundary does not replace Candidate Information-Set Review:
-the trusted controller still determines whether the exact cumulative candidate
-may reach a Worker.
+instruction-level boundary cannot replace Candidate Information-Set Review:
+the prospective main controller must determine whether the exact cumulative
+effective candidate may reach a Worker.
 
-The detailed workflow is a registered skill loaded before substantive shell
-work. Each stage emits only a short public summary---not hidden chain of
+The thin state interface is a registered skill loaded before substantive shell
+work. It fixes state names, marker grammar, public-grounded inapplicability, and
+evaluation-to-earlier-stage revisits, but does not prescribe a data-audit
+checklist, quantitative method, perturbation, validator, or artifact algorithm.
+Each stage emits only a short public summary---not hidden chain of
 thought---for mandate, evidence, representation, operation, evaluation, and
 artifact completion. Evaluation may explicitly revisit an earlier stage, and
 an inapplicable stage must be marked with a public reason rather than silently
 skipped. A trusted post-run parser stores the marker ledger outside the task
 submission and does not equate marker presence with stage correctness.
-Quant-H0-S6 contains no evolved component library, candidate history, failure
-classifier, or component-selection policy.
+This is a human-authored observation scaffold shared by the baseline and QRS;
+the claimed QRS contribution begins only when state-conditioned evidence,
+relation selection, component routing, or intervention changes the harness.
+The more detailed S6-Full workflow is retained as a disclosed manual-process
+baseline, not silently folded into the QRS starting state. Quant-H0-S6-Core
+contains no evolved component library, candidate history, failure classifier,
+or component-selection policy.
 
 \subsection{Quant Research State Representation}
 
@@ -46,7 +54,7 @@ We use the general state set
 The states denote Research Mandate \& Contract, Research Evidence \& Data,
 Quantitative Representation, Research Operation, Evaluation \& Reconciliation,
 and Research Artifact \& Completion. They are an open diagnostic ontology, not
-a claim that research is intrinsically linear. Quant-H0-S6 nevertheless orders
+a claim that research is intrinsically linear. Quant-H0-S6-Core nevertheless orders
 their observable checkpoints to make histories comparable and diagnosable;
 evaluation can record a revisit to evidence, representation, or operation.
 Research Operation may instantiate as estimation, pricing, calibration, risk
@@ -100,17 +108,17 @@ tool, descriptor, middleware, memory, or configuration surface that carries it.
 
 \subsection{Candidate Information-Set Review}
 
-The Evolver may inspect answer-rich optimize-only diagnostics after a blind
-development attempt, but those diagnostics may neither reach the Worker nor be
-translated into an unsupported reusable rule. Raw-file isolation alone is
-insufficient: a hidden evaluator predicate can be semantically projected into
-a Worker-visible prompt or tool even when the original diagnostic file is
-absent.
+The prospective QRS main Evolver receives only public and answer-free evidence.
+Historical answer-rich development is retained as a threat model rather than
+as main-method permission: retrospective audit showed that a hidden evaluator
+predicate can be semantically projected into a Worker-visible prompt or tool
+even when the original diagnostic file is absent. Raw-file isolation alone is
+therefore insufficient.
 
-Every admitted changed candidate therefore enters a mandatory candidate-focused
+Under the prospective main contract, every admitted changed candidate enters a mandatory candidate-focused
 Candidate Information-Set Review before fresh Worker execution. A trusted
 controller constructs the review package from the complete cumulative
-Quant-H0-S6-to-candidate Worker-visible material, the candidate's claim inventory,
+Quant-H0-S6-Core-to-effective-candidate Worker-visible material, the candidate's claim inventory,
 public task contracts, and any independent references frozen before proposal.
 Optimize-only material may be supplied only to trace a forbidden origin; it
 cannot positively support a claim. The Reviewer checks both support and
@@ -164,7 +172,7 @@ of the proposed information boundary.}
 
 \Proposed{The main unit is an independent QRS cumulative campaign rather than a
 set of disconnected task-specific winners. Each campaign starts from a fresh
-Quant-H0-S6, maintains one official incumbent, and traverses a frozen family
+Quant-H0-S6-Core, maintains one official incumbent, and traverses a frozen family
 order under fixed evidence, mutation, and evaluation budgets. A separately
 executed QRS-no-State ablation uses the same lifecycle without State-Card
 construction or state-conditioned retrieval/routing; it is not a runtime mode

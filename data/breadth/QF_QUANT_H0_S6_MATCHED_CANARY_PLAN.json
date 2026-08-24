@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-24",
+  "status": "frozen_not_run",
+  "experiment_id": "qf-quant-h0-s6-matched-canary-20260824-r1",
+  "purpose": "Calibrate the construct and operating cost of the frozen Worker substrate by comparing legacy H0, a thin S6 state interface, and the implemented full S6 workflow. S6-Core is the prospective QRS substrate because it exposes stable state interfaces while leaving stage implementations evolvable. S6-Full is a disclosed human-authored workflow baseline that measures how much capability and headroom detailed process advice consumes. This is not a QRS, Evolver, Reviewer, promotion, sealed-evaluation, or method-superiority experiment.",
+  "treatment": {
+    "control": "Quant-H0 with the shared trusted reusable-harness runtime rule",
+    "core": "Quant-H0-S6-Core with the same trusted runtime rule plus a thin six-stage state interface and trusted marker index; concrete methods and checks remain unspecified",
+    "full": "Quant-H0-S6-Full with the same trusted runtime rule plus the implemented detailed stage workflow and trusted marker index",
+    "only_intended_differences": "legacy versus an observable state interface, and the thin state interface versus detailed human-authored stage advice",
+    "shared": [
+      "DeepSeek V4 Flash Worker model and provider route",
+      "public task instruction and data",
+      "one run_shell_command tool with a byte-identical descriptor",
+      "context, iteration, completion-token, temperature, streaming, timeout, and no-replay settings",
+      "rootless image, QFBench source and manifest, official verifier, task order, and concurrency",
+      "trusted reusable-harness and hidden-answer prohibition runtime rule"
+    ]
+  },
+  "task_selection": [
+    {
+      "task_id": "swap-curve-bootstrap-ois",
+      "family_role": "low-variance rates contract and reconciliation task",
+      "retained_selection_record": "The historical five-run Quant-H0 screen was 17/19 in every run. This score is controller-side selection evidence only and is not reused as a fresh comparator or shown to either Worker.",
+      "expected_total_properties": 19,
+      "why_selected": "It gives a stable two-property headroom reference and a compact public curve-construction workflow."
+    },
+    {
+      "task_id": "13f-amendment-aware-crowding",
+      "family_role": "long data-research and artifact-reconciliation task",
+      "retained_selection_record": "The latest valid public-only Quant-H0 pre-screen was 47/51, while older runs were more variable. This is controller-side selection evidence only and is not reused as a fresh comparator or shown to either Worker.",
+      "expected_total_properties": 51,
+      "why_selected": "Its long trace and repeated data, representation, operation, and reconciliation repairs test whether S6 changes real research behavior rather than only adding markers."
+    },
+    {
+      "task_id": "fx-forward-cross-rate",
+      "family_role": "short full-score ceiling and protocol-overhead control",
+      "retained_selection_record": "The latest valid public-only Quant-H0 pre-screen was 37/37. This is controller-side selection evidence only and is not reused as a fresh comparator or shown to either Worker.",
+      "expected_total_properties": 37,
+      "why_selected": "It tests whether the state interface preserves a simple successful execution and whether Core or Full adds ritual, turns, tokens, or cost without useful behavioral change."
+    }
+  ],
+  "selection_boundary": {
+    "development_tasks_only": true,
+    "sealed_tasks_used": false,
+    "official_selection_values_worker_visible": false,
+    "contaminated_candidate_or_diagnostic_used": false,
+    "task_choice_claim": "Purposive mechanism calibration over one stable rates task and one complex holdings task; not a representative QFBench sample."
+  },
+  "deploy_source_freeze": {
+    "deploy_id": "qf-quant-h0-s6-matched-canary-20260824-r1",
+    "source_revision": "FUTURE_COMMIT:qf-quant-h0-s6-matched-canary-20260824-r1",
+    "resolution": "Deploy the future repository commit that first contains this plan, Quant-H0-S6-Core, S6-Full, the trusted runtime rule, parser, and then-current runner under the exact deploy_id. Record the revision in operational evidence without editing this plan.",
+    "launch_before_resolution_allowed": false
+  },
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0",
+    "worker_concurrency_per_run": 1,
+    "verifier_concurrency_per_run": 1,
+    "max_parallel_runs": 1
+  },
+  "runs": [
+    {
+      "repetition": 1,
+      "run_id": "qf-quant-h0-s6-matched-canary-20260824-r1-rep1-legacy-first",
+      "checkpoint_prefix": "qf-quant-h0-s6-matched-canary-20260824-r1-rep1",
+      "arm_order": [
+        "quant-h0",
+        "quant-h0-s6-core",
+        "quant-h0-s6-full"
+      ],
+      "launch_argv": [
+        "/home/julius/qea/runtime/venvs/rootless/bin/python",
+        "/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/scripts/run_qfbench_component_pilot.py",
+        "--qfbench-root",
+        "/home/julius/qea/runtime/qfbench-source/024921eb",
+        "--qfbench-manifest",
+        "/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+        "--rootless-config",
+        "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+        "--rootless-image-set-manifest",
+        "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+        "--run-id",
+        "qf-quant-h0-s6-matched-canary-20260824-r1-rep1-legacy-first",
+        "--results-dir",
+        "/data/qea-julius-storage/runs",
+        "--seed-worker",
+        "/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/qea/worker_quant_h0",
+        "--arm",
+        "quant-h0=/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/qea/worker_quant_h0",
+        "--arm",
+        "quant-h0-s6-core=/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/qea/worker_quant_h0_s6_core",
+        "--arm",
+        "quant-h0-s6-full=/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/qea/worker_quant_h0_s6",
+        "--task-id",
+        "swap-curve-bootstrap-ois",
+        "--task-id",
+        "13f-amendment-aware-crowding",
+        "--task-id",
+        "fx-forward-cross-rate",
+        "--checkpoint-prefix",
+        "qf-quant-h0-s6-matched-canary-20260824-r1-rep1",
+        "--worker-concurrency",
+        "1",
+        "--verifier-concurrency",
+        "1",
+        "--approve-external-run"
+      ]
+    },
+    {
+      "repetition": 2,
+      "run_id": "qf-quant-h0-s6-matched-canary-20260824-r1-rep2-full-first",
+      "checkpoint_prefix": "qf-quant-h0-s6-matched-canary-20260824-r1-rep2",
+      "arm_order": [
+        "quant-h0-s6-full",
+        "quant-h0-s6-core",
+        "quant-h0"
+      ],
+      "launch_argv": [
+        "/home/julius/qea/runtime/venvs/rootless/bin/python",
+        "/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/scripts/run_qfbench_component_pilot.py",
+        "--qfbench-root",
+        "/home/julius/qea/runtime/qfbench-source/024921eb",
+        "--qfbench-manifest",
+        "/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+        "--rootless-config",
+        "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+        "--rootless-image-set-manifest",
+        "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+        "--run-id",
+        "qf-quant-h0-s6-matched-canary-20260824-r1-rep2-full-first",
+        "--results-dir",
+        "/data/qea-julius-storage/runs",
+        "--seed-worker",
+        "/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/qea/worker_quant_h0",
+        "--arm",
+        "quant-h0-s6-full=/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/qea/worker_quant_h0_s6",
+        "--arm",
+        "quant-h0-s6-core=/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/qea/worker_quant_h0_s6_core",
+        "--arm",
+        "quant-h0=/data/qea-julius-storage/deploy/qf-quant-h0-s6-matched-canary-20260824-r1/qea/worker_quant_h0",
+        "--task-id",
+        "swap-curve-bootstrap-ois",
+        "--task-id",
+        "13f-amendment-aware-crowding",
+        "--task-id",
+        "fx-forward-cross-rate",
+        "--checkpoint-prefix",
+        "qf-quant-h0-s6-matched-canary-20260824-r1-rep2",
+        "--worker-concurrency",
+        "1",
+        "--verifier-concurrency",
+        "1",
+        "--approve-external-run"
+      ]
+    }
+  ],
+  "execution": {
+    "launch_policy": "Run repetition 1 first with one Worker at a time. Audit protocol realization, execution validity, and accounting before launching the separately frozen reverse-order repetition 2. Never use repetition-1 scores to edit a Worker or substitute a task.",
+    "hard_wall": "Each systemd unit uses RuntimeMaxSec=18000.",
+    "resume": "Resume only the same run ID and checkpoint. Never change task, model, provider, route, budget, or arm ordering after launch.",
+    "invalid_recovery": "No automatic third repetition. Retain an invalid cell as infrastructure evidence and stop for a separately frozen recovery decision."
+  },
+  "limits": {
+    "max_worker_sessions": 18,
+    "max_official_verifier_executions": 18,
+    "max_completed_requests_per_run": 300,
+    "max_total_tokens_per_run": 18000000,
+    "provider_cost_usd_per_run": 0.75,
+    "campaign_provider_cost_usd": 1.50,
+    "wall_time_hours_per_run": 5,
+    "no_replacement_model_or_provider": true,
+    "no_evolver_reviewer_or_follow_on_dispatch": true
+  },
+  "metrics": {
+    "paired_unit": "task_id x fresh repetition",
+    "primary_vector": [
+      "valid Worker and verifier observation",
+      "official tests passed and total",
+      "official reward"
+    ],
+    "headroom_vector": [
+      "raw remaining failed-property count for each arm and cell",
+      "core and full minus legacy passed-property deltas for each cell",
+      "full minus core delta to isolate detailed human-authored workflow advice",
+      "fraction of paired legacy headroom closed by core and full when legacy is not full",
+      "full-score cell count by arm",
+      "FX full-score preservation and overhead ratios as a ceiling control"
+    ],
+    "process_vector": [
+      "S1-S6 accounted-stage coverage",
+      "marker protocol issues and explicit revisits",
+      "turns, tool calls, tool errors, artifact count, and execution validity",
+      "requests, input/output/total tokens, provider cost, and wall time"
+    ],
+    "reporting": "Report all six task-by-repetition blocks, all three arm values, and per-task medians. Report an equal-task macro only as a secondary summary so the 51-property holdings task cannot dominate. Do not use a mean-only summary, a significance claim, or one full-score cell as the decision. Marker coverage is not quantitative correctness."
+  },
+  "terminal_interpretation": [
+    {
+      "decision": "INVALID_CANARY",
+      "when": "Any arm has an unrecovered invalid Worker/verifier observation or accounting cannot be reconciled.",
+      "action": "Do not tune S6 and do not infer capability or headroom from the invalid cell."
+    },
+    {
+      "decision": "S6_PROTOCOL_NOT_REALIZED",
+      "when": "More than one valid core or full cell lacks an accountable S1-S6 marker protocol or S6 enters before a terminal S5 marker.",
+      "action": "Repair only skill loading or marker protocol before any main baseline decision."
+    },
+    {
+      "decision": "FULL_HUMAN_WORKFLOW_ADVANTAGE",
+      "when": "Full materially and directionally improves over Core on both non-ceiling tasks without validity regression, or closes at least three quarters of the legacy headroom while Core does not.",
+      "action": "Report the gain as human-authored workflow engineering and retain Full as a disclosed strong baseline or ablation. Do not move its detailed stage algorithms into the QRS starting substrate merely because they score well. Keep Core as the construct-aligned QRS substrate and prescreen harder public development tasks if Core or Full removes existing headroom."
+    },
+    {
+      "decision": "S6_CORE_SUBSTRATE_ACCEPTED",
+      "when": "Core realizes the marker protocol, preserves validity, has no repeated task-level regression, and has tolerable request, token, cost, and wall overhead. This decision does not require Core to preserve old task headroom.",
+      "action": "Retain S6-Core as the prospective QRS substrate because it exposes evolvable state interfaces without pre-solving stage behavior. If Core genuinely improves the baseline, disclose that human-scaffold gain and re-screen harder development tasks rather than weakening Core to manufacture QRS headroom."
+    },
+    {
+      "decision": "S6_REVISE_OR_REJECT",
+      "when": "S6 shows a clear official regression in both repetitions of either task, materially higher invalidity, or pathological cost without compensating observability.",
+      "action": "Revise the workflow or retain legacy H0; do not attribute the regression to QRS."
+    }
+  ],
+  "answer_boundary": "No Worker receives selection scores, failed-property identities, verifier output, expected values, diagnostics, candidate history, Reviewer feedback, or an Evolver instruction. All three receive only the public task/data, their frozen harness, and the same trusted reusable-harness runtime rule.",
+  "claim_boundary": "This canary calibrates legacy, thin-state, and detailed-pipeline Worker substrates on three deliberately selected development tasks: stable headroom, complex variable headroom, and a full-score ceiling control. It is not QRS evolution, benchmark-wide baseline superiority, a population estimate, a stable promotion, a sealed result, or evidence that marker emission causes correctness."
+}
