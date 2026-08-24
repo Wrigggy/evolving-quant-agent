@@ -1,0 +1,242 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-quant-h0-s6-core-v2-protocol-gate-20260824-r1",
+  "run_id": "qf-quant-h0-s6-core-v2-protocol-gate-20260824-r1",
+  "date": "2026-08-24",
+  "status": "retained_negative_invalid_worker_execution_and_protocol_gate_failed",
+  "research_question": "Does Quant-H0-S6-Core-v2 produce valid Worker/verifier observations whose trusted assistant-role traces account for S1 through S6 in order with no malformed marker or protocol issue?",
+  "setup": {
+    "benchmark": "QFBench",
+    "source_revision": "14a9696e8ea8dbbb8d14189653a76753c7d209d8",
+    "benchmark_revision": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+    "frozen_plan": "data/breadth/QF_QUANT_H0_S6_CORE_V2_BREADTH_PLAN.json",
+    "remote_artifact_root": "/data/qea-julius-storage/runs/qf-quant-h0-s6-core-v2-protocol-gate-20260824-r1",
+    "canonical_report": "/data/qea-julius-storage/runs/qf-quant-h0-s6-core-v2-protocol-gate-20260824-r1/pilot-report.json",
+    "development_tasks_only": true,
+    "sealed_tasks_used": false,
+    "evolver_calls": 0,
+    "reviewer_calls": 0,
+    "candidate_mutations": 0,
+    "worker_route": "deepseek-v4-flash-main0",
+    "worker_model": "deepseek/deepseek-v4-flash-0731",
+    "worker_concurrency": 1,
+    "verifier_concurrency": 1,
+    "arm": "quant-h0-s6-core-v2",
+    "task_order": [
+      "swap-curve-bootstrap-ois",
+      "13f-amendment-aware-crowding",
+      "fx-forward-cross-rate"
+    ],
+    "gate_rule": "Proceed only if all three Worker/verifier observations are valid and all three trusted research-state traces account for S1 through S6 in order with no malformed marker or protocol issue. Official score cannot authorize breadth."
+  },
+  "cells": [
+    {
+      "task_id": "swap-curve-bootstrap-ois",
+      "official": {
+        "valid_observation": true,
+        "tests_passed": 19,
+        "tests_failed": 0,
+        "reward": 1.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid_for_selection": true,
+        "outcome": "completed",
+        "turns": 13,
+        "tool_calls": 16,
+        "tool_errors": 5,
+        "artifacts": 5,
+        "worker_seconds": 205.541,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "complete": true,
+        "accounted_stages": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ],
+        "first_accounted_order": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ],
+        "missing_stages": [],
+        "issues": [],
+        "malformed_markers": 0,
+        "marker_counts": {
+          "S1": {"enter": 1, "complete": 1, "not_applicable": 0},
+          "S2": {"enter": 1, "complete": 1, "not_applicable": 0},
+          "S3": {"enter": 1, "complete": 1, "not_applicable": 0},
+          "S4": {"enter": 1, "complete": 1, "not_applicable": 0},
+          "S5": {"enter": 1, "complete": 1, "not_applicable": 0},
+          "S6": {"enter": 1, "complete": 1, "not_applicable": 0}
+        }
+      },
+      "accounting": {
+        "completed_requests": 13,
+        "input_tokens": 358803,
+        "output_tokens": 21060,
+        "total_tokens": 379863,
+        "provider_cost_usd": 0.021322788
+      }
+    },
+    {
+      "task_id": "13f-amendment-aware-crowding",
+      "official": {
+        "valid_observation": true,
+        "tests_passed": 42,
+        "tests_failed": 9,
+        "reward": 0.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid_for_selection": true,
+        "outcome": "completed",
+        "turns": 26,
+        "tool_calls": 37,
+        "tool_errors": 4,
+        "artifacts": 8,
+        "worker_seconds": 520.745,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "complete": false,
+        "accounted_stages": [],
+        "first_accounted_order": [],
+        "missing_stages": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ],
+        "issues": [
+          "first_stage_entries_out_of_order_or_missing"
+        ],
+        "malformed_markers": 0,
+        "observed_qstate_text": "The raw trace contains the intended S1-S6 text inside run_shell_command echo commands and subsequent tool-role stdout.",
+        "trusted_parser_channel": "assistant role, exact standalone marker line",
+        "channel_mismatch": "shell_echo_and_tool_stdout_are_not_assistant_role_markers"
+      },
+      "accounting": {
+        "completed_requests": 26,
+        "input_tokens": 1195411,
+        "output_tokens": 46822,
+        "total_tokens": 1242233,
+        "provider_cost_usd": 0.045299788
+      }
+    },
+    {
+      "task_id": "fx-forward-cross-rate",
+      "official": {
+        "valid_observation": false,
+        "tests_passed": 0,
+        "tests_failed": 16,
+        "reward": 0.0,
+        "verifier_exit_code": 0,
+        "interpretation": "The verifier score was produced after an invalid empty Worker execution and is retained only as failure diagnostics; it is not an interpretable benchmark outcome."
+      },
+      "execution": {
+        "valid_for_selection": false,
+        "outcome": "model_empty_response",
+        "invalid_reason": "model_empty_response_before_worker_progress",
+        "turns": 0,
+        "tool_calls": 0,
+        "tool_errors": 0,
+        "artifacts": 0,
+        "worker_seconds": 308.957,
+        "cleaned_up": true,
+        "observed_error": "Empty model response received: finish_reason=unknown, role=assistant, content_len=0, tool_calls=0"
+      },
+      "protocol": {
+        "complete": false,
+        "accounted_stages": [],
+        "first_accounted_order": [],
+        "missing_stages": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ],
+        "issues": [
+          "first_stage_entries_out_of_order_or_missing"
+        ],
+        "malformed_markers": 0,
+        "trace_bytes": 0
+      },
+      "accounting": {
+        "completed_requests": 2,
+        "input_tokens": 7463,
+        "output_tokens": 32167,
+        "total_tokens": 39630,
+        "provider_cost_usd": 0.022108688
+      }
+    }
+  ],
+  "gate_summary": {
+    "canonical_run_status": "invalid_worker_execution",
+    "valid_worker_verifier_cells": 2,
+    "invalid_worker_cells": 1,
+    "protocol_complete_cells": 1,
+    "protocol_applicable_cells": 3,
+    "gate_passed": false,
+    "breadth_dispatches": 0,
+    "breadth_run_directories": 0,
+    "terminal": "S6_CORE_V2_PROTOCOL_GATE_FAILED",
+    "failure_reasons": [
+      "13f-amendment-aware-crowding emitted QSTATE text through shell echo and tool stdout rather than accepted assistant-role marker lines.",
+      "fx-forward-cross-rate ended with model_empty_response_before_worker_progress and therefore did not yield a valid Worker/verifier observation."
+    ]
+  },
+  "run_accounting": {
+    "attempts": 3,
+    "completed_requests": 41,
+    "input_tokens": 1561677,
+    "output_tokens": 100049,
+    "total_tokens": 1661726,
+    "provider_cost_usd": 0.088731264,
+    "provider_cost_complete": true,
+    "provider_cost_is_lower_bound": false,
+    "rate_limited_retries": 0,
+    "other_nonaccepted_requests": 0,
+    "unreconciled_attempts": 0,
+    "unreconciled_requests": 0,
+    "started_at": "2026-08-24T14:32:25+08:00",
+    "finished_at": "2026-08-24T14:50:23+08:00",
+    "elapsed_seconds": 1078,
+    "transient_systemd_unit_collected": true
+  },
+  "cleanup": {
+    "lifecycle_records": 12,
+    "lifecycle_records_cleaned": 12,
+    "cleanup_method": "exact-id",
+    "related_processes_remaining": 0,
+    "related_containers_remaining": 0,
+    "related_networks_remaining": 0,
+    "related_volumes_remaining": 0,
+    "run_specific_namespaces_remaining": 0,
+    "coordinator_lock_file_present": true,
+    "coordinator_lock_size_bytes": 0,
+    "coordinator_lock_owner_present": false
+  },
+  "decision": {
+    "protocol_gate": "FAIL",
+    "breadth": "NO-GO",
+    "retain_result": true,
+    "next_action": "Repair only the observable assistant-role marker channel under a new frozen Worker treatment identity, then run a fresh protocol gate. Do not broaden the trusted parser to count shell commands or tool stdout after observing this result, and do not dispatch the frozen Core-v2 breadth runs."
+  },
+  "claim_boundary": {
+    "supported": "One valid protocol-complete swap cell; one valid holdings official outcome with a directly observed shell-echo versus assistant-role marker-channel mismatch; one invalid FX Worker execution; exact request, token, cost, lifecycle, and zero-breadth-dispatch accounting; S6_CORE_V2_PROTOCOL_GATE_FAILED.",
+    "not_supported": "An aggregate three-task Core-v2 benchmark score, interpretation of the invalid FX 0/16 as quantitative performance, reliable S1-S6 realization, Core-v2 breadth eligibility, QRS starting-substrate acceptance, stable gain, representative QFBench performance, candidate Review effectiveness, sealed performance, or main-experiment readiness."
+  }
+}

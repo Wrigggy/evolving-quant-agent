@@ -1009,3 +1009,40 @@ correctness, and Full shows no detailed-human-workflow advantage. Rep2 is
 \SsixCanaryRepTwo{} because repairing the failed protocol changes the Worker
 treatment identity. No Evolver, candidate, Candidate Reviewer, protection,
 sealed task, or main experiment ran.}
+
+\Measured{The fresh Quant-H0-S6-Core-v2 protocol gate terminated at
+\SsixCoreVtwoGateStatus{} with \SsixCoreVtwoGateValidCells{} valid
+Worker/verifier observations and only \SsixCoreVtwoGateProtocolComplete{}
+strict protocol-complete traces.} The swap cell produced
+\SsixCoreVtwoGateSwapOfficial{} and accounted for S1--S6 in order with one
+ENTER/COMPLETE pair per stage and no parser issue. The holdings cell produced
+\SsixCoreVtwoGateHoldingsOfficial{} as a valid official observation, but the
+trusted marker index contained no events: the Worker emitted its intended
+QSTATE text through \texttt{run\_shell\_command} \texttt{echo} calls and
+tool-role stdout rather than assistant-role standalone marker lines. All six
+stages were therefore missing and the strict parser reported
+\texttt{first\_stage\_entries\_out\_of\_order\_or\_missing}.
+
+The FX Worker returned an empty model response before any Worker progress,
+with zero turns, tools, artifacts, and trace bytes. Its verifier subsequently
+wrote \SsixCoreVtwoGateFxRecord{}, but that value is retained only as failure
+diagnostics: the attempt was invalid for selection and cannot be pooled into a
+three-task performance aggregate. The canonical run status was
+\SsixCoreVtwoGateRunStatus{}.
+
+The gate reconciled \SsixCoreVtwoGateRequests{} completed requests,
+\SsixCoreVtwoGateInputTokens{} input, \SsixCoreVtwoGateOutputTokens{} output,
+and \SsixCoreVtwoGateTokens{} total tokens at
+\SsixCoreVtwoGateCost{} over \SsixCoreVtwoGateWall{}. There were zero retry,
+nonaccepted, or unreconciled requests. Exact-ID cleanup covered
+\SsixCoreVtwoGateCleanup{} and left no live process, container, network,
+volume, run-specific namespace, or transient unit. Breadth dispatches were
+\SsixCoreVtwoGateBreadthDispatches{}.
+
+\Boundary{The gate establishes neither reliable S1--S6 realization nor an
+aggregate Core-v2 benchmark result. The invalid FX 0/16 is not quantitative
+performance, marker completeness is not stage correctness, and the valid swap
+and holdings records provide no matched or repeated gain estimate. The frozen
+Core-v2 breadth wave remains no-go. A marker-channel repair creates a new
+Worker treatment identity and requires a fresh gate; no Evolver, candidate,
+Candidate Reviewer, protection, sealed task, or main experiment ran.}

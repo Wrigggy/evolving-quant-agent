@@ -1,5 +1,37 @@
 # QEA Repository Memory
 
+## 2026-08-24 Quant-H0-S6-Core-v2 protocol gate failed; breadth stopped
+
+The frozen three-cell Core-v2 protocol gate is retained as a negative result.
+Only `swap-curve-bootstrap-ois` produced both a valid Worker/verifier
+observation and a complete strict S1--S6 trace: 19/19, reward 1, with every
+stage represented by one assistant-role ENTER/COMPLETE pair. The holdings cell
+was execution-valid at 42/51, reward 0, but failed the protocol completely.
+Its raw trace put all intended QSTATE text inside `run_shell_command` `echo`
+commands and subsequent tool stdout; the trusted parser correctly accepted
+none of those as assistant-role standalone markers. The FX Worker returned an
+empty model response before progress, wrote zero trace bytes and zero
+artifacts, and was invalid for selection. Its later verifier record of 0/16 is
+failure diagnostics, not an interpretable benchmark outcome.
+
+The canonical run status is `invalid_worker_execution`; only 2/3 cells were
+valid and only 1/3 protocols were complete. The terminal decision is
+`S6_CORE_V2_PROTOCOL_GATE_FAILED`, and all frozen Core-v2 breadth runs remain
+`NO-GO`. No breadth unit or run directory was dispatched. A future repair may
+change only the observable marker channel under a new Worker treatment
+identity; it must not broaden the parser after observing this result, reuse
+the failed gate, add task-specific quantitative methods, or dispatch the
+current Core-v2 breadth plan.
+
+The run reconciled 41 completed requests, 1,661,726 total tokens, and
+$0.088731264 with zero retry, nonaccepted request, or unreconciled accounting.
+All 12 lifecycle records were cleaned by exact ID, leaving no process,
+container, network, volume, run-specific namespace, or transient-unit residue.
+The zero-byte coordinator lock had no owner. Full record:
+`docs/decisions/2026-08-24-quant-h0-s6-core-v2-protocol-gate-result.md`; compact
+result:
+`data/breadth/QF_QUANT_H0_S6_CORE_V2_PROTOCOL_GATE_RESULT.json`.
+
 ## 2026-08-24 Quant-H0-S6-Core-v2 protocol repair and 12-task breadth map frozen
 
 The rep1 construct result selected `S6_PROTOCOL_NOT_REALIZED`, so the original
