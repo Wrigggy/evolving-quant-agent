@@ -1,5 +1,36 @@
 # QEA Repository Memory
 
+## 2026-08-24 Quant-H0-S6-Core-v3 R2 failed on transition timing
+
+The frozen Core-v3 R2 gate is retained as a negative protocol result. All
+three Worker/verifier executions were valid, with official records
+`[19/19, 0/11, 37/37]` on swap, holdings, and FX. The runner's trusted syntax
+parser marked swap and FX complete, for 2/3 syntactic protocol completion. A
+manual role/turn chronology audit found 0/3 complete transition-timed traces:
+swap emitted all S1--S6 markers in one final-only retrospective block;
+holdings emitted a direct assistant-only S1 ENTER that the agent loop treated
+as final, ending after two turns with no artifact; and FX successfully
+continued when marker messages also contained ToolUse, but substantive input
+inspection preceded its first S1 and S2 markers.
+
+The gate therefore failed and breadth remains `NO-GO`. Parser syntax, direct
+assistant channel, transition timing, Worker validity, and official score are
+separate measurements. A new treatment must align nonterminal markers with
+runtime continuation and ensure ENTER precedes substantive stage work. It
+cannot reuse this gate, dispatch the frozen Core-v3 breadth plan, add a
+task-specific quant method, or select new tasks from the observed scores.
+
+The run reconciled 30 completed logical requests against 34 provider audit
+rows. Four FX rows were rate-limited and not accepted. Completed requests used
+866,943 tokens and $0.052165716, with no other nonaccepted or unreconciled
+request. Breadth dispatch was zero. All 12 lifecycle records were cleaned by
+exact ID; no process, container, network, volume, namespace, main unit, health
+timer, or breadth directory remained. The zero-byte coordinator lock had no
+owner. Full record:
+`docs/decisions/2026-08-24-quant-h0-s6-core-v3-protocol-gate-r2-result.md`;
+compact result:
+`data/breadth/QF_QUANT_H0_S6_CORE_V3_PROTOCOL_GATE_R2_RESULT.json`.
+
 ## 2026-08-24 Quant-H0-S6-Core-v2 protocol gate failed; breadth stopped
 
 The frozen three-cell Core-v2 protocol gate is retained as a negative result.

@@ -399,7 +399,7 @@ common sealed vector and resource use rather than being forced into QRS's
 internal promotion semantics. Purposeful development-task selection is
 disclosed through the complete pool, criteria, strata, roles, exclusions, and
 freeze time. This is a design record, not a completed experiment; the
-universal gate, fresh assistant-channel S6 repair and protocol re-gate,
+universal gate, transition-timed S6 runtime/protocol repair and re-gate,
 public-only Review-PASS
 Worker result, main manifest, independent lineages, AHE reproduction, and
 sealed panel remain pending.
@@ -494,3 +494,46 @@ The terminal decision is
 remain no-go. A direct-assistant marker-channel repair would be a new Worker
 treatment and must receive a fresh gate rather than broadening the parser or
 reusing this failed authorization.
+
+\subsection{Quant-H0-S6-Core-v3 R2 protocol gate retained negative record}
+
+The frozen R2 protocol-gate setup is defined in
+\path{data/breadth/QF_QUANT_H0_S6_CORE_V3_BREADTH_PLAN.json}. Its compact
+result is
+\path{data/breadth/QF_QUANT_H0_S6_CORE_V3_PROTOCOL_GATE_R2_RESULT.json},
+and the retained four-part decision is
+\path{docs/decisions/2026-08-24-quant-h0-s6-core-v3-protocol-gate-r2-result.md}.
+The complete local mirror is
+\path{results/bc-mirror/qf-quant-h0-s6-core-v3-protocol-gate-20260824-r2/}.
+The human-readable deploy identity was
+\texttt{qf-quant-h0-s6-core-v3-breadth-20260824-r2}; the frozen Worker
+treatment was \texttt{quant-h0-s6-core-v3}.
+
+All three Worker/verifier cells were valid for selection. Swap scored 19/19,
+Holdings 0/11, and FX 37/37. The strict runner parser accepted the complete
+S1--S6 syntax in two of three cells, but manual transition-timing review found
+zero of three complete realizations. Swap emitted all 12 events retrospectively
+in one final assistant message after the substantive tool work. Holdings
+emitted an assistant-only S1-enter marker on its second turn, which the runtime
+treated as the final response; it produced no artifact and never reached the
+remaining transitions. FX supplied a complete 12-event parser trace and used
+marker-plus-\texttt{ToolUse} turns for intermediate transitions, but it completed
+material evidence acquisition before the first S1 and S2 entries, so the trace
+did not establish correctly timed stage execution. Its final assistant-only S6
+completion marker terminated normally.
+
+Accounting reconciled 30 completed logical requests and 34 provider audit
+rows: 808,773 input tokens, 58,170 output tokens, 866,943 total tokens, and
+\$0.052165716. The four additional audit rows were rate-limited, not accepted,
+and not billed. Twelve of twelve lifecycle records were cleaned by exact ID.
+No related process, container, network, volume, namespace, or exact systemd
+unit remained at the final audit; a zero-byte coordinator lock had no owner.
+No breadth directory was created and breadth dispatch remained zero.
+
+The terminal decision is
+\texttt{S6\_CORE\_V3\_PROTOCOL\_GATE\_FAILED}. Parser completeness is
+retained as syntax evidence only; it is not evidence that the six stages
+governed execution. Core-v3 breadth remains no-go. A successor must align
+transition markers with runtime continuation and require markers before their
+corresponding work, then pass a fresh gate under a new human-readable treatment
+identity.

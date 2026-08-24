@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-quant-h0-s6-core-v3-protocol-gate-20260824-r2",
+  "run_id": "qf-quant-h0-s6-core-v3-protocol-gate-20260824-r2",
+  "date": "2026-08-24",
+  "status": "retained_negative_protocol_gate_failed",
+  "research_question": "Does the direct-assistant marker-channel repair make the otherwise unchanged Core-v3 Worker realize S1 through S6 at the transitions those markers claim to record, without premature runtime termination?",
+  "setup": {
+    "benchmark": "QFBench",
+    "benchmark_snapshot": "pinned QFBench base85 runtime snapshot",
+    "deploy_id": "qf-quant-h0-s6-core-v3-breadth-20260824-r2",
+    "frozen_plan": "data/breadth/QF_QUANT_H0_S6_CORE_V3_BREADTH_PLAN.json",
+    "local_mirror": "results/bc-mirror/qf-quant-h0-s6-core-v3-protocol-gate-20260824-r2/",
+    "canonical_report": "results/bc-mirror/qf-quant-h0-s6-core-v3-protocol-gate-20260824-r2/pilot-report.json",
+    "development_tasks_only": true,
+    "sealed_tasks_used": false,
+    "evolver_calls": 0,
+    "reviewer_calls": 0,
+    "candidate_mutations": 0,
+    "worker_route": "deepseek-v4-flash-main0",
+    "worker_model": "deepseek/deepseek-v4-flash-0731",
+    "worker_concurrency": 1,
+    "verifier_concurrency": 1,
+    "arm": "quant-h0-s6-core-v3",
+    "task_order": [
+      "swap-curve-bootstrap-ois",
+      "13f-amendment-aware-crowding",
+      "fx-forward-cross-rate"
+    ],
+    "gate_rule": "Proceed only if all three Worker/verifier observations are valid and all three traces realize the direct-assistant S1-S6 protocol without malformed markers, sequence issues, non-assistant marker channels, or retrospective transition claims. Official score cannot authorize breadth."
+  },
+  "cells": [
+    {
+      "task_id": "swap-curve-bootstrap-ois",
+      "official": {
+        "valid_observation": true,
+        "tests_passed": 19,
+        "tests_failed": 0,
+        "reward": 1.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid_for_selection": true,
+        "outcome": "completed",
+        "turns": 11,
+        "tool_calls": 13,
+        "tool_errors": 3,
+        "artifacts": 5,
+        "worker_seconds": 190.199,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "runner_parser_complete": true,
+        "runner_parser_events": 12,
+        "runner_parser_missing_stages": [],
+        "runner_parser_issues": [],
+        "runner_parser_malformed_markers": 0,
+        "direct_assistant_marker_messages": 1,
+        "marker_message_trace_lines": [25],
+        "marker_messages_with_tool_use": 0,
+        "manual_transition_timing_complete": false,
+        "manual_issue": "All S1-S6 markers were consolidated in the final assistant-only message after substantive work. The S6 summary explicitly disclosed terminal consolidation, violating the frozen no-final-only-backfill rule.",
+        "runtime_effect": "The marker block did not terminate work early because it was first emitted after all substantive tool work had finished."
+      },
+      "accounting": {
+        "completed_logical_requests": 11,
+        "provider_audit_rows": 11,
+        "rate_limited_not_accepted_rows": 0,
+        "input_tokens": 234287,
+        "output_tokens": 19160,
+        "total_tokens": 253447,
+        "provider_cost_usd": 0.018685124
+      }
+    },
+    {
+      "task_id": "13f-amendment-aware-crowding",
+      "official": {
+        "valid_observation": true,
+        "tests_passed": 0,
+        "tests_failed": 11,
+        "reward": 0.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid_for_selection": true,
+        "outcome": "completed",
+        "turns": 2,
+        "tool_calls": 3,
+        "tool_errors": 0,
+        "artifacts": 0,
+        "worker_seconds": 9.641,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "runner_parser_complete": false,
+        "runner_parser_events": 1,
+        "runner_parser_accounted_stages": [],
+        "runner_parser_missing_stages": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ],
+        "runner_parser_issues": [
+          "S1_enter_without_complete",
+          "first_stage_entries_out_of_order_or_missing"
+        ],
+        "runner_parser_malformed_markers": 0,
+        "direct_assistant_marker_messages": 1,
+        "marker_message_trace_lines": [6],
+        "marker_messages_with_tool_use": 0,
+        "manual_transition_timing_complete": false,
+        "manual_issue": "The direct assistant-only S1 ENTER message contained no ToolUse. The current agent loop treated it as the final response and ended the Worker before S1 completion or any deliverable.",
+        "runtime_effect": "Marker-only nonterminal assistant output caused premature normal termination."
+      },
+      "accounting": {
+        "completed_logical_requests": 2,
+        "provider_audit_rows": 2,
+        "rate_limited_not_accepted_rows": 0,
+        "input_tokens": 6650,
+        "output_tokens": 295,
+        "total_tokens": 6945,
+        "provider_cost_usd": 0.001030628
+      }
+    },
+    {
+      "task_id": "fx-forward-cross-rate",
+      "official": {
+        "valid_observation": true,
+        "tests_passed": 37,
+        "tests_failed": 0,
+        "reward": 1.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid_for_selection": true,
+        "outcome": "completed",
+        "turns": 17,
+        "tool_calls": 18,
+        "tool_errors": 2,
+        "artifacts": 1,
+        "worker_seconds": 355.515,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "runner_parser_complete": true,
+        "runner_parser_events": 12,
+        "runner_parser_missing_stages": [],
+        "runner_parser_issues": [],
+        "runner_parser_malformed_markers": 0,
+        "direct_assistant_marker_messages": 5,
+        "marker_message_trace_lines": [14, 16, 32, 34, 36],
+        "marker_messages_with_tool_use": 4,
+        "final_marker_message_without_tool_use": 36,
+        "manual_transition_timing_complete": false,
+        "manual_issue": "The later stage boundaries were interleaved with continuing ToolUse, but the Worker had already listed and read the public spot, deposit, portfolio, history, and parameter inputs before its first S1 ENTER and S2 ENTER markers.",
+        "runtime_effect": "Marker messages on trace lines 14, 16, 32, and 34 continued because they also contained ToolUse; the assistant-only S6 COMPLETE message on line 36 became the final response."
+      },
+      "accounting": {
+        "completed_logical_requests": 17,
+        "provider_audit_rows": 21,
+        "rate_limited_not_accepted_rows": 4,
+        "input_tokens": 567836,
+        "output_tokens": 38715,
+        "total_tokens": 606551,
+        "provider_cost_usd": 0.032449964
+      }
+    }
+  ],
+  "gate_summary": {
+    "canonical_run_status": "complete",
+    "valid_worker_verifier_cells": 3,
+    "runner_syntax_complete_cells": 2,
+    "manual_transition_timing_complete_cells": 0,
+    "official_task_vector": [
+      "19/19, reward 1",
+      "0/11, reward 0",
+      "37/37, reward 1"
+    ],
+    "gate_passed": false,
+    "breadth_dispatches": 0,
+    "breadth_run_directories": 0,
+    "failure_reasons": [
+      "Swap satisfied marker syntax only by final-only retrospective backfill.",
+      "Holdings emitted a nonterminal marker-only assistant response that the runtime treated as final, leaving the protocol incomplete and producing no artifact.",
+      "FX demonstrated the viable marker-plus-ToolUse continuation pattern, but substantive evidence work preceded its initial S1 and S2 markers."
+    ]
+  },
+  "run_accounting": {
+    "attempts": 3,
+    "completed_logical_requests": 30,
+    "provider_audit_rows": 34,
+    "rate_limited_not_accepted_rows": 4,
+    "other_nonaccepted_requests": 0,
+    "input_tokens": 808773,
+    "output_tokens": 58170,
+    "total_tokens": 866943,
+    "provider_cost_usd": 0.052165716,
+    "provider_cost_complete": true,
+    "provider_cost_is_lower_bound": false,
+    "unreconciled_attempts": 0,
+    "unreconciled_requests": 0,
+    "started_at": "2026-08-24T15:07:48+08:00",
+    "finished_at": "2026-08-24T15:17:46+08:00",
+    "elapsed_seconds": 598
+  },
+  "cleanup": {
+    "lifecycle_records": 12,
+    "lifecycle_records_cleaned": 12,
+    "cleanup_method": "exact-id",
+    "related_processes_remaining": 0,
+    "related_containers_remaining": 0,
+    "related_networks_remaining": 0,
+    "related_volumes_remaining": 0,
+    "run_specific_namespaces_remaining": 0,
+    "main_unit_collected": true,
+    "health_service_and_timer_collected_after_terminal_check": true,
+    "coordinator_lock_file_present": true,
+    "coordinator_lock_size_bytes": 0,
+    "coordinator_lock_owner_present": false
+  },
+  "decision": {
+    "protocol_gate": "FAIL",
+    "breadth": "NO-GO",
+    "retain_result": true,
+    "next_action": "Use a new treatment identity to align nonterminal direct-assistant markers with runtime continuation and to enforce marker timing relative to substantive tool work. Validate it with no-model fixtures and a fresh three-cell gate before any separately frozen breadth dispatch."
+  },
+  "claim_boundary": {
+    "supported": "Three valid official development-task observations; a runner syntax-complete rate of two of three; a manual transition-timing-complete rate of zero of three; direct evidence for final-only backfill, marker-only premature termination, and marker-plus-ToolUse continuation; exact request, retry, token, cost, zero-breadth-dispatch, and cleanup accounting.",
+    "not_supported": "Reliable transition-timed S1-S6 realization, Core-v3 breadth eligibility, a matched or stable Worker gain, representative QFBench performance, accepted QRS starting substrate, candidate Review effectiveness, sealed performance, or main-experiment readiness."
+  }
+}
