@@ -126,11 +126,15 @@ hold:
    safe.
 
 Stable-promotion rate is the number of successful opportunities divided by the
-fixed number of predeclared opportunities. `ABSTAIN`, rejected admission,
-Reviewer `REJECT` or `INCONCLUSIVE`, invalid observations after bounded setup
-recovery, no-gain targets, inconsistent repeats, and unsafe protection all
-remain visible in this denominator. The study does not silently replace them
-with extra best-of-N attempts.
+fixed number of predeclared opportunities with valid matched execution.
+`ABSTAIN`, rejected admission, Reviewer `REJECT` or `INCONCLUSIVE`, no-gain
+targets, inconsistent repeats, and unsafe protection all remain visible in this
+denominator. An observation that remains infrastructure-invalid after the one
+frozen setup recovery is reported as operational attrition; the affected
+Generic--QRS pair is omitted from the scientific rate under a predeclared
+paired-missingness rule, and a companion intent-to-run sensitivity rate counts
+it as zero. It may not be replaced by a new task, route, budget, or unreported
+best-of-N attempt.
 
 ### Final primary: sealed official performance
 

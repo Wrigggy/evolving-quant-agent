@@ -65,7 +65,10 @@ that footprint without a new failure. The answer-free protection candidate
 must be aggregate-safe and its failed-property set must be a subset of the
 matched parent set. Only then does the controller update the official incumbent.
 Invalid runtime observations may receive only the separately frozen bounded
-setup recovery; they are not scored as model or method failures.
+setup recovery. If that recovery also remains invalid, the matched arm-pair is
+reported as operational attrition and omitted from the scientific rate under a
+frozen paired-missingness rule; a companion intent-to-run rate counts it as
+zero. The task, route, and budget are not adaptively replaced.
 
 \subsection{Primary Endpoints}
 
@@ -73,7 +76,7 @@ The development primary endpoint is the stable-promotion rate
 \begin{equation}
     \operatorname{SPR}
     = \frac{\sum_{\ell,f} \mathbb{1}[\text{Review pass, target gain,
-    repeat-consistent, protection-safe}]}{N_{\mathrm{predeclared\ opportunities}}}.
+    repeat-consistent, protection-safe}]}{N_{\mathrm{valid\ matched\ opportunities}}}.
 \end{equation}
 The denominator is fixed before execution. \texttt{ABSTAIN}, rejected
 admission, Review \texttt{REJECT} or \texttt{INCONCLUSIVE}, no-gain target,
