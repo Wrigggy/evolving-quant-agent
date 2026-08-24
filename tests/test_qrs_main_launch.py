@@ -283,7 +283,15 @@ def test_every_proposal_is_workflow_global_answer_free_and_review_mandatory(
         assert review["arm_blind"] is True
         assert review["optimize_only_sources"] == []
         assert review["candidate_material_baseline_worker_dir"] == frozen_worker
-        assert len(review["public_sources"]) >= 12
+        assert review["public_sources"] == []
+        assert len(review["public_source_catalog"]) >= 12
+        assert all(
+            "excerpt" not in source
+            for source in review["public_source_catalog"]
+        )
+        assert review["answer_free_development_evidence_root"] == (
+            proposal["evidence"]
+        )
         assert plan["dispatch_boundary"]["required_stop_after_stage"] == (
             "information_set_review"
         )
@@ -314,11 +322,13 @@ def test_review_contracts_are_cumulative_without_future_or_sealed_tasks(
         review = controller["lineages"][0][
             "candidate_information_set_review"
         ]
-        refs = {source["ref"] for source in review["public_sources"]}
+        refs = {
+            source["ref"] for source in review["public_source_catalog"]
+        }
         observed = {
-            ref.split(":", 2)[1]
+            Path(ref).parts[3]
             for ref in refs
-            if ref.startswith("public:")
+            if ref.startswith("benchmarks/qfbench/tasks/")
         }
 
         assert observed == expected

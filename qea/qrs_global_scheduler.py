@@ -13,12 +13,14 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from decimal import Decimal
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
 from qea.frozen_base_harness import (
     FrozenBaseHarnessError,
     inspect_base_harness,
+    validate_frozen_worker_tree_read_only,
     validate_selected_runtime,
 )
 from qea.qrs_candidate_boundary import inspect_qrs_candidate_boundary
@@ -306,6 +308,15 @@ def _import_handoff(
             raise GlobalSchedulerError("frozen H0 has no selected_runtime")
         validate_selected_runtime(runtime)
         inspect_base_harness(worker_dir)
+        adapter = handoff.get("adapter_contract")
+        if (
+            not isinstance(adapter, Mapping)
+            or adapter.get("selected_worker_tree_read_only") is not True
+        ):
+            raise GlobalSchedulerError(
+                "frozen H0 handoff does not declare a read-only Worker tree"
+            )
+        validate_frozen_worker_tree_read_only(worker_dir)
         launch_runtime = launch["runtime"]
         if runtime.get("worker_model_route") != launch_runtime.get("worker_route"):
             raise GlobalSchedulerError("launch worker route differs from frozen H0")
@@ -649,10 +660,27 @@ def _component_scores(
         rewards = summary.get("task_rewards") if isinstance(summary, Mapping) else None
         if not isinstance(rewards, Mapping) or set(rewards) != set(expected_tasks):
             raise GlobalSchedulerError(f"component arm {label} has incomplete rewards")
-        try:
-            scores[label] = {task: float(rewards[task]) for task in expected_tasks}
-        except (TypeError, ValueError) as exc:
-            raise GlobalSchedulerError("component reward is not numeric") from exc
+        arm_scores: dict[str, float] = {}
+        for task in expected_tasks:
+            raw_reward = rewards[task]
+            if isinstance(raw_reward, bool) or not isinstance(
+                raw_reward, (int, float)
+            ):
+                raise GlobalSchedulerError(
+                    f"component reward must be numeric for {label}/{task}"
+                )
+            reward = float(raw_reward)
+            if not isfinite(reward):
+                raise GlobalSchedulerError(
+                    f"component reward is non-finite for {label}/{task}"
+                )
+            if reward not in {0.0, 1.0}:
+                raise GlobalSchedulerError(
+                    "component reward must be exact binary 0.0 or 1.0 for "
+                    f"{label}/{task}"
+                )
+            arm_scores[task] = reward
+        scores[label] = arm_scores
     return scores
 
 
@@ -888,6 +916,7 @@ def _accepted_claims(result: Mapping[str, object]) -> list[dict[str, object]]:
         claim = value.get("claim")
         surfaces = value.get("surfaces")
         basis_refs = value.get("basis_refs")
+        safe_sources = value.get("safe_sources")
         if (
             not isinstance(claim_id, str)
             or not claim_id
@@ -898,15 +927,21 @@ def _accepted_claims(result: Mapping[str, object]) -> list[dict[str, object]]:
             or not surfaces
             or not isinstance(basis_refs, list)
             or not basis_refs
+            or not isinstance(safe_sources, list)
+            or not safe_sources
         ):
             raise GlobalSchedulerError("accepted claim inventory is incomplete")
         seen.add(claim_id)
         claims.append(
             {
                 "claim_id": claim_id,
+                "claim_scope": value.get(
+                    "claim_scope", "task_specific_requirement"
+                ),
                 "claim": claim,
                 "surfaces": list(surfaces),
                 "basis_refs": list(basis_refs),
+                "safe_sources": deepcopy(list(safe_sources)),
             }
         )
     return claims

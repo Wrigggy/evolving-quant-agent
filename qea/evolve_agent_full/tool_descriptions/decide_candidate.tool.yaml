@@ -112,7 +112,7 @@ input_schema:
                 description: Exact worker_trace.jsonl or research_state_trace.json evidence path, also cited in evidence_refs.
               observed_handoff:
                 type: string
-                description: Repeated answer-free trajectory observation supporting the declared handoff gap.
+                description: Repeated answer-free trajectory observation supporting the declared handoff gap. Cite the exact relevant JSONL line number or bounded line range (for example line 27 or lines 85-87) so the controller can supply a compact exact Reviewer excerpt.
             required: [task_key, task_family, trajectory_ref, observed_handoff]
             additionalProperties: false
         predicted_end_to_end_observable:
@@ -282,7 +282,7 @@ input_schema:
         worker_visible_claims:
           type: array
           minItems: 1
-          description: Required for ACT whenever the active evidence contract requests Worker-visible claim provenance, including answer-free global workflow search. Enumerate predicates and instructions that the candidate will expose to the Worker. Every claim needs at least one public-contract or benchmark-independent basis; an optimize-only diagnostic may supplement but never solely support it.
+          description: Required for ACT whenever the active evidence contract requests Worker-visible claim provenance, including answer-free global workflow search. Enumerate predicates and instructions that the candidate will expose to the Worker. Every positive basis must resolve to an exact supplied source. A task-specific requirement needs public-contract or public-reference support. A task-agnostic harness policy may instead cite the frozen framework contract plus exact answer-free development trajectories from the structured workflow_evidence inventory. Optimize-only diagnostics may supplement but never solely support a claim.
           items:
             type: object
             properties:
@@ -292,6 +292,10 @@ input_schema:
               claim:
                 type: string
                 description: The predicate, convention, or instruction the Worker will see.
+              claim_scope:
+                type: string
+                enum: [task_agnostic_harness_policy, task_specific_requirement]
+                description: Whether the claim is a reusable harness/workflow policy or a task-specific numeric, output, or serialization requirement. Omitted legacy claims are treated as task-specific.
               surfaces:
                 type: array
                 minItems: 1
@@ -306,10 +310,10 @@ input_schema:
                   properties:
                     kind:
                       type: string
-                      enum: [public_contract, benchmark_independent, optimize_only_diagnostic]
+                      enum: [public_contract, public_reference, framework_reference, answer_free_development_observation, optimize_only_diagnostic]
                     ref:
                       type: string
-                      description: "Exact evidence path for public/optimize sources, or a principle:/reference: identifier for benchmark-independent support."
+                      description: Exact already-read path under the supplied evidence root. framework_reference cites the framework_reference path declared by contract.json; answer_free_development_observation must cite one trajectory_ref already declared in workflow_evidence. Bare principle labels are invalid.
                     support:
                       type: string
                       description: How this source supports the Worker-visible claim.

@@ -11,10 +11,53 @@ import scripts.run_qrs_global_scheduler as runner
 from qea.qrs_global_scheduler import GlobalSchedulerError
 
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
 def _write(path: Path, value: object) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+def test_current_global_main_plan_is_not_launch_authorized() -> None:
+    method = json.loads(
+        (
+            ROOT
+            / "data/breadth/QF_GLOBAL_S6_PRIMITIVE_H0_TRAJECTORY_SCHEDULER_PLAN.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    with pytest.raises(GlobalSchedulerError, match="frozen_launch_authorized"):
+        runner._require_live_launch_authority(method)
+
+
+def test_engineering_canary_plan_remains_permitted_with_cli_approval() -> None:
+    method = json.loads(
+        (
+            ROOT / "data/breadth/QF_QRS_MINI_SCHEDULER_CANARY_R3_PLAN.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    runner._require_live_launch_authority(method)
+
+
+def test_explicitly_unauthorized_engineering_canary_is_rejected() -> None:
+    method = json.loads(
+        (
+            ROOT
+            / "data/breadth/QF_QRS_REVIEWER_POLICY_V2_QUALIFICATION_PLAN.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    with pytest.raises(GlobalSchedulerError, match="explicit authority block"):
+        runner._require_live_launch_authority(method)
+
+    method["status"] = "frozen_launch_authorized"
+    method["authority"]["launch_authorized"] = True
+    method["authority"]["paid_or_remote_authority"] = True
+    method["limits"]["paid_or_remote_authority"] = True
+    runner._require_live_launch_authority(method)
 
 
 def _component_action(tmp_path: Path) -> dict[str, object]:
@@ -316,9 +359,16 @@ def _panel_fixture(
     claims = [
         {
             "claim_id": "claim-1",
+            "claim_scope": "task_specific_requirement",
             "claim": "Use the public contract.",
             "surfaces": ["systemprompt"],
-            "basis_refs": [{"ref": "public:t1:instruction"}],
+            "basis_refs": [
+                {
+                    "kind": "public_contract",
+                    "ref": "public:t1:instruction",
+                    "support": "the public instruction directly supports it",
+                }
+            ],
             "reviewer_reason": "must never enter accepted_claims",
         }
     ]
@@ -366,6 +416,22 @@ def _panel_fixture(
     state_path = _write(
         tmp_path / "controller-states" / "lineage-1.json", state
     )
+    _write(
+        tmp_path
+        / "controller-states"
+        / "review-inputs"
+        / f"{review_id}.json",
+        {
+            "schema_version": 1,
+            "review_id": review_id,
+            "candidate_id": "candidate-v1",
+            "candidate": {"diff_ref": "candidate:diff", "diff": "+ rule\n"},
+            "worker_visible_claims": claims,
+            "public_sources": public_sources,
+            "trusted_answer_free_sources": [],
+            "optimize_only_sources": [],
+        },
+    )
     launch = {
         "scheduler_state_root": str(tmp_path / "wrong-controller-root"),
         "public_contracts_root": str(contracts),
@@ -389,9 +455,24 @@ def test_panel_resume_uses_plan_state_and_returns_clean_claims(
     assert result["accepted_claims"] == [
         {
             "claim_id": "claim-1",
+            "claim_scope": "task_specific_requirement",
             "claim": "Use the public contract.",
             "surfaces": ["systemprompt"],
-            "basis_refs": [{"ref": "public:t1:instruction"}],
+            "basis_refs": [
+                {
+                    "kind": "public_contract",
+                    "ref": "public:t1:instruction",
+                    "support": "the public instruction directly supports it",
+                }
+            ],
+            "safe_sources": [
+                {
+                    "ref": "public:t1:instruction",
+                    "source_type": "public_contract",
+                    "source_path": str((tmp_path / "contracts/tasks/t1/instruction.md").resolve()),
+                    "excerpt": "public instruction\n",
+                }
+            ],
         }
     ]
     assert "reviewer_reason" not in result["accepted_claims"][0]

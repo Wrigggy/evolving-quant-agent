@@ -285,6 +285,17 @@ def test_resume_completes_partial_bank_and_stable_rebuild_is_idempotent(tmp_path
         )
         assert contract["workflow_scope_required_for_act"] is True
         assert len(contract["task_family_by_key"]) == 2
+        framework = json.loads(
+            (evidence / contract["framework_reference"]).read_text()
+        )
+        assert framework["workflow_scope"] == "workflow_global"
+        assert framework["minimum_distinct_task_families"] == 2
+        assert framework["allowed_search_loci"] == ["skills", "systemprompt"]
+        framework_text = json.dumps(framework)
+        assert "alpha-task" not in framework_text
+        assert "beta-task" not in framework_text
+        assert "anchor_task_by_family" not in framework_text
+        assert "not establish correctness or utility" in framework_text
         assert any(member.endswith("worker_trace.jsonl") for member in record.members)
 
 
@@ -371,9 +382,27 @@ def test_promoted_panel_carries_only_answer_free_candidate_history_forward(tmp_p
         accepted_claims=[
             {
                 "claim_id": "public-handoff",
+                "claim_scope": "task_agnostic_harness_policy",
                 "claim": "Keep the public workflow handoff explicit.",
                 "surfaces": ["systemprompt"],
-                "basis_refs": ["public:alpha-full-contract"],
+                "basis_refs": [
+                    {
+                        "kind": "public_contract",
+                        "ref": "public:alpha-full-contract",
+                        "support": "the public contract supports the handoff",
+                    }
+                ],
+                "safe_sources": [
+                    {
+                        "ref": "public:alpha-full-contract",
+                        "source_type": "public_contract",
+                        "source_path": str(
+                            panel_one
+                            / "benchmarks/qfbench/tasks/alpha-task/instruction.md"
+                        ),
+                        "excerpt": "Public alpha-task\n",
+                    }
+                ],
             }
         ],
         matched_run_dirs=matched_runs,

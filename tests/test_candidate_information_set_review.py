@@ -54,13 +54,19 @@ def _review_package(search_arm="qrs", *, with_reconciliation_reference=False):
                 "claim_id": "svi-a-positive",
                 "claim": "Every fitted SVI intercept a must be strictly positive.",
                 "surfaces": ["tools", "tool_descriptions"],
-                "basis_refs": ["principle:parameter-admissibility"],
+                "basis_refs": [
+                    "principle:parameter-admissibility",
+                    "diagnostic:local-vol",
+                ],
             },
             {
                 "claim_id": "pair-array-convention",
                 "claim": "Every pair field must be a two-element JSON array.",
                 "surfaces": ["tools"],
-                "basis_refs": ["principle:unambiguous-serialization"],
+                "basis_refs": [
+                    "principle:unambiguous-serialization",
+                    "public:holdings-instruction",
+                ],
             },
             {
                 "claim_id": "local-vol-positive",
@@ -328,6 +334,9 @@ def test_package_requires_optimize_sources_to_remain_worker_hidden():
 
 def test_overall_pass_requires_every_claim_and_coverage_to_pass():
     package = _review_package(with_reconciliation_reference=True)
+    for claim in package["worker_visible_claims"]:
+        if "public:local-vol-instruction" not in claim["basis_refs"]:
+            claim["basis_refs"].append("public:local-vol-instruction")
     response = _response(
         reconciliation_verdict="PASS",
         reconciliation_ref="reference:written-object-reconciliation",
@@ -346,6 +355,9 @@ def test_overall_pass_requires_every_claim_and_coverage_to_pass():
 
 def test_overall_inconclusive_when_no_claim_rejects():
     package = _review_package()
+    for claim in package["worker_visible_claims"][:-1]:
+        if "public:local-vol-instruction" not in claim["basis_refs"]:
+            claim["basis_refs"].append("public:local-vol-instruction")
     response = _response()
     for review in response["claim_reviews"][:-1]:
         review["verdict"] = "PASS"
@@ -357,3 +369,168 @@ def test_overall_inconclusive_when_no_claim_rejects():
     result = validate_candidate_information_set_review(response, package)
 
     assert result["overall_verdict"] == "INCONCLUSIVE"
+
+
+def _workflow_policy_package(*, claim_scope="task_agnostic_harness_policy"):
+    framework_ref = "guidance/qrs-workflow-framework.json"
+    observations = [
+        {
+            "ref": "benchmarks/qfbench/tasks/holdings/worker_trace.jsonl",
+            "source_type": "answer_free_development_observation",
+            "task_key": "qfbench:holdings",
+            "task_family": "data_engineering",
+            "observation": "S1 contains later-state work at line 7.",
+            "excerpt": "line 7: task-directed S2 work before S1 COMPLETE",
+            "answer_free": True,
+        },
+        {
+            "ref": "benchmarks/qfbench/tasks/localvol/worker_trace.jsonl",
+            "source_type": "answer_free_development_observation",
+            "task_key": "qfbench:localvol",
+            "task_family": "derivatives",
+            "observation": "S5 completes without fresh checks at lines 9-10.",
+            "excerpt": "line 9: S5 ENTER\nline 10: S5 COMPLETE",
+            "answer_free": True,
+        },
+    ]
+    return {
+        "schema_version": 1,
+        "review_id": "workflow-review",
+        "candidate_id": "workflow-candidate",
+        "candidate": {
+            "diff_ref": "candidate:diff",
+            "diff": "+ Keep each state span explicit and observable.\n",
+        },
+        "worker_visible_claims": [
+            {
+                "claim_id": "state-span-anchor",
+                "claim_scope": claim_scope,
+                "claim": "Keep each six-state span explicit and observable.",
+                "surfaces": ["skills"],
+                "basis_refs": [
+                    {"kind": "framework_reference", "ref": framework_ref},
+                    *[
+                        {
+                            "kind": "answer_free_development_observation",
+                            "ref": source["ref"],
+                        }
+                        for source in observations
+                    ],
+                ],
+            }
+        ],
+        "public_sources": [],
+        "trusted_answer_free_sources": [
+            {
+                "ref": framework_ref,
+                "source_type": "framework_reference",
+                "excerpt": "Frozen task-agnostic six-state workflow surface.",
+                "answer_free": True,
+            },
+            *observations,
+        ],
+        "optimize_only_sources": [],
+    }
+
+
+def _workflow_policy_pass_response():
+    return {
+        "schema_version": 1,
+        "review_id": "workflow-review",
+        "candidate_id": "workflow-candidate",
+        "claim_reviews": [
+            {
+                "claim_id": "state-span-anchor",
+                "verdict": "PASS",
+                "reason": (
+                    "The frozen workflow surface and two answer-free families "
+                    "ground this task-agnostic span policy."
+                ),
+                "source_basis": [
+                    {
+                        "ref": "guidance/qrs-workflow-framework.json",
+                        "role": "FRAMEWORK_SUPPORT",
+                    },
+                    {
+                        "ref": "benchmarks/qfbench/tasks/holdings/worker_trace.jsonl",
+                        "role": "DEVELOPMENT_OBSERVATION",
+                    },
+                    {
+                        "ref": "benchmarks/qfbench/tasks/localvol/worker_trace.jsonl",
+                        "role": "DEVELOPMENT_OBSERVATION",
+                    },
+                ],
+            }
+        ],
+        "coverage_review": {
+            "verdict": "PASS",
+            "reason": "The complete candidate diff is represented.",
+            "source_basis": [
+                {"ref": "candidate:diff", "role": "CANDIDATE_EXPOSURE"}
+            ],
+            "undeclared_exposures": [],
+        },
+        "overall_verdict": "PASS",
+    }
+
+
+def test_task_agnostic_workflow_policy_can_pass_with_framework_and_cross_family_observations():
+    result = validate_candidate_information_set_review(
+        _workflow_policy_pass_response(), _workflow_policy_package()
+    )
+
+    assert result["overall_verdict"] == "PASS"
+
+
+def test_task_specific_predicate_cannot_pass_from_trajectory_only_support():
+    with pytest.raises(
+        CandidateInformationSetReviewError,
+        match="PASS requires PUBLIC_SUPPORT",
+    ):
+        validate_candidate_information_set_review(
+            _workflow_policy_pass_response(),
+            _workflow_policy_package(claim_scope="task_specific_requirement"),
+        )
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["public_sources", "trusted_answer_free_sources", "optimize_only_sources"],
+)
+def test_review_package_rejects_duplicate_source_refs(field):
+    package = _workflow_policy_package()
+    if not package[field]:
+        package[field] = (
+            [
+                {
+                    "ref": "public:one",
+                    "source_type": "public_contract",
+                    "excerpt": "Public requirement.",
+                }
+            ]
+            if field == "public_sources"
+            else [
+                {
+                    "ref": "diagnostic:one",
+                    "source_type": "optimize_only_diagnostic",
+                    "worker_visible": False,
+                }
+            ]
+        )
+    package[field].append(dict(package[field][0]))
+
+    with pytest.raises(
+        CandidateInformationSetReviewError, match="source refs must be unique"
+    ):
+        validate_candidate_information_set_review_package(package)
+
+
+def test_review_package_rejects_oversized_model_input():
+    package = _workflow_policy_package()
+    package["candidate"]["diff"] = "+" + ("x" * 192_000)
+
+    with pytest.raises(
+        CandidateInformationSetReviewError,
+        match="exceeds the bounded model-input size",
+    ):
+        validate_candidate_information_set_review_package(package)

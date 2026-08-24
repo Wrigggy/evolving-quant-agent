@@ -449,6 +449,32 @@ def _proposal_worker_visible_claims(
     return [deepcopy(dict(claim)) for claim in claims]
 
 
+def _proposal_workflow_evidence(
+    report: Mapping[str, object],
+) -> list[dict[str, object]] | None:
+    """Read exact structured workflow observations from the admitted decision."""
+
+    summary = report.get("summary")
+    discovery = (
+        summary.get("discovery_hypothesis")
+        if isinstance(summary, Mapping)
+        else None
+    )
+    hypothesis = (
+        discovery.get("hypothesis") if isinstance(discovery, Mapping) else None
+    )
+    evidence = (
+        hypothesis.get("workflow_evidence")
+        if isinstance(hypothesis, Mapping)
+        else None
+    )
+    if not isinstance(evidence, list) or not evidence:
+        return None
+    if not all(isinstance(record, Mapping) for record in evidence):
+        return None
+    return [deepcopy(dict(record)) for record in evidence]
+
+
 def _activation_binding(
     *,
     parent_dir: object,
@@ -894,6 +920,9 @@ def import_proposal_report(
     worker_visible_claims = _proposal_worker_visible_claims(report)
     if worker_visible_claims is not None:
         result["proposal"]["worker_visible_claims"] = worker_visible_claims
+    workflow_evidence = _proposal_workflow_evidence(report)
+    if workflow_evidence is not None:
+        result["proposal"]["workflow_evidence"] = workflow_evidence
 
     if decision == "ABSTAIN":
         result["decision"] = "ABSTAIN"

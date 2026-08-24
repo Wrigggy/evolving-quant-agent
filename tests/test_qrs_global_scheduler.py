@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from qea.frozen_base_harness import build_selected_runtime, freeze_base_harness
-from qea.qrs_global_scheduler import GlobalSchedulerError, run_scheduler
+from qea.qrs_global_scheduler import (
+    GlobalSchedulerError,
+    _component_scores,
+    run_scheduler,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -93,6 +97,7 @@ class FakeRunner:
                 action["frozen_h0_worker_dir"], worker, dirs_exist_ok=True
             )
             prompt = worker / "systemprompt.md"
+            prompt.chmod(0o644)
             addition = (
                 f"\nKeep public workflow handoff {action['panel_index']} explicit.\n"
             )
@@ -115,9 +120,23 @@ class FakeRunner:
                 "accepted_claims": [
                     {
                         "claim_id": f"workflow-{action['panel_index']}",
+                        "claim_scope": "task_specific_requirement",
                         "claim": "Use the public six-stage handoff consistently.",
                         "surfaces": ["systemprompt"],
-                        "basis_refs": ["public:workflow-contract"],
+                        "basis_refs": [
+                            {
+                                "kind": "public_contract",
+                                "ref": "public:workflow-contract",
+                                "support": "the public workflow contract supports it",
+                            }
+                        ],
+                        "safe_sources": [
+                            {
+                                "ref": "public:workflow-contract",
+                                "source_type": "public_contract",
+                                "excerpt": "Use the public six-stage handoff consistently.",
+                            }
+                        ],
                     }
                 ],
                 "cost": {
@@ -151,11 +170,11 @@ class FakeRunner:
         labels = [value["label"] for value in action["arms"]]
         rewards = {}
         for label in labels:
-            base = 0.25
+            base = 0.0
             if action["purpose"] == "panel_matched_fitness" and label == "candidate":
-                base = 0.5
+                base = 1.0
             if action["purpose"] == "panel_matched_fitness" and label == "parent":
-                base = 0.25
+                base = 0.0
             if (
                 action["purpose"] == "panel_matched_fitness"
                 and action["panel_index"] == self.regression_panel
@@ -185,6 +204,72 @@ class FakeRunner:
                 "provider_cost_usd": "0.02",
             },
         }
+
+
+def _single_reward_component_result(reward: object):
+    action = {
+        "action_id": "binary-reward-import",
+        "task_ids": ["task-1"],
+        "arms": [{"label": "parent"}, {"label": "candidate"}],
+    }
+    result = {
+        "status": "complete",
+        "task_ids": ["task-1"],
+        "summaries": {
+            "parent": {"task_rewards": {"task-1": 0.0}},
+            "candidate": {"task_rewards": {"task-1": reward}},
+        },
+        "worker_executions": {
+            "parent": {"valid_for_selection": True},
+            "candidate": {"valid_for_selection": True},
+        },
+        "scheduler_protocol": {
+            "parent": {"task-1": True},
+            "candidate": {"task-1": True},
+        },
+    }
+    return action, result
+
+
+@pytest.mark.parametrize(
+    "reward",
+    [
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    ],
+)
+def test_main_reward_import_rejects_non_finite_values(reward: float) -> None:
+    action, result = _single_reward_component_result(reward)
+
+    with pytest.raises(GlobalSchedulerError, match="reward is non-finite"):
+        _component_scores(action, result)
+
+
+@pytest.mark.parametrize("reward", [0.5, -1.0, 1.5, 2.0])
+def test_main_reward_import_rejects_non_binary_values(reward: float) -> None:
+    action, result = _single_reward_component_result(reward)
+
+    with pytest.raises(GlobalSchedulerError, match="exact binary 0.0 or 1.0"):
+        _component_scores(action, result)
+
+
+@pytest.mark.parametrize("reward", ["0", "1", None, True])
+def test_main_reward_import_rejects_non_numeric_json_values(reward: object) -> None:
+    action, result = _single_reward_component_result(reward)
+
+    with pytest.raises(GlobalSchedulerError, match="reward must be numeric"):
+        _component_scores(action, result)
+
+
+@pytest.mark.parametrize("reward", [0, 0.0, 1, 1.0])
+def test_main_reward_import_accepts_exact_binary_values(reward: float) -> None:
+    action, result = _single_reward_component_result(reward)
+
+    scores = _component_scores(action, result)
+
+    assert scores["parent"] == {"task-1": 0.0}
+    assert scores["candidate"] == {"task-1": float(reward)}
 
 
 def test_full_schedule_runs_45_bank_cells_six_panels_and_four_sealed_blocks(tmp_path):

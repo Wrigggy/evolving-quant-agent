@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import stat
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -322,6 +323,62 @@ def _mutation_surfaces(
     return sorted(result)
 
 
+def _make_worker_tree_read_only(root: Path) -> None:
+    """Remove writes from a copied Worker while retaining required execute bits."""
+
+    directories = [root]
+    for member in root.rglob("*"):
+        if member.is_symlink():
+            raise FrozenBaseHarnessError(
+                f"frozen Worker must not contain symlinks: {member}"
+            )
+        if member.is_dir():
+            directories.append(member)
+            continue
+        if not member.is_file():
+            raise FrozenBaseHarnessError(
+                f"frozen Worker contains an unsupported entry: {member}"
+            )
+        executable = bool(member.stat().st_mode & 0o111)
+        member.chmod(0o555 if executable else 0o444)
+
+    # Make directories non-writable only after every child has been processed.
+    for directory in sorted(
+        directories,
+        key=lambda value: len(value.relative_to(root).parts),
+        reverse=True,
+    ):
+        directory.chmod(0o555)
+
+
+def validate_frozen_worker_tree_read_only(worker_dir: str | Path) -> None:
+    """Require the adapter's exact non-writable directory and file modes."""
+
+    root = Path(worker_dir).expanduser().resolve()
+    if not root.is_dir() or root.is_symlink():
+        raise FrozenBaseHarnessError("frozen Worker root is unavailable")
+    for member in [root, *root.rglob("*")]:
+        if member.is_symlink():
+            raise FrozenBaseHarnessError(
+                f"frozen Worker must not contain symlinks: {member}"
+            )
+        mode = stat.S_IMODE(member.stat().st_mode)
+        if member.is_dir():
+            if mode != 0o555:
+                raise FrozenBaseHarnessError(
+                    f"frozen Worker directory is writable or inaccessible: {member}"
+                )
+        elif member.is_file():
+            if mode not in {0o444, 0o555}:
+                raise FrozenBaseHarnessError(
+                    f"frozen Worker file has an invalid frozen mode: {member}"
+                )
+        else:
+            raise FrozenBaseHarnessError(
+                f"frozen Worker contains an unsupported entry: {member}"
+            )
+
+
 def freeze_base_harness(
     *,
     worker_dir: str | Path,
@@ -368,6 +425,11 @@ def freeze_base_harness(
     frozen_inspection = inspect_base_harness(destination)
     if frozen_inspection["agent_name"] != source_inspection["agent_name"]:
         raise FrozenBaseHarnessError("copied Worker agent identity changed unexpectedly")
+    _make_worker_tree_read_only(destination)
+    validate_frozen_worker_tree_read_only(destination)
+    # Resume consumes this materialized tree directly, so prove that the
+    # permission transition did not make its public structure unreadable.
+    frozen_inspection = inspect_base_harness(destination)
 
     manifest: dict[str, object] = {
         "schema_version": 1,
@@ -382,6 +444,7 @@ def freeze_base_harness(
         "adapter_contract": {
             "source_authoring_outside_qrs_scheduler": True,
             "scheduler_must_not_modify_selected_worker_in_place": True,
+            "selected_worker_tree_read_only": True,
             "registered_tools": frozen_inspection["registered_tools"],
             "state_identifiers": frozen_inspection["state_identifiers"],
             "worker_visible_surfaces": frozen_inspection[

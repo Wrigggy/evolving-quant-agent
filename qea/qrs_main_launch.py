@@ -19,6 +19,7 @@ from typing import Any
 from qea.frozen_base_harness import (
     FrozenBaseHarnessError,
     inspect_base_harness,
+    validate_frozen_worker_tree_read_only,
     validate_selected_runtime,
 )
 
@@ -207,7 +208,7 @@ def _contract_file(root: Path, task_id: str, name: str) -> Path:
     )
 
 
-def _public_sources(root: Path, task_ids: list[str]) -> list[dict[str, str]]:
+def _public_source_catalog(root: Path, task_ids: list[str]) -> list[dict[str, str]]:
     sources: list[dict[str, str]] = []
     for task_id in sorted(set(task_ids)):
         instruction = _contract_file(root, task_id, "instruction.md")
@@ -222,33 +223,21 @@ def _public_sources(root: Path, task_ids: list[str]) -> list[dict[str, str]]:
             raise QRSMainLaunchError(
                 f"public clauses are unavailable for {task_id}"
             )
-        try:
-            instruction_text = instruction.read_text(encoding="utf-8")
-            clauses_value = json.loads(clauses.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise QRSMainLaunchError(
-                f"cannot read public contract material for {task_id}"
-            ) from exc
-        if not instruction_text.strip():
-            raise QRSMainLaunchError(f"public instruction is empty for {task_id}")
         sources.extend(
             (
                 {
-                    "ref": f"public:{task_id}:instruction",
+                    "ref": (
+                        f"benchmarks/qfbench/tasks/{task_id}/instruction.md"
+                    ),
                     "source_type": "public_contract",
                     "source_path": str(instruction),
-                    "excerpt": instruction_text,
                 },
                 {
-                    "ref": f"public:{task_id}:clauses",
+                    "ref": (
+                        f"benchmarks/qfbench/tasks/{task_id}/public_clauses.json"
+                    ),
                     "source_type": "public_contract",
                     "source_path": str(clauses),
-                    "excerpt": json.dumps(
-                        clauses_value,
-                        ensure_ascii=False,
-                        sort_keys=True,
-                        indent=2,
-                    ),
                 },
             )
         )
@@ -345,6 +334,15 @@ def build_qrs_main_launch(
     try:
         validate_selected_runtime(selected_runtime)
         inspect_base_harness(worker_root)
+        adapter = handoff.get("adapter_contract")
+        if (
+            not isinstance(adapter, Mapping)
+            or adapter.get("selected_worker_tree_read_only") is not True
+        ):
+            raise FrozenBaseHarnessError(
+                "base-harness handoff does not declare a read-only frozen Worker"
+            )
+        validate_frozen_worker_tree_read_only(worker_root)
     except FrozenBaseHarnessError as exc:
         raise QRSMainLaunchError(str(exc)) from exc
     if selected_runtime.get("worker_model_route") != concrete_runtime["worker_route"]:
@@ -384,13 +382,17 @@ def build_qrs_main_launch(
         review_task_ids = sorted(
             cumulative_focus_tasks | set(anchors.values())
         )
-        public_sources = _public_sources(contracts_root, review_task_ids)
+        public_source_catalog = _public_source_catalog(
+            contracts_root, review_task_ids
+        )
         review_spec: dict[str, object] = {
             "enabled": True,
             "feedback_mode": "answer_free",
             "review_id": review_id,
             "arm_blind": True,
-            "public_sources": public_sources,
+            "public_sources": [],
+            "public_source_catalog": public_source_catalog,
+            "answer_free_development_evidence_root": str(panel_evidence_root),
             "optimize_only_sources": [],
             "candidate_material_baseline_worker_dir": str(
                 Path(worker_root).expanduser().resolve()

@@ -7,6 +7,7 @@ import argparse
 import difflib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -402,6 +403,18 @@ def _information_set_review_spec(
             raise LineageError(
                 f"candidate information-set review {field} must be a list"
             )
+    catalog = raw.get("public_source_catalog")
+    if catalog is not None and not isinstance(catalog, list):
+        raise LineageError(
+            "candidate information-set review public_source_catalog must be a list"
+        )
+    evidence_root = raw.get("answer_free_development_evidence_root")
+    if evidence_root is not None and (
+        not isinstance(evidence_root, str) or not evidence_root.strip()
+    ):
+        raise LineageError(
+            "candidate information-set review answer-free evidence root is invalid"
+        )
     if feedback_mode == "answer_free" and raw["optimize_only_sources"]:
         raise LineageError(
             "answer-free candidate review cannot include optimize-only sources"
@@ -472,7 +485,11 @@ def _materialize_reviewed_candidate_snapshot(
         finally:
             shutil.rmtree(temporary_root, ignore_errors=True)
         for path in sorted(destination.rglob("*"), reverse=True):
-            path.chmod(0o555 if path.is_dir() else 0o444)
+            if path.is_dir():
+                path.chmod(0o555)
+            else:
+                executable = bool(path.stat().st_mode & 0o111)
+                path.chmod(0o555 if executable else 0o444)
         destination.chmod(0o555)
     if not destination.is_dir() or destination.is_symlink():
         raise LineageError("reviewed candidate snapshot is unavailable")
@@ -577,6 +594,302 @@ def _worker_visible_candidate_material(
     }
 
 
+def _claim_basis_records(claims: Sequence[object]) -> dict[str, str]:
+    """Return exact structured basis refs and their declared source kind."""
+
+    records: dict[str, str] = {}
+    for claim in claims:
+        if not isinstance(claim, Mapping):
+            continue
+        bases = claim.get("basis_refs")
+        if not isinstance(bases, list):
+            continue
+        for basis in bases:
+            if not isinstance(basis, Mapping):
+                continue
+            ref = basis.get("ref")
+            kind = basis.get("kind")
+            if isinstance(ref, str) and ref and isinstance(kind, str) and kind:
+                if ref in records and records[ref] != kind:
+                    raise LineageError(
+                        f"candidate claim assigns conflicting kinds to source {ref}"
+                    )
+                records[ref] = kind
+    return records
+
+
+def _bounded_exact_text(path: Path, *, label: str, limit: int = 16_000) -> str:
+    if path.is_symlink() or not path.is_file():
+        raise LineageError(f"{label} is unavailable")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise LineageError(f"cannot read {label}") from exc
+    if not text.strip() or len(text.encode("utf-8")) > limit:
+        raise LineageError(f"{label} is empty or exceeds the bounded Review excerpt")
+    return text
+
+
+def _trajectory_line_excerpt(path: Path, observation: str) -> str:
+    """Read only exact JSONL lines explicitly cited by a workflow observation."""
+
+    if path.is_symlink() or not path.is_file():
+        raise LineageError("workflow trajectory source is unavailable")
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise LineageError("cannot read workflow trajectory source") from exc
+    ranges: list[tuple[int, int]] = []
+    for match in re.finditer(
+        r"\blines?\s+(\d+)(?:\s*[-–]\s*(\d+))?", observation, re.IGNORECASE
+    ):
+        start = int(match.group(1))
+        end = int(match.group(2) or start)
+        if start < 1 or end < start or end - start > 12 or end > len(lines):
+            raise LineageError("workflow observation cites an invalid line range")
+        ranges.append((start, end))
+    if not ranges:
+        raise LineageError(
+            "workflow observation must cite exact trajectory line numbers"
+        )
+    selected: list[int] = []
+    for start, end in ranges:
+        for number in range(start, end + 1):
+            if number not in selected:
+                selected.append(number)
+    if len(selected) > 24:
+        raise LineageError("workflow observation cites too many trajectory lines")
+    excerpt = "\n".join(
+        f"line {number}: {lines[number - 1]}" for number in selected
+    )
+    if len(excerpt.encode("utf-8")) > 24_000:
+        raise LineageError("workflow trajectory excerpt exceeds the Review bound")
+    return excerpt
+
+
+def _trusted_qrs_review_sources(
+    proposal: Mapping[str, object],
+    claims: Sequence[object],
+    spec: Mapping[str, object],
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Materialize only exact claim-cited public/framework/development sources."""
+
+    basis = _claim_basis_records(claims)
+    public_sources = list(spec.get("public_sources", []))
+    catalog = spec.get("public_source_catalog")
+    if isinstance(catalog, list):
+        by_ref = {
+            str(record["ref"]): record
+            for record in catalog
+            if isinstance(record, Mapping) and record.get("ref")
+        }
+        for ref, kind in basis.items():
+            if kind not in {"public_contract", "public_reference"}:
+                continue
+            record = by_ref.get(ref)
+            if not isinstance(record, Mapping) or record.get("source_type") != kind:
+                raise LineageError(f"no trusted public source resolves claim ref {ref}")
+            source_path = Path(str(record.get("source_path", ""))).expanduser()
+            public_sources.append(
+                {
+                    "ref": ref,
+                    "source_type": kind,
+                    "source_path": str(source_path.resolve()),
+                    "excerpt": _bounded_exact_text(
+                        source_path, label=f"public Review source {ref}"
+                    ),
+                }
+            )
+
+    root_value = spec.get("answer_free_development_evidence_root")
+    if root_value is None:
+        return public_sources, []
+    root_path = Path(str(root_value)).expanduser()
+    root = root_path.resolve()
+    if root_path.is_symlink() or not root.is_dir():
+        raise LineageError("answer-free development evidence root is unavailable")
+    trusted: list[dict[str, object]] = []
+    if any(kind == "framework_reference" for kind in basis.values()):
+        framework_refs = [
+            ref for ref, kind in basis.items() if kind == "framework_reference"
+        ]
+        if framework_refs != ["guidance/qrs-workflow-framework.json"]:
+            raise LineageError(
+                "framework claim must cite the frozen QRS workflow framework"
+            )
+        framework_ref = framework_refs[0]
+        framework_path = root / framework_ref
+        trusted.append(
+            {
+                "ref": framework_ref,
+                "source_type": "framework_reference",
+                "source_path": str(framework_path),
+                "excerpt": _bounded_exact_text(
+                    framework_path, label="frozen workflow framework"
+                ),
+                "answer_free": True,
+            }
+        )
+    workflow = proposal.get("workflow_evidence")
+    rows = workflow if isinstance(workflow, list) else []
+    by_ref = {
+        str(row["trajectory_ref"]): row
+        for row in rows
+        if isinstance(row, Mapping) and row.get("trajectory_ref")
+    }
+    for ref, kind in basis.items():
+        if kind != "answer_free_development_observation":
+            continue
+        row = by_ref.get(ref)
+        if not isinstance(row, Mapping):
+            raise LineageError(
+                f"development claim ref is absent from workflow_evidence: {ref}"
+            )
+        relative = Path(ref)
+        if relative.is_absolute() or ".." in relative.parts or relative.name not in {
+            "worker_trace.jsonl",
+            "research_state_trace.json",
+        }:
+            raise LineageError(f"unsafe workflow trajectory ref: {ref}")
+        source = (root / relative).resolve()
+        try:
+            source.relative_to(root)
+        except ValueError as exc:
+            raise LineageError("workflow trajectory escapes trusted evidence") from exc
+        observed = row.get("observed_handoff")
+        family = row.get("task_family")
+        task_key = row.get("task_key")
+        if (
+            not isinstance(observed, str)
+            or not observed.strip()
+            or not isinstance(family, str)
+            or not family.strip()
+            or not isinstance(task_key, str)
+            or not task_key.strip()
+        ):
+            raise LineageError("workflow observation is incomplete")
+        trusted.append(
+            {
+                "ref": ref,
+                "source_type": "answer_free_development_observation",
+                "source_path": str(source),
+                "task_key": task_key,
+                "task_family": family,
+                "observation": observed,
+                "excerpt": _trajectory_line_excerpt(source, observed),
+                "answer_free": True,
+            }
+        )
+    return public_sources, trusted
+
+
+def _prior_accepted_review_sources(
+    claims: Sequence[object], spec: Mapping[str, object]
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Carry exact safe sources for every previously accepted cumulative claim."""
+
+    root_value = spec.get("answer_free_development_evidence_root")
+    if root_value is None:
+        return [], []
+    root = Path(str(root_value)).expanduser().resolve()
+    index_path = root / "accepted-panels" / "INDEX.json"
+    if not index_path.exists():
+        return [], []
+    if index_path.is_symlink() or not index_path.is_file():
+        raise LineageError("accepted-panel history index is unavailable")
+    index = _json(index_path)
+    entries = index.get("entries")
+    if index.get("answer_free") is not True or not isinstance(entries, list):
+        raise LineageError("accepted-panel history index is not answer-free")
+    current = {
+        str(claim.get("claim_id")): claim
+        for claim in claims
+        if isinstance(claim, Mapping) and claim.get("claim_id")
+    }
+    public: dict[str, dict[str, object]] = {}
+    trusted: dict[str, dict[str, object]] = {}
+    for entry in entries:
+        record_value = entry.get("record") if isinstance(entry, Mapping) else None
+        if not isinstance(record_value, str) or not record_value:
+            raise LineageError("accepted-panel history entry has no record")
+        relative = Path(record_value)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise LineageError("accepted-panel history record path is unsafe")
+        record_path = (root / relative).resolve()
+        try:
+            record_path.relative_to(root)
+        except ValueError as exc:
+            raise LineageError("accepted-panel history escapes evidence root") from exc
+        if record_path.is_symlink() or not record_path.is_file():
+            raise LineageError("accepted-panel history record is unavailable")
+        record = _json(record_path)
+        prior_claims = record.get("accepted_claims")
+        if record.get("answer_free") is not True or not isinstance(prior_claims, list):
+            raise LineageError("accepted-panel history is not answer-free")
+        for prior in prior_claims:
+            if not isinstance(prior, Mapping):
+                raise LineageError("prior accepted claim is invalid")
+            claim_id = prior.get("claim_id")
+            observed = current.get(str(claim_id))
+            fields = (
+                "claim_scope",
+                "claim",
+                "surfaces",
+                "basis_refs",
+            )
+            if not isinstance(observed, Mapping) or any(
+                observed.get(field, "task_specific_requirement" if field == "claim_scope" else None)
+                != prior.get(field, "task_specific_requirement" if field == "claim_scope" else None)
+                for field in fields
+            ):
+                raise LineageError(
+                    f"cumulative proposal changed or omitted accepted claim {claim_id}"
+                )
+            safe_sources = prior.get("safe_sources")
+            if not isinstance(safe_sources, list) or not safe_sources:
+                raise LineageError(
+                    f"prior accepted claim has no exact safe sources: {claim_id}"
+                )
+            basis_refs = {
+                str(value.get("ref"))
+                for value in prior.get("basis_refs", [])
+                if isinstance(value, Mapping) and value.get("ref")
+            }
+            source_refs = {
+                str(value.get("ref"))
+                for value in safe_sources
+                if isinstance(value, Mapping) and value.get("ref")
+            }
+            if not basis_refs or not basis_refs.issubset(source_refs):
+                raise LineageError(
+                    f"prior accepted claim has unresolved safe sources: {claim_id}"
+                )
+            for source in safe_sources:
+                if not isinstance(source, Mapping):
+                    raise LineageError("prior accepted safe source is invalid")
+                source_type = source.get("source_type")
+                ref = source.get("ref")
+                if not isinstance(ref, str) or not ref:
+                    raise LineageError("prior accepted safe source has no ref")
+                destination = (
+                    public
+                    if source_type in {"public_contract", "public_reference"}
+                    else trusted
+                    if source_type in {
+                        "framework_reference",
+                        "answer_free_development_observation",
+                    }
+                    else None
+                )
+                if destination is None:
+                    raise LineageError("prior accepted safe source type is forbidden")
+                clean = deepcopy(dict(source))
+                if ref in destination and destination[ref] != clean:
+                    raise LineageError("prior accepted safe source changed across panels")
+                destination[ref] = clean
+    return list(public.values()), list(trusted.values())
+
+
 def _candidate_information_set_review_package(
     state: Mapping[str, object],
     spec: Mapping[str, object],
@@ -619,13 +932,34 @@ def _candidate_information_set_review_package(
     )
     if material is None:
         return None, "information_set_review_missing_candidate_material"
+    public_sources, trusted_sources = _trusted_qrs_review_sources(
+        proposal if isinstance(proposal, Mapping) else {}, claims, spec
+    )
+    prior_public, prior_trusted = _prior_accepted_review_sources(claims, spec)
+    for source in prior_public:
+        public_sources = [
+            value
+            for value in public_sources
+            if not isinstance(value, Mapping)
+            or value.get("ref") != source.get("ref")
+        ]
+        public_sources.append(source)
+    for source in prior_trusted:
+        trusted_sources = [
+            value
+            for value in trusted_sources
+            if not isinstance(value, Mapping)
+            or value.get("ref") != source.get("ref")
+        ]
+        trusted_sources.append(source)
     package = {
         "schema_version": 1,
         "review_id": spec["review_id"],
         "candidate_id": candidate["version"],
         "candidate": material,
         "worker_visible_claims": claims,
-        "public_sources": spec["public_sources"],
+        "public_sources": public_sources,
+        "trusted_answer_free_sources": trusted_sources,
         "optimize_only_sources": spec["optimize_only_sources"],
     }
     from qea.candidate_information_set_review import (
@@ -701,7 +1035,42 @@ def _candidate_information_set_review_result(
         plan, spec, states_root
     )
     input_path.parent.mkdir(parents=True, exist_ok=True)
-    input_path.write_text(json.dumps(package, indent=2) + "\n")
+    result_exists = result_path.exists()
+    if result_exists and (result_path.is_symlink() or not result_path.is_file()):
+        raise LineageError(
+            "candidate information-set result path is not a regular file"
+        )
+    if input_path.exists():
+        if input_path.is_symlink() or not input_path.is_file():
+            raise LineageError(
+                "candidate information-set input path is not a regular file"
+            )
+        if _json(input_path) != dict(package):
+            raise LineageError(
+                "existing candidate information-set input differs from the "
+                "current reviewed candidate package"
+            )
+    elif result_exists:
+        retained_result = _json(result_path)
+        source_input = retained_result.get("source_input")
+        source_path = (
+            Path(source_input).expanduser()
+            if isinstance(source_input, str) and source_input
+            else None
+        )
+        if (
+            source_path is None
+            or source_path.is_symlink()
+            or not source_path.is_file()
+            or _json(source_path) != dict(package)
+        ):
+            raise LineageError(
+                "existing candidate information-set result has no matching "
+                "retained input package"
+            )
+        input_path.write_text(json.dumps(package, indent=2) + "\n")
+    else:
+        input_path.write_text(json.dumps(package, indent=2) + "\n")
     if not result_path.is_file():
         if plan.get("mode") == "replay":
             raise LineageError(

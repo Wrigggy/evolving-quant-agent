@@ -262,11 +262,26 @@ def test_selection_reference_is_controller_only_and_child_argv_is_candidate_only
     assert reference["reward"] == 0.0
     assert reference["selection_only"] is True
     assert reference["worker_visible"] is False
+    candidate_dir = "/candidate/qf-public-only-credit-migration-c1"
+    review_id = "fixture-credit-migration-information-set-review-pass"
     active = {
         **lineage,
         "candidate": {
             "version": "qf-public-only-credit-migration-c1",
-            "worker_dir": "/candidate/qf-public-only-credit-migration-c1",
+            "worker_dir": candidate_dir,
+            "information_set_review": {
+                "review_id": review_id,
+                "overall_verdict": "PASS",
+                "reviewed_candidate_dir": candidate_dir,
+            },
+        },
+        "observations": {
+            "information_set_review": {
+                "review_id": review_id,
+                "overall_verdict": "PASS",
+                "reviewed_candidate_dir": candidate_dir,
+                "coverage_review": {"verdict": "PASS"},
+            }
         },
     }
     argv = build_child_argv(plan, active, target, approve_external_run=True)

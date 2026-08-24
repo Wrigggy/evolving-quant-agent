@@ -1,8 +1,10 @@
-"""Answer-rich review of claims that a candidate would expose to a Worker.
+"""Review claims that a candidate would expose to a Worker.
 
 The Reviewer may inspect optimize-only diagnostics to identify where a claim
-came from, but only public contract or reference excerpts can support exposing
-that claim to a blind Worker.  This module classifies evidence; it does not
+came from. Task-specific predicates still require direct public support. A
+task-agnostic harness policy may instead be admissible when an exact frozen
+framework reference and controller-trusted answer-free development observations
+jointly support it. This module classifies the information boundary; it does not
 mutate a candidate or authorize promotion.
 """
 
@@ -16,10 +18,18 @@ _VERDICTS = {"PASS", "REJECT", "INCONCLUSIVE"}
 _SOURCE_ROLES = {
     "PUBLIC_SUPPORT",
     "PUBLIC_CONTRADICTION",
+    "FRAMEWORK_SUPPORT",
+    "DEVELOPMENT_OBSERVATION",
     "OPTIMIZE_ONLY_ORIGIN",
     "CANDIDATE_EXPOSURE",
     "INSUFFICIENT_PUBLIC_SUPPORT",
 }
+_CLAIM_SCOPES = {
+    "task_agnostic_harness_policy",
+    "task_specific_requirement",
+}
+_MAX_REVIEW_PACKAGE_BYTES = 192_000
+_MAX_REVIEW_SOURCE_RECORDS = 32
 
 
 class CandidateInformationSetReviewError(ValueError):
@@ -51,8 +61,11 @@ def validate_candidate_information_set_review_package(
             "worker_visible_claims must be a non-empty list"
         )
 
+    public_records = review_package.get("public_sources", [])
+    if not isinstance(public_records, list):
+        raise CandidateInformationSetReviewError("public_sources must be a list")
     public_refs = set()
-    for record in review_package.get("public_sources", []):
+    for record in public_records:
         if not isinstance(record, Mapping) or not record.get("ref"):
             raise CandidateInformationSetReviewError(
                 "public sources require exact refs"
@@ -63,8 +76,44 @@ def validate_candidate_information_set_review_package(
             )
         public_refs.add(str(record["ref"]))
 
+    trusted_records = review_package.get("trusted_answer_free_sources", [])
+    if not isinstance(trusted_records, list):
+        raise CandidateInformationSetReviewError(
+            "trusted_answer_free_sources must be a list"
+        )
+    trusted_refs = set()
+    for record in trusted_records:
+        if not isinstance(record, Mapping) or not record.get("ref"):
+            raise CandidateInformationSetReviewError(
+                "trusted answer-free sources require exact refs"
+            )
+        if record.get("source_type") not in {
+            "framework_reference",
+            "answer_free_development_observation",
+        }:
+            raise CandidateInformationSetReviewError(
+                "trusted answer-free source_type is unsupported"
+            )
+        if record.get("answer_free") is not True:
+            raise CandidateInformationSetReviewError(
+                "trusted development sources must be answer-free"
+            )
+        if record.get("source_type") == "answer_free_development_observation":
+            if not isinstance(record.get("task_family"), str) or not str(
+                record["task_family"]
+            ).strip():
+                raise CandidateInformationSetReviewError(
+                    "development observations require task_family"
+                )
+        trusted_refs.add(str(record["ref"]))
+
+    diagnostic_records = review_package.get("optimize_only_sources", [])
+    if not isinstance(diagnostic_records, list):
+        raise CandidateInformationSetReviewError(
+            "optimize_only_sources must be a list"
+        )
     diagnostic_refs = set()
-    for record in review_package.get("optimize_only_sources", []):
+    for record in diagnostic_records:
         if not isinstance(record, Mapping) or not record.get("ref"):
             raise CandidateInformationSetReviewError(
                 "optimize-only sources require exact refs"
@@ -78,9 +127,39 @@ def validate_candidate_information_set_review_package(
                 "optimize-only sources must be Worker-hidden"
             )
         diagnostic_refs.add(str(record["ref"]))
-    if public_refs.intersection(diagnostic_refs):
+    if (
+        len(public_refs) != len(public_records)
+        or len(trusted_refs) != len(trusted_records)
+        or len(diagnostic_refs) != len(diagnostic_records)
+    ):
+        raise CandidateInformationSetReviewError("source refs must be unique")
+    if len(public_refs | trusted_refs | diagnostic_refs) != (
+        len(public_refs) + len(trusted_refs) + len(diagnostic_refs)
+    ):
         raise CandidateInformationSetReviewError(
-            "public and optimize-only source refs must be disjoint"
+            "public, trusted answer-free, and optimize-only refs must be disjoint"
+        )
+    if (
+        len(public_records) + len(trusted_records) + len(diagnostic_records)
+        > _MAX_REVIEW_SOURCE_RECORDS
+    ):
+        raise CandidateInformationSetReviewError(
+            "candidate Review package has too many source records"
+        )
+    for index, claim in enumerate(claims):
+        if not isinstance(claim, Mapping):
+            raise CandidateInformationSetReviewError(
+                f"worker_visible_claims[{index}] must be an object"
+            )
+        scope = claim.get("claim_scope", "task_specific_requirement")
+        if scope not in _CLAIM_SCOPES:
+            raise CandidateInformationSetReviewError(
+                f"worker_visible_claims[{index}] has unsupported claim_scope"
+            )
+    serialized = json.dumps(review_package, indent=2, ensure_ascii=False) + "\n"
+    if len(serialized.encode("utf-8")) > _MAX_REVIEW_PACKAGE_BYTES:
+        raise CandidateInformationSetReviewError(
+            "candidate Review package exceeds the bounded model-input size"
         )
     return dict(review_package)
 
@@ -125,9 +204,13 @@ def build_candidate_information_set_reviewer_prompt(
     )
     return f"""You are the Candidate Information-Set Reviewer in a quantitative harness-evolution experiment.
 
-Review every proposed Worker-visible claim in one batch. You may inspect the
-candidate diff/files, public contract and public reference excerpts, and
-optimize-only diagnostic excerpts supplied below. Optimize-only diagnostics are
+Review every proposed Worker-visible claim in one batch. Keep information-set
+admissibility separate from utility: first decide whether the claim has a safe
+supplied basis, then judge whether that exact evidence supports the policy the
+candidate implements. You may inspect candidate material, public contract and
+reference excerpts, frozen framework references, controller-trusted answer-free
+development observations, and optimize-only diagnostics supplied below.
+Optimize-only diagnostics are
 answer-rich Evolver evidence: they may reveal that a proposed predicate came
 from hidden evaluation, but their contents must never enter the Worker prompt,
 candidate tools, descriptors, validators, skills, memory, or routing rules.
@@ -135,20 +218,28 @@ candidate tools, descriptors, validators, skills, memory, or routing rules.
 Apply exactly the same information boundary to every candidate. The Reviewer
 is blind to the search-arm label. Judge the semantic claim, not whether it has
 a well-formed basis label. A `principle:...` label, a claim's own explanation,
-or a plausible finance convention is not evidence by itself. A public contract
-or supplied public reference excerpt must actually entail the decision-changing
-predicate before it can support Worker exposure.
+or a plausible finance convention is not evidence by itself. Every positive
+basis must be one of the exact supplied refs.
 
 For each claim return:
 
-- PASS only when a supplied public contract or public reference excerpt
-  directly supports the Worker-visible claim without adding a hidden threshold,
+- PASS for a `task_specific_requirement` only when a supplied public contract
+  or public reference directly supports it without adding a hidden threshold,
   serialization convention, expected value, or checker-specific predicate;
+- PASS for a `task_agnostic_harness_policy` when it has either direct public
+  support, or both (a) an exact frozen preproposal framework reference that
+  permits or defines the generic workflow surface and (b) exact
+  controller-trusted answer-free observations from at least two distinct task
+  families grounding the same workflow hypothesis. The observations establish
+  only an answer-free empirical origin and repeated process phenotype, not
+  correctness or utility; utility is decided only by the later matched gate.
+  The framework establishes admissibility. Neither licenses task-specific
+  numeric, output, or serialization predicates;
 - REJECT when the claim contradicts or narrows the public contract, or when its
   decision-changing content is available only from an optimize-only diagnostic;
-- INCONCLUSIVE when the claim may be reusable but the supplied public material
-  neither supports nor contradicts it. Withhold or generalize such a claim until
-  an actual public reference is supplied.
+- INCONCLUSIVE when the claim may be reusable but the supplied admissible
+  material neither supports nor contradicts it. Withhold or generalize such a
+  claim until an exact safe source is supplied.
 
 Examples of the boundary: a hidden fitted-SVI `a > 0` checker predicate is not
 justified by a public requirement that final local volatility be positive; an
@@ -156,8 +247,9 @@ exact pair-array serialization rule is invalid when the public contract permits
 any unambiguous encoding. Conversely, the public requirement that written
 local-volatility values be positive supports that exact output predicate. A
 written-object reconciliation rule is INCONCLUSIVE when it is backed only by a
-named principle, and may PASS only when a supplied public reference actually
-supports it.
+named principle. A genuinely task-agnostic reconciliation workflow may PASS
+when the supplied framework and cross-family observations jointly support it,
+but a task-specific output predicate may not use that route.
 
 Also compare the complete candidate diff/files with the declared claims. Return
 `coverage_review` with verdict, reason, source_basis, and
@@ -174,11 +266,18 @@ candidate_id, `claim_reviews`, `coverage_review`, and `overall_verdict`. Return
 claim reviews in the supplied order. Each claim review contains claim_id,
 verdict, a concise reason, and non-empty source_basis. Each source-basis entry
 contains an exact supplied ref and one role from {sorted(_SOURCE_ROLES)}. PASS
-requires at least one PUBLIC_SUPPORT basis. Claim REJECT requires
+requires PUBLIC_SUPPORT, except that a task-agnostic harness-policy PASS may use
+FRAMEWORK_SUPPORT plus DEVELOPMENT_OBSERVATION from at least two task families.
+Claim REJECT requires
 PUBLIC_CONTRADICTION or OPTIMIZE_ONLY_ORIGIN. Coverage PASS/REJECT must cite a
 CANDIDATE_EXPOSURE basis. Overall is REJECT if coverage or any claim is
 rejected, otherwise INCONCLUSIVE if coverage or any claim is inconclusive,
 otherwise PASS.
+
+For each claim, PUBLIC_SUPPORT, PUBLIC_CONTRADICTION, FRAMEWORK_SUPPORT,
+DEVELOPMENT_OBSERVATION, and OPTIMIZE_ONLY_ORIGIN may cite only refs already
+listed in that claim's `basis_refs`; do not borrow a source declared for another
+claim. CANDIDATE_EXPOSURE may cite the supplied candidate diff/file refs.
 
 You classify this boundary only. You cannot rewrite the candidate, call a
 Worker, PROMOTE or ROLLBACK a harness, select a benchmark result, or reveal the
@@ -240,11 +339,28 @@ def validate_candidate_information_set_review(
         )
 
     public_refs = _source_refs(review_package, "public_sources")
+    trusted_refs = _source_refs(review_package, "trusted_answer_free_sources")
+    trusted_records = {
+        str(record["ref"]): record
+        for record in review_package.get("trusted_answer_free_sources", [])
+        if isinstance(record, Mapping) and record.get("ref")
+    }
+    framework_refs = {
+        ref
+        for ref, record in trusted_records.items()
+        if record.get("source_type") == "framework_reference"
+    }
+    development_refs = {
+        ref
+        for ref, record in trusted_records.items()
+        if record.get("source_type")
+        == "answer_free_development_observation"
+    }
     diagnostic_refs = _source_refs(review_package, "optimize_only_sources")
     candidate_refs = _candidate_refs(review_package)
-    supplied_refs = public_refs | diagnostic_refs | candidate_refs
+    supplied_refs = public_refs | trusted_refs | diagnostic_refs | candidate_refs
     verdicts = []
-    for review in reviews:
+    for claim, review in zip(claims, reviews):
         if not isinstance(review, Mapping):
             raise CandidateInformationSetReviewError(
                 "every claim review must be an object"
@@ -265,6 +381,15 @@ def validate_candidate_information_set_review(
                 f"source_basis required for {review.get('claim_id')}"
             )
         roles = set()
+        raw_declared_bases = (
+            claim.get("basis_refs", []) if isinstance(claim, Mapping) else []
+        )
+        declared_refs = {
+            str(value.get("ref"))
+            if isinstance(value, Mapping)
+            else str(value)
+            for value in raw_declared_bases
+        } if isinstance(raw_declared_bases, list) else set()
         for basis in bases:
             if not isinstance(basis, Mapping):
                 raise CandidateInformationSetReviewError(
@@ -292,11 +417,48 @@ def validate_candidate_information_set_review(
                 raise CandidateInformationSetReviewError(
                     f"candidate exposure role requires a candidate ref: {ref}"
                 )
+            if role == "FRAMEWORK_SUPPORT" and ref not in framework_refs:
+                raise CandidateInformationSetReviewError(
+                    f"framework role requires a framework ref: {ref}"
+                )
+            if role == "DEVELOPMENT_OBSERVATION" and ref not in development_refs:
+                raise CandidateInformationSetReviewError(
+                    f"development role requires an observation ref: {ref}"
+                )
+            if role in {
+                "PUBLIC_SUPPORT",
+                "PUBLIC_CONTRADICTION",
+                "FRAMEWORK_SUPPORT",
+                "DEVELOPMENT_OBSERVATION",
+                "OPTIMIZE_ONLY_ORIGIN",
+            } and str(ref) not in declared_refs:
+                raise CandidateInformationSetReviewError(
+                    f"source ref was not declared for {review.get('claim_id')}: {ref}"
+                )
             roles.add(str(role))
         if verdict == "PASS" and "PUBLIC_SUPPORT" not in roles:
-            raise CandidateInformationSetReviewError(
-                f"PASS requires PUBLIC_SUPPORT for {review.get('claim_id')}"
+            scope = (
+                claim.get("claim_scope", "task_specific_requirement")
+                if isinstance(claim, Mapping)
+                else "task_specific_requirement"
             )
+            development_families = {
+                str(trusted_records[str(basis["ref"])]["task_family"])
+                for basis in bases
+                if isinstance(basis, Mapping)
+                and basis.get("role") == "DEVELOPMENT_OBSERVATION"
+                and str(basis.get("ref")) in trusted_records
+            }
+            if (
+                scope != "task_agnostic_harness_policy"
+                or "FRAMEWORK_SUPPORT" not in roles
+                or len(development_families) < 2
+            ):
+                raise CandidateInformationSetReviewError(
+                    "PASS requires PUBLIC_SUPPORT directly, or an exact framework "
+                    "plus cross-family development observations for a "
+                    f"task-agnostic policy: {review.get('claim_id')}"
+                )
         if verdict == "REJECT" and not roles.intersection(
             {"PUBLIC_CONTRADICTION", "OPTIMIZE_ONLY_ORIGIN"}
         ):

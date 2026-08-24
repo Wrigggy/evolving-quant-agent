@@ -1242,7 +1242,10 @@ def _information_review_proposal_state(tmp_path):
                         "claim_id": "public-output-positive",
                         "claim": "Written output values must be positive.",
                         "surfaces": ["tools"],
-                        "basis_refs": ["public:instruction"],
+                        "basis_refs": [
+                            "public:instruction",
+                            "diagnostic:target",
+                        ],
                     }
                 ]
             }

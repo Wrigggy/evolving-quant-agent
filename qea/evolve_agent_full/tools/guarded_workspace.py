@@ -152,7 +152,16 @@ _WORKFLOW_ANALYSIS_FIELDS = frozenset(
 )
 _WORKER_VISIBLE_SURFACES = _COMPONENT_ROLES | frozenset({"worker_instruction"})
 _WORKER_VISIBLE_BASIS_KINDS = frozenset(
-    {"public_contract", "benchmark_independent", "optimize_only_diagnostic"}
+    {
+        "public_contract",
+        "public_reference",
+        "framework_reference",
+        "answer_free_development_observation",
+        "optimize_only_diagnostic",
+    }
+)
+_WORKER_VISIBLE_CLAIM_SCOPES = frozenset(
+    {"task_agnostic_harness_policy", "task_specific_requirement"}
 )
 _FORBIDDEN_PUBLIC_BASIS_NAMES = frozenset(
     {
@@ -628,6 +637,8 @@ def _worker_visible_basis_visibility(relative: str) -> str:
         return "other"
     if pure.name == "optimization-diagnostic.json":
         return "optimize_only_diagnostic"
+    if normalized == "guidance/qrs-workflow-framework.json":
+        return "framework_reference"
     if path.suffix == ".json":
         try:
             payload = json.loads(_read_text(path))
@@ -643,6 +654,8 @@ def _worker_visible_basis_visibility(relative: str) -> str:
         return "public_contract"
     if pure.parts and pure.parts[0] == "contracts":
         return "public_contract"
+    if pure.parts and pure.parts[0] in {"public-references", "references"}:
+        return "public_reference"
     return "other"
 
 
@@ -651,6 +664,7 @@ def _normalize_worker_visible_claims(
     *,
     declared_components: set[str],
     accessed_evidence: set[str],
+    workflow_evidence: object,
 ) -> list[dict[str, Any]]:
     if not isinstance(raw_claims, list) or not raw_claims:
         raise GuardedWorkspaceError(
@@ -658,6 +672,12 @@ def _normalize_worker_visible_claims(
             "contract enables claim provenance"
         )
     normalized_claims: list[dict[str, Any]] = []
+    workflow_rows = {
+        str(entry["trajectory_ref"]): entry
+        for entry in workflow_evidence
+        if isinstance(entry, Mapping) and entry.get("trajectory_ref")
+    } if isinstance(workflow_evidence, list) else {}
+    workflow_refs = set(workflow_rows)
     claim_ids: set[str] = set()
     for claim_index, raw_claim in enumerate(raw_claims):
         if not isinstance(raw_claim, Mapping):
@@ -675,6 +695,14 @@ def _normalize_worker_visible_claims(
         if claim_id in claim_ids:
             raise GuardedWorkspaceError(f"duplicate Worker-visible claim: {claim_id}")
         claim_ids.add(claim_id)
+        claim_scope = _text(
+            raw_claim.get("claim_scope", "task_specific_requirement"),
+            label=f"worker_visible_claims[{claim_index}].claim_scope",
+        ).casefold()
+        if claim_scope not in _WORKER_VISIBLE_CLAIM_SCOPES:
+            raise GuardedWorkspaceError(
+                f"worker_visible_claims[{claim_index}].claim_scope is unsupported"
+            )
         surfaces = _text_list(
             raw_claim.get("surfaces"),
             label=f"worker_visible_claims[{claim_index}].surfaces",
@@ -700,7 +728,8 @@ def _normalize_worker_visible_claims(
                 f"worker_visible_claims[{claim_index}].basis_refs must be non-empty"
             )
         normalized_bases: list[dict[str, str]] = []
-        has_worker_safe_basis = False
+        safe_basis_kinds: set[str] = set()
+        development_families: set[str] = set()
         for basis_index, raw_basis in enumerate(raw_bases):
             if not isinstance(raw_basis, Mapping):
                 raise GuardedWorkspaceError(
@@ -714,43 +743,63 @@ def _normalize_worker_visible_claims(
                 raise GuardedWorkspaceError(f"{label}.kind is unsupported")
             basis_ref = _text(raw_basis.get("ref"), label=f"{label}.ref")
             support = _text(raw_basis.get("support"), label=f"{label}.support")
-            if kind == "benchmark_independent":
-                if not basis_ref.startswith(("principle:", "reference:")):
-                    raise GuardedWorkspaceError(
-                        f"{label}.ref must use principle: or reference:"
-                    )
-                if basis_ref.startswith("reference:"):
-                    reference_path = basis_ref.removeprefix("reference:")
-                    _resolve("reference", reference_path, must_exist=True)
-                has_worker_safe_basis = True
-            else:
-                _, normalized_ref = _resolve(
-                    "evidence", basis_ref, must_exist=True
+            if basis_ref.startswith("principle:"):
+                raise GuardedWorkspaceError(
+                    f"{label}.ref must resolve to an exact supplied source"
                 )
-                if normalized_ref not in accessed_evidence:
-                    raise GuardedWorkspaceError(
-                        f"{label}.ref must be read before decision"
-                    )
+            _, normalized_ref = _resolve("evidence", basis_ref, must_exist=True)
+            if normalized_ref not in accessed_evidence:
+                raise GuardedWorkspaceError(
+                    f"{label}.ref must be read before decision"
+                )
+            if kind == "answer_free_development_observation":
+                observed_kind = (
+                    kind if normalized_ref in workflow_refs else "other"
+                )
+            else:
                 observed_kind = _worker_visible_basis_visibility(normalized_ref)
-                if observed_kind != kind:
-                    raise GuardedWorkspaceError(
-                        f"{label}.kind does not match evidence visibility "
-                        f"({observed_kind})"
-                    )
-                basis_ref = normalized_ref
-                if kind == "public_contract":
-                    has_worker_safe_basis = True
+            if observed_kind != kind:
+                raise GuardedWorkspaceError(
+                    f"{label}.kind does not match evidence visibility "
+                    f"({observed_kind})"
+                )
+            basis_ref = normalized_ref
+            if kind != "optimize_only_diagnostic":
+                safe_basis_kinds.add(kind)
+            if kind == "answer_free_development_observation":
+                family = workflow_rows[normalized_ref].get("task_family")
+                if isinstance(family, str) and family:
+                    development_families.add(family)
             normalized_bases.append(
                 {"kind": kind, "ref": basis_ref, "support": support}
             )
-        if not has_worker_safe_basis:
+        direct_public = bool(
+            safe_basis_kinds.intersection({"public_contract", "public_reference"})
+        )
+        task_agnostic_safe = (
+            "framework_reference" in safe_basis_kinds
+            and len(development_families) >= 2
+        )
+        if not safe_basis_kinds:
             raise GuardedWorkspaceError(
                 f"worker_visible_claims[{claim_index}] has only optimize-only "
                 "diagnostic basis"
             )
+        if (
+            claim_scope == "task_specific_requirement" and not direct_public
+        ) or (
+            claim_scope == "task_agnostic_harness_policy"
+            and not direct_public
+            and not task_agnostic_safe
+        ):
+            raise GuardedWorkspaceError(
+                f"worker_visible_claims[{claim_index}] lacks its required exact "
+                "public or framework-plus-cross-family basis"
+            )
         normalized_claims.append(
             {
                 "claim_id": claim_id,
+                "claim_scope": claim_scope,
                 "claim": _text(
                     raw_claim.get("claim"),
                     label=f"worker_visible_claims[{claim_index}].claim",
@@ -2504,6 +2553,7 @@ def _decide_quant_property_candidate(
                 raw_worker_visible_claims,
                 declared_components=set(components),
                 accessed_evidence=accessed,
+                workflow_evidence=normalized.get("workflow_evidence"),
             )
         preferred_map = contract.get("preferred_primary_components", {})
         preferred = []

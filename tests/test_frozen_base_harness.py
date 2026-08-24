@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import stat
 from pathlib import Path
 
 import pytest
@@ -13,6 +15,7 @@ from qea.frozen_base_harness import (
     build_selected_runtime,
     freeze_base_harness,
     inspect_base_harness,
+    validate_frozen_worker_tree_read_only,
     validate_selected_runtime,
 )
 from scripts.freeze_qrs_base_harness import main
@@ -35,6 +38,19 @@ def _runtime(worker: Path) -> dict[str, object]:
         worker_model_route="deepseek-v4-flash-main0",
         rootless_config="runtime/qfbench-rootless.json",
     )
+
+
+def _restore_tree_write_access(root: Path) -> None:
+    """Let pytest remove a deliberately read-only test tree."""
+
+    directories = [root]
+    for member in root.rglob("*"):
+        if member.is_dir():
+            directories.append(member)
+        elif member.is_file():
+            member.chmod(0o644)
+    for directory in directories:
+        directory.chmod(0o755)
 
 
 def test_inspection_enumerates_declared_prompt_skill_tools_and_states(
@@ -100,6 +116,60 @@ def test_freeze_copies_worker_and_writes_scheduler_handoff(tmp_path: Path) -> No
 
     (worker / "systemprompt.md").write_text("changed externally\n")
     assert (frozen / "systemprompt.md").read_text() != "changed externally\n"
+
+
+def test_frozen_worker_is_read_only_but_remains_inspectable_on_resume(
+    tmp_path: Path,
+) -> None:
+    worker = _worker(tmp_path)
+    executable = worker / "tools/quant_state_telemetry.py"
+    executable.chmod(0o755)
+    artifacts = tmp_path / "selection"
+    artifacts.mkdir()
+    output = tmp_path / "handoff.json"
+
+    manifest = freeze_base_harness(
+        worker_dir=worker,
+        run_root=tmp_path / "run",
+        selected_profile_id="p0",
+        selected_runtime=_runtime(worker),
+        selection_artifact_root=artifacts,
+        handoff_path=output,
+    )
+    frozen = Path(manifest["selected_worker_root"])
+
+    try:
+        directories = [
+            frozen,
+            *(path for path in frozen.rglob("*") if path.is_dir()),
+        ]
+        files = [path for path in frozen.rglob("*") if path.is_file()]
+        assert all(stat.S_IMODE(path.stat().st_mode) == 0o555 for path in directories)
+        assert stat.S_IMODE((frozen / "agent.yaml").stat().st_mode) == 0o444
+        assert stat.S_IMODE(executable.stat().st_mode) == 0o755
+        assert stat.S_IMODE(
+            (frozen / "tools/quant_state_telemetry.py").stat().st_mode
+        ) == 0o555
+        assert all(not path.stat().st_mode & stat.S_IWUSR for path in files)
+
+        if os.geteuid() != 0:
+            with pytest.raises(PermissionError):
+                (frozen / "systemprompt.md").write_text("mutated\n")
+            with pytest.raises(PermissionError):
+                (frozen / "new-worker-file.txt").write_text("mutated\n")
+
+        resumed = inspect_base_harness(frozen)
+        validate_frozen_worker_tree_read_only(frozen)
+        validate_selected_runtime(manifest["selected_runtime"])
+        assert resumed["agent_name"] == manifest["selected_agent_name"]
+        assert json.loads(output.read_text(encoding="utf-8")) == manifest
+        assert manifest["adapter_contract"]["selected_worker_tree_read_only"] is True
+
+        (frozen / "systemprompt.md").chmod(0o644)
+        with pytest.raises(FrozenBaseHarnessError, match="invalid frozen mode"):
+            validate_frozen_worker_tree_read_only(frozen)
+    finally:
+        _restore_tree_write_access(frozen)
 
 
 def test_freeze_refuses_to_overwrite_existing_worker_or_manifest(

@@ -232,13 +232,28 @@ def test_target_uses_fresh_selection_reference_but_child_argv_is_candidate_only(
     assert reference["tests_passed"] == 47
     assert reference["tests_total"] == 51
     assert reference["reward"] == 0.0
+    candidate_dir = "/candidate/qf-public-only-holdings-c1"
+    review_id = "fixture-holdings-information-set-review-pass"
     active = {
         **lineage,
         "candidate": {
             "version": lineage["proposal"]["candidate_version"],
-            "worker_dir": "/candidate/qf-public-only-holdings-c1",
+            "worker_dir": candidate_dir,
             "activation_token": "reconcile_effective_holdings",
             "activation_binding": {"status": "singleton"},
+            "information_set_review": {
+                "review_id": review_id,
+                "overall_verdict": "PASS",
+                "reviewed_candidate_dir": candidate_dir,
+            },
+        },
+        "observations": {
+            "information_set_review": {
+                "review_id": review_id,
+                "overall_verdict": "PASS",
+                "reviewed_candidate_dir": candidate_dir,
+                "coverage_review": {"verdict": "PASS"},
+            }
         },
     }
     argv = build_child_argv(plan, active, target, approve_external_run=True)

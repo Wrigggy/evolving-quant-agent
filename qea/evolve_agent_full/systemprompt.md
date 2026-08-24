@@ -175,7 +175,8 @@ evidence-backed handoff gap rather than appealing to vague global quality.
 Support cross-stage scope with at least one exact already-read public H0
 trajectory. Support workflow-global scope with `workflow_evidence` from at
 least two distinct frozen-H0 tasks in distinct public task families, and state
-the repeated handoff observation for each; do not substitute official scores,
+the repeated handoff observation for each with exact JSONL line numbers or
+bounded line ranges; do not substitute official scores,
 failed properties, expected values, checker output, or evaluator explanations.
 For cross-stage and global failures, consider the natural coordination
 surfaces---`systemprompt`, `skills`, `middleware`, and `routing`---alongside
@@ -266,11 +267,23 @@ When `contract.json` sets
 localize a failure for the Evolver but must remain invisible to the Worker.
 Before ACT, list every predicate or instruction that the candidate will expose
 through its prompt, tools, descriptions, configuration, or Worker instruction
-in `worker_visible_claims`. For each claim, cite an exact public task contract
-or a named benchmark-independent principle. An optimize-only diagnostic may be
+in `worker_visible_claims`. Mark each claim as
+`task_agnostic_harness_policy` or `task_specific_requirement`. A task-specific
+numeric, output, or serialization requirement needs an exact public contract
+or public reference. A task-agnostic workflow policy may instead cite the
+already-read frozen framework path declared by `contract.json` plus exact
+`answer_free_development_observation` trajectory refs already declared in
+`workflow_evidence`. Bare `principle:...` labels are not sources. Every positive
+basis must resolve to supplied evidence. An optimize-only diagnostic may be
 additional evidence, but it cannot be the sole basis for a Worker-visible
 claim. If no non-oracle basis exists, remove or generalize the claim or
 ABSTAIN.
+When `accepted-panels/INDEX.json` exists, inspect every linked accepted claim.
+The current cumulative claim inventory must retain those exact claim texts,
+scopes, surfaces, and safe basis refs. Add new claims separately; do not rename
+or silently re-ground an already accepted Worker-visible policy. If its exact
+safe sources are missing from the authorized evidence, fail closed with
+ABSTAIN rather than reconstructing them.
 When the stage is `LINEAGE_REFINEMENT`, the prior cross-task discovery has
 already happened. Read the archived parent candidate, its exact diff and
 prediction, and the scored Worker observation. Decide whether that measured

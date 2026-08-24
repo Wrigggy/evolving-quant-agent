@@ -151,9 +151,24 @@ def test_gate_selectivity_candidate_argv_is_candidate_only_and_conditional() -> 
     lineage = _case(plan, "localvol-positive")["lineage"]
     active = {
         **lineage,
+        "observations": {
+            "information_set_review": {
+                "overall_verdict": "PASS",
+                "reviewed_candidate_dir": (
+                    "/candidate/qf-qrs-gate-selectivity-localvol-c1"
+                ),
+                "coverage_review": {"verdict": "PASS"},
+            }
+        },
         "candidate": {
             "version": lineage["proposal"]["candidate_version"],
             "worker_dir": "/candidate/qf-qrs-gate-selectivity-localvol-c1",
+            "information_set_review": {
+                "overall_verdict": "PASS",
+                "reviewed_candidate_dir": (
+                    "/candidate/qf-qrs-gate-selectivity-localvol-c1"
+                ),
+            },
         },
     }
     expected = {

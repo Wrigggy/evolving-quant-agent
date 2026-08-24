@@ -1,0 +1,540 @@
+{
+  "schema_version": 2,
+  "record_kind": "qrs_reviewer_policy_v2_engineering_qualification_plan",
+  "date": "2026-08-25",
+  "status": "frozen_not_run_launch_not_authorized_pending_source_commit",
+  "experiment_id": "qf-qrs-reviewer-policy-v2-qualification-20260825-r1",
+  "purpose": "Qualify the corrected answer-free Reviewer policy and the complete reviewed-snapshot matched scheduler path as an engineering canary. This is not a utility experiment, Main, or a continuation of an earlier mini run.",
+  "source_freeze": {
+    "engineering_source_revision": "FUTURE_COMMIT:qf-qrs-reviewer-policy-v2-qualification-20260825-r1",
+    "resolution_convention": "Before launch, resolve FUTURE_COMMIT to the single commit containing the already-reviewed Reviewer-policy-v2 implementation, its focused code tests, the read-only frozen-base adapter, this plan, and this plan test. Record the resolved revision in the launch manifest without changing any scientific field.",
+    "launch_blocked_while_future_commit": true,
+    "code_and_focused_tests_must_be_green": true
+  },
+  "authority": {
+    "engineering_canary_only": true,
+    "launch_authorized": false,
+    "paid_or_remote_authority": false,
+    "main_authority": false,
+    "authorization_condition": "A separate launch decision may be made only after FUTURE_COMMIT is resolved and the current focused code and plan tests are green. This frozen plan itself grants no paid, remote, or Main authority."
+  },
+  "phase_order": [
+    "import_frozen_primitive_h0",
+    "phase0_all_n_h0_development_bank",
+    "phase1_six_panel_curriculum",
+    "phase2_feedback_sealed_main",
+    "terminal_report"
+  ],
+  "canary_execution": {
+    "scheduler_run_id": "qf-qrs-reviewer-policy-v2-qualification-20260825-r1",
+    "stop_after_panel": 1,
+    "actual_max_h0_bank_cells": 4,
+    "actual_max_panel_matched_cells": 12,
+    "actual_max_qfbench_cells": 16,
+    "actual_evolver_calls": 1,
+    "actual_reviewer_calls": 1,
+    "sealed_dispatch_authorized": false,
+    "later_panel_dispatch_authorized": false,
+    "main_reuse_allowed": false
+  },
+  "public_task_partition_rule": {
+    "development_n": 4,
+    "role": "engineering_canary_only",
+    "main_experiment_membership": "No qualification Worker, candidate, trajectory, claim inventory, evidence access state, score, verdict, snapshot, or decision is reusable by Main."
+  },
+  "arm_identities": {
+    "frozen_parent": "quant-h0-s6-primitive-v1-fresh-reviewer-policy-v2-r1",
+    "candidate_lineage": {
+      "allowed_change": "At most one task-agnostic harness-policy hypothesis in only the six-stage skill and/or system prompt.",
+      "forbidden_change": "Task-specific formulas, outputs, constants, routing, evaluator predicates, expected values, hidden outcomes, or prior-mini material."
+    }
+  },
+  "development_panels": [
+    {
+      "panel_index": 1,
+      "family": "execution_microstructure",
+      "parent": "quant-h0-s6-primitive-v1-fresh-reviewer-policy-v2-r1",
+      "proposal": "reviewer-policy-v2-qualification-r1-p1",
+      "task_ids": [
+        "crypto-funding-rate-basis-carry"
+      ]
+    },
+    {
+      "panel_index": 2,
+      "family": "rates_fx_macro",
+      "parent": "reviewer-policy-v2-qualification-r1-p1",
+      "proposal": "reviewer-policy-v2-qualification-r1-p2-not-authorized",
+      "task_ids": [
+        "cir-bond-pricing"
+      ]
+    },
+    {
+      "panel_index": 3,
+      "family": "risk_credit",
+      "parent": "reviewer-policy-v2-qualification-r1-p2-not-authorized",
+      "proposal": "reviewer-policy-v2-qualification-r1-p3-not-authorized",
+      "task_ids": [
+        "copula-equity-fitting",
+        "historical-var-data-prep"
+      ]
+    }
+  ],
+  "cross_family_workflow_evidence": {
+    "anchor_task_by_family": {
+      "execution_microstructure": "crypto-funding-rate-basis-carry",
+      "rates_fx_macro": "cir-bond-pricing",
+      "risk_credit": "historical-var-data-prep"
+    },
+    "workflow_scope": "workflow_global",
+    "involved_states": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5",
+      "S6"
+    ],
+    "canary_panel_1_visible_rule": "The existing trajectory-bank builder exposes the panel-1 execution focus plus the rates and risk anchors: exactly crypto-funding-rate-basis-carry, cir-bond-pricing, and historical-var-data-prep. Copula-equity-fitting is a non-anchor task in the later risk panel and remains controller-only for the only authorized panel.",
+    "controller_only_bank_task_for_authorized_panel": "copula-equity-fitting"
+  },
+  "sealed_main_tasks": [
+    {
+      "task_id": "corporate-action-adjustment",
+      "domain": "data_engineering",
+      "group": "a",
+      "role": "controller_only_schema_placeholder_never_dispatched"
+    },
+    {
+      "task_id": "fx-forward-cross-rate",
+      "domain": "rates_fx_macro",
+      "group": "b",
+      "role": "controller_only_schema_placeholder_never_dispatched"
+    }
+  ],
+  "independence": {
+    "separately_frozen_policy_qualification": true,
+    "not_r4": true,
+    "fresh_run_identity": true,
+    "prior_mini_material_paths": [],
+    "prior_mini_material_path_count": 0,
+    "reuses_prior_run": false,
+    "reuses_prior_candidate": false,
+    "reuses_prior_claim": false,
+    "reuses_prior_trace": false,
+    "reuses_prior_access_state": false,
+    "reuses_prior_score_or_verdict": false,
+    "budget_calibration_exception": "Only aggregate request, token, and provider-cost accounting is used to size the conservative envelope; it is not proposal evidence, Reviewer evidence, Worker input, task selection input, or a scientific outcome.",
+    "automatic_retry_authorized": false
+  },
+  "task_selection": {
+    "benchmark": "QFBench",
+    "metadata_authority": "data/qfbench/MANIFEST_85_BASELINE.json",
+    "main_partition_authority": "data/breadth/QF_GLOBAL_S6_PRIMITIVE_H0_TRAJECTORY_SCHEDULER_PLAN.json",
+    "eligible_filter": "baseline.primary and reward_kind=binary and resource_source=upstream; exclude construct-calibration tasks, feedback-sealed Main tasks, and tasks used by the earlier mini attempts",
+    "selector_visible_fields": [
+      "task_id",
+      "domain",
+      "difficulty",
+      "reward_kind",
+      "resource_source"
+    ],
+    "selector_forbidden_inputs": [
+      "prior_or_current_score",
+      "reward",
+      "passed_count",
+      "failed_property",
+      "expected_value",
+      "verifier_output",
+      "worker_trace_or_artifact",
+      "candidate_history",
+      "hidden_test",
+      "headroom",
+      "researcher_outcome_preference"
+    ],
+    "selection_algorithm": "Freeze three distinct public development domains and four role/difficulty strata for interface coverage, including hard and easy risk-credit strata so the later risk panel contains one non-anchor controller-only bank task. Choose the lexicographically first eligible task_id in each stratum after subtracting earlier-mini tasks. The strata were fixed without score, reward, failure, trace, artifact, headroom, or outcome inspection.",
+    "tasks": [
+      {
+        "task_id": "crypto-funding-rate-basis-carry",
+        "role": "focus_visible_and_matched",
+        "domain": "execution_microstructure",
+        "difficulty": "medium",
+        "reward_kind": "binary",
+        "resource_source": "upstream",
+        "stratum_rank_by_task_id": 1
+      },
+      {
+        "task_id": "cir-bond-pricing",
+        "role": "cross_family_anchor_visible_and_matched",
+        "domain": "rates_fx_macro",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream",
+        "stratum_rank_by_task_id": 1
+      },
+      {
+        "task_id": "historical-var-data-prep",
+        "role": "cross_family_anchor_visible_and_matched",
+        "domain": "risk_credit",
+        "difficulty": "easy",
+        "reward_kind": "binary",
+        "resource_source": "upstream",
+        "stratum_rank_by_task_id": 1
+      },
+      {
+        "task_id": "copula-equity-fitting",
+        "role": "controller_only_bank_sentinel",
+        "domain": "risk_credit",
+        "difficulty": "hard",
+        "reward_kind": "binary",
+        "resource_source": "upstream",
+        "stratum_rank_by_task_id": 1
+      }
+    ],
+    "fresh_development_task_count": 4,
+    "sealed_task_count": 2,
+    "sealed_dispatch_authorized": false,
+    "score_or_headroom_selected": false
+  },
+  "primitive_h0_bank": {
+    "worker_identity": "quant-h0-s6-primitive-v1-fresh-reviewer-policy-v2-r1",
+    "fresh_cells": 4,
+    "one_cell_per_selected_task": true,
+    "required_before_proposal": "All four fresh Primitive-H0 Worker/verifier cells, public contracts, answer-free raw traces, finals, artifacts, state traces, process records, and cost records must be complete and structurally valid.",
+    "worker_answer_boundary": "Every H0 Worker is blind to scores, verifier output, failed properties, expected values, optimization diagnostics, Review material, prior mini material, and sealed identities.",
+    "score_visibility": "Official H0 outcomes are controller-only and cannot enter task selection, Evolver evidence, Reviewer policy evidence, candidate material, or later Worker input."
+  },
+  "phase0_all_n_h0_development_bank": {
+    "task_count": 4,
+    "fresh_primitive_h0_cells": 4,
+    "complete_before_proposal": true,
+    "trajectory_bank_builder": "qea.qfbench_trajectory_bank.build_trajectory_bank",
+    "public_contract_materializer": "qea.qrs_public_contracts.materialize_qrs_public_contracts",
+    "sealed_placeholders_materialized": false
+  },
+  "proposal": {
+    "proposal_calls": 1,
+    "proposal_scope": "workflow_global",
+    "involved_states": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5",
+      "S6"
+    ],
+    "focus_task": "crypto-funding-rate-basis-carry",
+    "visible_anchor_tasks": [
+      "cir-bond-pricing",
+      "historical-var-data-prep"
+    ],
+    "controller_only_task": "copula-equity-fitting",
+    "visible_task_family_count": 3,
+    "allowed_evolver_sources": [
+      "fresh_public_contract",
+      "fresh_answer_free_h0_trace",
+      "frozen_answer_free_framework_reference",
+      "fresh_frozen_parent_material"
+    ],
+    "forbidden_evolver_sources": [
+      "official_score_or_reward",
+      "verifier_output_or_failed_property",
+      "expected_value_or_hidden_test",
+      "optimization_diagnostic",
+      "prior_run_candidate_claim_trace_or_access_state",
+      "controller_only_copula_trace",
+      "sealed_task_identity_or_outcome"
+    ],
+    "one_candidate_maximum": true,
+    "abstain_semantics": "An Evolver ABSTAIN is a valid retained qualification outcome, creates no Review or candidate Worker dispatch, clears no engineering gate, leaves Main NO-GO, and cannot trigger an automatic retry."
+  },
+  "phase1_six_panel_curriculum": {
+    "proposal_calls": 3,
+    "reviewer_calls": 3,
+    "canary_authorized_panel_count": 1,
+    "promotion_rule": "The frozen focus-plus-other-family-anchor repeated binary task-reward gate applies. A complete scientific PROMOTE, RETAIN, or ROLLBACK is valid for engineering qualification; integrity, protocol, accounting, provenance, cleanup, or answer-boundary failure does not clear it."
+  },
+  "reviewer_policy_v2": {
+    "policy_id": "candidate-information-set-review-policy-v2",
+    "review_calls": 1,
+    "utility_blind": true,
+    "allowed_claim_scopes": [
+      "task_agnostic_harness_policy",
+      "task_specific_requirement"
+    ],
+    "allowed_source_kinds": [
+      "public_contract",
+      "public_reference",
+      "framework_reference",
+      "answer_free_development_observation"
+    ],
+    "forbidden_source_kinds": [
+      "optimize_only_diagnostic",
+      "official_outcome",
+      "verifier_diagnostic",
+      "expected_value",
+      "hidden_test",
+      "prior_mini_material"
+    ],
+    "task_specific_requirement_rule": "PASS requires direct support from an exact supplied public_contract or public_reference. Framework goals and development observations cannot entail a task-specific numeric, output, formula, serialization, or benchmark predicate.",
+    "task_agnostic_harness_policy_rule": "PASS may use direct exact public support, or an exact frozen answer-free framework_reference jointly with exact controller-trusted answer_free_development_observation refs from at least two distinct visible task families.",
+    "development_observation_rule": "Each development observation must name its task family, resolve to a fresh answer-free H0 trace ref already read by the Evolver, and contain no score, verifier result, failed property, expected value, official outcome, or reconstructed hidden predicate.",
+    "admissibility_utility_separation": "Review only whether every Worker-visible claim is safely and adequately grounded and whether the claim inventory covers the complete candidate exposure. Matched official fitness, not the Reviewer, decides utility.",
+    "optimize_only_sources": [],
+    "worker_visible": false
+  },
+  "mandatory_review_gate": {
+    "candidate_worker_dispatch_before_review": 0,
+    "required_overall_verdict": "PASS",
+    "required_coverage_verdict": "PASS",
+    "all_claims_must_pass": true,
+    "undeclared_exposures_must_be_empty": true,
+    "review_input": "Complete cumulative Primitive-H0-to-proposal diff, every resulting Worker-visible file, complete claim inventory, exact declared source refs, and no optimize-only source.",
+    "exact_reviewed_snapshot_required": true,
+    "snapshot_rule": "After overall PASS and coverage PASS, copy the reviewed candidate into a new immutable reviewed-candidate snapshot. Every candidate Worker cell must load exactly that snapshot; no post-Review edit, regeneration, or alternate candidate is allowed.",
+    "nonpass_rule": "REJECT or INCONCLUSIVE is retained exactly, dispatches zero candidate cells, leaves the frozen Primitive parent unchanged, clears no engineering gate, leaves Main NO-GO, and cannot trigger an automatic retry."
+  },
+  "matched_gate": {
+    "authorized_only_after_mandatory_review_pass": true,
+    "tasks": [
+      "crypto-funding-rate-basis-carry",
+      "cir-bond-pricing",
+      "historical-var-data-prep"
+    ],
+    "arms": [
+      "fresh_primitive_h0_parent",
+      "exact_reviewed_policy_v2_candidate"
+    ],
+    "repetitions": 2,
+    "cell_formula": "3 tasks x 2 arms x 2 fresh repetitions",
+    "exact_cell_count": 12,
+    "arm_order": [
+      {
+        "repetition": 1,
+        "order": [
+          "fresh_primitive_h0_parent",
+          "exact_reviewed_policy_v2_candidate"
+        ]
+      },
+      {
+        "repetition": 2,
+        "order": [
+          "exact_reviewed_policy_v2_candidate",
+          "fresh_primitive_h0_parent"
+        ]
+      }
+    ],
+    "fresh_sessions": true,
+    "matched_runtime": true,
+    "invalid_cell_rule": "Any missing, invalid, non-fresh, wrong-snapshot, or unmatched cell retains the exact partial result, clears no engineering gate, leaves Main NO-GO, and cannot trigger an automatic retry."
+  },
+  "full_path_decision": {
+    "allowed_complete_decisions": [
+      "PROMOTE",
+      "RETAIN",
+      "ROLLBACK"
+    ],
+    "promotion_rule": "PROMOTE only under the frozen focus-gain and all-task no-regression rule; anchor gain cannot substitute for focus gain.",
+    "retain_rule": "RETAIN is valid when all 12 cells are valid but the candidate does not meet promotion and does not require regression rollback.",
+    "rollback_rule": "ROLLBACK is valid when the complete matched gate detects a frozen regression condition.",
+    "utility_gain_required_for_engineering_clearance": false,
+    "scientific_interpretation": "PROMOTE, RETAIN, and ROLLBACK are matched utility outcomes. The qualification asks whether the safe reviewed candidate reached the complete controller path, not whether it improved the benchmark."
+  },
+  "answer_free_carry": {
+    "required": true,
+    "promote_carry": "Carry only the exact reviewed candidate's accepted Worker-visible claims and fresh answer-free matched traces plus the promoted incumbent identity.",
+    "retain_or_rollback_carry": "Carry the unchanged frozen parent and only previously admissible answer-free history; do not carry rejected candidate claims, Reviewer reasoning, or candidate official outcomes as later evidence.",
+    "always_forbidden": [
+      "score",
+      "reward",
+      "passed_or_failed_property",
+      "verifier_output",
+      "expected_value",
+      "reviewer_reasoning",
+      "controller_fitness_reason"
+    ],
+    "worker_visibility": false
+  },
+  "accounting_and_cleanup": {
+    "request_reconciliation_required": true,
+    "record_completed_requests_tokens_and_cost": true,
+    "record_nonaccepted_retries_and_unreconciled_requests": true,
+    "exact_run_id_lifecycle_cleanup_required": true,
+    "required_zero_residue": [
+      "worker_processes",
+      "verifier_processes",
+      "containers",
+      "networks",
+      "volumes",
+      "run_namespaces",
+      "transient_units",
+      "follow_on_dispatch"
+    ],
+    "cleanup_failure_rule": "Retain the exact result as engineering-invalid, clear no gate, leave Main NO-GO, and do not retry automatically."
+  },
+  "same_stop_resume": {
+    "stop_after_panel": 1,
+    "required_after_terminal_decision": true,
+    "new_actions": 0,
+    "new_qfbench_cells": 0,
+    "new_evolver_calls": 0,
+    "new_reviewer_calls": 0,
+    "new_cost": 0,
+    "must_preserve_exactly": [
+      "runner_inputs",
+      "scheduler_result",
+      "scheduler_state",
+      "cost_accounting",
+      "reviewed_snapshot",
+      "panel_handoff",
+      "child_results"
+    ],
+    "failure_rule": "Any new action or changed terminal state clears no engineering gate, leaves Main NO-GO, and cannot trigger an automatic retry."
+  },
+  "phase2_feedback_sealed_main": {
+    "comparator": "quant-h0-s6-primitive-v1-fresh-reviewer-policy-v2-r1",
+    "final_candidate": "retained-incumbent-after-panel-3-policy-v2-r1",
+    "runs": [
+      {
+        "repetition": 1,
+        "group": "a",
+        "arm_order": [
+          "quant-h0-s6-primitive-v1-fresh-reviewer-policy-v2-r1",
+          "retained-incumbent-after-panel-3-policy-v2-r1"
+        ]
+      },
+      {
+        "repetition": 1,
+        "group": "b",
+        "arm_order": [
+          "retained-incumbent-after-panel-3-policy-v2-r1",
+          "quant-h0-s6-primitive-v1-fresh-reviewer-policy-v2-r1"
+        ]
+      },
+      {
+        "repetition": 2,
+        "group": "a",
+        "arm_order": [
+          "retained-incumbent-after-panel-3-policy-v2-r1",
+          "quant-h0-s6-primitive-v1-fresh-reviewer-policy-v2-r1"
+        ]
+      },
+      {
+        "repetition": 2,
+        "group": "b",
+        "arm_order": [
+          "quant-h0-s6-primitive-v1-fresh-reviewer-policy-v2-r1",
+          "retained-incumbent-after-panel-3-policy-v2-r1"
+        ]
+      }
+    ],
+    "canary_dispatch": "forbidden_by_stop_after_panel_1",
+    "placeholder_policy": "The nonempty sealed task rows satisfy the existing scheduler schema only. Their identities, contracts, histories, artifacts, scores, and verifier records are never materialized into development evidence and no sealed action is authorized or dispatched."
+  },
+  "limits": {
+    "phase0_h0_cells": 4,
+    "panel_gate_parent_cells": 20,
+    "panel_gate_proposal_cells": 20,
+    "sealed_main_h0_cells": 4,
+    "sealed_main_final_candidate_cells": 4,
+    "qfbench_primary_cells": 52,
+    "evolver_calls": 3,
+    "reviewer_calls": 3,
+    "maximum_qfbench_recovery_cells": 0,
+    "maximum_qfbench_sessions_including_recovery": 52,
+    "maximum_all_worker_sessions": 52,
+    "maximum_worker_turn_iterations": 3120,
+    "maximum_total_tokens": 60000000,
+    "maximum_provider_cost_usd": 4.0,
+    "maximum_wall_seconds": 86400,
+    "worker_concurrency": 1,
+    "verifier_concurrency": 1,
+    "max_parallel_runs": 1,
+    "paid_or_remote_authority": false,
+    "canary_incremental_cap": {
+      "qfbench_cells": 16,
+      "evolver_calls": 1,
+      "reviewer_calls": 1,
+      "completed_requests": 800,
+      "total_tokens": 60000000,
+      "provider_cost_usd": 4.0,
+      "wall_seconds": 86400
+    },
+    "measured_estimate_basis": {
+      "provenance": "Aggregate request, token, and provider-cost accounting measured in the retained final mini R3 is used only for budget sizing. No R3 artifact path or scientific material is copied.",
+      "four_fresh_h0_cells": {
+        "completed_requests": 148,
+        "total_tokens": 7264862,
+        "provider_cost_usd": 0.22967604
+      },
+      "one_workflow_global_proposal": {
+        "completed_requests": 23,
+        "total_tokens": 2771430,
+        "provider_cost_usd": 0.081515784
+      },
+      "one_reviewer_call": {
+        "completed_requests": 1,
+        "scheduler_accounted_tokens": 52094,
+        "provider_cost_usd": 0.0415536
+      },
+      "matched_cell_projection": "Project each of the 12 matched Worker cells at the measured four-cell H0 mean. This is budget sizing only and is not a performance assumption."
+    },
+    "measured_full_path_estimate": {
+      "qfbench_cells": 16,
+      "evolver_calls": 1,
+      "reviewer_calls": 1,
+      "completed_requests": 616,
+      "total_tokens": 31882972,
+      "provider_cost_usd": 1.041773544
+    },
+    "conservative_hard_envelope": {
+      "qfbench_cells": 16,
+      "maximum_qfbench_recovery_cells": 0,
+      "maximum_all_worker_sessions": 16,
+      "maximum_worker_turn_iterations": 960,
+      "evolver_calls": 1,
+      "reviewer_calls": 1,
+      "maximum_completed_requests": 800,
+      "maximum_total_tokens": 60000000,
+      "maximum_provider_cost_usd": 4.0,
+      "maximum_wall_seconds": 86400,
+      "worker_concurrency": 1,
+      "verifier_concurrency": 1,
+      "max_parallel_runs": 1,
+      "hard_stop_on_any_cap": true
+    }
+  },
+  "engineering_clearance": {
+    "initial_status": "NO_GO",
+    "pass_requires": [
+      "resolved committed source and green focused tests",
+      "four fresh valid Primitive-H0 bank cells",
+      "one policy-v2-admissible workflow_global ACT",
+      "mandatory overall PASS and coverage PASS",
+      "exact reviewed-candidate snapshot",
+      "all 12 fresh valid matched cells",
+      "complete PROMOTE, RETAIN, or ROLLBACK decision",
+      "answer-free carry",
+      "reconciled accounting",
+      "zero lifecycle residue",
+      "same-stop zero-work resume"
+    ],
+    "utility_gain_required": false,
+    "abstain_nonpass_invalid_or_cleanup_failure": "Retain the exact outcome, keep engineering clearance and Main at NO-GO, authorize no automatic retry, and do not reinterpret the result.",
+    "main_after_clearance": "A qualification PASS removes only this engineering blocker. It does not authorize Main, contribute data to Main, or establish QRS utility."
+  },
+  "main_reuse": {
+    "allowed": false,
+    "worker_cells": false,
+    "candidate": false,
+    "claims": false,
+    "traces": false,
+    "evidence_access_state": false,
+    "scores_or_verdicts": false,
+    "reviewed_snapshot": false,
+    "handoff": false
+  },
+  "claim_boundary": {
+    "may_support": "A successful run may support only that Reviewer policy v2 admits safely grounded task-agnostic harness-policy hypotheses without admitting answer-derived task predicates, and that the exact reviewed snapshot can traverse the complete 12-cell matched scheduler, answer-free carry, accounting, cleanup, and zero-work-resume path. Review PASS establishes admissibility, not truth or utility.",
+    "does_not_support": "It is not R4, a Main result, a benchmark gain, a reusable candidate, stable promotion, sealed evaluation, a representative task estimate, or evidence that QRS improves quant performance. No canary material is reusable in Main."
+  }
+}

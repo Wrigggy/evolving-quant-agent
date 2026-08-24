@@ -608,6 +608,7 @@ def test_a6_e_preserves_optional_typed_comparison_without_requiring_it(
     guarded_roots, tmp_path
 ):
     from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
         decide_candidate,
         read_workspace,
     )
@@ -1586,10 +1587,11 @@ def test_answer_rich_contract_accepts_public_local_vol_positivity_claim(
     )
 
 
-def test_answer_rich_contract_accepts_benchmark_independent_reconciliation_claim(
+def test_answer_rich_contract_rejects_bare_benchmark_independent_principle(
     guarded_roots,
 ):
     from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
         decide_candidate,
         read_workspace,
     )
@@ -1613,10 +1615,62 @@ def test_answer_rich_contract_accepts_benchmark_independent_reconciliation_claim
         )
     ]
 
+    with pytest.raises(GuardedWorkspaceError, match="kind is unsupported"):
+        decide_candidate(discovery=decision)
+
+
+def test_global_workflow_claim_accepts_exact_framework_and_trajectory_sources(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_answer_rich_claim_boundary(evidence)
+    refs = _configure_global_workflow_evidence(evidence)
+    framework_ref = "guidance/qrs-workflow-framework.json"
+    framework = evidence / framework_ref
+    framework.parent.mkdir(parents=True, exist_ok=True)
+    framework.write_text(
+        '{"answer_free":true,"policy":"task-agnostic six-state handoffs"}\n',
+        encoding="utf-8",
+    )
+    for ref in [*refs, framework_ref]:
+        read_workspace(source="evidence", file_path=ref)
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = [*refs, framework_ref]
+    _set_global_workflow(decision, refs)
+    decision["worker_visible_claims"] = [
+        {
+            "claim_id": "state-span-anchor",
+            "claim_scope": "task_agnostic_harness_policy",
+            "claim": "Keep each six-state handoff explicit and observable.",
+            "surfaces": ["tools"],
+            "basis_refs": [
+                {
+                    "kind": "framework_reference",
+                    "ref": framework_ref,
+                    "support": "the frozen method permits a generic workflow policy",
+                },
+                *[
+                    {
+                        "kind": "answer_free_development_observation",
+                        "ref": ref,
+                        "support": "the answer-free trajectory shows the handoff gap",
+                    }
+                    for ref in refs
+                ],
+            ],
+        }
+    ]
+
     result = decide_candidate(discovery=decision)
 
-    assert result["worker_visible_claims"][0]["basis_refs"][0]["ref"] == (
-        "principle:written-object-reconciliation"
+    assert result["worker_visible_claims"][0]["claim_scope"] == (
+        "task_agnostic_harness_policy"
     )
 
 
@@ -2282,6 +2336,16 @@ def test_quant_v2_forbids_legacy_unlock_and_schema_matches_quant_hypotheses(
     assert "failure_type_id" not in hypothesis_schema["required"]
     assert claims_schema["minItems"] == 1
     assert "basis_refs" in claims_schema["items"]["required"]
+    basis_kinds = claims_schema["items"]["properties"]["basis_refs"][
+        "items"
+    ]["properties"]["kind"]["enum"]
+    assert "benchmark_independent" not in basis_kinds
+    assert "framework_reference" in basis_kinds
+    assert "answer_free_development_observation" in basis_kinds
+    assert claims_schema["items"]["properties"]["claim_scope"]["enum"] == [
+        "task_agnostic_harness_policy",
+        "task_specific_requirement",
+    ]
     assert workflow_properties["workflow_scope"]["enum"] == [
         "stage_local",
         "cross_stage",

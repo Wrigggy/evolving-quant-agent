@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections import defaultdict
+from copy import deepcopy
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
@@ -697,6 +699,7 @@ def append_accepted_panel_history(
         text = claim.get("claim")
         surfaces = claim.get("surfaces")
         basis_refs = claim.get("basis_refs")
+        safe_sources = claim.get("safe_sources")
         if (
             not isinstance(claim_id, str)
             or not claim_id
@@ -707,15 +710,86 @@ def append_accepted_panel_history(
             or not surfaces
             or not isinstance(basis_refs, list)
             or not basis_refs
+            or not isinstance(safe_sources, list)
+            or not safe_sources
         ):
             raise QFBenchTrajectoryBankError("accepted claim inventory is incomplete")
+        safe_refs: set[str] = set()
+        clean_sources: list[dict[str, object]] = []
+        for source in safe_sources:
+            if not isinstance(source, Mapping):
+                raise QFBenchTrajectoryBankError("accepted safe source is invalid")
+            ref = source.get("ref")
+            source_type = source.get("source_type")
+            if (
+                not isinstance(ref, str)
+                or not ref
+                or ref in safe_refs
+                or source_type not in {
+                    "public_contract",
+                    "public_reference",
+                    "framework_reference",
+                    "answer_free_development_observation",
+                }
+            ):
+                raise QFBenchTrajectoryBankError(
+                    "accepted safe source has no unique permitted identity"
+                )
+            safe_refs.add(ref)
+            source_path_value = source.get("source_path")
+            excerpt = source.get("excerpt")
+            if (
+                not isinstance(source_path_value, str)
+                or not source_path_value
+                or not isinstance(excerpt, str)
+                or not excerpt
+            ):
+                raise QFBenchTrajectoryBankError(
+                    "accepted safe source has no exact path and excerpt"
+                )
+            source_path = Path(source_path_value).expanduser().resolve()
+            source_text = _read_public_text(
+                source_path, label=f"accepted safe source {ref}"
+            )
+            if source_type == "answer_free_development_observation":
+                source_lines = source_text.splitlines()
+                for excerpt_line in excerpt.splitlines():
+                    match = re.fullmatch(r"line (\d+): (.*)", excerpt_line)
+                    if (
+                        match is None
+                        or int(match.group(1)) < 1
+                        or int(match.group(1)) > len(source_lines)
+                        or source_lines[int(match.group(1)) - 1] != match.group(2)
+                    ):
+                        raise QFBenchTrajectoryBankError(
+                            "accepted development excerpt differs from its source"
+                        )
+            elif excerpt != source_text:
+                raise QFBenchTrajectoryBankError(
+                    "accepted safe excerpt differs from its source"
+                )
+            clean_source = deepcopy(dict(source))
+            clean_sources.append(clean_source)
+        basis_identities = {
+            str(record.get("ref"))
+            for record in basis_refs
+            if isinstance(record, Mapping) and record.get("ref")
+        }
+        if not basis_identities or not basis_identities.issubset(safe_refs):
+            raise QFBenchTrajectoryBankError(
+                "accepted claim basis lacks an exact safe source"
+            )
         seen_claims.add(claim_id)
         clean_claims.append(
             {
                 "claim_id": claim_id,
+                "claim_scope": claim.get(
+                    "claim_scope", "task_specific_requirement"
+                ),
                 "claim": text,
                 "surfaces": list(surfaces),
                 "basis_refs": list(basis_refs),
+                "safe_sources": clean_sources,
             }
         )
 
@@ -839,6 +913,55 @@ def build_trajectory_bank(
     target = destination.expanduser().resolve()
     manifest = _read_json(manifest_file, label="QFBench public manifest")
     plan = _read_json(plan_file, label="QFBench scheduler plan")
+    arm_identities = plan.get("arm_identities")
+    candidate_lineage = (
+        arm_identities.get("candidate_lineage")
+        if isinstance(arm_identities, Mapping)
+        else None
+    )
+    workflow_contract = plan.get("cross_family_workflow_evidence")
+    framework_reference = {
+        "schema_version": 1,
+        "record_kind": "qrs_frozen_preproposal_workflow_framework",
+        "answer_free": True,
+        "workflow_scope": (
+            workflow_contract.get("workflow_scope") or "workflow_global"
+            if isinstance(workflow_contract, Mapping)
+            else "workflow_global"
+        ),
+        "involved_states": (
+            workflow_contract.get("involved_states")
+            or ["S1", "S2", "S3", "S4", "S5", "S6"]
+            if isinstance(workflow_contract, Mapping)
+            else ["S1", "S2", "S3", "S4", "S5", "S6"]
+        ),
+        "minimum_distinct_trajectory_tasks": 2,
+        "minimum_distinct_task_families": 2,
+        "allowed_search_loci": ["skills", "systemprompt"],
+        "allowed_change": (
+            candidate_lineage.get("allowed_change")
+            if isinstance(candidate_lineage, Mapping)
+            else (
+                "One task-agnostic clarification of the six-stage quantitative "
+                "workflow."
+            )
+        ),
+        "forbidden_change": (
+            candidate_lineage.get("forbidden_change")
+            if isinstance(candidate_lineage, Mapping)
+            else (
+                "Task-specific formulas, outputs, constants, routing, evaluator "
+                "predicates, or hidden outcomes."
+            )
+        ),
+        "evidence_boundary": (
+            "Answer-free development observations may ground a reusable workflow "
+            "hypothesis and its empirical origin. They do not establish correctness "
+            "or utility; utility is decided only by the later matched gate."
+        ),
+    }
+    _assert_answer_free(framework_reference)
+    _assert_no_identity_keys(framework_reference)
     manifest_tasks = _task_metadata(manifest)
     panels, anchors, sealed_ids = _plan_layout(
         plan,
@@ -1048,6 +1171,9 @@ def build_trajectory_bank(
             / f"panel-{panel_index:02d}-{family}"
         )
         text_outputs[evidence_root / "access_log.jsonl"] = ""
+        outputs[
+            evidence_root / "guidance/qrs-workflow-framework.json"
+        ] = framework_reference
         task_cards: list[dict[str, object]] = []
         task_keys: list[str] = []
         task_family_by_key: dict[str, str] = {}
@@ -1190,13 +1316,14 @@ def build_trajectory_bank(
                 "systemprompt.md",
             ],
             "candidate_goal": (
-                "Use the complete focus-family Primitive-H0 histories and the five "
-                "cross-family anchors to propose at most one task-agnostic "
+                "Use the complete focus-family Primitive-H0 histories and the "
+                "cross-family anchors present in this panel to propose at most one task-agnostic "
                 "workflow_global clarification in only the six-stage skill and/or "
                 "system prompt. Cite at least two inspected fresh H0 trajectories "
                 "from different families. Do not encode a task answer, task ID, "
                 "official outcome, failed property, expected value, or checker rule."
             ),
+            "framework_reference": "guidance/qrs-workflow-framework.json",
         }
         panel_rows.append(
             {

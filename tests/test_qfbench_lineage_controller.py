@@ -9,6 +9,7 @@ from qea.qfbench_lineage import LineageError
 from scripts.run_qfbench_discovery_pilot import main as run_discovery_pilot
 from scripts.run_qfbench_lineage_controller import (
     _candidate_information_set_review_package,
+    _candidate_information_set_review_result,
     _information_set_review_spec,
     _quantcodeeval_property_set_safe,
     build_candidate_information_set_review_argv,
@@ -20,6 +21,48 @@ from scripts.run_qfbench_lineage_controller import (
     property_set_safe_from_reports,
     run_controller,
 )
+
+
+def test_existing_information_review_result_requires_same_retained_input(tmp_path):
+    states_root = tmp_path / "states"
+    result_dir = tmp_path / "results" / "review-r1"
+    result_dir.mkdir(parents=True)
+    result_dir.joinpath("RESULT.json").write_text("{}\n")
+    input_dir = states_root / "review-inputs"
+    input_dir.mkdir(parents=True)
+    input_dir.joinpath("review-r1.json").write_text(
+        json.dumps({"schema_version": 1, "candidate_id": "old"}) + "\n"
+    )
+
+    with pytest.raises(LineageError, match="differs from the current reviewed"):
+        _candidate_information_set_review_result(
+            {"runtime": {"results_dir": str(tmp_path / "results")}},
+            {"review_id": "review-r1"},
+            {"schema_version": 1, "candidate_id": "new"},
+            states_root,
+            approve_external_run=False,
+            runner=lambda _argv: (_ for _ in ()).throw(
+                AssertionError("existing Review must not dispatch")
+            ),
+        )
+
+
+def test_existing_information_review_result_requires_retained_input(tmp_path):
+    result_dir = tmp_path / "results" / "review-r1"
+    result_dir.mkdir(parents=True)
+    result_dir.joinpath("RESULT.json").write_text("{}\n")
+
+    with pytest.raises(LineageError, match="has no matching retained input package"):
+        _candidate_information_set_review_result(
+            {"runtime": {"results_dir": str(tmp_path / "results")}},
+            {"review_id": "review-r1"},
+            {"schema_version": 1, "candidate_id": "new"},
+            tmp_path / "states",
+            approve_external_run=False,
+            runner=lambda _argv: (_ for _ in ()).throw(
+                AssertionError("existing Review must not dispatch")
+            ),
+        )
 
 
 def _report(root: Path, run_id: str, task: str, parent, candidate, failures):
@@ -2338,6 +2381,8 @@ def _information_review_sources():
 
 def _write_information_review_result(result_dir, package, verdict="PASS"):
     result_dir.mkdir(parents=True, exist_ok=True)
+    source_input = result_dir / "REQUEST.json"
+    source_input.write_text(json.dumps(package, indent=2) + "\n")
     claim_id = package["worker_visible_claims"][0]["claim_id"]
     if verdict == "PASS":
         ref, role = "public:instruction", "PUBLIC_SUPPORT"
@@ -2349,6 +2394,7 @@ def _write_information_review_result(result_dir, package, verdict="PASS"):
         "schema_version": 1,
         "status": "complete",
         "review_scope": "answer_rich_evolver_candidate_information_set",
+        "source_input": str(source_input),
         "request": {
             "request_count": 1,
             "accounting": {
@@ -2409,7 +2455,10 @@ def _information_review_controller_plan(tmp_path, *, mode="live"):
                                     "claim_id": "public-output-positive",
                                     "claim": "Written output values must be positive.",
                                     "surfaces": ["tools"],
-                                    "basis_refs": ["public:instruction"],
+                                    "basis_refs": [
+                                        "public:instruction",
+                                        "diagnostic:target",
+                                    ],
                                 }
                             ]
                         }
@@ -2609,6 +2658,7 @@ def test_preconstructed_candidate_review_and_worker_share_exact_snapshot(
     }
     _add_replay_candidate_reviews(plan, tmp_path)
     source_candidate = Path(plan["lineages"][0]["candidate"]["worker_dir"])
+    source_candidate.joinpath("systemprompt.md").chmod(0o755)
     source_text = source_candidate.joinpath("systemprompt.md").read_text()
     plan_path = tmp_path / "snapshot-plan.json"
     plan_path.write_text(json.dumps(plan))
@@ -2643,6 +2693,7 @@ def test_preconstructed_candidate_review_and_worker_share_exact_snapshot(
         "reviewed_candidate_dir"
     ] == str(reviewed_dir)
     assert reviewed_dir.joinpath("systemprompt.md").read_text() == source_text
+    assert reviewed_dir.joinpath("systemprompt.md").stat().st_mode & 0o777 == 0o555
 
     source_candidate.joinpath("systemprompt.md").write_text(
         "Post-review source mutation must not reach the Worker.\n"
@@ -2702,30 +2753,21 @@ def test_replay_information_review_nonpass_never_dispatches_worker(
     proposal = json.loads(
         Path(plan["lineages"][0]["proposal"]["replay_report"]).read_text()
     )
-    package = {
-        "schema_version": 1,
-        "review_id": review_id,
-        "candidate_id": "information-candidate-r1",
-        "candidate": _candidate_information_set_review_package(
-            {
-                "current_parent": parent,
-                "candidate": {
-                    "version": "information-candidate-r1",
-                    "worker_dir": proposal["candidate_dir"],
-                },
-                "proposal": {
-                    "worker_visible_claims": proposal["summary"][
-                        "discovery_hypothesis"
-                    ]["hypothesis"]["worker_visible_claims"]
-                },
+    package = _candidate_information_set_review_package(
+        {
+            "current_parent": parent,
+            "candidate": {
+                "version": "information-candidate-r1",
+                "worker_dir": proposal["candidate_dir"],
             },
-            plan["lineages"][0]["candidate_information_set_review"],
-        )[0]["candidate"],
-        "worker_visible_claims": proposal["summary"]["discovery_hypothesis"][
-            "hypothesis"
-        ]["worker_visible_claims"],
-        **_information_review_sources(),
-    }
+            "proposal": {
+                "worker_visible_claims": proposal["summary"][
+                    "discovery_hypothesis"
+                ]["hypothesis"]["worker_visible_claims"]
+            },
+        },
+        plan["lineages"][0]["candidate_information_set_review"],
+    )[0]
     _write_information_review_result(
         Path(plan["runtime"]["results_dir"]) / review_id,
         package,
@@ -3144,3 +3186,179 @@ def test_answer_free_information_review_requires_no_optimize_sources():
     ] = sources["optimize_only_sources"]
     with pytest.raises(LineageError, match="cannot include optimize-only"):
         _information_set_review_spec(answer_free)
+
+
+def test_qrs_review_package_materializes_only_exact_r3_workflow_sources(
+    tmp_path,
+):
+    parent, candidate = _information_review_workers(tmp_path)
+    evidence = tmp_path / "panel-evidence"
+    framework_ref = "guidance/qrs-workflow-framework.json"
+    framework = evidence / framework_ref
+    framework.parent.mkdir(parents=True)
+    framework.write_text(
+        '{"answer_free":true,"policy":"six-state workflow"}\n',
+        encoding="utf-8",
+    )
+    workflow = []
+    refs = [
+        (
+            "benchmarks/qfbench/tasks/holdings/worker_trace.jsonl",
+            "data_engineering",
+        ),
+        (
+            "benchmarks/qfbench/tasks/localvol/worker_trace.jsonl",
+            "derivatives",
+        ),
+    ]
+    for task_index, (ref, family) in enumerate(refs, start=1):
+        source = evidence / ref
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text(
+            "\n".join(
+                json.dumps({"line": number, "event": f"event-{number}"})
+                for number in range(1, 6)
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        workflow.append(
+            {
+                "task_key": f"qfbench:task-{task_index}",
+                "task_family": family,
+                "trajectory_ref": ref,
+                "observed_handoff": "The state handoff is absent at lines 2-3.",
+            }
+        )
+    claim = {
+        "claim_id": "state-span-anchor",
+        "claim_scope": "task_agnostic_harness_policy",
+        "claim": "Keep each six-state span explicit and observable.",
+        "surfaces": ["tools"],
+        "basis_refs": [
+            {"kind": "framework_reference", "ref": framework_ref},
+            *[
+                {
+                    "kind": "answer_free_development_observation",
+                    "ref": ref,
+                }
+                for ref, _family in refs
+            ],
+        ],
+    }
+    package, hold = _candidate_information_set_review_package(
+        {
+            "current_parent": {"version": "h0", "worker_dir": str(parent)},
+            "candidate": {"version": "candidate", "worker_dir": str(candidate)},
+            "proposal": {
+                "worker_visible_claims": [claim],
+                "workflow_evidence": workflow,
+            },
+        },
+        {
+            "review_id": "r3-shaped-review",
+            "candidate_material_baseline_worker_dir": str(parent),
+            "public_sources": [],
+            "public_source_catalog": [],
+            "answer_free_development_evidence_root": str(evidence),
+            "optimize_only_sources": [],
+        },
+    )
+
+    assert hold is None
+    assert package is not None
+    assert package["public_sources"] == []
+    trusted = package["trusted_answer_free_sources"]
+    assert [source["source_type"] for source in trusted] == [
+        "framework_reference",
+        "answer_free_development_observation",
+        "answer_free_development_observation",
+    ]
+    assert {source.get("task_family") for source in trusted[1:]} == {
+        "data_engineering",
+        "derivatives",
+    }
+    assert all(len(source["excerpt"]) < 2_000 for source in trusted)
+
+
+def test_later_qrs_review_fails_closed_when_prior_accepted_claim_is_omitted(
+    tmp_path,
+):
+    parent, candidate = _information_review_workers(tmp_path)
+    evidence = tmp_path / "later-panel-evidence"
+    accepted = evidence / "accepted-panels/panel-01-data"
+    accepted.mkdir(parents=True)
+    (evidence / "accepted-panels/INDEX.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "answer_free": True,
+                "entries": [
+                    {
+                        "panel_index": 1,
+                        "record": (
+                            "accepted-panels/panel-01-data/ACCEPTED-PANEL.json"
+                        ),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (accepted / "ACCEPTED-PANEL.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "answer_free": True,
+                "accepted_claims": [
+                    {
+                        "claim_id": "prior-policy",
+                        "claim_scope": "task_specific_requirement",
+                        "claim": "Preserve the public output requirement.",
+                        "surfaces": ["systemprompt"],
+                        "basis_refs": [
+                            {
+                                "kind": "public_contract",
+                                "ref": "public:instruction",
+                            }
+                        ],
+                        "safe_sources": [
+                            {
+                                "ref": "public:instruction",
+                                "source_type": "public_contract",
+                                "excerpt": "Preserve the public output requirement.",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    current_claim = {
+        "claim_id": "new-policy",
+        "claim": "Apply a new public rule.",
+        "surfaces": ["systemprompt"],
+        "basis_refs": ["public:instruction"],
+    }
+
+    with pytest.raises(LineageError, match="changed or omitted accepted claim"):
+        _candidate_information_set_review_package(
+            {
+                "current_parent": {"worker_dir": str(parent)},
+                "candidate": {"version": "candidate", "worker_dir": str(candidate)},
+                "proposal": {"worker_visible_claims": [current_claim]},
+            },
+            {
+                "review_id": "later-review",
+                "public_sources": [
+                    {
+                        "ref": "public:instruction",
+                        "source_type": "public_contract",
+                        "excerpt": "Apply a new public rule.",
+                    }
+                ],
+                "answer_free_development_evidence_root": str(evidence),
+                "optimize_only_sources": [],
+            },
+        )

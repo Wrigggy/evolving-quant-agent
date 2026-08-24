@@ -93,6 +93,45 @@ def _bind_runner_inputs(
     return method, launch
 
 
+def _require_live_launch_authority(method: Mapping[str, object]) -> None:
+    """Reject non-canary paid/remote dispatch without an activated Main plan."""
+
+    partition = method.get("public_task_partition_rule")
+    role = partition.get("role") if isinstance(partition, Mapping) else None
+    if role == "engineering_canary_only":
+        explicit = method.get("authority")
+        if explicit is None:
+            return
+        limits = method.get("limits")
+        if (
+            isinstance(explicit, Mapping)
+            and explicit.get("launch_authorized") is True
+            and explicit.get("paid_or_remote_authority") is True
+            and method.get("status") == "frozen_launch_authorized"
+            and isinstance(limits, Mapping)
+            and limits.get("paid_or_remote_authority") is True
+        ):
+            return
+        raise GlobalSchedulerError(
+            "engineering canary with an explicit authority block requires a "
+            "superseding frozen_launch_authorized method and paid/remote authority"
+        )
+    limits = method.get("limits")
+    authority = (
+        limits.get("paid_or_remote_authority")
+        if isinstance(limits, Mapping)
+        else None
+    )
+    if (
+        method.get("status") != "frozen_launch_authorized"
+        or authority is not True
+    ):
+        raise GlobalSchedulerError(
+            "non-canary Main requires a superseding frozen_launch_authorized "
+            "method with paid_or_remote_authority=true"
+        )
+
+
 def _run(argv: Sequence[str]) -> None:
     result = subprocess.run(argv, check=False, text=True)
     if result.returncode:
@@ -335,7 +374,11 @@ def _component_result(
     return report
 
 
-def _clean_accepted_claims(value: object) -> list[dict[str, object]]:
+def _clean_accepted_claims(
+    value: object,
+    *,
+    review_package: Mapping[str, object] | None = None,
+) -> list[dict[str, object]]:
     if not isinstance(value, list) or not value:
         raise GlobalSchedulerError("Review PASS has no Worker-visible claim inventory")
     claims: list[dict[str, object]] = []
@@ -360,14 +403,38 @@ def _clean_accepted_claims(value: object) -> list[dict[str, object]]:
         ):
             raise GlobalSchedulerError("Worker-visible claim inventory is incomplete")
         seen.add(claim_id)
-        claims.append(
-            {
-                "claim_id": claim_id,
-                "claim": claim,
-                "surfaces": list(surfaces),
-                "basis_refs": list(basis_refs),
+        clean = {
+            "claim_id": claim_id,
+            "claim_scope": raw.get(
+                "claim_scope", "task_specific_requirement"
+            ),
+            "claim": claim,
+            "surfaces": list(surfaces),
+            "basis_refs": list(basis_refs),
+        }
+        if review_package is not None:
+            source_records = [
+                *review_package.get("public_sources", []),
+                *review_package.get("trusted_answer_free_sources", []),
+            ]
+            by_ref = {
+                str(record["ref"]): record
+                for record in source_records
+                if isinstance(record, Mapping) and record.get("ref")
             }
-        )
+            refs = {
+                str(basis.get("ref"))
+                for basis in basis_refs
+                if isinstance(basis, Mapping) and basis.get("ref")
+            }
+            if not refs or not refs.issubset(by_ref):
+                raise GlobalSchedulerError(
+                    "Review PASS claim has a basis without an exact safe source"
+                )
+            clean["safe_sources"] = [deepcopy(dict(by_ref[ref])) for ref in sorted(refs)]
+        elif isinstance(raw.get("safe_sources"), list):
+            clean["safe_sources"] = deepcopy(list(raw["safe_sources"]))
+        claims.append(clean)
     return claims
 
 
@@ -538,10 +605,15 @@ def _validate_public_sources(
     if root_path.is_symlink() or not root.is_dir():
         raise GlobalSchedulerError("public contracts root is unavailable")
     sources = review_spec.get("public_sources")
-    if not isinstance(sources, list) or not sources:
-        raise GlobalSchedulerError("panel Review has no public sources")
+    catalog = review_spec.get("public_source_catalog", [])
+    if (
+        not isinstance(sources, list)
+        or not isinstance(catalog, list)
+        or not (sources or catalog)
+    ):
+        raise GlobalSchedulerError("panel Review has no public source catalog")
     refs: set[str] = set()
-    for source in sources:
+    for source in [*sources, *catalog]:
         if not isinstance(source, Mapping):
             raise GlobalSchedulerError("panel Review public source is invalid")
         ref = source.get("ref")
@@ -551,10 +623,13 @@ def _validate_public_sources(
             not isinstance(ref, str)
             or not ref
             or ref in refs
-            or source.get("source_type") != "public_contract"
+            or source.get("source_type") not in {
+                "public_contract",
+                "public_reference",
+            }
             or not isinstance(path_value, str)
             or not path_value
-            or not isinstance(excerpt, str)
+            or (source in sources and not isinstance(excerpt, str))
         ):
             raise GlobalSchedulerError("panel Review public source is incomplete")
         refs.add(ref)
@@ -583,7 +658,7 @@ def _validate_public_sources(
             raise GlobalSchedulerError(
                 "cannot read panel Review public source"
             ) from exc
-        if excerpt != expected:
+        if source in sources and excerpt != expected:
             raise GlobalSchedulerError(
                 "panel Review public excerpt differs from its source file"
             )
@@ -685,6 +760,31 @@ def _panel_result(
         raise GlobalSchedulerError(
             "panel candidate Review must be answer-free with no optimize-only source"
         )
+    if review_spec.get("public_source_catalog") is not None and (
+        review_spec.get("answer_free_development_evidence_root")
+        != expected_evidence
+    ):
+        raise GlobalSchedulerError(
+            "panel Review trusted evidence root differs from the proposal bank view"
+        )
+    if review_spec.get("public_source_catalog") is not None:
+        evidence_root = Path(str(expected_evidence)).expanduser().resolve()
+        contract_path = evidence_root / "contract.json"
+        framework_path = (
+            evidence_root / "guidance/qrs-workflow-framework.json"
+        )
+        if (
+            evidence_root.is_symlink()
+            or contract_path.is_symlink()
+            or not contract_path.is_file()
+            or framework_path.is_symlink()
+            or not framework_path.is_file()
+            or _json(contract_path).get("framework_reference")
+            != "guidance/qrs-workflow-framework.json"
+        ):
+            raise GlobalSchedulerError(
+                "panel Review frozen workflow framework is unavailable"
+            )
     _validate_public_sources(review_spec, launch)
     states_root = plan.get("states_root")
     if not isinstance(states_root, str) or not states_root:
@@ -854,8 +954,29 @@ def _panel_result(
             raise GlobalSchedulerError(
                 "panel Review is not bound to the retained candidate snapshot"
             )
+        review_id = observation.get("review_id")
+        review_input_path = (
+            state_dir / "review-inputs" / f"{review_id}.json"
+            if isinstance(review_id, str) and review_id
+            else None
+        )
+        if (
+            review_input_path is None
+            or review_input_path.is_symlink()
+            or not review_input_path.is_file()
+        ):
+            raise GlobalSchedulerError("Review PASS has no exact input package")
+        review_package = _json(review_input_path)
+        if (
+            review_package.get("review_id") != review_id
+            or review_package.get("candidate_id") != candidate.get("version")
+        ):
+            raise GlobalSchedulerError(
+                "Review PASS input package is not bound to the candidate"
+            )
         accepted_claims = _clean_accepted_claims(
-            state_proposal.get("worker_visible_claims")
+            state_proposal.get("worker_visible_claims"),
+            review_package=review_package,
         )
     elif phase == "TARGET":
         raise GlobalSchedulerError("non-PASS panel Review cannot enter TARGET")
@@ -1050,6 +1171,9 @@ def main() -> int:
         raise GlobalSchedulerError(
             "live scheduler execution requires --approve-external-run"
         )
+    _require_live_launch_authority(
+        _json(args.method_plan.expanduser().resolve())
+    )
     method, launch = _bind_runner_inputs(
         args.method_plan, args.launch_plan, args.state_dir
     )

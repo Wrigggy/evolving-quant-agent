@@ -269,7 +269,17 @@ def test_real_r1_replay_builds_exact_package_and_only_reviewer_argv(
     assert state["stopped_after_stage"] == "information_set_review"
     assert state["observations"].keys() == {"information_set_review"}
     assert state["candidate"]["activation_binding"]["status"] == "none"
-    assert state["candidate"]["worker_dir"] == str(R1_CANDIDATE_PATH)
+    reviewed_snapshot = (
+        tmp_path
+        / "fresh-r2-state/reviewed-candidates"
+        / lineage["lineage_id"]
+        / "qf-public-only-holdings-information-set-review-20260824-r2"
+    )
+    assert state["candidate"]["worker_dir"] == str(reviewed_snapshot)
+    assert state["candidate"]["worker_dir"] != str(R1_CANDIDATE_PATH)
+    assert state["observations"]["information_set_review"][
+        "reviewed_candidate_dir"
+    ] == str(reviewed_snapshot)
 
     package = json.loads(
         (tmp_path / "fresh-r2-state/review-inputs/"
