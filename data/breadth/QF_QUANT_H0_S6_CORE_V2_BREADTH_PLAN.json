@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-24",
+  "status": "frozen_not_run",
+  "experiment_id": "qf-quant-h0-s6-core-v2-breadth-20260824-r1",
+  "purpose": "First verify that the protocol-only Core-v2 repair realizes the six-state marker interface, then measure Legacy Quant-H0 versus Core-v2 through newly scheduled matched executions on a 12-task, six-domain, outcome-blind-selected but historically public and exposed QFBench development panel. This is Worker-substrate construct calibration and breadth mapping, not QRS evolution, candidate improvement, sealed evaluation, or benchmark-wide superiority.",
+  "measured_antecedent": {
+    "run_id": "qf-quant-h0-s6-matched-canary-20260824-r1-rep1-legacy-first",
+    "status": "complete",
+    "decision": "S6_PROTOCOL_NOT_REALIZED",
+    "core_score_direction": "Core passed 105/107 properties versus Legacy 102/107 in one fresh repetition, but only one of three Core cells had a complete marker protocol.",
+    "full_disposition": "S6-Full passed 103/107 and also realized the protocol in only one of three cells; it is not expanded beyond the antecedent construct calibration.",
+    "score_use": "The antecedent scores motivate a broader outcome-blind task panel but are not used to select any breadth task or as comparators."
+  },
+  "core_v2_change_boundary": {
+    "allowed": [
+      "require exact ENTER and COMPLETE pairing before the next state",
+      "require exact S5 revisit grammar",
+      "require exact S6 ENTER followed by S6 COMPLETE",
+      "require a terminal marker-protocol audit before the final response"
+    ],
+    "forbidden": [
+      "new quantitative method, formula, estimator, data-cleaning heuristic, artifact checklist, task identifier, hidden property, expected value, or benchmark-specific convention",
+      "model, provider, shell descriptor, tool binding, budget, runtime, or verifier changes"
+    ],
+    "scientific_role": "Core-v2 repairs only the observed marker-execution failure. It remains a thin human-authored state interface rather than a detailed quant workflow."
+  },
+  "selection_rule": {
+    "source": "data/qfbench/MANIFEST_85_BASELINE.json baseline.primary",
+    "eligible_filter": {
+      "reward_kind": "binary",
+      "resource_source": "upstream",
+      "excluded_construct_calibration_tasks": [
+        "swap-curve-bootstrap-ois",
+        "13f-amendment-aware-crowding",
+        "fx-forward-cross-rate"
+      ]
+    },
+    "domain_rule": "Use each of the six manifest domains. Within each domain, choose one low task from difficulty easy or medium and one high task from difficulty hard, medium-hard, very-hard, or very_hard.",
+    "draw_rule": "Sort task IDs within each domain and stratum, then choose one with Python random.Random('20260824:' + domain + ':' + stratum).choice. The selector may read only task_id, domain, difficulty, reward_kind, and resource_source from the manifest.",
+    "eligibility_rationale": "Binary-only keeps the native task-level reward and paired win-tie-loss estimand uniform. Upstream-only avoids making QEA-authored fallback resource contracts an additional treatment in the Worker-substrate comparison. The domain and difficulty fields are repository-maintained public-contract taxonomy, not claimed as an official randomized QFBench sampling frame.",
+    "eligible_pool_count": 57,
+    "excluded_counts": {
+      "nonbinary_primary_tasks": 6,
+      "qea_fallback_primary_tasks": 11,
+      "antecedent_construct_tasks": 3
+    },
+    "eligible_task_ids": [
+      "alpha-hedge-strategy",
+      "american-option-fd-new",
+      "asian-option-levy-curran",
+      "binance-btc-participation-tca",
+      "bl-regime-hmm",
+      "bollinger-backtest-aapl",
+      "brinson-sector-attribution",
+      "cir-bond-pricing",
+      "cliquet-ratchet-pricing",
+      "cme-hdd-option-pricing",
+      "copula-equity-fitting",
+      "corporate-action-adjustment",
+      "credit-migration-matrix",
+      "credit-portfolio-var-cvar",
+      "credit-spread-decomposition",
+      "creditmetrics-portfolio-var",
+      "cross-sectional-momentum",
+      "crypto-funding-rate-basis-carry",
+      "dcc-garch-portfolio-var",
+      "delta-hedging-pnl-simulation",
+      "double-sort",
+      "earnings-surprise-calculator",
+      "etf-cross-asset-lead-lag",
+      "etf-overlap-redemption-pressure",
+      "event-study-earnings",
+      "ewma-portfolio-risk-decomposition",
+      "fama-french-factor-model-new",
+      "fft-compound-poisson",
+      "fomc-tone-event-study",
+      "form4-cross-sectional-sale-pressure",
+      "historical-var-data-prep",
+      "hull-white-swaption",
+      "implied-vol-approximations",
+      "interest-rate-cap-floor",
+      "intraday-volume-fitting-and-execution-scheduling",
+      "ipca-latent-factors",
+      "lob-pc-signal",
+      "mc-greek-surface-1",
+      "merton-jump-diffusion",
+      "momentum-backtest",
+      "multimodal-alpha-fusion-edgar-cot-gdelt",
+      "option-put-call-parity-forward-audit",
+      "ou-jump-commodity",
+      "pca-factor-portfolio",
+      "polars-api-migration",
+      "realized-vol-estimators",
+      "residual-momentum",
+      "sma-crossover-spy",
+      "spread-option-kirk-margrabe",
+      "stable-residual",
+      "standard-var-methods",
+      "stochvol-implied-surface-new",
+      "var-es-estimation",
+      "variance-swap-replication",
+      "yield-curve-bootstrap-immunization",
+      "yield-curve-pca-dynamics",
+      "zero-coupon-bootstrapping"
+    ],
+    "forbidden_selection_inputs": "Prior reward, official passed count, failed-property identity, verifier output, Worker trace, candidate history, artifact contents, or researcher preference after seeing an outcome.",
+    "historical_exposure_boundary": "The task identities and public contracts are historically public/exposed and may have appeared in earlier repository development or train-validation-test bookkeeping. Only these executions are new. The panel is selection-outcome-blind, not unseen, sealed, or contamination-free.",
+    "estimand": "Equal-domain descriptive development breadth over this preregistered 12-task sample from the 57-task eligible development universe, not an unbiased estimate of all 77 primary QFBench tasks."
+  },
+  "breadth_tasks": [
+    {"domain": "data_engineering", "stratum": "low", "difficulty": "medium", "task_id": "corporate-action-adjustment"},
+    {"domain": "data_engineering", "stratum": "high", "difficulty": "hard", "task_id": "form4-cross-sectional-sale-pressure"},
+    {"domain": "derivatives", "stratum": "low", "difficulty": "medium", "task_id": "variance-swap-replication"},
+    {"domain": "derivatives", "stratum": "high", "difficulty": "hard", "task_id": "ou-jump-commodity"},
+    {"domain": "execution_microstructure", "stratum": "low", "difficulty": "medium", "task_id": "lob-pc-signal"},
+    {"domain": "execution_microstructure", "stratum": "high", "difficulty": "hard", "task_id": "binance-btc-participation-tca"},
+    {"domain": "rates_fx_macro", "stratum": "low", "difficulty": "medium", "task_id": "yield-curve-pca-dynamics"},
+    {"domain": "rates_fx_macro", "stratum": "high", "difficulty": "hard", "task_id": "cir-bond-pricing"},
+    {"domain": "risk_credit", "stratum": "low", "difficulty": "medium", "task_id": "credit-spread-decomposition"},
+    {"domain": "risk_credit", "stratum": "high", "difficulty": "hard", "task_id": "credit-portfolio-var-cvar"},
+    {"domain": "systematic_strategy", "stratum": "low", "difficulty": "medium", "task_id": "stable-residual"},
+    {"domain": "systematic_strategy", "stratum": "high", "difficulty": "hard", "task_id": "double-sort"}
+  ],
+  "answer_boundary": "Every Worker sees only the public task instruction and data, its frozen Worker harness, and the shared trusted runtime rule. No prior score, failed-property identity, verifier result, expected value, diagnostic, Reviewer result, Evolver instruction, or candidate history is Worker-visible.",
+  "deploy_source_freeze": {
+    "deploy_id": "qf-quant-h0-s6-core-v2-breadth-20260824-r1",
+    "source_revision": "FUTURE_COMMIT:qf-quant-h0-s6-core-v2-breadth-20260824-r1",
+    "resolution": "Deploy the future commit that first contains this plan, Core-v2, its focused tests, the trusted state-trace parser, and the then-current runner. Record the exact revision in operational evidence without editing this plan.",
+    "launch_before_resolution_allowed": false
+  },
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/qf-quant-h0-s6-core-v2-breadth-20260824-r1",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/qf-quant-h0-s6-core-v2-breadth-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0",
+    "worker_concurrency_per_run": 1,
+    "verifier_concurrency_per_run": 1,
+    "max_parallel_runs": 1
+  },
+  "protocol_gate": {
+    "run_id": "qf-quant-h0-s6-core-v2-protocol-gate-20260824-r1",
+    "tasks": [
+      "swap-curve-bootstrap-ois",
+      "13f-amendment-aware-crowding",
+      "fx-forward-cross-rate"
+    ],
+    "launch_argv": [
+      "/home/julius/qea/runtime/venvs/rootless/bin/python",
+      "/data/qea-julius-storage/deploy/qf-quant-h0-s6-core-v2-breadth-20260824-r1/scripts/run_qfbench_component_pilot.py",
+      "--qfbench-root", "/home/julius/qea/runtime/qfbench-source/024921eb",
+      "--qfbench-manifest", "/data/qea-julius-storage/deploy/qf-quant-h0-s6-core-v2-breadth-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+      "--rootless-config", "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+      "--rootless-image-set-manifest", "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+      "--run-id", "qf-quant-h0-s6-core-v2-protocol-gate-20260824-r1",
+      "--results-dir", "/data/qea-julius-storage/runs",
+      "--seed-worker", "/data/qea-julius-storage/deploy/qf-quant-h0-s6-core-v2-breadth-20260824-r1/qea/worker_quant_h0",
+      "--arm", "quant-h0-s6-core-v2=/data/qea-julius-storage/deploy/qf-quant-h0-s6-core-v2-breadth-20260824-r1/qea/worker_quant_h0_s6_core_v2",
+      "--task-id", "swap-curve-bootstrap-ois",
+      "--task-id", "13f-amendment-aware-crowding",
+      "--task-id", "fx-forward-cross-rate",
+      "--checkpoint-prefix", "qf-quant-h0-s6-core-v2-protocol-gate-20260824-r1",
+      "--worker-concurrency", "1",
+      "--verifier-concurrency", "1",
+      "--approve-external-run"
+    ],
+    "proceed_only_if": "All three Worker/verifier observations are valid and all three research-state traces account for S1 through S6 in order with no malformed marker or protocol issue. Official score is recorded but cannot authorize the breadth phase.",
+    "failure_action": "Stop without launching a breadth unit. Retain the result and revise only marker realization in a separately frozen version."
+  },
+  "breadth_runs": [
+    {
+      "repetition": 1,
+      "group": "data-derivatives-execution",
+      "run_id": "qf-quant-h0-s6-core-v2-breadth-20260824-r1-rep1-legacy-first",
+      "arm_order": ["quant-h0", "quant-h0-s6-core-v2"],
+      "tasks": ["corporate-action-adjustment", "form4-cross-sectional-sale-pressure", "variance-swap-replication", "ou-jump-commodity", "lob-pc-signal", "binance-btc-participation-tca"]
+    },
+    {
+      "repetition": 1,
+      "group": "rates-risk-systematic",
+      "run_id": "qf-quant-h0-s6-core-v2-breadth-20260824-r1-rep1-core-first",
+      "arm_order": ["quant-h0-s6-core-v2", "quant-h0"],
+      "tasks": ["yield-curve-pca-dynamics", "cir-bond-pricing", "credit-spread-decomposition", "credit-portfolio-var-cvar", "stable-residual", "double-sort"]
+    },
+    {
+      "repetition": 2,
+      "group": "data-derivatives-execution",
+      "run_id": "qf-quant-h0-s6-core-v2-breadth-20260824-r1-rep2-core-first",
+      "arm_order": ["quant-h0-s6-core-v2", "quant-h0"],
+      "tasks": ["corporate-action-adjustment", "form4-cross-sectional-sale-pressure", "variance-swap-replication", "ou-jump-commodity", "lob-pc-signal", "binance-btc-participation-tca"]
+    },
+    {
+      "repetition": 2,
+      "group": "rates-risk-systematic",
+      "run_id": "qf-quant-h0-s6-core-v2-breadth-20260824-r1-rep2-legacy-first",
+      "arm_order": ["quant-h0", "quant-h0-s6-core-v2"],
+      "tasks": ["yield-curve-pca-dynamics", "cir-bond-pricing", "credit-spread-decomposition", "credit-portfolio-var-cvar", "stable-residual", "double-sort"]
+    }
+  ],
+  "launch_template": [
+    "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "/data/qea-julius-storage/deploy/qf-quant-h0-s6-core-v2-breadth-20260824-r1/scripts/run_qfbench_component_pilot.py",
+    "--qfbench-root", "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "--qfbench-manifest", "/data/qea-julius-storage/deploy/qf-quant-h0-s6-core-v2-breadth-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "--rootless-config", "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "--rootless-image-set-manifest", "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "--run-id", "<breadth_runs.run_id>",
+    "--results-dir", "/data/qea-julius-storage/runs",
+    "--seed-worker", "/data/qea-julius-storage/deploy/qf-quant-h0-s6-core-v2-breadth-20260824-r1/qea/worker_quant_h0",
+    "--arm", "<arm_order[0]>=/data/qea-julius-storage/deploy/qf-quant-h0-s6-core-v2-breadth-20260824-r1/qea/<matching-worker-dir>",
+    "--arm", "<arm_order[1]>=/data/qea-julius-storage/deploy/qf-quant-h0-s6-core-v2-breadth-20260824-r1/qea/<matching-worker-dir>",
+    "--task-id", "<each tasks item in order>",
+    "--checkpoint-prefix", "<breadth_runs.run_id>",
+    "--worker-concurrency", "1",
+    "--verifier-concurrency", "1",
+    "--approve-external-run"
+  ],
+  "execution": {
+    "preflight": "Before any model call, verify the exact source revision, the two effective Worker directories (Legacy Quant-H0 and Core-v2; seed and Legacy arm may reference the same directory), byte-identical shell descriptors, all 12 selected task identities in the pinned manifest, task image/resource availability, clean exact run namespaces, and sufficient disk/memory.",
+    "phase_order": "Run the protocol gate first. If and only if it passes, run both repetition-1 breadth groups. Audit all 24 matched breadth cells before any repetition-2 launch.",
+    "repetition_2": "Repetition 2 is frozen but not automatic. It reverses arm order within each group and may run only after repetition 1 is valid, protocol-complete, and within budget. Repetition-1 scores cannot change tasks, Workers, grouping, or budgets.",
+    "hard_wall": "Protocol gate RuntimeMaxSec=7200. Each six-task breadth unit RuntimeMaxSec=28800.",
+    "resume": "Resume only the same exact run ID and checkpoint. Do not replace a task or route after observing an outcome."
+  },
+  "limits": {
+    "protocol_gate": {"worker_sessions": 3, "verifier_executions": 3, "completed_requests": 100, "total_tokens": 6000000, "provider_cost_usd": 0.30, "wall_time_seconds": 7200},
+    "per_breadth_run": {"worker_sessions": 12, "verifier_executions": 12, "completed_requests": 400, "total_tokens": 24000000, "provider_cost_usd": 1.00, "wall_time_seconds": 28800},
+    "breadth_campaign": {"worker_sessions": 48, "verifier_executions": 48, "completed_requests": 1600, "total_tokens": 96000000, "provider_cost_usd": 4.00},
+    "protocol_plus_full_breadth_campaign": {"worker_sessions": 51, "verifier_executions": 51, "completed_requests": 1700, "total_tokens": 102000000, "provider_cost_usd": 4.30, "sequential_wall_time_seconds": 122400},
+    "no_evolver_reviewer_candidate_or_follow_on": true,
+    "no_replacement_task_model_provider_or_route": true
+  },
+  "metrics": {
+    "primary": "Per task and repetition: valid official binary reward and complete passed/total vector. The win-tie-loss unit is each of the 24 matched task-repetition pairs. For each task, average its two repetition-level rewards; within each domain, average its two task means; the headline domain macro is the unweighted mean of the six domain means. Report every underlying paired value.",
+    "secondary": "For each matched cell with Legacy not full, headroom_closure=(Core_passed-Legacy_passed)/(total-Legacy_passed), without clipping; report N/A when Legacy is full. Also report passed-property fraction, the count of tasks on which Core is full in both repetitions, the sum of total-Core_passed across all 24 Core cells, and task-level discordance across repetitions. Do not pool raw properties across tasks as the headline.",
+    "construct": "Core-v2 S1-S6 marker completeness, first-entry order, malformed markers, explicit revisits, execution validity, artifact count, turns, tool calls/errors, requests, tokens, cost, and wall time.",
+    "overhead_acceptance": "Across both repetitions, every Core-v2 cell must be selection-valid and each of aggregate Core-v2 provider cost, total tokens, and Worker wall time must be no more than 1.50 times the corresponding Legacy aggregate. This descriptive threshold is an engineering retention gate, not a significance test.",
+    "interpretation": "Marker completeness is observability, not quantitative correctness. A 12-task panel is a disclosed stratified development breadth map, not a representative estimate of all QFBench tasks. Two repetitions support descriptive paired discordance and order reversal only, not stability, significance, or broad superiority."
+  },
+  "terminal_decisions": [
+    {"decision": "STOP_PROTOCOL_NOT_REALIZED", "when": "Any protocol-gate Core-v2 trace is incomplete or malformed.", "next_dispatch": null},
+    {"decision": "ELIGIBLE_FOR_BREADTH_REP1", "when": "All three protocol-gate cells are valid and marker-complete.", "next_dispatch": "both frozen repetition-1 breadth groups"},
+    {"decision": "STOP_INVALID_BREADTH", "when": "Any breadth cell is infrastructure-invalid, the matched treatment differs outside Core-v2, or accounting cannot be reconciled.", "next_dispatch": null},
+    {"decision": "BREADTH_REP1_COMPLETE", "when": "All 24 repetition-1 cells are valid and all 12 Core-v2 traces are marker-complete.", "next_dispatch": "separately launch the frozen reverse-order repetition 2 only after audit"},
+    {"decision": "S6_CORE_V2_TOO_STRONG_FOR_CURRENT_DEVELOPMENT_PANEL", "when": "Across both repetitions Core-v2 is full-score in both repetitions on at least 10 of 12 tasks, the sum of total-Core_passed across the 24 Core cells is below six, all 48 breadth cells are selection-valid, and the 1.50x cost/token/wall overhead thresholds pass.", "next_dispatch": null, "interpretation": "Disclose the strong human scaffold and select a harder public development panel by a separately frozen outcome-blind rule; do not weaken Core-v2 to create artificial QRS headroom."},
+    {"decision": "S6_CORE_V2_RETAIN_WITH_HEADROOM", "when": "Protocol is realized, all 48 breadth cells are selection-valid, the 1.50x cost/token/wall overhead thresholds pass, at least six of 12 tasks have a non-full Core-v2 result in at least one repetition, and at least four of six domains contain one such task.", "next_dispatch": null, "interpretation": "Freeze Core-v2 as the prospective QRS starting substrate and use only disclosed development tasks with headroom for adaptive search; keep a separate never-feedback sealed panel."}
+  ],
+  "claim_boundary": "This plan tests whether a protocol-only thin state scaffold is executable and how it changes a matched Worker across 12 public-metadata-stratified development tasks. It does not test QRS, Evolver, Candidate Reviewer, stable harness promotion, AHE, sealed generalization, or QFBench-wide superiority. Deliberate task selection and all exact task IDs must be disclosed in the paper or appendix."
+}

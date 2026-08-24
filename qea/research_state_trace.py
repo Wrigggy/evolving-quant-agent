@@ -29,6 +29,93 @@ def _read_trace(path: Path) -> list[dict[str, object]]:
     return records
 
 
+def _marker_sequence_issues(events: list[dict[str, object]]) -> list[str]:
+    """Validate the observable S1--S6 transition protocol."""
+
+    issues: list[str] = []
+    expected_index = 0
+    active_stage: str | None = None
+    revisit_target: str | None = None
+    revisit_entered = False
+
+    for event in events:
+        stage = str(event["stage"])
+        action = str(event["action"])
+
+        if revisit_target is not None:
+            if not revisit_entered:
+                if stage == revisit_target and action == "ENTER":
+                    revisit_entered = True
+                    active_stage = revisit_target
+                    continue
+                issues.append(
+                    f"revisit_{revisit_target}_not_entered_before_{stage}_{action}"
+                )
+                continue
+            if stage == revisit_target and action == "COMPLETE":
+                revisit_target = None
+                revisit_entered = False
+                active_stage = "S5"
+                continue
+            issues.append(
+                f"revisit_{revisit_target}_not_completed_before_{stage}_{action}"
+            )
+            continue
+
+        if action == "REVISIT":
+            target_stage = str(event["target_stage"])
+            if stage != "S5":
+                issues.append("revisit_marker_not_emitted_from_s5")
+            elif active_stage != "S5":
+                issues.append("revisit_without_active_s5")
+            else:
+                revisit_target = target_stage
+            continue
+
+        expected_stage = (
+            STAGES[expected_index] if expected_index < len(STAGES) else None
+        )
+        if action == "ENTER":
+            if active_stage is not None:
+                issues.append(f"{stage}_entered_before_{active_stage}_complete")
+                continue
+            if stage != expected_stage:
+                issues.append(f"{stage}_entered_out_of_initial_order")
+            active_stage = stage
+            continue
+
+        if action == "COMPLETE":
+            if active_stage != stage:
+                if stage == "S6":
+                    issues.append("S6_complete_before_enter")
+                else:
+                    issues.append(f"{stage}_complete_without_active_enter")
+                continue
+            active_stage = None
+            if stage == expected_stage:
+                expected_index += 1
+            continue
+
+        if action == "NOT_APPLICABLE":
+            if active_stage is not None:
+                issues.append(
+                    f"{stage}_not_applicable_before_{active_stage}_complete"
+                )
+                continue
+            if stage == "S6":
+                issues.append("S6_not_applicable_not_allowed")
+            if stage != expected_stage:
+                issues.append(f"{stage}_not_applicable_out_of_initial_order")
+            else:
+                expected_index += 1
+
+    if revisit_target is not None:
+        issues.append(f"revisit_{revisit_target}_not_closed")
+    elif active_stage is not None:
+        issues.append(f"{active_stage}_enter_without_complete")
+    return list(dict.fromkeys(issues))
+
+
 def parse_research_state_trace(path: str | Path) -> dict[str, object]:
     """Return marker coverage without treating marker presence as correctness."""
 
@@ -85,7 +172,7 @@ def parse_research_state_trace(path: str | Path) -> dict[str, object]:
         if stage not in first_accounted:
             first_accounted.append(stage)
 
-    issues: list[str] = []
+    issues = _marker_sequence_issues(events)
     missing: list[str] = []
     for stage in STAGES:
         state = counts[stage]
@@ -100,10 +187,6 @@ def parse_research_state_trace(path: str | Path) -> dict[str, object]:
 
     if first_accounted != list(STAGES):
         issues.append("first_stage_entries_out_of_order_or_missing")
-    for event in events:
-        if event["action"] == "REVISIT" and event["stage"] != "S5":
-            issues.append("revisit_marker_not_emitted_from_s5")
-
     s5_terminal = next(
         (
             index
@@ -126,6 +209,7 @@ def parse_research_state_trace(path: str | Path) -> dict[str, object]:
         issues.append("s6_entered_before_s5_terminal_marker")
     if malformed:
         issues.append("malformed_qstate_marker")
+    issues = list(dict.fromkeys(issues))
 
     return {
         "schema_version": 1,

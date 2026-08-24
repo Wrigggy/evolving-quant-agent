@@ -72,6 +72,115 @@ def test_parser_reports_missing_and_malformed_markers_without_claiming_success(t
     assert "s6_entered_before_s5_terminal_marker" in report["issues"]
 
 
+def test_parser_rejects_entering_next_stage_before_previous_complete(tmp_path):
+    from qea.research_state_trace import parse_research_state_trace
+
+    trace = tmp_path / "raw-trace.jsonl"
+    _write_trace(
+        trace,
+        [
+            "[QSTATE S1 ENTER]",
+            "[QSTATE S2 ENTER]",
+            "[QSTATE S1 COMPLETE]",
+            "[QSTATE S2 COMPLETE]",
+            "[QSTATE S3 NOT_APPLICABLE] reason=public task",
+            "[QSTATE S4 NOT_APPLICABLE] reason=public task",
+            "[QSTATE S5 ENTER]\n[QSTATE S5 COMPLETE]",
+            "[QSTATE S6 ENTER]\n[QSTATE S6 COMPLETE]",
+        ],
+    )
+
+    report = parse_research_state_trace(trace)
+
+    assert report["coverage"]["marker_protocol_complete"] is False
+    assert "S2_entered_before_S1_complete" in report["issues"]
+
+
+def test_parser_rejects_s6_complete_before_enter(tmp_path):
+    from qea.research_state_trace import parse_research_state_trace
+
+    trace = tmp_path / "raw-trace.jsonl"
+    _write_trace(
+        trace,
+        [
+            f"[QSTATE S{stage} ENTER]\n[QSTATE S{stage} COMPLETE]"
+            for stage in range(1, 6)
+        ]
+        + ["[QSTATE S6 COMPLETE]\n[QSTATE S6 ENTER]"],
+    )
+
+    report = parse_research_state_trace(trace)
+
+    assert report["coverage"]["marker_protocol_complete"] is False
+    assert "S6_complete_before_enter" in report["issues"]
+
+
+def test_parser_rejects_unclosed_revisit_and_early_return_to_s5(tmp_path):
+    from qea.research_state_trace import parse_research_state_trace
+
+    trace = tmp_path / "raw-trace.jsonl"
+    _write_trace(
+        trace,
+        [
+            f"[QSTATE S{stage} ENTER]\n[QSTATE S{stage} COMPLETE]"
+            for stage in range(1, 5)
+        ]
+        + [
+            "[QSTATE S5 ENTER]\n[QSTATE S5 REVISIT S3] reason=unit check",
+            "[QSTATE S3 ENTER]",
+            "[QSTATE S5 COMPLETE] returned before S3 complete",
+            "[QSTATE S6 ENTER]\n[QSTATE S6 COMPLETE]",
+        ],
+    )
+
+    report = parse_research_state_trace(trace)
+
+    assert report["coverage"]["marker_protocol_complete"] is False
+    assert "revisit_S3_not_completed_before_S5_COMPLETE" in report["issues"]
+    assert "revisit_S3_not_closed" in report["issues"]
+
+
+def test_parser_rejects_wrong_revisit_target_and_reentering_s5(tmp_path):
+    from qea.research_state_trace import parse_research_state_trace
+
+    wrong_target = tmp_path / "wrong-target.jsonl"
+    _write_trace(
+        wrong_target,
+        [
+            f"[QSTATE S{stage} ENTER]\n[QSTATE S{stage} COMPLETE]"
+            for stage in range(1, 5)
+        ]
+        + [
+            "[QSTATE S5 ENTER]\n[QSTATE S5 REVISIT S3] reason=unit check",
+            "[QSTATE S4 ENTER]\n[QSTATE S4 COMPLETE]",
+            "[QSTATE S5 COMPLETE]",
+            "[QSTATE S6 ENTER]\n[QSTATE S6 COMPLETE]",
+        ],
+    )
+    wrong_return = tmp_path / "wrong-return.jsonl"
+    _write_trace(
+        wrong_return,
+        [
+            f"[QSTATE S{stage} ENTER]\n[QSTATE S{stage} COMPLETE]"
+            for stage in range(1, 5)
+        ]
+        + [
+            "[QSTATE S5 ENTER]\n[QSTATE S5 REVISIT S3] reason=unit check",
+            "[QSTATE S3 ENTER]\n[QSTATE S3 COMPLETE]",
+            "[QSTATE S5 ENTER]\n[QSTATE S5 COMPLETE]",
+            "[QSTATE S6 ENTER]\n[QSTATE S6 COMPLETE]",
+        ],
+    )
+
+    wrong_target_report = parse_research_state_trace(wrong_target)
+    wrong_return_report = parse_research_state_trace(wrong_return)
+
+    assert wrong_target_report["coverage"]["marker_protocol_complete"] is False
+    assert "revisit_S3_not_entered_before_S4_ENTER" in wrong_target_report["issues"]
+    assert wrong_return_report["coverage"]["marker_protocol_complete"] is False
+    assert "S5_entered_before_S5_complete" in wrong_return_report["issues"]
+
+
 def test_materializer_is_enabled_only_by_registered_six_stage_skill(tmp_path):
     from qea.research_state_trace import materialize_research_state_trace
 

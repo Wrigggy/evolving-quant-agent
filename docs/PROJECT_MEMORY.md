@@ -1,5 +1,40 @@
 # QEA Repository Memory
 
+## 2026-08-24 Quant-H0-S6-Core-v2 protocol repair and 12-task breadth map frozen
+
+The rep1 construct result selected `S6_PROTOCOL_NOT_REALIZED`, so the original
+Core/Full reverse repetition remains stopped. `qea/worker_quant_h0_s6_core_v2`
+is a new treatment identity that repairs only the observed public marker
+interface: every entered state must close before the next state, revisits use
+the exact S5 grammar, S6 emits ENTER before COMPLETE, and a terminal audit
+reports rather than retroactively fabricates omitted events. It adds no quant
+method, formula, data-cleaning heuristic, artifact checklist, task identity,
+hidden property, expected value, model, tool, runtime, or budget change.
+
+The frozen plan first runs a three-cell Core-v2-only protocol gate on the
+original construct tasks. Official scores are recorded but cannot authorize
+the next phase; all three traces must be valid, ordered, well formed, and
+complete through S6. Only after that gate passes may newly scheduled matched
+executions on a 12-task breadth map compare Legacy Quant-H0 with Core-v2. The
+task identities are historically public/exposed development material, not
+unseen or sealed. The map spans all six public manifest domains with one low
+and one high public-difficulty task per domain. Exact
+tasks are chosen before execution by a fixed draw over sorted eligible task
+IDs using only public manifest metadata; prior rewards, failed properties,
+verifier outputs, traces, artifacts, and researcher outcome preference are
+forbidden selection inputs. S6-Full is excluded from breadth.
+
+The primary breadth unit is the matched task/repetition: report every official
+binary reward and passed/total vector, paired win--tie--loss, equal-task means
+within domain, and an equal-domain macro. Do not pool heterogeneous raw
+properties as the headline. Repetition 1 contains 24 Worker/verifier cells;
+the reverse-order repetition is frozen but not automatic. This is disclosed
+development substrate calibration, not QRS, Candidate Review, AHE, sealed
+generalization, or QFBench-wide superiority. If Core-v2 is near ceiling, keep
+the stronger public scaffold and move to a separately frozen harder public
+panel rather than weakening it to manufacture Evolver headroom. Full record:
+`docs/decisions/2026-08-24-quant-h0-s6-core-v2-breadth-plan.md`.
+
 ## 2026-08-24 Quant-H0-S6 matched construct canary rep1
 
 The first frozen Legacy/Core/Full construct repetition ran nine fresh
