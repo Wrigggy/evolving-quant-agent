@@ -4,8 +4,6 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 from qea.frozen_base_harness import (
     build_selected_runtime,
     freeze_base_harness,
@@ -15,10 +13,7 @@ from qea.qfbench_trajectory_bank import build_trajectory_bank
 from qea.qrs_global_scheduler import _panel_evaluation_tasks, run_scheduler
 from qea.qrs_main_launch import build_qrs_main_launch
 from qea.qrs_public_contracts import materialize_qrs_public_contracts
-from scripts.run_qrs_global_scheduler import (
-    GlobalSchedulerError,
-    _require_live_launch_authority,
-)
+from scripts.run_qrs_global_scheduler import _require_live_launch_authority
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -123,29 +118,30 @@ def _all_file_text(root: Path) -> str:
     )
 
 
-def test_r2_is_fresh_frozen_future_commit_and_not_launch_authorized() -> None:
+def test_r2_is_fresh_frozen_launch_authorized_but_not_main() -> None:
     assert PLAN["schema_version"] == 2
     assert PLAN["record_kind"] == (
         "qrs_reviewer_policy_v2_engineering_qualification_r2_plan"
     )
     assert PLAN["experiment_id"] == R2_ID
-    assert PLAN["status"] == "frozen_not_launch_authorized"
+    assert PLAN["status"] == "frozen_launch_authorized"
     source = PLAN["source_freeze"]
-    assert source["engineering_source_revision"] == "FUTURE_COMMIT"
-    assert source["launch_blocked_while_future_commit"] is True
+    assert source["engineering_source_revision"] == (
+        "4c1ce03d798c646c76d97b07c75462eff01062f7"
+    )
+    assert source["launch_blocked_while_future_commit"] is False
     assert source["code_and_focused_tests_must_be_green"] is True
     assert PLAN["authority"] == {
         "engineering_canary_only": True,
-        "launch_authorized": False,
-        "paid_or_remote_authority": False,
+        "launch_authorized": True,
+        "paid_or_remote_authority": True,
         "main_authority": False,
         "authorization_condition": PLAN["authority"][
             "authorization_condition"
         ],
     }
-    assert PLAN["limits"]["paid_or_remote_authority"] is False
-    with pytest.raises(GlobalSchedulerError, match="frozen_launch_authorized"):
-        _require_live_launch_authority(PLAN)
+    assert PLAN["limits"]["paid_or_remote_authority"] is True
+    _require_live_launch_authority(PLAN)
 
 
 def test_r1_is_setup_invalid_and_only_aggregate_budget_sizing_is_reused() -> None:

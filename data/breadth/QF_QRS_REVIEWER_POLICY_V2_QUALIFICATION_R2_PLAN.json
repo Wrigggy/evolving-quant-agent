@@ -2,21 +2,21 @@
   "schema_version": 2,
   "record_kind": "qrs_reviewer_policy_v2_engineering_qualification_r2_plan",
   "date": "2026-08-25",
-  "status": "frozen_not_launch_authorized",
+  "status": "frozen_launch_authorized",
   "experiment_id": "qf-qrs-reviewer-policy-v2-qualification-20260825-r2",
   "purpose": "Fresh separately frozen engineering qualification of the unchanged Reviewer-policy-v2 scientific design after R1 ended setup-invalid before any Reviewer call. R2 reruns four fresh Primitive-H0 cells and one fresh proposal before any conditional Review; it is not a resume, repeat, utility experiment, Main, or continuation of R1.",
   "source_freeze": {
-    "engineering_source_revision": "FUTURE_COMMIT",
-    "resolution_convention": "Resolve only to a future tested commit containing decision-time 24KB parity validation, terminal controller-package HOLD accounting, collected-unit health truth, this R2 plan, and its focused test. A later launch decision may change only source and authority fields; no scientific field may change.",
-    "launch_blocked_while_future_commit": true,
+    "engineering_source_revision": "4c1ce03d798c646c76d97b07c75462eff01062f7",
+    "resolution_convention": "Resolved by the separately retained 2026-08-25 R2 launch decision to the tested commit containing decision-time 24KB parity validation, terminal controller-package HOLD accounting, collected-unit health truth, this R2 plan, and its focused test. No scientific field changed during activation.",
+    "launch_blocked_while_future_commit": false,
     "code_and_focused_tests_must_be_green": true
   },
   "authority": {
     "engineering_canary_only": true,
-    "launch_authorized": false,
-    "paid_or_remote_authority": false,
+    "launch_authorized": true,
+    "paid_or_remote_authority": true,
     "main_authority": false,
-    "authorization_condition": "Not satisfied. R2 requires a separately retained launch decision after FUTURE_COMMIT is resolved and focused plus adjacent tests are green. No current field authorizes local, paid, remote, Reviewer, Worker, matched, or Main dispatch."
+    "authorization_condition": "Satisfied by the separately retained 2026-08-25 R2 launch decision after source revision resolution and 228 green focused/adjacent tests. Authority is limited to this engineering canary through stop_after_panel=1 and grants no R3, later-panel, sealed, reuse, or Main authority."
   },
   "phase_order": [
     "import_frozen_primitive_h0",
@@ -522,7 +522,7 @@
     "worker_concurrency": 1,
     "verifier_concurrency": 1,
     "max_parallel_runs": 1,
-    "paid_or_remote_authority": false,
+    "paid_or_remote_authority": true,
     "canary_incremental_cap": {
       "qfbench_cells": 16,
       "evolver_calls": 1,
