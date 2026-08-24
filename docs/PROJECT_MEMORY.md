@@ -1,5 +1,51 @@
 # QEA Repository Memory
 
+## 2026-08-24 QRS-only main supersedes the matched Generic--QRS design
+
+The prospective main experiment is now **QRS-only**. The earlier plan that put
+Generic and QRS in one matched main runner is superseded. Quant-specificity is
+tested separately with a frozen QRS-no-State ablation under the same public
+inputs and controller, while AHE is reproduced from its own pinned
+implementation as an independent external baseline. Neither QRS-no-State nor
+AHE remains a runtime treatment switch in the final QRS release. Historical
+Generic code and results stay in dated artifacts or archival commits for
+reconstruction, not as the released method.
+
+The Worker answer boundary is not yet repository-wide. Raw verifier,
+optimize-only diagnostic, and Reviewer files are excluded from current target
+Worker inputs, and the public-only holdings R2--R4 Review non-`PASS` outcomes
+correctly dispatched zero Workers. However, Candidate Information-Set Review
+is still opt-in in legacy controller paths; preconstructed candidates and the
+discovery selected-probe path can bypass it; cumulative Quant-H0 review and
+trusted public-source resolution are not universal; and no real public-only
+Review-`PASS` candidate has yet crossed the exact reviewed-harness boundary to
+a blind Worker. Main remains `NO-GO` until every changed candidate fails closed
+without Review `PASS` and one fresh public-only candidate produces a retained
+blind-Worker strict official gain. Repeat and answer-free protection remain
+required for stable promotion.
+
+The current Quant-H0 names six Research States but does not expose a six-stage
+trace protocol. A read-only audit of five retained traces found zero explicit
+S1--S6 markers. The next baseline is therefore a new **Quant-H0-S6** identity:
+the shell tool and frozen model remain unchanged, while a prompt-level protocol
+requires concise observable S1 mandate, S2 evidence, S3 representation, S4
+operation, S5 evaluation/revisit, and S6 artifact markers. A trusted post-run
+parser records stage summaries outside submission artifacts. This is a
+human-designed quantitative substrate and a new baseline, so historical H0
+scores cannot be mixed with H0-S6 results.
+
+For the QRS-only development endpoint, stable-promotion rate uses all
+predeclared QRS opportunities as the conservative denominator; unresolved
+invalid executions count as zero after one frozen setup recovery, with an
+execution-valid sensitivity analysis reported separately. The headline final
+endpoint is the complete sealed official task/property vector and equal-family
+macro for frozen H0-S6 versus frozen QRS. Cross-method AHE comparison uses the
+common sealed vector and resource use rather than forcing AHE into QRS's
+internal promotion semantics. Deliberate development-task selection is allowed
+but must be disclosed with the full eligible pool, rules, exclusions, roles,
+and freeze time; concealing it is not acceptable. Full decision:
+`docs/decisions/2026-08-24-qrs-only-main-independent-ahe-and-quant-h0-s6.md`.
+
 ## 2026-08-24 main metrics, task selection, and candidate-review story aligned
 
 The prospective paper method now requires a mandatory arm-blind **Candidate

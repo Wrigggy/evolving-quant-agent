@@ -3,91 +3,121 @@
 We organize the prospective study around four questions.
 
 \begin{description}
-    \item[RQ1: Search yield.] Under matched public evidence and compute, does
-    QRS-guided evolution produce more stable, protection-safe promotions than
-    Generic trajectory-guided full-harness evolution?
-    \item[RQ2: Mechanism.] At which stage---proposal, information-set review,
-    Worker exposure or activation, state correction, target gain, repeat, or
-    protection---do the two arms differ?
-    \item[RQ3: Generalization.] Do the frozen final incumbents improve the
-    complete official outcome vector on a no-feedback sealed panel?
+    \item[RQ1: QRS main.] Can a QRS-only cumulative lineage produce
+    information-eligible, repeat-consistent, protection-safe harness
+    promotions and improve a frozen no-feedback sealed outcome vector relative
+    to Quant-H0-S6?
+    \item[RQ2: Quant-specific mechanism.] Holding the controller, public
+    evidence, tasks, model, and budget fixed, how does removing State-Card
+    construction and state-conditioned retrieval/routing change proposal,
+    Review, state-transition, and promotion outcomes?
+    \item[RQ3: External baseline.] Under common public task information,
+    Worker model, sealed panel, and outer resource budget, how does QRS compare
+    with an independently reproduced AHE baseline?
     \item[RQ4: Efficiency.] What requests, tokens, verifier calls, cost, and
-    wall time are required to reach the first stable promotion?
+    wall time are required to reach the first stable QRS promotion and the
+    frozen sealed endpoints?
 \end{description}
 
-\subsection{Arms and Unit of Analysis}
+\subsection{Three Separate Experiment Tracks}
 
-The main QFBench comparison includes the frozen minimal Quant-H0 reference, a
-matched Generic trajectory-guided full-harness Evolver, and the QRS-guided
-full-harness Evolver. Generic and QRS use the same frozen base model, provider
-route, initial harness, public evidence, mutation surface, family order,
-budgets, admission checks, arm-blind Candidate Information-Set Reviewer,
-Worker, verifier, repeat rule, and protection rule. QRS alone receives the
-Quant Research State Card and state-, relation-, and component-conditioned
-retrieval and routing. We reserve the name AHE for a separately audited faithful
-reproduction rather than using it as a loose synonym for the Generic arm.
+The headline QFBench experiment is QRS-only. Independent cumulative QRS
+lineages start from fresh Quant-H0-S6 instances, maintain their own incumbent,
+and traverse a predeclared family order. Quant-H0-S6 retains the shell interface
+but emits concise S1--S6 stage summaries; it is a new baseline and is never
+mixed with historical Quant-H0 observations.
 
-The statistical unit is an independent cumulative lineage. Each arm maintains
-its own incumbent and never receives another arm's candidates or post-treatment
-history. Families within a lineage are dependent because later candidates
-inherit earlier promoted harness changes. We prefer at least four lineages per
-arm with counterbalanced family order for a paper-level comparison. A two-per-
-arm wave is reported only as a descriptive mechanism study.
+The quant-specific mechanism study is a separately frozen QRS-no-State
+executable. It removes the State Card and state-conditioned retrieval/routing
+while keeping Quant-H0-S6, public evidence, task order, model, budget,
+Candidate Review, and downstream lifecycle fixed. Runs share no candidates or
+post-treatment history. This ablation is not called Generic or AHE and is not a
+runtime switch in the final QRS release.
+
+AHE is reproduced independently from a pinned upstream implementation. We
+first establish source-faithful execution, then add the minimum adapter needed
+to consume the same quantitative public tasks. A common Candidate
+Information-Set Review is applied after proposal and before the blind Worker as
+an experimental-integrity gate, not as an AHE search component. The AHE code
+and lifecycle remain outside the released QRS implementation.
+
+The statistical unit is an independent cumulative lineage, not an individual
+task inside it. Families in a lineage are dependent because later candidates
+inherit earlier promoted changes. Paper-level inference requires multiple
+independent lineages with counterbalanced family order; a small canary is
+reported as a descriptive mechanism study without a superiority claim.
 
 \subsection{Task-Pool Disclosure and Evidence Splits}
 
-Before the first main proposal, we freeze a task manifest containing the full
+Before the first QRS proposal, we freeze a manifest containing the full
 candidate pool, public inclusion and exclusion criteria, family strata, the
-selection rule within each stratum, selected target/repeat/protection roles,
-all exclusions and reasons, and the freeze time. Purposeful family selection is
-allowed: the development panel may require a valid runtime, a publicly auditable
-contract, nontrivial fresh Quant-H0 headroom, and an answer-free matched
-protection task. We identify this as a deliberately stratified
-mechanism-development panel, not an unselected sample of the full benchmark.
+person-independent selection rule within each stratum, selected
+target/repeat/protection roles, all exclusions and reasons, and the freeze
+time. Purposeful family selection is allowed: a development task may require a
+valid prescribed runtime, a publicly auditable contract, nontrivial fresh
+Quant-H0-S6 headroom, and an answer-free protection task. We identify this as a
+deliberately selected mechanism-development panel rather than an unselected
+sample of QFBench. The selection is disclosed rather than hidden.
 
-Any task, trajectory, score, or diagnostic that affects candidate generation,
+Any task, trajectory, or outcome that affects candidate generation,
 refinement, promotion, or task selection is development evidence. A separate
-family-stratified sealed panel is frozen before optimization from the remaining
-eligible pool. Each final incumbent sees each sealed task once; sealed outcomes
-do not return to the Evolver, Reviewer, retrieval index, promotion controller,
-or task selector. QuantCodeEval is a later cross-benchmark check and is not
-required to complete the first QFBench main comparison.
+family-stratified sealed panel is frozen before optimization from tasks that did
+not influence those decisions. Each frozen Quant-H0-S6, QRS, and external AHE
+endpoint sees each sealed task once; sealed outcomes do not return to the
+Evolver, Candidate Reviewer, retrieval index, promotion controller, or task
+selector. QuantCodeEval is a later cross-benchmark check and does not block the
+first QFBench QRS campaign.
 
-\subsection{Candidate and Promotion Protocol}
+\subsection{Candidate Information Boundary and Promotion}
+
+Quant-H0-S6 is the only unevolved Worker that may run without Candidate
+Review. Every changed candidate must fail closed unless a trusted controller
+has reviewed the exact cumulative Quant-H0-S6-to-effective-candidate material,
+including any Worker directive or runtime overlay, and recorded overall
+\texttt{PASS} with complete claim coverage. Public support is read from frozen
+task contracts or predeclared references. Optimize-only diagnostics and Review
+feedback cannot support a Worker-visible claim and do not enter the Worker.
+The Candidate Reviewer evaluates the candidate information set; it does not
+review the Worker answer and cannot mutate, run, retain, or promote a candidate.
 
 Each predeclared family-round permits one initial proposal and at most one
-evidence-grounded refinement. A nonempty admitted candidate must receive
-arm-blind Candidate Information-Set Review \texttt{PASS} with complete
-cumulative-surface coverage before any fresh Worker. The target must strictly
-improve the official outcome without introducing a failed property and must
-resolve a nonempty property footprint. An independent repeat must reproduce
-that footprint without a new failure. The answer-free protection candidate
-must be aggregate-safe and its failed-property set must be a subset of the
-matched parent set. Only then does the controller update the official incumbent.
-Invalid runtime observations may receive only the separately frozen bounded
-setup recovery. If that recovery also remains invalid, the matched arm-pair is
-reported as operational attrition and omitted from the scientific rate under a
-frozen paired-missingness rule; a companion intent-to-run rate counts it as
-zero. The task, route, and budget are not adaptively replaced.
+evidence-grounded refinement. A Review-eligible target must strictly improve
+the official outcome without introducing a failed property and must resolve a
+nonempty property footprint. An independent repeat must reproduce that
+footprint without a new failure. The answer-free protection candidate must be
+aggregate-safe and its failed-property set must be a subset of the parent set.
+Only then does the controller update the official incumbent. Invalid runtime
+observations may receive only one separately frozen setup recovery; tasks,
+routes, and budgets are never adaptively replaced.
 
 \subsection{Primary Endpoints}
 
-The development primary endpoint is the stable-promotion rate
+The QRS development endpoint is stable-promotion rate
 \begin{equation}
-    \operatorname{SPR}
+    \operatorname{SPR}_{\mathrm{QRS}}
     = \frac{\sum_{\ell,f} \mathbb{1}[\text{Review pass, target gain,
-    repeat-consistent, protection-safe}]}{N_{\mathrm{valid\ matched\ opportunities}}}.
+    repeat-consistent, protection-safe}]}{N_{\mathrm{predeclared\ QRS\ opportunities}}}.
 \end{equation}
-The denominator is fixed before execution. \texttt{ABSTAIN}, rejected
-admission, Review \texttt{REJECT} or \texttt{INCONCLUSIVE}, no-gain target,
-repeat inconsistency, and unsafe protection remain zero-valued opportunities;
-they are not replaced by unreported best-of-$N$ attempts.
+The conservative denominator includes every predeclared opportunity.
+\texttt{ABSTAIN}, rejected admission, Review \texttt{REJECT} or
+\texttt{INCONCLUSIVE}, no-gain target, repeat inconsistency, unsafe protection,
+and an execution that remains invalid after its frozen recovery all count as
+zero. A separately labelled execution-valid sensitivity analysis may omit only
+the last category. Neither analysis substitutes another task or unreported
+best-of-$N$ attempt.
 
-The final primary endpoint is the complete official task and property vector
-for each frozen incumbent on the sealed panel. We report each task, the
-equal-weight mean within each task family, and an equal-weight macro across
-families. The family macro prevents a large family from dominating but never
-replaces the per-task vector.
+The headline final endpoint is the complete sealed official task and property
+vector for frozen Quant-H0-S6 and the frozen QRS incumbent. We report every
+task, an equal-weight task mean inside each family, and an equal-weight macro
+across families. The macro never replaces the per-task vector.
+
+The QRS-no-State study uses the same lifecycle, so proposal, Review,
+state-transition, promotion, sealed-vector, and cost funnels are directly
+comparable across separate runs. AHE may retain a distinct internal lifecycle;
+the defensible cross-method endpoint is therefore its common sealed official
+vector and resource use under the same public inputs, Worker model, task panel,
+and outer budget. We do not silently relabel a generic QRS mode as AHE or force
+AHE into QRS-specific promotion semantics.
 
 \subsection{Diagnostics, Efficiency, and Reporting}
 
@@ -96,13 +126,15 @@ State correction, official target gain, repeat consistency, and protection
 safety rates form a diagnostic funnel. These explain the primary endpoints and
 are not individually called benchmark wins. We additionally report total model
 requests, tokens, provider cost, verifier calls, and wall time per lineage and
-to the first stable promotion. A lineage without a promotion is censored at and
-charged its full frozen budget. Statistical comparisons, if sample size permits,
-operate on paired independent-lineage outcomes; otherwise the paper reports
-descriptive vectors and intervals without a significance or superiority claim.
+to the first stable promotion. A lineage without a promotion is charged its
+full frozen budget. Statistical comparisons, if sample size permits, operate on
+independent-lineage outcomes; otherwise the paper reports descriptive vectors
+and intervals without a significance or superiority claim.
 
-\Boundary{The prospective main manifest, matched lineages, and sealed panel
-have not yet run. Main launch remains blocked until one fresh public-only
-candidate passes Candidate Information-Set Review and produces a retained blind-
-Worker strict official gain; repeat and protection are additionally required
-before calling that candidate stable.}
+\Boundary{The universal candidate-dispatch gate, Quant-H0-S6 canary, QRS main
+manifest, independent no-State ablation, source-faithful AHE reproduction, and
+sealed panel remain prospective. Main launch is blocked until one fresh
+public-only QRS candidate passes Candidate Information-Set Review, reaches a
+blind Worker as the exact reviewed harness, and produces a retained strict
+official gain. Repeat and protection are additionally required before calling
+that candidate stable.}

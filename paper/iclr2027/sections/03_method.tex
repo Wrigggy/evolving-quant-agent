@@ -11,11 +11,15 @@ The harness may contain prompts, executable tools, memory, middleware,
 validators, routing, and research workflow. One execution of task $q$ produces
 a trajectory $\tau_{i,q}$ and artifact $a_{i,q}$.
 
-All compared evolution methods start from a minimal Quant-H0 containing only
-the Quant Research Worker identity, the names and short explanations of the six
-Research States below, one shell tool, and basic task execution. It contains no
-evolved component library, candidate history, failure classifier, or
-component-selection policy.
+The main method starts from Quant-H0-S6, a newly frozen baseline containing the
+Quant Research Worker identity, one shell tool, and six concise observable
+stage checkpoints. Each stage emits only a short public summary---not hidden
+chain of thought---for mandate, evidence, representation, operation,
+evaluation, and artifact completion. Evaluation may explicitly revisit an
+earlier stage, and an inapplicable stage must be marked with a public reason
+rather than silently skipped. A trusted post-run parser stores the stage ledger
+outside the task submission. Quant-H0-S6 contains no evolved component library,
+candidate history, failure classifier, or component-selection policy.
 
 \subsection{Quant Research State Representation}
 
@@ -27,10 +31,12 @@ We use the general state set
 \end{equation}
 The states denote Research Mandate \& Contract, Research Evidence \& Data,
 Quantitative Representation, Research Operation, Evaluation \& Reconciliation,
-and Research Artifact \& Completion. They are not a fixed linear pipeline. A
-task may revisit or omit a state, and Research Operation may instantiate as
-estimation, pricing, calibration, risk analysis, backtesting, execution, or
-another operation.
+and Research Artifact \& Completion. They are an open diagnostic ontology, not
+a claim that research is intrinsically linear. Quant-H0-S6 nevertheless orders
+their observable checkpoints to make histories comparable and diagnosable;
+evaluation can record a revisit to evidence, representation, or operation.
+Research Operation may instantiate as estimation, pricing, calibration, risk
+analysis, backtesting, execution, or another operation.
 
 For the relevant part of a failed trajectory, the Evolver reconstructs a
 task-conditioned expected state $s^*_q$ and observed state
@@ -87,10 +93,10 @@ insufficient: a hidden evaluator predicate can be semantically projected into
 a Worker-visible prompt or tool even when the original diagnostic file is
 absent.
 
-Every admitted changed candidate therefore enters a mandatory arm-blind
+Every admitted changed candidate therefore enters a mandatory candidate-focused
 Candidate Information-Set Review before fresh Worker execution. A trusted
 controller constructs the review package from the complete cumulative
-Quant-H0-to-candidate Worker-visible material, the candidate's claim inventory,
+Quant-H0-S6-to-candidate Worker-visible material, the candidate's claim inventory,
 public task contracts, and any independent references frozen before proposal.
 Optimize-only material may be supplied only to trace a forbidden origin; it
 cannot positively support a claim. The Reviewer checks both support and
@@ -100,7 +106,7 @@ must be declared. Overall \texttt{PASS} and complete coverage permit Worker
 evaluation. \texttt{REJECT} or \texttt{INCONCLUSIVE} returns
 \texttt{HOLD\_FOR\_REFINE} or stops the lineage without a Worker call.
 
-The Candidate Information-Set Reviewer is treatment-neutral and has no
+The Candidate Information-Set Reviewer is method-agnostic and has no
 authority to edit, evaluate, retain, or promote a harness. Its \texttt{PASS}
 means only that the candidate is eligible for blind evaluation. A separate
 callable Quant Research Reviewer may remain an optional search aid that returns
@@ -142,13 +148,15 @@ scores and controller transitions remain measured, but R4 is contaminated
 development evidence and not a valid scientific promotion or a clean example
 of the proposed information boundary.}
 
-\Proposed{The main comparison unit is a cumulative campaign rather than a set
-of disconnected task-specific winners. Matched Generic and QRS campaigns each
-start from Quant-$H_0$, maintain their own official incumbent, and traverse the
-same frozen family order under matched model, evidence, mutation, and evaluation
-budgets, including the same Candidate Information-Set Review. Runtime histories
-may diverge after treatment begins. Each final official incumbent is frozen
-before a separate no-feedback evaluation whose outcomes never return to
-proposal, retrieval, task selection, or promotion. QuantCodeEval breadth is a
-useful later cross-benchmark test but does not block the QFBench campaign-level
-mechanism comparison.}
+\Proposed{The main unit is an independent QRS cumulative campaign rather than a
+set of disconnected task-specific winners. Each campaign starts from a fresh
+Quant-H0-S6, maintains one official incumbent, and traverses a frozen family
+order under fixed evidence, mutation, and evaluation budgets. A separately
+executed QRS-no-State ablation uses the same lifecycle without State-Card
+construction or state-conditioned retrieval/routing; it is not a runtime mode
+in the released method. AHE is reproduced in its own pinned implementation and
+compared externally on common frozen sealed outcomes and resource use. Each
+final incumbent is frozen before a no-feedback evaluation whose outcomes never
+return to proposal, retrieval, task selection, or promotion. QuantCodeEval
+breadth is a useful later cross-benchmark test but does not block the first
+QFBench QRS campaign.}
