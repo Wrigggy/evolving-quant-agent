@@ -1,5 +1,43 @@
 # QEA Repository Memory
 
+## 2026-08-24 public-only credit-migration proposal calibrated ABSTAIN
+
+The separately frozen Stage-A proposal
+`qf-public-only-credit-migration-proposal-20260824-r1` returned calibrated
+`ABSTAIN`. The controller recorded `FROZEN`, `status=abstained`, and
+`stopped_after_stage=proposal`. Candidate writes remained locked: zero changed
+files, zero diff bytes, zero components, zero Worker-visible claims, and zero
+Quant Research State Cards or transitions. Quant-H0 remained unchanged.
+
+The Evolver read 21/23 exact public evidence members and cited 16 sources. Its
+local artifact profile found the eight public outputs schema-conforming, but
+the key count observation was not semantically unique. Summing all pooled
+8-by-8 cells, including the absorbing Default row, gives 22,956; summing only
+non-default starting cohorts gives 22,935. The public contract explicitly uses
+non-default starts for the cohort default-rate denominator but does not define
+whether `summary.total_transitions` includes the absorbing Default-row counts.
+The +21 difference therefore cannot by itself support a reusable rule, despite
+the separately retained trusted 106/107 headroom.
+
+The candidate leak audit found no fixed 22,956, 22,935, or 21; official score
+or property; checker predicate; expected value; or verifier-derived rule. The
+Evolver-only rationale discussed the public ambiguity, but no such information
+entered a candidate or Worker-visible claim. Reviewer, new Worker, verifier,
+and selected/Worker probe dispatch were all zero; the local artifact profile
+was not a Worker probe.
+
+The proposal used 12 completed requests, 883,909 tokens, and $0.040307676 over
+201.008 seconds. The last timer-produced snapshot was healthy; the proposal
+service then exited successfully with zero restarts. Exact-ID sandbox and
+network cleanup completed and related residue was zero.
+
+This is calibrated insufficiency, not a candidate, gain, stable reuse,
+protection, promotion, or main-readiness result. Stage B Review must not run.
+Compact result:
+`data/breadth/QF_PUBLIC_ONLY_CREDIT_MIGRATION_LINEAGE_R1_PROPOSAL_RESULT.json`;
+full decision:
+`docs/decisions/2026-08-24-public-only-credit-migration-lineage-r1-proposal-result.md`.
+
 ## 2026-08-24 public-only credit-migration H0 found public mass headroom
 
 The frozen `qf-public-only-credit-migration-h0-prescreen-20260824-r1`

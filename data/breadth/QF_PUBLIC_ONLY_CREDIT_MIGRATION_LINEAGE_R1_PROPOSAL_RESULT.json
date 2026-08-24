@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-public-only-credit-migration-lineage-20260824-r1",
+  "proposal_run_id": "qf-public-only-credit-migration-proposal-20260824-r1",
+  "date": "2026-08-24",
+  "status": "calibrated_public_only_proposal_abstain_frozen",
+  "research_question": "Can the public credit-migration contract and one answer-free Quant-H0 trajectory uniquely support a reusable harness mutation before mandatory review?",
+  "setup": {
+    "benchmark": "QFBench",
+    "task_id": "credit-migration-matrix",
+    "protection_task_id": "historical-var-data-prep",
+    "parent": "Quant-H0",
+    "deployment_source_version": "6cf6a48",
+    "frozen_plan": "data/breadth/QF_PUBLIC_ONLY_CREDIT_MIGRATION_LINEAGE_R1_PLAN.json",
+    "proposal_artifacts": "results/bc-mirror/qf-public-only-credit-migration-proposal-20260824-r1",
+    "controller_artifacts": "results/bc-mirror/qf-public-only-credit-migration-lineage-20260824-r1-controller-state",
+    "authorized_evidence": "results/bc-mirror/qf-public-only-credit-migration-public-trajectory-evidence-20260824-r1",
+    "proposal_stage_only": true,
+    "trusted_selection_reference": "The fresh Quant-H0 prescreen aggregate 106/107 result selected the task for this separately frozen lineage but was not proposal, Reviewer, or Worker input.",
+    "official_failed_property_identity_recorded_here": false
+  },
+  "evidence_use": {
+    "authorized_members": 23,
+    "exact_members_read": 21,
+    "exact_read_ratio": 0.9130434782608695,
+    "sources_cited": 16,
+    "operations": {
+      "read": 21,
+      "map": 1,
+      "search": 1,
+      "inspect_candidate": 1,
+      "local_artifact_profiles": 8,
+      "decision": 1
+    },
+    "local_profile_interpretation": "The Evolver-local artifact-schema-vs-contract profile covered eight authorized public artifacts. It was not a selected, component, or Worker probe and caused no downstream execution."
+  },
+  "proposal": {
+    "decision": "ABSTAIN",
+    "admission": "not_applicable",
+    "admission_reason": "Evolver recorded ABSTAIN; candidate writes remained locked.",
+    "nonempty_diff": false,
+    "changed_candidate_files": 0,
+    "added_bytes": 0,
+    "deleted_bytes": 0,
+    "component_roles": [],
+    "declared_components": [],
+    "primary_components": [],
+    "worker_visible_claims": 0,
+    "quant_research_state_cards": 0,
+    "research_state_transitions": 0,
+    "parent_unchanged": true,
+    "unchanged_parent_members": [
+      "agent.yaml",
+      "systemprompt.md",
+      "tool_descriptions/run_shell_command.tool.yaml"
+    ]
+  },
+  "public_semantic_boundary": {
+    "public_contract_observation": "The contract defines cohort/default-rate denominators over non-default starting ratings and requires an absorbing Default row in the 8x8 transition matrix, but it does not define whether summary.total_transitions includes the absorbing Default-row counts.",
+    "all_8x8_pooled_counts": 22956,
+    "non_default_starting_cohorts": 22935,
+    "difference": 21,
+    "supported_interpretations": [
+      "summary.total_transitions may count all pooled 8x8 cells, including 21 absorbing Default-row observations",
+      "summary.total_transitions may instead be intended to count only non-default starting cohorts"
+    ],
+    "proposal_consequence": "The public 21-count difference is real but does not uniquely identify a contract violation or reusable correction. Converting 22956, 22935, or 21 into a candidate constant, expected value, threshold, or routing rule would be unsupported.",
+    "trusted_headroom_boundary": "The separate trusted 106/107 prescreen shows aggregate headroom only. Its co-occurrence with this public ambiguity does not identify the failed property or establish causality."
+  },
+  "candidate_leakage_audit": {
+    "scope": "The unchanged Quant-H0 candidate tree plus the empty diff and empty Worker-visible claim surface.",
+    "fixed_22956_found": false,
+    "fixed_22935_found": false,
+    "fixed_21_found": false,
+    "official_score_or_property_found": false,
+    "checker_or_expected_value_found": false,
+    "verifier_derived_rule_found": false,
+    "interpretation": "The Evolver-only abstention record discussed the public count ambiguity, but no count, score, property, checker predicate, or expected value entered a candidate or Worker-visible claim."
+  },
+  "controller": {
+    "phase": "FROZEN",
+    "status": "abstained",
+    "decision": "ABSTAIN",
+    "stopped_after_stage": "proposal",
+    "reviewer_requests": 0,
+    "worker_sessions": 0,
+    "verifier_executions": 0,
+    "selected_or_worker_probe_requests": 0,
+    "selected_or_worker_probe_dispatches": 0,
+    "downstream_delivery_requests": 0,
+    "review_target_repeat_or_protection_artifacts_created": false,
+    "frozen_disposition": "STOP_NO_REVIEW"
+  },
+  "request_accounting": {
+    "completed_requests": 12,
+    "total_tokens": 883909,
+    "provider_cost_usd": 0.040307676,
+    "wall_seconds": 201.008,
+    "downstream_delivery_requests": 0,
+    "missing_cost_count": 0,
+    "missing_token_count": 0,
+    "within_proposal_limits": true
+  },
+  "runtime": {
+    "last_health_timer_snapshot": {
+      "category": "healthy",
+      "observed_unix": 1787531976,
+      "progress_age_seconds": 193.761,
+      "stalled_after_seconds": 1200,
+      "needs_codex": false,
+      "replacement_count": 0,
+      "score_count": 0,
+      "worker_count": 0
+    },
+    "proposal_service_terminal_state": "inactive/dead",
+    "service_result": "success",
+    "service_exit_code": 0,
+    "service_restarts": 0,
+    "evolver_sandbox_cleaned_up": true,
+    "proxy_sandbox_cleaned_up": true,
+    "proxy_network_cleaned_up": true,
+    "cleanup_method": "exact-id",
+    "proxy_sandbox_cleaned_at": "2026-08-24T00:39:50.842391+00:00",
+    "proxy_network_cleaned_at": "2026-08-24T00:39:51.041181+00:00",
+    "related_live_container_or_network_residue": 0
+  },
+  "retained_conclusion": "The public-only Stage-A proposal made a calibrated ABSTAIN and froze at proposal. It used a local public-artifact profile to recognize that the observed count difference is not semantically identifiable under the public contract, then left Quant-H0 unchanged and created no candidate mutation, Worker-visible claim, or State Card.",
+  "claim_boundary": {
+    "supported": "One public-only proposal-stage ABSTAIN, exact evidence reads and citations, public semantic ambiguity, unchanged parent, zero downstream dispatch, exact proposal accounting, healthy monitored execution, exact-ID cleanup, and zero residue.",
+    "not_supported": "A candidate, candidate admission or quality, Reviewer verdict, Worker uptake, official property diagnosis, benchmark gain, repeatability, protection, stable reuse, promotion, or main-experiment readiness.",
+    "interpretation": "This is calibrated insufficiency: the Evolver declined to turn a numerically salient but publicly underdetermined difference into a reusable rule."
+  }
+}
