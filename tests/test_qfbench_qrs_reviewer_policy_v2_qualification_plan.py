@@ -62,23 +62,23 @@ def _manifest_rows():
     }
 
 
-def test_policy_v2_qualification_is_separate_frozen_and_not_authorized() -> None:
+def test_policy_v2_qualification_is_separately_launch_authorized_not_main() -> None:
     experiment_id = "qf-qrs-reviewer-policy-v2-qualification-20260825-r1"
     assert PLAN["schema_version"] == 2
     assert PLAN["date"] == "2026-08-25"
     assert PLAN["experiment_id"] == experiment_id
-    assert PLAN["status"] == (
-        "frozen_not_run_launch_not_authorized_pending_source_commit"
-    )
+    assert PLAN["status"] == "frozen_launch_authorized"
     source = PLAN["source_freeze"]
-    assert source["engineering_source_revision"] == f"FUTURE_COMMIT:{experiment_id}"
-    assert source["launch_blocked_while_future_commit"] is True
+    assert source["engineering_source_revision"] == (
+        "701ceac236e454b94f08eb7ed5fc8e9ba322fa31"
+    )
+    assert source["launch_blocked_while_future_commit"] is False
     assert source["code_and_focused_tests_must_be_green"] is True
     authority = PLAN["authority"]
     assert authority == {
         "engineering_canary_only": True,
-        "launch_authorized": False,
-        "paid_or_remote_authority": False,
+        "launch_authorized": True,
+        "paid_or_remote_authority": True,
         "main_authority": False,
         "authorization_condition": authority["authorization_condition"],
     }
@@ -417,7 +417,7 @@ def test_measured_estimate_and_conservative_envelope_are_internally_consistent()
     assert limits["maximum_qfbench_sessions_including_recovery"] == 52
     assert limits["maximum_all_worker_sessions"] == 52
     assert limits["maximum_worker_turn_iterations"] == 52 * 60
-    assert limits["paid_or_remote_authority"] is False
+    assert limits["paid_or_remote_authority"] is True
     basis = limits["measured_estimate_basis"]
     assert "retained final mini R3" in basis["provenance"]
     assert "only for budget sizing" in basis["provenance"]

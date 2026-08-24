@@ -2,21 +2,21 @@
   "schema_version": 2,
   "record_kind": "qrs_reviewer_policy_v2_engineering_qualification_plan",
   "date": "2026-08-25",
-  "status": "frozen_not_run_launch_not_authorized_pending_source_commit",
+  "status": "frozen_launch_authorized",
   "experiment_id": "qf-qrs-reviewer-policy-v2-qualification-20260825-r1",
   "purpose": "Qualify the corrected answer-free Reviewer policy and the complete reviewed-snapshot matched scheduler path as an engineering canary. This is not a utility experiment, Main, or a continuation of an earlier mini run.",
   "source_freeze": {
-    "engineering_source_revision": "FUTURE_COMMIT:qf-qrs-reviewer-policy-v2-qualification-20260825-r1",
-    "resolution_convention": "Before launch, resolve FUTURE_COMMIT to the single commit containing the already-reviewed Reviewer-policy-v2 implementation, its focused code tests, the read-only frozen-base adapter, this plan, and this plan test. Record the resolved revision in the launch manifest without changing any scientific field.",
-    "launch_blocked_while_future_commit": true,
+    "engineering_source_revision": "701ceac236e454b94f08eb7ed5fc8e9ba322fa31",
+    "resolution_convention": "Resolved to the tested source-freeze commit containing the Reviewer-policy-v2 implementation, focused code tests, read-only frozen-base adapter, this plan, and this plan test. The dated launch decision changes only source and authority fields; no scientific field changes.",
+    "launch_blocked_while_future_commit": false,
     "code_and_focused_tests_must_be_green": true
   },
   "authority": {
     "engineering_canary_only": true,
-    "launch_authorized": false,
-    "paid_or_remote_authority": false,
+    "launch_authorized": true,
+    "paid_or_remote_authority": true,
     "main_authority": false,
-    "authorization_condition": "A separate launch decision may be made only after FUTURE_COMMIT is resolved and the current focused code and plan tests are green. This frozen plan itself grants no paid, remote, or Main authority."
+    "authorization_condition": "Satisfied by the separately retained 2026-08-25 qualification launch decision after source revision resolution and green focused/adjacent tests. Authority is limited to this engineering canary through stop_after_panel=1 and grants no Main authority."
   },
   "phase_order": [
     "import_frozen_primitive_h0",
@@ -449,7 +449,7 @@
     "worker_concurrency": 1,
     "verifier_concurrency": 1,
     "max_parallel_runs": 1,
-    "paid_or_remote_authority": false,
+    "paid_or_remote_authority": true,
     "canary_incremental_cap": {
       "qfbench_cells": 16,
       "evolver_calls": 1,

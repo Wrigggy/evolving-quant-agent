@@ -50,6 +50,11 @@ def test_explicitly_unauthorized_engineering_canary_is_rejected() -> None:
         ).read_text(encoding="utf-8")
     )
 
+    method["status"] = "frozen_not_run_launch_not_authorized"
+    method["authority"]["launch_authorized"] = False
+    method["authority"]["paid_or_remote_authority"] = False
+    method["limits"]["paid_or_remote_authority"] = False
+
     with pytest.raises(GlobalSchedulerError, match="explicit authority block"):
         runner._require_live_launch_authority(method)
 
