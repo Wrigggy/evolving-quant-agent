@@ -1,6 +1,7 @@
 import pytest
 
 from qea.qfbench_lineage import (
+    LineageError,
     freeze_lineage,
     import_candidate_information_set_review,
     import_pilot_report,
@@ -14,7 +15,7 @@ from qea.qfbench_lineage import (
 
 
 def _state(limit="1"):
-    return new_lineage(
+    return _mark_review_passed(new_lineage(
         lineage_id="lineage-a",
         parent_version="h0",
         parent_path="/workers/h0",
@@ -25,11 +26,11 @@ def _state(limit="1"):
         worker_route="route-a",
         worker_budget="normal",
         cost_limit_usd=limit,
-    )
+    ))
 
 
 def _quant_state(limit="2"):
-    return new_lineage(
+    return _mark_review_passed(new_lineage(
         lineage_id="quant-lineage",
         parent_version="h0",
         parent_path="/workers/h0",
@@ -41,7 +42,7 @@ def _quant_state(limit="2"):
         worker_budget="normal",
         cost_limit_usd=limit,
         quantitative_protection_review=True,
-    )
+    ))
 
 
 def _report(run_id, task, parent, candidate, cost="0.1"):
@@ -97,6 +98,25 @@ def _proposal(decision, admitted, candidate_dir="/real/proposal/candidate"):
             "total_tokens": 200,
         },
     }
+
+
+def _mark_review_passed(state):
+    candidate = state["candidate"]
+    worker_dir = candidate["worker_dir"]
+    candidate["information_set_review"] = {
+        "review_id": "fixture-review",
+        "overall_verdict": "PASS",
+        "reviewed_candidate_dir": worker_dir,
+    }
+    state["candidate_information_set_review"] = True
+    state["observations"]["information_set_review"] = {
+        "review_id": "fixture-review",
+        "overall_verdict": "PASS",
+        "reviewed_candidate_dir": worker_dir,
+        "coverage_review": {"verdict": "PASS"},
+    }
+    state["phase"] = "TARGET"
+    return state
 
 
 def _worker(root, tools):
@@ -554,7 +574,7 @@ def test_cost_limit_stops_before_repeat():
     assert state["phase"] == "BUDGET_STOP"
 
 
-def test_admitted_act_attaches_report_candidate_and_accounts_once():
+def test_admitted_act_without_claims_holds_for_universal_review():
     report = _proposal("ACT", True)
     state = import_proposal_report(
         _proposal_state(),
@@ -571,7 +591,7 @@ def test_admitted_act_attaches_report_candidate_and_accounts_once():
         candidate_version="candidate-r1",
     )
 
-    assert state["phase"] == "TARGET"
+    assert state["phase"] == "HOLD_FOR_REFINE"
     assert state["candidate"] == {
         "version": "candidate-r1",
         "worker_dir": "/real/proposal/candidate",
@@ -617,6 +637,7 @@ def test_proposal_singleton_tool_binds_and_observes_activation(tmp_path):
         proposal_run_id="proposal-r1",
         candidate_version="candidate-r1",
     )
+    state = _mark_review_passed(state)
 
     assert state["candidate"]["activation_token"] == "audit_quant_state"
     assert state["candidate"]["activation_binding"]["status"] == "singleton"
@@ -1314,6 +1335,7 @@ def test_information_set_review_pass_enters_target_and_accounts_once(tmp_path):
             "completed_request_count": 1,
             "total_tokens": 50,
         },
+        reviewed_candidate_dir=state["candidate"]["worker_dir"],
     )
     resumed = import_candidate_information_set_review(
         reviewed,
@@ -1326,6 +1348,7 @@ def test_information_set_review_pass_enters_target_and_accounts_once(tmp_path):
             "completed_request_count": 1,
             "total_tokens": 50,
         },
+        reviewed_candidate_dir=reviewed["candidate"]["worker_dir"],
     )
 
     assert state["phase"] == "INFORMATION_SET_REVIEW"
@@ -1356,6 +1379,7 @@ def test_information_set_review_nonpass_holds_without_worker(tmp_path, verdict):
             "completed_request_count": 1,
             "total_tokens": 50,
         },
+        reviewed_candidate_dir=state["candidate"]["worker_dir"],
     )
 
     assert reviewed["phase"] == "HOLD_FOR_REFINE"
@@ -1374,6 +1398,7 @@ def test_information_set_review_nonpass_holds_without_worker(tmp_path, verdict):
             ],
             "worker_visible": False,
             "promotion_authority": False,
+            "reviewed_candidate_dir": state["candidate"]["worker_dir"],
         }
     }
 
@@ -1408,3 +1433,117 @@ def test_information_set_review_missing_claims_holds_admitted_act(tmp_path):
     assert result["hold"]["reason"] == (
         "information_set_review_missing_worker_visible_claims"
     )
+
+
+def test_frozen_h0_same_worker_path_needs_no_candidate_review():
+    state = new_lineage(
+        lineage_id="frozen-h0",
+        parent_version="h0",
+        parent_path="/workers/h0",
+        candidate_version="h0",
+        candidate_path="/workers/h0",
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+    )
+
+    imported = import_pilot_report(
+        state,
+        stage="target",
+        report=_report(
+            "frozen-h0-target", "target", (1, 2, 0), (1, 2, 0)
+        ),
+        report_path="/reports/frozen-h0-target.json",
+        parent_arm="h0",
+        candidate_arm="candidate",
+    )
+
+    assert state["phase"] == "TARGET"
+    assert state["candidate_information_set_review"] is False
+    assert imported["decision"] == "ROLLBACK"
+
+
+def test_preconstructed_changed_candidate_requires_review_even_if_opted_out():
+    state = new_lineage(
+        lineage_id="preconstructed",
+        parent_version="h0",
+        parent_path="/workers/h0",
+        candidate_version="candidate",
+        candidate_path="/workers/candidate",
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+        candidate_information_set_review=False,
+    )
+
+    assert state["phase"] == "INFORMATION_SET_REVIEW"
+    assert state["candidate_information_set_review"] is True
+
+    in_place_identity_change = new_lineage(
+        lineage_id="in-place-candidate",
+        parent_version="h0",
+        parent_path="/workers/h0",
+        candidate_version="candidate-v1",
+        candidate_path="/workers/h0",
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+        candidate_information_set_review=False,
+    )
+    assert in_place_identity_change["phase"] == "INFORMATION_SET_REVIEW"
+
+
+def test_legacy_changed_candidate_result_import_cannot_bypass_review():
+    state = new_lineage(
+        lineage_id="legacy-bypass",
+        parent_version="h0",
+        parent_path="/workers/h0",
+        candidate_version="candidate",
+        candidate_path="/workers/candidate",
+        target_task_id="target",
+        protection_task_id="protect",
+        worker_route="route-a",
+        worker_budget="normal",
+        cost_limit_usd="1",
+    )
+    # Reproduce the old persisted-state shape that directly entered TARGET.
+    state["phase"] = "TARGET"
+    state["candidate_information_set_review"] = False
+
+    with pytest.raises(LineageError, match="without Review PASS"):
+        import_pilot_report(
+            state,
+            stage="target",
+            report=_report(
+                "legacy-target", "target", (1, 2, 0), (2, 2, 1)
+            ),
+            report_path="/reports/legacy-target.json",
+            parent_arm="h0",
+            candidate_arm="candidate",
+        )
+
+
+def test_review_pass_must_bind_the_active_candidate_snapshot(tmp_path):
+    state = _information_review_proposal_state(tmp_path)
+    package = _information_review_package(state)
+
+    with pytest.raises(LineageError, match="active reviewed_candidate snapshot"):
+        import_candidate_information_set_review(
+            state,
+            review_id="information-review-r1",
+            review_path="/reviews/information-review-r1/RESULT.json",
+            review_package=package,
+            review_payload=_information_review_payload(package, "PASS"),
+            review_accounting={
+                "provider_cost_usd": "0.01",
+                "completed_request_count": 1,
+                "total_tokens": 50,
+            },
+            reviewed_candidate_dir="/workers/post-review-mutated-candidate",
+        )

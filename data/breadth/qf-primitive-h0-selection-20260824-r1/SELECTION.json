@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-24",
+  "selection_id": "qf-primitive-h0-selection-20260824-r1",
+  "status": "selected_for_engineering_canaries",
+  "selected_profile_id": "quant-h0-s6-primitive-v1",
+  "selected_source_worker": "qea/worker_quant_h0_s6_primitive_v1",
+  "selection_owner": "external_to_qrs_scheduler",
+  "selection_rationale": "A task-agnostic six-slot base harness with common shell and passive structured recorder bindings; deliberately ambiguous stage bodies leave workflow content and cross-stage policy available to the QRS Evolver.",
+  "not_claimed": [
+    "benchmark superiority",
+    "optimal primitive initialization",
+    "random or preregistered selection",
+    "QRS method gain"
+  ],
+  "scheduler_boundary": "The QRS scheduler may import this one materialized profile but may not rank, replace, weaken, or modify it in place."
+}

@@ -153,6 +153,31 @@ observed, and target state plus a concrete transition observable. The state
 transition should narrow component search; it must not predetermine whether the
 right intervention is a prompt, tool, memory, validator, middleware, routing,
 or another harness role.
+Before choosing that component, inspect the complete six-state workflow rather
+than assuming that the earliest visible mismatch is self-contained. When the
+contract sets `workflow_scope_required_for_act: true`, declare a
+`workflow_scope` of `stage_local`, `cross_stage`, or `workflow_global`, list the
+`involved_states`, and predict one answer-free
+`predicted_end_to_end_observable`; the same bundle may be recorded under an
+older contract when the evidence supports it, but global scope is not
+mechanically forced. A stage-local diagnosis names exactly one
+state and a null `handoff_gap`. A cross-stage diagnosis names two to five states
+and the concrete handoff that lost an output, decision, context, or activation.
+A workflow-global diagnosis names all six states and still identifies one
+evidence-backed handoff gap rather than appealing to vague global quality.
+Support cross-stage scope with at least one exact already-read public H0
+trajectory. Support workflow-global scope with `workflow_evidence` from at
+least two distinct frozen-H0 tasks in distinct public task families, and state
+the repeated handoff observation for each; do not substitute official scores,
+failed properties, expected values, checker output, or evaluator explanations.
+For cross-stage and global failures, consider the natural coordination
+surfaces---`systemprompt`, `skills`, `middleware`, and `routing`---alongside
+tools, validators, memory, descriptions, and configuration. Select only the
+loci supported by the observed mechanism; global scope neither requires
+generic prompt prose nor rules out a bounded executable component. The
+existing `research_state_transition` remains the earliest concrete anchor,
+while the end-to-end observable tests whether the intervention survives later
+handoffs and final artifact delivery.
 When `contract.json` sets
 `quant_research_state_card_required_for_act: true`, materialize one compact
 Quant Research State Card with `materialize_quant_research_state_card` before
@@ -174,6 +199,12 @@ nor component routing is supported, ABSTAIN. ABSTAIN does not require a card,
 relation, or routing decision. The card and terminal summary remain
 Evolver evidence: do not project optimize diagnostics, expected values, or
 other answer-rich material into a Worker instruction or reusable candidate.
+Workflow scope, handoff diagnosis, trajectory evidence, and end-to-end
+predictions are likewise Evolver evidence, not automatic Worker instructions.
+Any predicate or rule that reaches a Worker-visible prompt, skill, tool,
+descriptor, configuration, memory, middleware, routing decision, or probe
+instruction remains subject to the public-only claim-provenance requirements
+below.
 When `contract.json` sets `quant_residual_risk_relation_enabled: true`, treat
 the selected relation as the primary intervention relation. Before ACT, ask
 whether repairing it could leave one orthogonal, evidence-supported
@@ -277,7 +308,10 @@ are structural, not conceptual labels: validator behavior implemented in
 `tools/*.py` is the `tools` role, and `validator` may be declared only when a
 file below `validator/` actually changes. Likewise, registration is
 `agent_config`, a tool schema is `tool_descriptions`, and prompt activation is
-`systemprompt`. Never add a role merely because its name describes the purpose
+`systemprompt`. When `contract.json` declares `allowed_candidate_components`
+or `allowed_candidate_paths`, keep the proposal entirely inside that mutation
+surface; the contract is a hard experiment boundary, not a routing prior.
+Never add a role merely because its name describes the purpose
 of code stored under another role. The component routing prior in
 `contract.json` is advisory; if the evidence points elsewhere, provide
 `component_override_reason`. Use ABSTAIN for `unknown` or

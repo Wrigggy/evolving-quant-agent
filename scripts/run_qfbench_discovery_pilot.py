@@ -406,8 +406,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--dispatch-selected-probe",
         action="store_true",
         help=(
-            "After an admitted coordinated ACT, evaluate exactly the Evolver-"
-            "selected probe task. Protection remains a separate conditional run."
+            "Legacy flag retained for fail-closed rejection; direct selected-"
+            "probe Worker dispatch is disabled in favor of lineage Review."
         ),
     )
     parser.add_argument("--approve-external-run", action="store_true")
@@ -543,6 +543,12 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if _RUN_ID.fullmatch(args.run_id) is None:
         raise ValueError("run ID is unsafe")
+    if args.dispatch_selected_probe:
+        raise ValueError(
+            "direct selected-probe Worker dispatch is disabled; materialize the "
+            "effective candidate and run universal Candidate Information-Set "
+            "Review through the lineage controller"
+        )
     if (
         not args.preflight_only
         and not args.approve_external_run

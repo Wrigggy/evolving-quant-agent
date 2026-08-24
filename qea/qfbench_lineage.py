@@ -65,11 +65,17 @@ def new_lineage(
             )
         current_parent["retained_activation_token"] = retained_activation_token
 
+    candidate_changed = (
+        candidate_version != parent_version
+        or Path(parent_path).resolve(strict=False)
+        != Path(candidate_path).resolve(strict=False)
+    )
+    review_required = candidate_changed or candidate_information_set_review
     state = {
         "schema_version": 1,
         "lineage_id": lineage_id,
         "status": "running",
-        "phase": "TARGET",
+        "phase": "INFORMATION_SET_REVIEW" if review_required else "TARGET",
         "current_parent": current_parent,
         "candidate": {
             "version": candidate_version,
@@ -92,9 +98,8 @@ def new_lineage(
         "decision": None,
         "quantitative_protection_review": quantitative_protection_review,
         "repeat_consistency_policy": repeat_consistency_policy,
+        "candidate_information_set_review": review_required,
     }
-    if candidate_information_set_review:
-        state["candidate_information_set_review"] = True
     return state
 
 
@@ -108,7 +113,7 @@ def new_proposal_lineage(
     worker_route: str,
     worker_budget: str,
     cost_limit_usd: float | str,
-    candidate_information_set_review: bool = False,
+    candidate_information_set_review: bool = True,
     quantitative_protection_review: bool = False,
     repeat_consistency_policy: str = "aggregate_only",
     retained_activation_token: str | None = None,
@@ -126,7 +131,7 @@ def new_proposal_lineage(
         worker_route=worker_route,
         worker_budget=worker_budget,
         cost_limit_usd=cost_limit_usd,
-        candidate_information_set_review=candidate_information_set_review,
+        candidate_information_set_review=True,
         quantitative_protection_review=quantitative_protection_review,
         repeat_consistency_policy=repeat_consistency_policy,
         retained_activation_token=retained_activation_token,
@@ -134,6 +139,7 @@ def new_proposal_lineage(
     state["phase"] = "PROPOSAL"
     state["candidate"] = None
     state["proposal"] = None
+    state["candidate_information_set_review"] = True
     return state
 
 
@@ -957,6 +963,7 @@ def import_candidate_information_set_review(
     review_package: Mapping[str, object],
     review_payload: Mapping[str, object],
     review_accounting: Mapping[str, object],
+    reviewed_candidate_dir: str,
 ) -> dict[str, object]:
     """Import one pre-Worker answer-boundary review exactly once."""
 
@@ -975,6 +982,18 @@ def import_candidate_information_set_review(
     validated = validate_candidate_information_set_review(
         review_payload, review_package
     )
+    candidate = result.get("candidate")
+    if not isinstance(candidate, Mapping):
+        raise LineageError("candidate review has no active candidate")
+    candidate_worker_dir = candidate.get("worker_dir")
+    if (
+        not isinstance(reviewed_candidate_dir, str)
+        or not reviewed_candidate_dir
+        or candidate_worker_dir != reviewed_candidate_dir
+    ):
+        raise LineageError(
+            "candidate review must bind the active reviewed_candidate snapshot"
+        )
     _add_review_cost(result, review_accounting)
     accounted.append(review_id)
     result["observations"]["information_set_review"] = {
@@ -985,9 +1004,15 @@ def import_candidate_information_set_review(
         "coverage_review": deepcopy(validated["coverage_review"]),
         "worker_visible": False,
         "promotion_authority": False,
+        "reviewed_candidate_dir": reviewed_candidate_dir,
     }
     verdict = validated["overall_verdict"]
     if verdict == "PASS":
+        result["candidate"]["information_set_review"] = {
+            "review_id": review_id,
+            "overall_verdict": "PASS",
+            "reviewed_candidate_dir": reviewed_candidate_dir,
+        }
         result["phase"] = "TARGET"
         result["status"] = "running"
         if _budget_reached(result):
@@ -999,6 +1024,72 @@ def import_candidate_information_set_review(
         result,
         reason=f"information_set_review_{str(verdict).lower()}",
     )
+
+
+def _require_candidate_information_set_review_pass(
+    state: Mapping[str, object],
+) -> None:
+    """Fail closed before importing any changed-candidate Worker observation."""
+
+    candidate = state.get("candidate")
+    if not isinstance(candidate, Mapping):
+        if state.get("candidate_information_set_review") is True:
+            raise LineageError("changed candidate has no review-bound worker")
+        return
+    parent = state.get("current_parent")
+    parent_dir = parent.get("worker_dir") if isinstance(parent, Mapping) else None
+    parent_version = parent.get("version") if isinstance(parent, Mapping) else None
+    candidate_dir = candidate.get("worker_dir")
+    candidate_version = candidate.get("version")
+    changed_candidate = (
+        parent_version != candidate_version
+        or (
+            isinstance(parent_dir, str)
+            and isinstance(candidate_dir, str)
+            and Path(parent_dir).resolve(strict=False)
+            != Path(candidate_dir).resolve(strict=False)
+        )
+    )
+    if (
+        state.get("candidate_information_set_review") is not True
+        and not changed_candidate
+    ):
+        return
+    binding = candidate.get("information_set_review")
+    if not isinstance(binding, Mapping) or binding.get("overall_verdict") != "PASS":
+        raise LineageError(
+            "changed candidate cannot reach Worker evaluation without Review PASS"
+        )
+    worker_dir = candidate.get("worker_dir")
+    if (
+        not isinstance(worker_dir, str)
+        or not worker_dir
+        or binding.get("reviewed_candidate_dir") != worker_dir
+    ):
+        raise LineageError(
+            "Worker candidate differs from the exact reviewed_candidate snapshot"
+        )
+    observations = state.get("observations")
+    observation = (
+        observations.get("information_set_review")
+        if isinstance(observations, Mapping)
+        else None
+    )
+    coverage = (
+        observation.get("coverage_review")
+        if isinstance(observation, Mapping)
+        else None
+    )
+    if (
+        not isinstance(observation, Mapping)
+        or observation.get("overall_verdict") != "PASS"
+        or observation.get("reviewed_candidate_dir") != worker_dir
+        or not isinstance(coverage, Mapping)
+        or coverage.get("verdict") != "PASS"
+    ):
+        raise LineageError(
+            "changed candidate has no matching retained Review PASS observation"
+        )
 
 
 def import_pilot_report(
@@ -1094,6 +1185,7 @@ def _import_invalid_worker_observation(
     if not isinstance(cost, Mapping):
         raise LineageError("invalid Worker report has no cost summary")
     result = deepcopy(dict(state))
+    _require_candidate_information_set_review_pass(result)
     if run_id in result.get("accounted_run_ids", []):
         existing = result.get("observations", {}).get(stage)
         if isinstance(existing, Mapping) and existing.get("run_id") == run_id:
@@ -1215,6 +1307,7 @@ def import_comparison_observation(
     if not isinstance(cost, Mapping):
         raise LineageError("comparison has no candidate cost summary")
     result = deepcopy(dict(state))
+    _require_candidate_information_set_review_pass(result)
     if run_id in result.get("accounted_run_ids", []):
         existing = result.get("observations", {}).get(stage)
         if isinstance(existing, Mapping) and existing.get("run_id") == run_id:

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from qea.qfbench_lineage import LineageError
+from scripts.run_qfbench_discovery_pilot import main as run_discovery_pilot
 from scripts.run_qfbench_lineage_controller import (
     _candidate_information_set_review_package,
     _information_set_review_spec,
@@ -137,6 +138,147 @@ def _qce_result(
     return path
 
 
+def _add_replay_candidate_reviews(plan, tmp_path: Path) -> None:
+    """Give legacy transition fixtures one real universal Review PASS.
+
+    These tests predate the universal gate.  Keep their lifecycle assertions
+    focused by materializing small local parent/candidate workers and a retained
+    answer-free Reviewer result for every changed candidate.
+    """
+
+    runtime = plan.setdefault("runtime", {})
+    if "results_dir" not in runtime:
+        runtime["results_dir"] = str(tmp_path / "review-results")
+    results_dir = Path(str(runtime["results_dir"]))
+    for index, lineage in enumerate(plan["lineages"]):
+        lineage_id = str(lineage["lineage_id"])
+        parent = lineage["parent"]
+        parent_dir = Path(str(parent["worker_dir"]))
+        if not parent_dir.is_dir():
+            parent_dir = tmp_path / "review-workers" / lineage_id / "parent"
+            parent_dir.mkdir(parents=True, exist_ok=True)
+            parent_dir.joinpath("systemprompt.md").write_text(
+                "Follow the public task instructions.\n"
+            )
+            parent["worker_dir"] = str(parent_dir)
+
+        proposal = lineage.get("proposal")
+        if isinstance(proposal, dict):
+            report_path = Path(str(proposal["replay_report"]))
+            report = json.loads(report_path.read_text())
+            if report.get("decision") != "ACT" or report.get("admission", {}).get(
+                "admitted"
+            ) is not True:
+                continue
+            candidate_dir = Path(str(report.get("candidate_dir", "")))
+            if not candidate_dir.is_dir():
+                candidate_dir = (
+                    tmp_path / "review-workers" / lineage_id / "candidate"
+                )
+                candidate_dir.mkdir(parents=True, exist_ok=True)
+                candidate_dir.joinpath("systemprompt.md").write_text(
+                    "Follow the public task instructions.\n"
+                    "Apply the declared public output rule.\n"
+                )
+                report["candidate_dir"] = str(candidate_dir)
+            hypothesis = report.setdefault("summary", {}).setdefault(
+                "discovery_hypothesis", {}
+            ).setdefault("hypothesis", {})
+            claims = hypothesis.setdefault(
+                "worker_visible_claims",
+                [
+                    {
+                        "claim_id": "public-output-positive",
+                        "claim": "Apply the declared public output rule.",
+                        "surfaces": ["systemprompt"],
+                        "basis_refs": ["public:instruction"],
+                    }
+                ],
+            )
+            report_path.write_text(json.dumps(report))
+            candidate_version = str(
+                proposal.get("candidate_version")
+                or proposal.get("replay_run_id")
+                or "candidate"
+            )
+        else:
+            candidate = lineage["candidate"]
+            candidate_dir = Path(str(candidate["worker_dir"]))
+            if not candidate_dir.is_dir():
+                candidate_dir = (
+                    tmp_path / "review-workers" / lineage_id / "candidate"
+                )
+                candidate_dir.mkdir(parents=True, exist_ok=True)
+                candidate_dir.joinpath("systemprompt.md").write_text(
+                    "Follow the public task instructions.\n"
+                    "Apply the declared public output rule.\n"
+                )
+                candidate["worker_dir"] = str(candidate_dir)
+            candidate_version = str(candidate["version"])
+            claims = [
+                {
+                    "claim_id": "public-output-positive",
+                    "claim": "Apply the declared public output rule.",
+                    "surfaces": ["systemprompt"],
+                    "basis_refs": ["public:instruction"],
+                }
+            ]
+
+        review_id = f"{lineage_id}-universal-review-{index}"
+        sources = {
+            "public_sources": [
+                {
+                    "ref": "public:instruction",
+                    "source_type": "public_contract",
+                    "excerpt": "Apply the declared public output rule.",
+                }
+            ],
+            "optimize_only_sources": [],
+        }
+        review_spec = {
+            "enabled": True,
+            "feedback_mode": "answer_free",
+            "review_id": review_id,
+            "worker_visible_claims": claims,
+            **sources,
+        }
+        lineage["candidate_information_set_review"] = review_spec
+        package, hold_reason = _candidate_information_set_review_package(
+            {
+                "current_parent": parent,
+                "candidate": {
+                    "version": candidate_version,
+                    "worker_dir": str(candidate_dir),
+                },
+                "proposal": {"worker_visible_claims": claims},
+            },
+            review_spec,
+        )
+        assert hold_reason is None
+        _write_information_review_result(results_dir / review_id, package)
+
+
+def _review_bound_lineage(lineage):
+    """Bind an argv-only fixture to its declared reviewed candidate path."""
+
+    candidate = lineage["candidate"]
+    candidate_dir = candidate["worker_dir"]
+    candidate["information_set_review"] = {
+        "review_id": "argv-review",
+        "overall_verdict": "PASS",
+        "reviewed_candidate_dir": candidate_dir,
+    }
+    lineage["observations"] = {
+        "information_set_review": {
+            "review_id": "argv-review",
+            "overall_verdict": "PASS",
+            "reviewed_candidate_dir": candidate_dir,
+            "coverage_review": {"verdict": "PASS"},
+        }
+    }
+    return lineage
+
+
 def test_property_set_safety_detects_failure_swap(tmp_path):
     path, report = _report(
         tmp_path,
@@ -227,6 +369,7 @@ def test_replay_runs_to_frozen_without_child_dispatch(tmp_path):
             ],
         }],
     }
+    _add_replay_candidate_reviews(plan, tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan))
 
@@ -367,6 +510,7 @@ def test_one_controller_replays_qfbench_and_quantcodeeval_lineages(tmp_path):
             },
         ],
     }
+    _add_replay_candidate_reviews(plan, tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan))
 
@@ -385,9 +529,9 @@ def test_one_controller_replays_qfbench_and_quantcodeeval_lineages(tmp_path):
     assert qce["decision"] == "PROMOTE"
     assert qce["phase"] == "FROZEN"
     assert qce["cost"] == {
-        "provider_cost_usd": "0.015",
-        "completed_requests": 3,
-        "total_tokens": 150,
+        "provider_cost_usd": "0.025",
+        "completed_requests": 4,
+        "total_tokens": 200,
     }
     assert qce["accounted_run_ids"] == [
         "qce-candidate-target",
@@ -456,6 +600,7 @@ def test_quantcodeeval_infrastructure_incomplete_fails_closed(tmp_path):
             ],
         }],
     }
+    _add_replay_candidate_reviews(plan, tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan))
 
@@ -509,6 +654,7 @@ def test_quantcodeeval_candidate_without_cost_is_not_lineage_ready(tmp_path):
             ],
         }],
     }
+    _add_replay_candidate_reviews(plan, tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan))
 
@@ -559,8 +705,8 @@ def test_live_quantcodeeval_candidate_stages_resume_without_dispatch(tmp_path):
             "lineage_id": "qce-live",
             "parent": {"version": "quant-h0", "worker_dir": "/qce-h0"},
             "candidate": {
-                "version": "qce-c1",
-                "worker_dir": "/qce-c1",
+                "version": "quant-h0",
+                "worker_dir": "/qce-h0",
                 "activation_run": "/activation",
             },
             "stages": [
@@ -675,8 +821,8 @@ def test_live_quantcodeeval_evaluation_failure_remains_infrastructure(tmp_path):
             "lineage_id": "qce-live",
             "parent": {"version": "quant-h0", "worker_dir": "/qce-h0"},
             "candidate": {
-                "version": "qce-c1",
-                "worker_dir": "/qce-c1",
+                "version": "quant-h0",
+                "worker_dir": "/qce-h0",
                 "activation_run": "/activation",
             },
             "stages": [
@@ -754,7 +900,12 @@ def test_live_quantcodeeval_child_requires_approval_and_fixed_run_dir(tmp_path):
     }
     lineage = {
         "lineage_id": "qce",
-        "candidate": {"activation_run": "/activation"},
+        "parent": {"version": "quant-h0", "worker_dir": "/qce-h0"},
+        "candidate": {
+            "version": "quant-h0",
+            "worker_dir": "/qce-h0",
+            "activation_run": "/activation",
+        },
     }
     stage = {
         "name": "target",
@@ -798,7 +949,12 @@ def test_live_quantcodeeval_child_reuses_h0_preflight_image_refs(tmp_path):
     }
     lineage = {
         "lineage_id": "qce",
-        "candidate": {"activation_run": "/activation"},
+        "parent": {"version": "quant-h0", "worker_dir": "/qce-h0"},
+        "candidate": {
+            "version": "quant-h0",
+            "worker_dir": "/qce-h0",
+            "activation_run": "/activation",
+        },
     }
     stage = {"name": "target", "task_id": "T26"}
 
@@ -809,6 +965,38 @@ def test_live_quantcodeeval_child_reuses_h0_preflight_image_refs(tmp_path):
     assert argv[argv.index("--worker-image") + 1] == "existing-worker-id"
     assert argv[argv.index("--verifier-image") + 1] == "existing-verifier-id"
     assert argv[argv.index("--proxy-image") + 1] == "existing-proxy-id"
+
+
+def test_live_quantcodeeval_changed_candidate_dispatch_is_blocked(tmp_path):
+    plan = {
+        "controller_run_id": "main0",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "results_dir": str(tmp_path / "results"),
+            "quantcodeeval_config": "/config.json",
+            "quantcodeeval_release": "/release",
+            "quantcodeeval_worker_image": "worker:fixed",
+            "quantcodeeval_verifier_image": "verifier:fixed",
+            "quantcodeeval_proxy_image": "proxy:fixed",
+        },
+    }
+    lineage = _review_bound_lineage({
+        "lineage_id": "qce",
+        "parent": {"worker_dir": "/qce-h0"},
+        "candidate": {
+            "worker_dir": "/reviewed-candidate",
+            "activation_run": "/activation",
+        },
+    })
+
+    with pytest.raises(LineageError, match="cannot bind.*dispatch is blocked"):
+        build_quantcodeeval_child_argv(
+            plan,
+            lineage,
+            {"name": "target", "task_id": "T26"},
+            approve_external_run=True,
+        )
 
 
 def test_live_child_argv_uses_existing_component_runner():
@@ -831,12 +1019,50 @@ def test_live_child_argv_uses_existing_component_runner():
     }
     stage = {"name": "protection", "task_id": "task-p"}
 
-    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+    argv = build_child_argv(
+        plan, _review_bound_lineage(lineage), stage, approve_external_run=True
+    )
 
     assert argv[1] == "/source/scripts/run_qfbench_component_pilot.py"
     assert "parent=/h0" in argv
     assert "candidate=/c1" in argv
     assert argv[-1] == "--approve-external-run"
+
+
+def test_live_child_argv_requires_retained_review_coverage_observation():
+    plan = {
+        "controller_run_id": "main0",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest.json",
+            "rootless_config": "/config.json",
+            "image_set_manifest": "/images.json",
+            "results_dir": "/results",
+        },
+    }
+    lineage = {
+        "lineage_id": "missing-review-observation",
+        "parent": {"version": "h0", "worker_dir": "/h0"},
+        "candidate": {
+            "version": "c1",
+            "worker_dir": "/reviewed-c1",
+            "information_set_review": {
+                "review_id": "candidate-only-binding",
+                "overall_verdict": "PASS",
+                "reviewed_candidate_dir": "/reviewed-c1",
+            },
+        },
+    }
+
+    with pytest.raises(LineageError, match="retained Review PASS coverage"):
+        build_child_argv(
+            plan,
+            lineage,
+            {"name": "target", "task_id": "task-t"},
+            approve_external_run=True,
+        )
 
 
 def test_live_child_argv_prefers_proposal_bound_activation_token():
@@ -867,7 +1093,9 @@ def test_live_child_argv_prefers_proposal_bound_activation_token():
         "activation_token": "stale_plan_token",
     }
 
-    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+    argv = build_child_argv(
+        plan, _review_bound_lineage(lineage), stage, approve_external_run=True
+    )
 
     assert argv[argv.index("--activation-token") + 1] == "actual_new_tool"
     assert "property-P" not in argv
@@ -900,7 +1128,9 @@ def test_live_child_argv_uses_modified_component_binding():
     }
     stage = {"name": "target", "task_id": "task-t"}
 
-    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+    argv = build_child_argv(
+        plan, _review_bound_lineage(lineage), stage, approve_external_run=True
+    )
 
     assert argv[argv.index("--activation-token") + 1] == "audit_quant_state"
 
@@ -929,7 +1159,9 @@ def test_live_child_argv_uses_retained_component_binding():
     }
     stage = {"name": "target", "task_id": "task-t"}
 
-    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+    argv = build_child_argv(
+        plan, _review_bound_lineage(lineage), stage, approve_external_run=True
+    )
 
     assert argv[argv.index("--activation-token") + 1] == "audit_quant_state"
 
@@ -961,9 +1193,45 @@ def test_live_child_argv_does_not_guess_for_ambiguous_proposal_binding():
         "activation_token": "stale_plan_token",
     }
 
-    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+    argv = build_child_argv(
+        plan, _review_bound_lineage(lineage), stage, approve_external_run=True
+    )
 
     assert "--activation-token" not in argv
+
+
+def test_reviewed_preconstructed_candidate_ignores_stage_activation_overlay():
+    plan = {
+        "controller_run_id": "main0",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest.json",
+            "rootless_config": "/config.json",
+            "image_set_manifest": "/images.json",
+            "results_dir": "/results",
+        },
+    }
+    lineage = _review_bound_lineage({
+        "lineage_id": "preconstructed",
+        "parent": {"version": "h0", "worker_dir": "/h0"},
+        "candidate": {"version": "c1", "worker_dir": "/reviewed-c1"},
+    })
+
+    argv = build_child_argv(
+        plan,
+        lineage,
+        {
+            "name": "target",
+            "task_id": "task-t",
+            "activation_token": "unreviewed-stage-token",
+        },
+        approve_external_run=True,
+    )
+
+    assert "--activation-token" not in argv
+    assert "unreviewed-stage-token" not in argv
 
 
 def test_live_child_argv_runs_only_candidate_when_parent_is_reused():
@@ -992,7 +1260,9 @@ def test_live_child_argv_runs_only_candidate_when_parent_is_reused():
         "parent_comparator": {"id": "h0-task-t-r1"},
     }
 
-    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+    argv = build_child_argv(
+        plan, _review_bound_lineage(lineage), stage, approve_external_run=True
+    )
 
     arm_values = [
         argv[index + 1] for index, value in enumerate(argv) if value == "--arm"
@@ -1034,7 +1304,9 @@ def test_live_child_argv_runs_only_candidate_with_older_selection_reference():
         },
     }
 
-    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+    argv = build_child_argv(
+        plan, _review_bound_lineage(lineage), stage, approve_external_run=True
+    )
 
     arm_values = [
         argv[index + 1] for index, value in enumerate(argv) if value == "--arm"
@@ -1139,6 +1411,7 @@ def test_replay_reuses_parent_and_accounts_only_candidate_calls(tmp_path):
             ],
         }],
     }
+    _add_replay_candidate_reviews(plan, tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan))
 
@@ -1156,9 +1429,9 @@ def test_replay_reuses_parent_and_accounts_only_candidate_calls(tmp_path):
     assert state["phase"] == "FROZEN"
     assert state["decision"] == "PROMOTE"
     assert state["cost"] == {
-        "provider_cost_usd": "0.012",
-        "completed_requests": 3,
-        "total_tokens": 75,
+        "provider_cost_usd": "0.022",
+        "completed_requests": 4,
+        "total_tokens": 125,
     }
     assert state["accounted_run_ids"] == [
         "candidate-target-r1",
@@ -1216,6 +1489,7 @@ def test_parent_comparator_version_must_match_active_parent(tmp_path):
             ],
         }],
     }
+    _add_replay_candidate_reviews(plan, tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan))
 
@@ -1320,6 +1594,7 @@ def test_selection_reference_can_precede_active_refinement_parent(tmp_path):
             }
         ],
     }
+    _add_replay_candidate_reviews(plan, tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan))
 
@@ -1421,6 +1696,7 @@ def test_stop_after_proposal_resumes_without_reimporting_proposal(tmp_path):
             "parent_arm": "h0",
             "candidate_arm": "candidate",
         })
+    _add_replay_candidate_reviews(plan, tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan))
 
@@ -1435,13 +1711,18 @@ def test_stop_after_proposal_resumes_without_reimporting_proposal(tmp_path):
         stop_after_stage="proposal",
     )["lineages"]["proposal-lineage"]
 
-    assert paused["phase"] == "TARGET"
+    assert paused["phase"] == "INFORMATION_SET_REVIEW"
     assert paused["accounted_run_ids"] == ["proposal-r1"]
     assert resumed["phase"] == "FROZEN"
     assert resumed["decision"] == "PROMOTE"
     assert "stopped_after_stage" not in resumed
-    assert resumed["archive"][0]["worker_dir"] == "/proposal-output/candidate"
+    assert "/reviewed-candidates/proposal-lineage/" in (
+        resumed["archive"][0]["worker_dir"]
+    )
     assert resumed["accounted_run_ids"].count("proposal-r1") == 1
+    assert resumed["accounted_review_ids"] == [
+        "proposal-lineage-universal-review-0"
+    ]
 
 
 def test_retained_component_refinement_controller_resumes_idempotently(tmp_path):
@@ -1556,6 +1837,7 @@ def test_retained_component_refinement_controller_resumes_idempotently(tmp_path)
             ],
         }],
     }
+    _add_replay_candidate_reviews(plan, tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan))
     state_dir = tmp_path / "state"
@@ -1682,6 +1964,7 @@ def test_opt_in_semantic_repeat_controller_is_resume_idempotent(tmp_path):
             ],
         }],
     }
+    _add_replay_candidate_reviews(plan, tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan))
     state_dir = tmp_path / "state"
@@ -1733,6 +2016,36 @@ def test_live_proposal_argv_uses_existing_discovery_runner():
     assert argv[argv.index("--backbone") + 1] == "/h0"
     assert argv[argv.index("--arm") + 1] == "quant-state-v2"
     assert "--dispatch-selected-probe" not in argv
+
+
+def test_discovery_direct_selected_probe_dispatch_is_disabled(tmp_path):
+    with pytest.raises(
+        ValueError,
+        match="direct selected-probe Worker dispatch is disabled",
+    ):
+        run_discovery_pilot([
+            "--qfbench-root",
+            str(tmp_path / "qfbench"),
+            "--qfbench-manifest",
+            str(tmp_path / "manifest.json"),
+            "--rootless-config",
+            str(tmp_path / "rootless.json"),
+            "--rootless-image-set-manifest",
+            str(tmp_path / "images.json"),
+            "--run-id",
+            "selected-probe-bypass",
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--backbone",
+            str(tmp_path / "h0"),
+            "--evidence",
+            str(tmp_path / "evidence"),
+            "--evolver-dir",
+            str(tmp_path / "evolver"),
+            "--arm",
+            "quant-state-v2",
+            "--dispatch-selected-probe",
+        ])
 
 
 def test_qpr_replay_resumes_review_and_existing_protection_repeat(tmp_path):
@@ -1880,6 +2193,7 @@ def test_qpr_replay_resumes_review_and_existing_protection_repeat(tmp_path):
             ],
         }],
     }
+    _add_replay_candidate_reviews(plan, tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan))
 
@@ -1910,7 +2224,9 @@ def test_qpr_replay_resumes_review_and_existing_protection_repeat(tmp_path):
         "target-r2",
         "protect-r1",
     ]
-    assert paused["accounted_review_ids"] == []
+    assert paused["accounted_review_ids"] == [
+        "search-v2-universal-review-0"
+    ]
     assert resumed == again
     assert resumed["phase"] == "HOLD_FOR_REFINE"
     assert resumed["decision"] == "HOLD_FOR_REFINE"
@@ -1920,11 +2236,14 @@ def test_qpr_replay_resumes_review_and_existing_protection_repeat(tmp_path):
         "protect-r1",
         "protect-r2",
     ]
-    assert resumed["accounted_review_ids"] == ["qpr1-review-r1"]
+    assert resumed["accounted_review_ids"] == [
+        "search-v2-universal-review-0",
+        "qpr1-review-r1",
+    ]
     assert resumed["cost"] == {
-        "provider_cost_usd": "0.04966108",
-        "completed_requests": 9,
-        "total_tokens": 6764,
+        "provider_cost_usd": "0.05966108",
+        "completed_requests": 10,
+        "total_tokens": 6814,
     }
     assert resumed["hold"]["reason"] == (
         "quantitative_protection_still_inconclusive"
@@ -1954,7 +2273,9 @@ def test_protection_repeat_argv_reuses_component_pilot():
         "task_id": "localvol-barrier",
     }
 
-    argv = build_child_argv(plan, lineage, stage, approve_external_run=True)
+    argv = build_child_argv(
+        plan, _review_bound_lineage(lineage), stage, approve_external_run=True
+    )
 
     assert argv[1] == "/source/scripts/run_qfbench_component_pilot.py"
     assert argv[argv.index("--run-id") + 1] == "main0-a-protection_repeat"
@@ -2016,7 +2337,8 @@ def _information_review_sources():
 
 
 def _write_information_review_result(result_dir, package, verdict="PASS"):
-    result_dir.mkdir(parents=True)
+    result_dir.mkdir(parents=True, exist_ok=True)
+    claim_id = package["worker_visible_claims"][0]["claim_id"]
     if verdict == "PASS":
         ref, role = "public:instruction", "PUBLIC_SUPPORT"
     elif verdict == "REJECT":
@@ -2042,7 +2364,7 @@ def _write_information_review_result(result_dir, package, verdict="PASS"):
             "candidate_id": package["candidate_id"],
             "claim_reviews": [
                 {
-                    "claim_id": "public-output-positive",
+                    "claim_id": claim_id,
                     "verdict": verdict,
                     "reason": f"fixture {verdict.lower()} boundary",
                     "source_basis": [{"ref": ref, "role": role}],
@@ -2218,6 +2540,152 @@ def test_live_information_review_and_resume_account_once(tmp_path):
     }
     assert resumed == first
     assert plan["lineages"][0]["parent"]["version"] == "h0"
+
+
+def test_preconstructed_candidate_review_and_worker_share_exact_snapshot(
+    tmp_path,
+):
+    target_path, _ = _report(
+        tmp_path / "snapshot-target",
+        "snapshot-target-r1",
+        "task-t",
+        (1, 2, 0),
+        (2, 2, 1),
+        {},
+    )
+    repeat_path, _ = _report(
+        tmp_path / "snapshot-repeat",
+        "snapshot-repeat-r1",
+        "task-t",
+        (1, 2, 0),
+        (2, 2, 1),
+        {},
+    )
+    protection_path, _ = _report(
+        tmp_path / "snapshot-protection",
+        "snapshot-protection-r1",
+        "task-p",
+        (2, 2, 1),
+        (2, 2, 1),
+        {},
+    )
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "snapshot-controller",
+        "mode": "replay",
+        "runtime": {},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [{
+            "lineage_id": "preconstructed-snapshot",
+            "parent": {"version": "h0", "worker_dir": "/fixture/h0"},
+            "candidate": {
+                "version": "candidate",
+                "worker_dir": "/fixture/candidate",
+            },
+            "stages": [
+                {
+                    "name": "target",
+                    "task_id": "task-t",
+                    "replay_report": str(target_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                },
+                {
+                    "name": "repeat",
+                    "task_id": "task-t",
+                    "replay_report": str(repeat_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                },
+                {
+                    "name": "protection",
+                    "task_id": "task-p",
+                    "replay_report": str(protection_path),
+                    "parent_arm": "h0",
+                    "candidate_arm": "candidate",
+                },
+            ],
+        }],
+    }
+    _add_replay_candidate_reviews(plan, tmp_path)
+    source_candidate = Path(plan["lineages"][0]["candidate"]["worker_dir"])
+    source_text = source_candidate.joinpath("systemprompt.md").read_text()
+    plan_path = tmp_path / "snapshot-plan.json"
+    plan_path.write_text(json.dumps(plan))
+    state_dir = tmp_path / "snapshot-state"
+
+    paused = run_controller(
+        plan_path,
+        state_dir,
+        stop_after_stage="information_set_review",
+        runner=lambda _argv: (_ for _ in ()).throw(
+            AssertionError("retained Review and reports must not dispatch")
+        ),
+    )["lineages"]["preconstructed-snapshot"]
+    reviewed_dir = Path(paused["candidate"]["worker_dir"])
+
+    assert paused["phase"] == "TARGET"
+    assert reviewed_dir != source_candidate.resolve()
+    assert reviewed_dir == (
+        state_dir
+        / "reviewed-candidates/preconstructed-snapshot/"
+        "preconstructed-snapshot-universal-review-0"
+    ).resolve()
+    assert paused["candidate"]["information_set_review"] == {
+        "review_id": "preconstructed-snapshot-universal-review-0",
+        "overall_verdict": "PASS",
+        "reviewed_candidate_dir": str(reviewed_dir),
+    }
+    assert paused["observations"]["information_set_review"][
+        "coverage_review"
+    ]["verdict"] == "PASS"
+    assert paused["observations"]["information_set_review"][
+        "reviewed_candidate_dir"
+    ] == str(reviewed_dir)
+    assert reviewed_dir.joinpath("systemprompt.md").read_text() == source_text
+
+    source_candidate.joinpath("systemprompt.md").write_text(
+        "Post-review source mutation must not reach the Worker.\n"
+    )
+    assert reviewed_dir.joinpath("systemprompt.md").read_text() == source_text
+
+    dispatch_plan = {
+        "controller_run_id": "snapshot-controller",
+        "runtime": {
+            "python": "/python",
+            "source_root": "/source",
+            "qfbench_root": "/qfbench",
+            "qfbench_manifest": "/manifest.json",
+            "rootless_config": "/config.json",
+            "image_set_manifest": "/images.json",
+            "results_dir": "/results",
+        },
+    }
+    argv = build_child_argv(
+        dispatch_plan,
+        {
+            "lineage_id": "preconstructed-snapshot",
+            "parent": paused["current_parent"],
+            "candidate": paused["candidate"],
+            "observations": paused["observations"],
+        },
+        {"name": "target", "task_id": "task-t"},
+        approve_external_run=True,
+    )
+    assert f"candidate={reviewed_dir}" in argv
+
+    resumed = run_controller(
+        plan_path,
+        state_dir,
+        runner=lambda _argv: (_ for _ in ()).throw(
+            AssertionError("resume must reuse Review and replay reports")
+        ),
+    )["lineages"]["preconstructed-snapshot"]
+    assert resumed["phase"] == "FROZEN"
+    assert resumed["current_parent"]["worker_dir"] == str(reviewed_dir)
+    assert resumed["accounted_review_ids"] == [
+        "preconstructed-snapshot-universal-review-0"
+    ]
 
 
 @pytest.mark.parametrize("verdict", ["REJECT", "INCONCLUSIVE"])
@@ -2476,7 +2944,7 @@ def test_information_review_missing_candidate_material_holds_without_call(
     )
 
 
-def test_legacy_proposal_path_does_not_require_information_review(tmp_path):
+def test_legacy_proposal_path_cannot_bypass_information_review(tmp_path):
     plan_path, plan = _information_review_controller_plan(tmp_path, mode="replay")
     del plan["lineages"][0]["candidate_information_set_review"]
     plan_path.write_text(json.dumps(plan))
@@ -2485,13 +2953,59 @@ def test_legacy_proposal_path_does_not_require_information_review(tmp_path):
         plan_path,
         tmp_path / "legacy-state",
         runner=lambda _argv: (_ for _ in ()).throw(
-            AssertionError("legacy replay path must not dispatch a child")
+            AssertionError("missing Review plan must not dispatch a child")
         ),
     )["lineages"]["information-lineage"]
 
-    assert result["phase"] == "FROZEN"
-    assert result["decision"] == "PROMOTE"
+    assert result["phase"] == "HOLD_FOR_REFINE"
+    assert result["decision"] == "HOLD_FOR_REFINE"
     assert result["accounted_review_ids"] == []
+    assert result["hold"]["reason"] == (
+        "information_set_review_missing_trusted_plan"
+    )
+
+
+def test_preconstructed_candidate_without_review_plan_cannot_reach_target(
+    tmp_path,
+):
+    plan = {
+        "schema_version": 1,
+        "controller_run_id": "preconstructed-no-review",
+        "mode": "replay",
+        "runtime": {},
+        "limits": {"provider_cost_usd": 1},
+        "lineages": [{
+            "lineage_id": "preconstructed-no-review",
+            "parent": {"version": "h0", "worker_dir": "/workers/h0"},
+            "candidate": {
+                "version": "candidate-v1",
+                "worker_dir": "/workers/candidate-v1",
+            },
+            "stages": [
+                {"name": "target", "task_id": "task-t"},
+                {"name": "repeat", "task_id": "task-t"},
+                {"name": "protection", "task_id": "task-p"},
+            ],
+        }],
+    }
+    plan_path = tmp_path / "preconstructed-no-review.json"
+    plan_path.write_text(json.dumps(plan))
+
+    state = run_controller(
+        plan_path,
+        tmp_path / "preconstructed-no-review-state",
+        runner=lambda _argv: (_ for _ in ()).throw(
+            AssertionError("missing Review plan must not dispatch")
+        ),
+    )["lineages"]["preconstructed-no-review"]
+
+    assert state["phase"] == "HOLD_FOR_REFINE"
+    assert state["decision"] == "HOLD_FOR_REFINE"
+    assert state["hold"]["reason"] == (
+        "information_set_review_missing_trusted_plan"
+    )
+    assert state["accounted_run_ids"] == []
+    assert state["accounted_review_ids"] == []
 
 
 def test_worker_argv_never_contains_review_reason_or_diagnostic():
@@ -2521,7 +3035,7 @@ def test_worker_argv_never_contains_review_reason_or_diagnostic():
     }
     argv = build_child_argv(
         plan,
-        lineage,
+        _review_bound_lineage(lineage),
         {"name": "target", "task_id": "task-t"},
         approve_external_run=True,
     )

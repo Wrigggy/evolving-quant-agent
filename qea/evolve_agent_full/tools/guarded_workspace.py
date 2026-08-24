@@ -125,19 +125,48 @@ _QUANT_BREAKDOWN_STAGES = frozenset(
         "unable_to_decide",
     }
 )
-_QUANT_RESEARCH_STATES = frozenset(
+_QUANT_RESEARCH_STATE_SEQUENCE = (
+    "research_mandate_contract",
+    "research_evidence_data",
+    "quantitative_representation",
+    "research_operation",
+    "evaluation_reconciliation",
+    "research_artifact_completion",
+)
+_QUANT_RESEARCH_STATES = frozenset(_QUANT_RESEARCH_STATE_SEQUENCE)
+_WORKFLOW_SCOPES = frozenset(
+    {"stage_local", "cross_stage", "workflow_global"}
+)
+_PUBLIC_TRAJECTORY_NAMES = frozenset(
+    {"worker_trace.jsonl", "research_state_trace.json"}
+)
+_WORKFLOW_ANALYSIS_FIELDS = frozenset(
     {
-        "research_mandate_contract",
-        "research_evidence_data",
-        "quantitative_representation",
-        "research_operation",
-        "evaluation_reconciliation",
-        "research_artifact_completion",
+        "workflow_scope",
+        "involved_states",
+        "handoff_gap",
+        "workflow_evidence",
+        "predicted_end_to_end_observable",
     }
 )
 _WORKER_VISIBLE_SURFACES = _COMPONENT_ROLES | frozenset({"worker_instruction"})
 _WORKER_VISIBLE_BASIS_KINDS = frozenset(
     {"public_contract", "benchmark_independent", "optimize_only_diagnostic"}
+)
+_FORBIDDEN_PUBLIC_BASIS_NAMES = frozenset(
+    {
+        "checker.py",
+        "expected.json",
+        "failed_properties.json",
+        "official_score.json",
+        "public_evaluation.json",
+        "reference.json",
+        "rubric.json",
+        "task_scores.json",
+    }
+)
+_FORBIDDEN_PUBLIC_BASIS_PARTS = frozenset(
+    {"checker", "expected", "reference", "solution", "verifier"}
 )
 
 
@@ -304,6 +333,205 @@ def _text_list(
     return normalized
 
 
+def _normalize_workflow_analysis(
+    discovery: Mapping[str, Any],
+    *,
+    contract: Mapping[str, Any],
+    decision_evidence_refs: set[str],
+    transition_state_id: str | None = None,
+) -> dict[str, Any]:
+    """Validate one explicit local, cross-state, or global workflow diagnosis."""
+
+    required_fields = {
+        "workflow_scope",
+        "involved_states",
+        "handoff_gap",
+        "predicted_end_to_end_observable",
+    }
+    missing = sorted(required_fields - set(discovery))
+    if missing:
+        raise GuardedWorkspaceError(
+            "workflow analysis is missing required fields: " + ", ".join(missing)
+        )
+
+    workflow_scope = _text(
+        discovery.get("workflow_scope"), label="workflow_scope"
+    ).casefold()
+    if workflow_scope not in _WORKFLOW_SCOPES:
+        raise GuardedWorkspaceError("workflow_scope is unsupported")
+    involved_states = [
+        state.casefold()
+        for state in _text_list(
+            discovery.get("involved_states"),
+            label="involved_states",
+            minimum=1,
+        )
+    ]
+    if len(set(involved_states)) != len(involved_states):
+        raise GuardedWorkspaceError("involved_states must not contain duplicates")
+    if any(state not in _QUANT_RESEARCH_STATES for state in involved_states):
+        raise GuardedWorkspaceError("involved_states contains an unsupported state")
+    if transition_state_id is not None and transition_state_id not in involved_states:
+        raise GuardedWorkspaceError(
+            "research_state_transition.state_id must be included in involved_states"
+        )
+
+    raw_handoff = discovery.get("handoff_gap")
+    handoff_gap: dict[str, str] | None
+    if workflow_scope == "stage_local":
+        if len(involved_states) != 1:
+            raise GuardedWorkspaceError(
+                "stage_local workflow_scope requires exactly one involved state"
+            )
+        if raw_handoff is not None:
+            raise GuardedWorkspaceError(
+                "stage_local workflow_scope requires a null handoff_gap"
+            )
+        handoff_gap = None
+    else:
+        if workflow_scope == "cross_stage" and not 2 <= len(involved_states) <= 5:
+            raise GuardedWorkspaceError(
+                "cross_stage workflow_scope requires two to five involved states"
+            )
+        if workflow_scope == "workflow_global" and set(involved_states) != set(
+            _QUANT_RESEARCH_STATE_SEQUENCE
+        ):
+            raise GuardedWorkspaceError(
+                "workflow_global workflow_scope requires all six research states"
+            )
+        if not isinstance(raw_handoff, Mapping):
+            raise GuardedWorkspaceError(
+                f"{workflow_scope} workflow_scope requires a handoff_gap object"
+            )
+        from_state = _text(
+            raw_handoff.get("from_state"), label="handoff_gap.from_state"
+        ).casefold()
+        to_state = _text(
+            raw_handoff.get("to_state"), label="handoff_gap.to_state"
+        ).casefold()
+        if from_state == to_state:
+            raise GuardedWorkspaceError(
+                "handoff_gap must connect two distinct research states"
+            )
+        if from_state not in involved_states or to_state not in involved_states:
+            raise GuardedWorkspaceError(
+                "handoff_gap states must both appear in involved_states"
+            )
+        handoff_gap = {
+            "from_state": from_state,
+            "to_state": to_state,
+            "observed_gap": _text(
+                raw_handoff.get("observed_gap"),
+                label="handoff_gap.observed_gap",
+            ),
+            "target_handoff": _text(
+                raw_handoff.get("target_handoff"),
+                label="handoff_gap.target_handoff",
+            ),
+        }
+
+    raw_workflow_evidence = discovery.get("workflow_evidence", [])
+    if not isinstance(raw_workflow_evidence, list):
+        raise GuardedWorkspaceError("workflow_evidence must be a list")
+    minimum_evidence = 2 if workflow_scope == "workflow_global" else int(
+        workflow_scope == "cross_stage"
+    )
+    if len(raw_workflow_evidence) < minimum_evidence:
+        raise GuardedWorkspaceError(
+            f"{workflow_scope} workflow_scope requires at least "
+            f"{minimum_evidence} workflow_evidence entries"
+        )
+    if raw_workflow_evidence and contract.get("answer_free") is not True:
+        raise GuardedWorkspaceError(
+            "workflow_evidence requires an answer-free evidence contract"
+        )
+
+    task_keys = set(
+        _text_list(contract.get("task_keys", []), label="contract task_keys")
+    )
+    raw_prefixes = contract.get("task_evidence_prefixes", {})
+    prefixes = raw_prefixes if isinstance(raw_prefixes, Mapping) else {}
+    raw_family_map = contract.get("task_family_by_key", {})
+    family_map = raw_family_map if isinstance(raw_family_map, Mapping) else {}
+    workflow_evidence: list[dict[str, str]] = []
+    seen_refs: set[str] = set()
+    for index, raw_entry in enumerate(raw_workflow_evidence):
+        if not isinstance(raw_entry, Mapping):
+            raise GuardedWorkspaceError(
+                f"workflow_evidence[{index}] must be an object"
+            )
+        label = f"workflow_evidence[{index}]"
+        task_key = _text(raw_entry.get("task_key"), label=f"{label}.task_key")
+        task_family = _text(
+            raw_entry.get("task_family"), label=f"{label}.task_family"
+        ).casefold()
+        trajectory_ref = _text(
+            raw_entry.get("trajectory_ref"), label=f"{label}.trajectory_ref"
+        )
+        if task_key not in task_keys:
+            raise GuardedWorkspaceError(f"{label}.task_key is not authorized")
+        expected_family = family_map.get(task_key)
+        if expected_family is not None and (
+            not isinstance(expected_family, str)
+            or expected_family.strip().casefold() != task_family
+        ):
+            raise GuardedWorkspaceError(
+                f"{label}.task_family does not match the evidence contract"
+            )
+        task_prefixes = prefixes.get(task_key)
+        if not isinstance(task_prefixes, list) or not any(
+            trajectory_ref == prefix or trajectory_ref.startswith(str(prefix))
+            for prefix in task_prefixes
+        ):
+            raise GuardedWorkspaceError(
+                f"{label}.trajectory_ref is outside its authorized task evidence"
+            )
+        if PurePosixPath(trajectory_ref).name not in _PUBLIC_TRAJECTORY_NAMES:
+            raise GuardedWorkspaceError(
+                f"{label}.trajectory_ref must name a public Worker trajectory"
+            )
+        if trajectory_ref not in decision_evidence_refs:
+            raise GuardedWorkspaceError(
+                f"{label}.trajectory_ref must be cited in evidence_refs"
+            )
+        if trajectory_ref in seen_refs:
+            raise GuardedWorkspaceError(
+                "workflow_evidence must not repeat a trajectory_ref"
+            )
+        seen_refs.add(trajectory_ref)
+        workflow_evidence.append(
+            {
+                "task_key": task_key,
+                "task_family": task_family,
+                "trajectory_ref": trajectory_ref,
+                "observed_handoff": _text(
+                    raw_entry.get("observed_handoff"),
+                    label=f"{label}.observed_handoff",
+                ),
+            }
+        )
+    if workflow_scope == "workflow_global":
+        if len({row["task_key"] for row in workflow_evidence}) < 2:
+            raise GuardedWorkspaceError(
+                "workflow_global requires multiple H0 task trajectories"
+            )
+        if len({row["task_family"] for row in workflow_evidence}) < 2:
+            raise GuardedWorkspaceError(
+                "workflow_global requires cross-family H0 trajectory evidence"
+            )
+
+    return {
+        "workflow_scope": workflow_scope,
+        "involved_states": involved_states,
+        "handoff_gap": handoff_gap,
+        "workflow_evidence": workflow_evidence,
+        "predicted_end_to_end_observable": _text(
+            discovery.get("predicted_end_to_end_observable"),
+            label="predicted_end_to_end_observable",
+        ),
+    }
+
+
 def _contract() -> dict[str, Any]:
     path, _ = _resolve("evidence", "contract.json", must_exist=True)
     try:
@@ -392,6 +620,11 @@ def _worker_visible_basis_visibility(relative: str) -> str:
 
     path, normalized = _resolve("evidence", relative, must_exist=True)
     pure = PurePosixPath(normalized)
+    if pure.name.casefold() in _FORBIDDEN_PUBLIC_BASIS_NAMES or any(
+        part.casefold() in _FORBIDDEN_PUBLIC_BASIS_PARTS
+        for part in pure.parts[:-1]
+    ):
+        return "other"
     if pure.name == "optimization-diagnostic.json":
         return "optimize_only_diagnostic"
     if path.suffix == ".json":
@@ -1950,6 +2183,18 @@ def _decide_quant_property_candidate(
                     label="research_state_transition.transition_observable",
                 ),
             }
+            if (
+                contract.get("workflow_scope_required_for_act") is True
+                or any(field in discovery for field in _WORKFLOW_ANALYSIS_FIELDS)
+            ):
+                normalized.update(
+                    _normalize_workflow_analysis(
+                        discovery,
+                        contract=contract,
+                        decision_evidence_refs=set(normalized_refs),
+                        transition_state_id=state_id,
+                    )
+                )
         if contract.get("quant_research_state_card_required_for_act") is True:
             card_path = _text(
                 discovery.get("quant_research_state_card"),
@@ -2205,6 +2450,24 @@ def _decide_quant_property_candidate(
             raise GuardedWorkspaceError(
                 f"ACT may change at most {max_declared} component roles"
             )
+        raw_allowed_components = contract.get("allowed_candidate_components")
+        if raw_allowed_components is not None:
+            allowed_components = _text_list(
+                raw_allowed_components,
+                label="contract allowed_candidate_components",
+                minimum=1,
+            )
+            if any(
+                component not in _COMPONENT_ROLES
+                for component in allowed_components
+            ):
+                raise GuardedWorkspaceError(
+                    "contract allowed_candidate_components contains an unknown role"
+                )
+            if not set(components) <= set(allowed_components):
+                raise GuardedWorkspaceError(
+                    "ACT declares a component outside allowed_candidate_components"
+                )
         raw_worker_visible_claims = discovery.get("worker_visible_claims")
         claim_provenance_required = (
             contract.get("worker_visible_claim_provenance_required_for_act") is True
@@ -2321,6 +2584,14 @@ def _decide_quant_property_candidate(
         normalized["abstain_reason"] = _text(
             discovery.get("abstain_reason"), label="abstain_reason"
         )
+        if any(field in discovery for field in _WORKFLOW_ANALYSIS_FIELDS):
+            normalized.update(
+                _normalize_workflow_analysis(
+                    discovery,
+                    contract=contract,
+                    decision_evidence_refs=set(normalized_refs),
+                )
+            )
     normalized["components"] = components
     normalized["primary_components"] = primary_components
     if len(components) == 1:
@@ -2345,6 +2616,9 @@ def _decide_quant_property_candidate(
             "research_state_transition_required_for_act": contract.get(
                 "research_state_transition_required_for_act"
             ),
+            "workflow_scope_required_for_act": contract.get(
+                "workflow_scope_required_for_act"
+            ),
             "quant_research_state_card_required_for_act": contract.get(
                 "quant_research_state_card_required_for_act"
             ),
@@ -2353,6 +2627,10 @@ def _decide_quant_property_candidate(
             ),
             "max_primary_components": contract.get("max_primary_components"),
             "max_declared_components": contract.get("max_declared_components"),
+            "allowed_candidate_components": contract.get(
+                "allowed_candidate_components"
+            ),
+            "allowed_candidate_paths": contract.get("allowed_candidate_paths"),
             "preferred_primary_components": contract.get(
                 "preferred_primary_components"
             ),
@@ -2392,6 +2670,13 @@ def _decide_quant_property_candidate(
         "components": components,
         "failure_signature": normalized.get("failure_signature"),
         "research_state_transition": normalized.get("research_state_transition"),
+        "workflow_scope": normalized.get("workflow_scope"),
+        "involved_states": normalized.get("involved_states"),
+        "handoff_gap": normalized.get("handoff_gap"),
+        "workflow_evidence": normalized.get("workflow_evidence"),
+        "predicted_end_to_end_observable": normalized.get(
+            "predicted_end_to_end_observable"
+        ),
         "quant_research_state_card": normalized.get("quant_research_state_card"),
         "selected_relation": normalized.get("selected_relation"),
         "residual_risk_relation": normalized.get("residual_risk_relation"),

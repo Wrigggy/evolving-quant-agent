@@ -6,8 +6,12 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
+from copy import deepcopy
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
@@ -54,6 +58,59 @@ def _stage(lineage: Mapping[str, object], name: str) -> Mapping[str, object]:
     return matches[0]
 
 
+def _reviewed_worker_dir(lineage: Mapping[str, object]) -> str:
+    """Resolve only a frozen H0 or an exact Review-PASS candidate worker."""
+
+    parent = lineage.get("parent")
+    candidate = lineage.get("candidate")
+    if not isinstance(parent, Mapping) or not isinstance(candidate, Mapping):
+        raise LineageError("Worker dispatch requires parent and candidate records")
+    parent_dir = parent.get("worker_dir")
+    candidate_dir = candidate.get("worker_dir")
+    if not isinstance(parent_dir, str) or not isinstance(candidate_dir, str):
+        raise LineageError("Worker dispatch has no candidate directory")
+    frozen_h0 = (
+        isinstance(parent.get("version"), str)
+        and parent.get("version") == candidate.get("version")
+        and Path(parent_dir).resolve(strict=False)
+        == Path(candidate_dir).resolve(strict=False)
+    )
+    if frozen_h0:
+        return candidate_dir
+    review = candidate.get("information_set_review")
+    if (
+        not isinstance(review, Mapping)
+        or review.get("overall_verdict") != "PASS"
+        or review.get("reviewed_candidate_dir") != candidate_dir
+    ):
+        raise LineageError(
+            "changed candidate Worker dispatch requires exact Review PASS snapshot"
+        )
+    observations = lineage.get("observations")
+    observation = (
+        observations.get("information_set_review")
+        if isinstance(observations, Mapping)
+        else None
+    )
+    coverage = (
+        observation.get("coverage_review")
+        if isinstance(observation, Mapping)
+        else None
+    )
+    if (
+        not isinstance(observation, Mapping)
+        or observation.get("overall_verdict") != "PASS"
+        or observation.get("reviewed_candidate_dir") != candidate_dir
+        or not isinstance(coverage, Mapping)
+        or coverage.get("verdict") != "PASS"
+    ):
+        raise LineageError(
+            "changed candidate Worker dispatch requires matching retained "
+            "Review PASS coverage"
+        )
+    return candidate_dir
+
+
 def build_child_argv(
     plan: Mapping[str, object],
     lineage: Mapping[str, object],
@@ -68,6 +125,7 @@ def build_child_argv(
     runtime = plan["runtime"]
     parent = lineage["parent"]
     candidate = lineage["candidate"]
+    reviewed_worker_dir = _reviewed_worker_dir(lineage)
     run_id = str(
         stage.get("live_run_id")
         or f"{plan['controller_run_id']}-{lineage['lineage_id']}-{stage['name']}"
@@ -97,7 +155,7 @@ def build_child_argv(
         stage.get("selection_reference"), Mapping
     ):
         argv.extend(("--arm", f"{parent_arm}={parent['worker_dir']}"))
-    argv.extend(("--arm", f"{candidate_arm}={candidate['worker_dir']}"))
+    argv.extend(("--arm", f"{candidate_arm}={reviewed_worker_dir}"))
     argv.extend(
         [
             "--task-id",
@@ -111,7 +169,11 @@ def build_child_argv(
             "--approve-external-run",
         ]
     )
-    if "activation_binding" in candidate:
+    if isinstance(candidate.get("information_set_review"), Mapping):
+        # A changed candidate may only activate the token bound before Review;
+        # a stage-local fallback would be an unreviewed effective-Worker overlay.
+        activation_token = candidate.get("activation_token")
+    elif "activation_binding" in candidate:
         activation_token = candidate.get("activation_token")
     else:
         activation_token = stage.get("activation_token")
@@ -157,6 +219,14 @@ def build_quantcodeeval_child_argv(
         raise LineageError("live QuantCodeEval child execution was not approved")
     runtime = plan["runtime"]
     candidate = lineage["candidate"]
+    _reviewed_worker_dir(lineage)
+    if Path(str(lineage["parent"]["worker_dir"])).resolve(
+        strict=False
+    ) != Path(str(candidate["worker_dir"])).resolve(strict=False):
+        raise LineageError(
+            "live QuantCodeEval activation_run cannot bind the reviewed_candidate "
+            "snapshot; dispatch is blocked"
+        )
     activation_run = stage.get("activation_run") or candidate.get(
         "activation_run"
     )
@@ -307,7 +377,7 @@ def _proposal_run_id(
 def _information_set_review_spec(
     lineage: Mapping[str, object],
 ) -> dict[str, object] | None:
-    """Return one trusted opt-in pre-Worker review specification."""
+    """Return one trusted pre-Worker review specification."""
 
     raw = lineage.get("candidate_information_set_review")
     if raw is None:
@@ -336,7 +406,81 @@ def _information_set_review_spec(
         raise LineageError(
             "answer-free candidate review cannot include optimize-only sources"
         )
+    claims = raw.get("worker_visible_claims")
+    if claims is not None and (
+        not isinstance(claims, list) or not claims
+    ):
+        raise LineageError(
+            "candidate information-set review worker_visible_claims must be "
+            "a non-empty list when supplied"
+        )
     return dict(raw)
+
+
+def _materialize_reviewed_candidate_snapshot(
+    state: Mapping[str, object],
+    spec: Mapping[str, object],
+    states_root: Path,
+) -> dict[str, object]:
+    """Freeze one run-scoped candidate copy shared by Review and Worker."""
+
+    result = deepcopy(dict(state))
+    candidate = result.get("candidate")
+    if not isinstance(candidate, dict):
+        raise LineageError("candidate review has no candidate to snapshot")
+    lineage_id = result.get("lineage_id")
+    review_id = spec.get("review_id")
+    for label, value in (("lineage_id", lineage_id), ("review_id", review_id)):
+        if (
+            not isinstance(value, str)
+            or not value
+            or Path(value).name != value
+            or value in {".", ".."}
+        ):
+            raise LineageError(f"candidate review {label} is unsafe")
+    destination = (
+        states_root / "reviewed-candidates" / str(lineage_id) / str(review_id)
+    ).resolve()
+    source_value = candidate.get("source_worker_dir") or candidate.get("worker_dir")
+    if not isinstance(source_value, str) or not source_value:
+        raise LineageError("candidate review has no source worker directory")
+    source = Path(source_value).resolve()
+    if destination.exists() and (
+        candidate.get("reviewed_candidate_dir") != str(destination)
+        or not candidate.get("source_worker_dir")
+    ):
+        raise LineageError(
+            "reviewed candidate snapshot already exists outside this resume state"
+        )
+    if not destination.exists():
+        if not source.is_dir() or source.is_symlink():
+            raise LineageError(
+                "information_set_review_missing_candidate_material"
+            )
+        if any(path.is_symlink() for path in source.rglob("*")):
+            raise LineageError(
+                "reviewed candidate snapshot cannot contain symlinks"
+            )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary_root = Path(
+            tempfile.mkdtemp(prefix=".reviewed-candidate-", dir=destination.parent)
+        )
+        temporary = temporary_root / "candidate"
+        try:
+            shutil.copytree(source, temporary)
+            os.replace(temporary, destination)
+        finally:
+            shutil.rmtree(temporary_root, ignore_errors=True)
+        for path in sorted(destination.rglob("*"), reverse=True):
+            path.chmod(0o555 if path.is_dir() else 0o444)
+        destination.chmod(0o555)
+    if not destination.is_dir() or destination.is_symlink():
+        raise LineageError("reviewed candidate snapshot is unavailable")
+    candidate["source_worker_dir"] = str(source)
+    candidate["reviewed_candidate_dir"] = str(destination)
+    candidate["review_id"] = str(review_id)
+    candidate["worker_dir"] = str(destination)
+    return result
 
 
 def _worker_visible_surface(relative: str) -> str | None:
@@ -447,6 +591,8 @@ def _candidate_information_set_review_package(
         if isinstance(proposal, Mapping)
         else None
     )
+    if claims is None:
+        claims = spec.get("worker_visible_claims")
     if not isinstance(claims, list) or not claims:
         return None, "information_set_review_missing_worker_visible_claims"
 
@@ -1299,9 +1445,23 @@ def run_controller(
             if state.get("phase") == "INFORMATION_SET_REVIEW":
                 review_spec = _information_set_review_spec(lineage)
                 if review_spec is None:
-                    raise LineageError(
-                        "INFORMATION_SET_REVIEW has no enabled trusted plan"
+                    state = hold_candidate_information_set_review(
+                        state,
+                        reason="information_set_review_missing_trusted_plan",
                     )
+                    save_lineage(state_path, state)
+                    continue
+                try:
+                    state = _materialize_reviewed_candidate_snapshot(
+                        state, review_spec, states_root
+                    )
+                except LineageError as exc:
+                    state = hold_candidate_information_set_review(
+                        state, reason=str(exc)
+                    )
+                    save_lineage(state_path, state)
+                    continue
+                save_lineage(state_path, state)
                 package, hold_reason = _candidate_information_set_review_package(
                     state, review_spec
                 )
@@ -1328,6 +1488,9 @@ def run_controller(
                     review_package=package,
                     review_payload=review_payload,
                     review_accounting=review_accounting,
+                    reviewed_candidate_dir=str(
+                        state["candidate"]["worker_dir"]
+                    ),
                 )
                 save_lineage(state_path, state)
                 if (
@@ -1371,6 +1534,7 @@ def run_controller(
                             **dict(lineage.get("candidate", {})),
                             **state["candidate"],
                         },
+                        "observations": state["observations"],
                     },
                     stage,
                     approve_external_run=approve_external_run,
@@ -1426,6 +1590,7 @@ def run_controller(
                         **lineage,
                         "parent": state["current_parent"],
                         "candidate": state["candidate"],
+                        "observations": state["observations"],
                     },
                     stage,
                     approve_external_run=approve_external_run,

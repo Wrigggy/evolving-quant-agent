@@ -68,6 +68,56 @@ input_schema:
               description: Concrete trajectory, component-use, invariant, artifact, or official observation showing whether the transition occurred.
           required: [state_id, expected_state, observed_state, target_state, transition_observable]
           additionalProperties: false
+        workflow_scope:
+          type: string
+          enum: [stage_local, cross_stage, workflow_global]
+          description: Required for ACT when the evidence contract sets workflow_scope_required_for_act; otherwise optional. State whether the evidence supports one local state, a handoff among a strict subset of states, or an end-to-end mechanism spanning all six research states.
+        involved_states:
+          type: array
+          minItems: 1
+          maxItems: 6
+          uniqueItems: true
+          description: Research states implicated by the observed mechanism. A stage_local decision names exactly one, cross_stage names two to five, and workflow_global names all six.
+          items:
+            type: string
+            enum: [research_mandate_contract, research_evidence_data, quantitative_representation, research_operation, evaluation_reconciliation, research_artifact_completion]
+        handoff_gap:
+          type: [object, "null"]
+          description: Null for stage_local. For cross_stage or workflow_global, identify the observed loss between two involved states and the target handoff; this is Evolver diagnosis, not automatically a Worker-visible instruction.
+          properties:
+            from_state:
+              type: string
+              enum: [research_mandate_contract, research_evidence_data, quantitative_representation, research_operation, evaluation_reconciliation, research_artifact_completion]
+            to_state:
+              type: string
+              enum: [research_mandate_contract, research_evidence_data, quantitative_representation, research_operation, evaluation_reconciliation, research_artifact_completion]
+            observed_gap:
+              type: string
+              description: Concrete trajectory or artifact evidence that the earlier state's output, decision, or context did not reach the later state.
+            target_handoff:
+              type: string
+              description: Public-grounded information or control transition the candidate should preserve across the boundary.
+          required: [from_state, to_state, observed_gap, target_handoff]
+          additionalProperties: false
+        workflow_evidence:
+          type: array
+          description: Exact already-read answer-free frozen-H0 trajectories supporting the workflow diagnosis. Cross-stage ACT needs at least one entry; workflow-global ACT needs at least two distinct tasks from distinct public task families. These observations can localize a mechanism but are not automatically public normative support for a Worker-visible claim.
+          items:
+            type: object
+            properties:
+              task_key: {type: string}
+              task_family: {type: string}
+              trajectory_ref:
+                type: string
+                description: Exact worker_trace.jsonl or research_state_trace.json evidence path, also cited in evidence_refs.
+              observed_handoff:
+                type: string
+                description: Repeated answer-free trajectory observation supporting the declared handoff gap.
+            required: [task_key, task_family, trajectory_ref, observed_handoff]
+            additionalProperties: false
+        predicted_end_to_end_observable:
+          type: string
+          description: Required with workflow_scope. One answer-free fresh-Worker trajectory or artifact observation showing whether the complete workflow improved while preserving final delivery.
         quant_research_state_card:
           type: string
           description: Required for ACT only when the evidence contract enables Quant Research State guided search. Reference the fixed relative Evolver result path quant-research-state-card.json; do not copy the card into this payload.
@@ -187,6 +237,7 @@ input_schema:
           items:
             type: string
             enum: [systemprompt, agent_config, tool_descriptions, tools, validator, skills, memory, middleware, routing]
+          description: Complete exact changed file roles. When contract.json declares allowed_candidate_components or allowed_candidate_paths, the ACT proposal must stay entirely inside that frozen mutation surface.
         primary_components:
           type: array
           items:

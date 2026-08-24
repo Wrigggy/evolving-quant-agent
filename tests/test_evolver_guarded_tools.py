@@ -828,6 +828,14 @@ def _quant_v2_decision():
                 "the public estimator fixture"
             ),
         },
+        "workflow_scope": "stage_local",
+        "involved_states": ["research_operation"],
+        "handoff_gap": None,
+        "workflow_evidence": [],
+        "predicted_end_to_end_observable": (
+            "the fresh Worker uses the selected operation and still delivers the "
+            "publicly requested artifact"
+        ),
         "hypotheses_considered": [
             {
                 "hypothesis_id": "h_operation",
@@ -921,6 +929,9 @@ def test_quant_v2_uses_exact_history_and_unlocks_binding_components(guarded_root
     assert result["primary_components"] == ["tools"]
     assert result["components"] == ["agent_config", "tool_descriptions", "tools"]
     assert result["research_state_transition"]["state_id"] == "research_operation"
+    assert result["workflow_scope"] == "stage_local"
+    assert result["involved_states"] == ["research_operation"]
+    assert result["handoff_gap"] is None
     write_candidate("tools/estimator.py", "def estimate(values):\n    return sum(values)\n")
     write_candidate("tool_descriptions/estimator.tool.yaml", "type: tool\n")
     with pytest.raises(GuardedWorkspaceError, match="undeclared component"):
@@ -944,6 +955,391 @@ def test_quant_v2_act_requires_research_state_transition(guarded_roots):
     decision.pop("research_state_transition")
 
     with pytest.raises(GuardedWorkspaceError, match="research_state_transition"):
+        decide_candidate(discovery=decision)
+
+
+def test_quant_v2_keeps_older_stage_local_decisions_compatible(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    for field in (
+        "workflow_scope",
+        "involved_states",
+        "handoff_gap",
+        "workflow_evidence",
+        "predicted_end_to_end_observable",
+    ):
+        decision.pop(field)
+
+    result = decide_candidate(discovery=decision)
+
+    assert result["workflow_scope"] is None
+
+
+def test_quant_v2_contract_can_require_explicit_workflow_scope(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["workflow_scope_required_for_act"] = True
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    decision.pop("workflow_scope")
+
+    with pytest.raises(GuardedWorkspaceError, match="workflow analysis is missing"):
+        decide_candidate(discovery=decision)
+
+
+@pytest.mark.parametrize(
+    ("updates", "error"),
+    [
+        (
+            {
+                "workflow_scope": "stage_local",
+                "involved_states": [
+                    "research_operation",
+                    "evaluation_reconciliation",
+                ],
+            },
+            "stage_local workflow_scope requires exactly one involved state",
+        ),
+        (
+            {
+                "workflow_scope": "cross_stage",
+                "involved_states": [
+                    "research_operation",
+                    "evaluation_reconciliation",
+                ],
+                "handoff_gap": None,
+            },
+            "cross_stage workflow_scope requires a handoff_gap object",
+        ),
+        (
+            {
+                "workflow_scope": "workflow_global",
+                "involved_states": [
+                    "research_operation",
+                    "evaluation_reconciliation",
+                ],
+                "handoff_gap": {
+                    "from_state": "research_operation",
+                    "to_state": "evaluation_reconciliation",
+                    "observed_gap": "the operation output is not reconciled",
+                    "target_handoff": "carry the operation result into evaluation",
+                },
+            },
+            "workflow_global workflow_scope requires all six research states",
+        ),
+    ],
+)
+def test_quant_v2_rejects_incoherent_workflow_scope(
+    guarded_roots, updates, error
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path="counterexample.md")
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", "counterexample.md"]
+    decision.update(updates)
+
+    with pytest.raises(GuardedWorkspaceError, match=error):
+        decide_candidate(discovery=decision)
+
+
+def _configure_global_workflow_evidence(evidence: Path) -> list[str]:
+    refs = [
+        "benchmarks/qfbench/tasks/rates-a/worker_trace.jsonl",
+        "benchmarks/qfbench/tasks/holdings-b/research_state_trace.json",
+    ]
+    for ref in refs:
+        path = evidence / ref
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"public_worker_event":"handoff omitted"}\n')
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract.update(
+        {
+            "answer_free": True,
+            "workflow_scope_required_for_act": True,
+            "task_keys": ["qfbench:rates-a", "qfbench:holdings-b"],
+            "task_evidence_prefixes": {
+                "qfbench:rates-a": ["benchmarks/qfbench/tasks/rates-a/"],
+                "qfbench:holdings-b": [
+                    "benchmarks/qfbench/tasks/holdings-b/"
+                ],
+            },
+            "task_family_by_key": {
+                "qfbench:rates-a": "rates_fx_macro",
+                "qfbench:holdings-b": "data_engineering",
+            },
+        }
+    )
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+    return refs
+
+
+def _set_global_workflow(decision: dict, refs: list[str]) -> None:
+    decision["workflow_scope"] = "workflow_global"
+    decision["involved_states"] = [
+        "research_mandate_contract",
+        "research_evidence_data",
+        "quantitative_representation",
+        "research_operation",
+        "evaluation_reconciliation",
+        "research_artifact_completion",
+    ]
+    decision["handoff_gap"] = {
+        "from_state": "research_mandate_contract",
+        "to_state": "evaluation_reconciliation",
+        "observed_gap": (
+            "the public deliverable constraint is not preserved through execution"
+        ),
+        "target_handoff": (
+            "carry the public deliverable constraint into final reconciliation"
+        ),
+    }
+    decision["workflow_evidence"] = [
+        {
+            "task_key": "qfbench:rates-a",
+            "task_family": "rates_fx_macro",
+            "trajectory_ref": refs[0],
+            "observed_handoff": (
+                "the public output contract disappears before reconciliation"
+            ),
+        },
+        {
+            "task_key": "qfbench:holdings-b",
+            "task_family": "data_engineering",
+            "trajectory_ref": refs[1],
+            "observed_handoff": (
+                "the artifact inventory is not carried into the final check"
+            ),
+        },
+    ]
+    decision["predicted_end_to_end_observable"] = (
+        "fresh Workers in both families preserve their public contracts through "
+        "reconciliation and deliver the requested artifacts"
+    )
+
+
+def test_quant_v2_accepts_cross_family_global_workflow_search(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    refs = _configure_global_workflow_evidence(evidence)
+    for ref in refs:
+        read_workspace(source="evidence", file_path=ref)
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = refs
+    _set_global_workflow(decision, refs)
+    decision["primary_components"] = ["routing"]
+    decision["components"] = ["routing", "skills"]
+    decision["component_override_reason"] = (
+        "the repeated loss occurs at a cross-state activation handoff"
+    )
+
+    result = decide_candidate(discovery=decision)
+
+    assert result["workflow_scope"] == "workflow_global"
+    assert len(result["involved_states"]) == 6
+    assert len(result["workflow_evidence"]) == 2
+    assert result["handoff_gap"]["from_state"] == "research_mandate_contract"
+    assert result["predicted_end_to_end_observable"].startswith("fresh Workers")
+
+
+def test_global_workflow_contract_limits_declared_candidate_roles(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    refs = _configure_global_workflow_evidence(evidence)
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["allowed_candidate_components"] = ["skills", "systemprompt"]
+    contract["allowed_candidate_paths"] = [
+        "skills/quant-research-six-stage-workflow/SKILL.md",
+        "systemprompt.md",
+    ]
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+    for ref in refs:
+        read_workspace(source="evidence", file_path=ref)
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = refs
+    _set_global_workflow(decision, refs)
+
+    with pytest.raises(
+        GuardedWorkspaceError,
+        match="outside allowed_candidate_components",
+    ):
+        decide_candidate(discovery=decision)
+
+    decision["primary_components"] = ["skills"]
+    decision["components"] = ["skills", "systemprompt"]
+    decision["component_override_reason"] = (
+        "the global workflow contract freezes all other harness surfaces"
+    )
+    result = decide_candidate(discovery=decision)
+    assert result["components"] == ["skills", "systemprompt"]
+
+
+def test_quant_v2_global_workflow_requires_cross_family_trajectories(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    refs = _configure_global_workflow_evidence(evidence)
+    for ref in refs:
+        read_workspace(source="evidence", file_path=ref)
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = refs
+    _set_global_workflow(decision, refs)
+    decision["workflow_evidence"][1]["task_family"] = "rates_fx_macro"
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract.pop("task_family_by_key")
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+
+    with pytest.raises(GuardedWorkspaceError, match="cross-family"):
+        decide_candidate(discovery=decision)
+
+
+def test_quant_v2_global_workflow_rejects_official_outcome_as_trajectory(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    refs = _configure_global_workflow_evidence(evidence)
+    outcome_ref = "benchmarks/qfbench/tasks/rates-a/task_scores.json"
+    (evidence / outcome_ref).write_text('{"official_score": 1}\n')
+    refs[0] = outcome_ref
+    for ref in refs:
+        read_workspace(source="evidence", file_path=ref)
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = refs
+    _set_global_workflow(decision, refs)
+
+    with pytest.raises(GuardedWorkspaceError, match="public Worker trajectory"):
+        decide_candidate(discovery=decision)
+
+
+def test_quant_v2_workflow_trajectory_is_not_public_claim_basis(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    refs = _configure_global_workflow_evidence(evidence)
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["worker_visible_claim_provenance_required_for_act"] = True
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+    for ref in refs:
+        read_workspace(source="evidence", file_path=ref)
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = refs
+    _set_global_workflow(decision, refs)
+    decision["worker_visible_claims"] = [
+        _worker_visible_claim(
+            claim_id="trajectory-derived-rule",
+            claim="Always use the handoff rule inferred from the H0 trace.",
+            kind="public_contract",
+            basis_ref=refs[0],
+        )
+    ]
+
+    with pytest.raises(
+        GuardedWorkspaceError, match="does not match evidence visibility"
+    ):
+        decide_candidate(discovery=decision)
+
+
+@pytest.mark.parametrize(
+    "forbidden_ref",
+    [
+        "contracts/task/checker.py",
+        "contracts/task/expected.json",
+        "contracts/task/failed_properties.json",
+        "contracts/task/task_scores.json",
+    ],
+)
+def test_quant_v2_rejects_evaluator_material_as_public_claim_basis(
+    guarded_roots, forbidden_ref
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    _enable_answer_rich_claim_boundary(evidence)
+    path = evidence / forbidden_ref
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("not public normative support\n", encoding="utf-8")
+    read_workspace(source="evidence", file_path="overview.md")
+    read_workspace(source="evidence", file_path=forbidden_ref)
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = ["overview.md", forbidden_ref]
+    decision["worker_visible_claims"] = [
+        _worker_visible_claim(
+            claim_id="evaluator-derived-rule",
+            claim="Expose an evaluator-derived rule to the Worker.",
+            kind="public_contract",
+            basis_ref=forbidden_ref,
+        )
+    ]
+
+    with pytest.raises(
+        GuardedWorkspaceError, match="does not match evidence visibility"
+    ):
         decide_candidate(discovery=decision)
 
 
@@ -1723,10 +2119,21 @@ def test_quant_v2_forbids_legacy_unlock_and_schema_matches_quant_hypotheses(
     claims_schema = schema["properties"]["discovery"]["properties"][
         "worker_visible_claims"
     ]
+    workflow_properties = schema["properties"]["discovery"]["properties"]
     assert "prediction" in hypothesis_schema["required"]
     assert "failure_type_id" not in hypothesis_schema["required"]
     assert claims_schema["minItems"] == 1
     assert "basis_refs" in claims_schema["items"]["required"]
+    assert workflow_properties["workflow_scope"]["enum"] == [
+        "stage_local",
+        "cross_stage",
+        "workflow_global",
+    ]
+    assert workflow_properties["involved_states"]["uniqueItems"] is True
+    assert "target_handoff" in workflow_properties["handoff_gap"]["required"]
+    workflow_evidence = workflow_properties["workflow_evidence"]["items"]
+    assert "trajectory_ref" in workflow_evidence["required"]
+    assert "predicted_end_to_end_observable" in workflow_properties
     assert "failure_prediction" not in schema_text
     with pytest.raises(GuardedWorkspaceError, match="legacy unlock is forbidden"):
         unlock_candidate(
