@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-qrs-mini-scheduler-canary-20260825-r3",
+  "run_id": "qf-qrs-mini-scheduler-canary-20260825-r3",
+  "date": "2026-08-25",
+  "status": "retained_review_nonpass_final_setup_recovery",
+  "research_question": "Does the final fresh mini setup recovery exercise bounded answer-free trace inspection, an admitted one-skill ACT, genuine Candidate Information-Set Review, clean non-PASS carry, and a zero-work resume?",
+  "setup": {
+    "benchmark": "QFBench",
+    "frozen_plan": "data/breadth/QF_QRS_MINI_SCHEDULER_CANARY_R3_PLAN.json",
+    "deployed_source_revision": "49c924c",
+    "engineering_change_revision": "2676e38",
+    "local_mirror": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r3/",
+    "scheduler_result": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r3/scheduler-state/SCHEDULER-RESULT.json",
+    "controller_result": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r3/scheduler-state/panel-1-controller/CONTROLLER-RESULT.json",
+    "trajectory_bank_result": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r3/trajectory-bank/TRAJECTORY-BANK-RESULT.json",
+    "proposal_result": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r3-panel-01-proposal/proposal-report.json",
+    "review_result": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r3-panel-01-review/RESULT.json",
+    "resume_before_snapshot": "/private/tmp/qf-r3-resume-before/",
+    "parent_version": "quant-h0-s6-primitive-v1-frozen-mini-r3",
+    "worker_route": "deepseek-v4-flash-main0",
+    "reviewer_model": "deepseek/deepseek-v4-pro",
+    "reviewer_backend": "openrouter",
+    "development_task_count": 4,
+    "stop_after_panel": 1,
+    "sealed_tasks_used": false,
+    "main_reuse_allowed": false,
+    "r1_or_r2_material_reused": false
+  },
+  "h0_bank": {
+    "valid_worker_verifier_cells": 4,
+    "valid_runtime_histories": 4,
+    "task_results": [
+      {
+        "task_id": "13f-amendment-aware-crowding",
+        "tests_passed": 44,
+        "tests_total": 51,
+        "reward": 0.0
+      },
+      {
+        "task_id": "dupire-local-vol",
+        "tests_passed": 66,
+        "tests_total": 68,
+        "reward": 0.0
+      },
+      {
+        "task_id": "localvol-barrier",
+        "tests_passed": 39,
+        "tests_total": 39,
+        "reward": 1.0
+      },
+      {
+        "task_id": "swap-curve-bootstrap-ois",
+        "tests_passed": 19,
+        "tests_total": 19,
+        "reward": 1.0
+      }
+    ]
+  },
+  "evidence_interface": {
+    "materially_operational": true,
+    "trace_slice_calls": 3,
+    "trace_slice_return_bytes": [
+      9693,
+      119,
+      29627
+    ],
+    "trace_slice_return_limit_errors": 0,
+    "read_workspace_calls": 29,
+    "evidence_bytes_returned": 282017,
+    "interpretation": "The Evolver retrieved bounded raw-trace observations across the fresh answer-free bank and reached a structured decision. This validates the repaired evidence interface, not the causal truth of the proposed workflow rule."
+  },
+  "proposal": {
+    "evolver_calls": 1,
+    "decision": "ACT",
+    "admitted": true,
+    "changed_component_roles": [
+      "skills"
+    ],
+    "changed_files": [
+      "skills/quant-research-six-stage-workflow/SKILL.md"
+    ],
+    "changed_file_count": 1,
+    "added_lines": 32,
+    "added_bytes": 2032,
+    "prompt_or_description_only": true,
+    "candidate_version": "mini-global-s6-r3-p1",
+    "candidate_worker_dispatches_before_review": 0
+  },
+  "candidate_information_set_review": {
+    "genuine_reviewer_calls": 1,
+    "review_scope": "answer_free_candidate_information_set",
+    "policy_context": "Historical verdict under the Candidate Information-Set Review policy deployed for R3; the later policy-v2 correction does not reinterpret this result.",
+    "overall_verdict": "INCONCLUSIVE",
+    "coverage_verdict": "PASS",
+    "claim_count": 4,
+    "claim_verdict_counts": {
+      "PASS": 0,
+      "INCONCLUSIVE": 4,
+      "REJECT": 0
+    },
+    "promotion_authority": false,
+    "worker_visible": false,
+    "reviewed_candidate_snapshot": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r3/scheduler-state/panel-1-controller/reviewed-candidates/qf-qrs-mini-scheduler-canary-20260825-r3-panel-01/qf-qrs-mini-scheduler-canary-20260825-r3-panel-01-review/",
+    "lineage_controller_decision": "HOLD_FOR_REFINE",
+    "global_scheduler_panel_decision": "RETAIN_REVIEW_NONPASS",
+    "candidate_matched_worker_cells": 0,
+    "interpretation": "Coverage PASS means the four declared claims covered the decision-changing candidate diff. Overall INCONCLUSIVE means the supplied public contracts did not entail the state-specific rules, so the Reviewer withheld candidate dispatch."
+  },
+  "retain_carry_resume": {
+    "parent_unchanged": true,
+    "retained_parent_version": "quant-h0-s6-primitive-v1-frozen-mini-r3",
+    "curriculum_handoff_kind": "retained_incumbent_history_carry",
+    "carried_entry_count": 0,
+    "next_answer_free_evidence_root": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r3/trajectory-bank/evolver-answer-free/panel-evidence/panel-02-derivatives/",
+    "scheduler_stored_status": "RUNNING",
+    "scheduler_stored_phase": "PANELS",
+    "stopped_after_panel": 1,
+    "zero_work_resume_new_actions": 0,
+    "resume_files_identical": [
+      "RUNNER-INPUTS.json",
+      "SCHEDULER-RESULT.json",
+      "scheduler-state.json"
+    ]
+  },
+  "run_accounting": {
+    "h0_bank": {
+      "completed_requests": 148,
+      "total_tokens": 7264862,
+      "provider_cost_usd": 0.229676040
+    },
+    "evolver_proposal": {
+      "completed_requests": 23,
+      "total_tokens": 2771430,
+      "provider_cost_usd": 0.081515784
+    },
+    "candidate_reviewer": {
+      "completed_requests": 1,
+      "total_tokens": 52094,
+      "scheduler_accounted_tokens": 52094,
+      "response_usage_total_tokens": 52094,
+      "provider_accounting_prompt_tokens": 37971,
+      "provider_accounting_completion_tokens": 5990,
+      "provider_accounting_total_tokens": 43961,
+      "provider_cost_usd": 0.041553600
+    },
+    "candidate_matched_workers": {
+      "cells": 0,
+      "completed_requests": 0,
+      "total_tokens": 0,
+      "provider_cost_usd": 0.0
+    },
+    "total": {
+      "completed_requests": 172,
+      "total_tokens": 10088386,
+      "provider_cost_usd": 0.352745424
+    }
+  },
+  "decision": {
+    "mini_scheduler_gate": "FAIL_REVIEW_NONPASS",
+    "terminal_panel_decision": "RETAIN_REVIEW_NONPASS",
+    "main": "NO_GO",
+    "r4": "NOT_AUTHORIZED",
+    "engineering_clear_condition": "A fresh overall Review PASS must reach the exact reviewed snapshot, all 12 matched parent/candidate cells, answer-free handoff, and zero-work resume. The matched scientific decision may be PROMOTE, RETAIN, or ROLLBACK; retained gain is not required to validate this engineering path.",
+    "reason": "The final setup recovery validated the evidence, Review, retain/carry, and resume interfaces, but did not produce the required overall Review PASS and therefore could not exercise the 12-cell matched candidate path. Main remains blocked until a fresh positive-Review path is live-validated under the corrected Review policy."
+  },
+  "claim_boundary": {
+    "supports": "Fresh four-cell H0 banking, materially usable bounded trace retrieval, a legal admitted one-skill ACT, one genuine answer-free Review, coverage accounting, non-PASS retention, unchanged-parent carry, exact accounting, and zero-work resume all executed.",
+    "does_not_support": "The candidate received no overall Review PASS and no candidate Worker ran. There is no matched gain, promotion, reusable candidate, sealed result, main readiness, benchmark improvement, or evidence that QRS is effective. No further setup recovery is authorized."
+  }
+}

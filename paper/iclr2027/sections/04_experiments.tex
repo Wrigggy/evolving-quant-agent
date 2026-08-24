@@ -5,18 +5,20 @@ We organize the prospective study around four questions.
 \begin{description}
     \item[RQ1: QRS main.] Can a QRS-only cumulative lineage produce
     information-eligible, repeated focus-family gains with fixed cross-family
-    task-reward protection, and improve a frozen no-feedback sealed outcome vector relative
+    task-reward sentinels, and improve a frozen within-QFBench feedback-sealed
+    matched outcome vector relative
     to the imported frozen Primitive-H0?
     \item[RQ2: Quant-specific mechanism.] Holding the controller, public
     evidence, tasks, model, and budget fixed, how does removing State-Card
     construction and state-conditioned retrieval/routing change proposal,
     Review, state-transition, and promotion outcomes?
     \item[RQ3: External baseline.] Under common public task information,
-    Worker model, sealed panel, and outer resource budget, how does QRS compare
-    with an independently reproduced AHE baseline?
+    Worker model, within-QFBench feedback-sealed matched panel, and outer
+    resource budget, how does QRS compare with an independently reproduced AHE
+    baseline?
     \item[RQ4: Efficiency.] What requests, tokens, verifier calls, cost, and
     wall time are required to reach the first stable QRS promotion and the
-    frozen sealed endpoints?
+    frozen feedback-sealed matched endpoints?
 \end{description}
 
 \subsection{Three Separate Experiment Tracks}
@@ -51,8 +53,9 @@ AHE is reproduced independently from a pinned upstream implementation. We
 first establish source-faithful execution, then add the minimum adapter needed
 to consume the same quantitative public tasks. A common Candidate
 Information-Set Review is applied after proposal and before the blind Worker as
-an experimental-integrity gate, not as an AHE search component. The AHE code
-and lifecycle remain outside the released QRS implementation.
+an information-admissibility and anti-leak gate, not as an AHE search component
+or utility judge. The AHE code and lifecycle remain outside the released QRS
+implementation.
 
 Families and repeated task cells in the lineage are dependent because later
 candidates inherit earlier promoted changes. The primary run therefore reports
@@ -72,9 +75,11 @@ or prune development tasks.
 
 Any task, trajectory, or outcome that affects candidate generation,
 refinement, promotion, or task selection is development evidence. A separate
-family-stratified sealed panel is frozen before optimization from tasks that did
-not influence those decisions. Each frozen Primitive-H0, QRS, and external AHE
-endpoint sees each sealed task in two fresh repetitions; sealed outcomes do not return to the
+family-stratified feedback-sealed panel is frozen before optimization from
+tasks that did not influence those decisions. Each frozen Primitive-H0, QRS,
+and external AHE
+endpoint sees each feedback-sealed task in two fresh repetitions;
+feedback-sealed outcomes do not return to the
 Evolver, Candidate Reviewer, retrieval index, promotion controller, or task
 selector. QuantCodeEval is a later cross-benchmark check and does not block the
 first QFBench QRS campaign.
@@ -86,10 +91,16 @@ Review. Every changed candidate must fail closed unless a trusted controller
 has reviewed the exact cumulative frozen-$H_0$-to-effective-candidate material,
 including any Worker directive or runtime overlay, and recorded overall
 \texttt{PASS} with complete claim coverage. Public support is read from frozen
-task contracts or predeclared references. Optimize-only diagnostics and Review
-feedback cannot support a Worker-visible claim and do not enter the Worker.
-The Candidate Reviewer evaluates the candidate information set; it does not
-review the Worker answer and cannot mutate, run, retain, or promote a candidate.
+task contracts or predeclared references. A task-specific numeric or output
+predicate requires frozen public task-contract support. A task-agnostic harness
+policy may instead use the frozen framework reference plus exact controller-
+trusted answer-free development observations actually accessed by the Evolver.
+Optimize-only diagnostics, expected values, checker output, failed properties,
+official outcomes, and Review feedback cannot support a Worker-visible claim
+and do not enter the Worker. The Candidate Reviewer evaluates information-set
+admissibility and coverage; it does not review the Worker answer, judge utility,
+or mutate, run, retain, or promote a candidate. Review \texttt{PASS} means only
+that the exact candidate is eligible for the blind matched gate.
 
 Each predeclared family round permits exactly one global-workflow proposal and
 no score-driven refinement. On Review \texttt{PASS}, the exact parent and
@@ -100,6 +111,9 @@ protocol-complete, every focus and anchor task is task-reward non-regressing in
 both repetitions, the focus-family mean strictly improves twice, and at least
 one identical focus task wins twice. Anchor wins cannot satisfy the focus-gain
 condition. This is task-reward protection, not a failed-property-set claim.
+The fixed other-family anchors are deterministic sentinels for a bounded
+cross-family regression check; they do not establish development-wide
+protection.
 Legal \texttt{ABSTAIN}, Review non-PASS, tie-only gain, unstable gain, or valid
 regression retains the incumbent and continues to the next family. Invalid
 runtime observations may receive only one separately frozen setup recovery;
@@ -107,7 +121,7 @@ tasks, routes, and budgets are never adaptively replaced.
 
 \subsection{Primary Endpoints}
 
-The QRS development endpoint is repeated panel-promotion rate
+The descriptive QRS development funnel includes the panel-promotion fraction
 \begin{equation}
     \operatorname{PPR}_{\mathrm{QRS}}
     = \frac{\sum_f \mathbb{1}[\text{Review pass, repeated focus gain,
@@ -120,9 +134,13 @@ and an execution that remains invalid after its frozen recovery all count as
 zero. A separately labelled execution-valid sensitivity analysis may omit only
 the last category. Neither analysis substitutes another task or unreported
 best-of-$N$ attempt.
+Because family panels differ in task count and occur in an ordered cumulative
+lineage, $x/6$ is a descriptive funnel fraction, not an estimator over
+exchangeable or independent trials.
 
-The headline final endpoint is the complete sealed official task vector for
-two fresh executions of the frozen Primitive-H0 and retained QRS incumbent. We
+The headline final endpoint is the complete within-QFBench feedback-sealed
+matched official task vector for two fresh executions of the frozen
+Primitive-H0 and retained QRS incumbent. We
 report 24 repetition-level paired W/T/L outcomes, 12 task-level mean W/T/L
 outcomes, every task vector, and family rows. Because the panel contains exactly
 two tasks per family, the equal-task mean and equal-family macro are
@@ -131,12 +149,15 @@ Passed/total values are secondary diagnostics when complete; normalized
 headroom closure is appendix-only descriptive context.
 
 The QRS-no-State study uses the same lifecycle, so proposal, Review,
-state-transition, promotion, sealed-vector, and cost funnels are directly
-comparable across separate runs. AHE may retain a distinct internal lifecycle;
-the defensible cross-method endpoint is therefore its common sealed official
-vector and resource use under the same public inputs, Worker model, task panel,
+state-transition, promotion, feedback-sealed-vector, and cost funnels are
+directly comparable across separate runs. AHE may retain a distinct internal
+lifecycle;
+the defensible cross-method endpoint is therefore its common within-QFBench
+feedback-sealed matched official vector and resource use under the same public
+inputs, Worker model, task panel,
 and outer budget. We do not silently relabel a generic QRS mode as AHE or force
-AHE into QRS-specific promotion semantics.
+AHE into QRS-specific promotion semantics. The claim is limited to
+within-QFBench feedback-sealed matched transfer.
 
 \subsection{Diagnostics, Efficiency, and Reporting}
 
@@ -153,10 +174,14 @@ and intervals without a significance or superiority claim.
 \Boundary{The candidate-dispatch gate, Primitive-H0 handoff, trajectory bank,
 dynamic-incumbent scheduler, answer-free panel history, mutation boundary, and
 launch materializer are implemented locally. The Primitive protocol canary has
-passed 3/3 valid strict-telemetry cells; the live mini-scheduler PASS path,
-main run, no-State ablation,
-source-faithful AHE reproduction, and sealed panel remain prospective. Main
-launch is blocked until one fresh
-public-only QRS candidate passes Candidate Information-Set Review, reaches a
-blind Worker as the exact reviewed harness, and produces a retained strict
-focus-family gain under the repeated focus-plus-anchor gate.}
+passed 3/3 valid strict-telemetry cells. Retained mini runs R1--R3 did not
+complete the positive Review path: R1 was setup-invalid, R2 ended in a legal
+fail-closed abstention under an oversized and compaction-corrupted evidence
+view, and R3 received a genuine but non-PASS Review. The main run, no-State
+ablation, source-faithful AHE reproduction, and feedback-sealed panel remain
+prospective. Main launch is blocked until one fresh policy-corrected candidate
+passes Candidate Information-Set Review, reaches 12 matched cells as the exact
+reviewed snapshot, hands off answer-free history, and cleanly resumes. Its
+matched terminal may be \texttt{PROMOTE} or a scientifically valid
+\texttt{RETAIN}/\texttt{ROLLBACK}; retained utility gain is a Main outcome, not
+an engineering-readiness requirement.}

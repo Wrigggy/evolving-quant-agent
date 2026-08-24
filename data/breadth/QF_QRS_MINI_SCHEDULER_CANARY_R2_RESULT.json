@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-qrs-mini-scheduler-canary-20260825-r2",
+  "run_id": "qf-qrs-mini-scheduler-canary-20260825-r2",
+  "date": "2026-08-25",
+  "status": "retained_oversized_retrieval_compaction_corrupted_legal_abstain",
+  "research_question": "After repairing R1 structured decision plumbing, can a fresh four-task Primitive-H0 bank support an evidence-grounded global proposal and continue correctly after a legal ABSTAIN?",
+  "setup": {
+    "benchmark": "QFBench",
+    "frozen_plan": "data/breadth/QF_QRS_MINI_SCHEDULER_CANARY_R2_PLAN.json",
+    "local_mirror": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r2/",
+    "scheduler_result": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r2/scheduler-state/SCHEDULER-RESULT.json",
+    "controller_result": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r2/scheduler-state/panel-1-controller/CONTROLLER-RESULT.json",
+    "trajectory_bank_result": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r2/trajectory-bank/TRAJECTORY-BANK-RESULT.json",
+    "proposal_result": "results/bc-mirror/qf-qrs-mini-scheduler-canary-20260825-r2-panel-01-proposal/proposal-report.json",
+    "parent_version": "quant-h0-s6-primitive-v1-frozen-mini-r2",
+    "worker_route": "deepseek-v4-flash-main0",
+    "development_task_count": 4,
+    "stop_after_panel": 1,
+    "sealed_tasks_used": false,
+    "main_reuse_allowed": false,
+    "r1_material_reused": false
+  },
+  "h0_bank": {
+    "valid_worker_verifier_cells": 4,
+    "valid_runtime_histories": 4,
+    "task_results": [
+      {
+        "task_id": "13f-amendment-aware-crowding",
+        "tests_passed": 48,
+        "tests_total": 51,
+        "reward": 0.0
+      },
+      {
+        "task_id": "dupire-local-vol",
+        "tests_passed": 67,
+        "tests_total": 68,
+        "reward": 0.0
+      },
+      {
+        "task_id": "localvol-barrier",
+        "tests_passed": 38,
+        "tests_total": 39,
+        "reward": 0.96
+      },
+      {
+        "task_id": "swap-curve-bootstrap-ois",
+        "tests_passed": 19,
+        "tests_total": 19,
+        "reward": 1.0
+      }
+    ]
+  },
+  "pipeline_observation": {
+    "evolver_calls": 1,
+    "proposal_decision": "ABSTAIN",
+    "candidate_changed_files": 0,
+    "proposal_admission": "not_applicable",
+    "trace_slice_calls": 3,
+    "trace_slice_calls_exceeding_return_limit": 2,
+    "trace_slice_successful_calls": 1,
+    "successful_trace_slice_output_bytes": 131999,
+    "trace_slice_error": "trace slice exceeds bounded return limit",
+    "direct_read_workspace_output_bytes": [
+      195919,
+      113955
+    ],
+    "direct_reads_returned_observable_text_at_tool_time": true,
+    "pre_compaction_prompt_tokens": 141971,
+    "post_compaction_prompt_tokens": 28399,
+    "terminal_compaction_replaced_oversized_tool_content_with_empty_bounded_text": true,
+    "probe_record_count": 0,
+    "abstain_contract_valid": true,
+    "evidence_sufficiency": "indeterminate_due_to_oversized_retrieval_and_terminal_compaction_corruption",
+    "genuine_reviewer_calls": 0,
+    "candidate_matched_worker_cells": 0,
+    "panel_results_retained": 0,
+    "curriculum_handoffs": 0,
+    "controller_decision": "ABSTAIN",
+    "controller_status": "abstained",
+    "scheduler_status": "STOP_PANEL",
+    "scheduler_phase": "TERMINAL",
+    "scheduler_stop_reason": "candidate Review returned no valid terminal verdict",
+    "outer_interpretation_failure": "The outer scheduler converted the absence of a Review-bound candidate after legal ABSTAIN into a missing-Review stop instead of retaining the ABSTAIN and carrying the unchanged parent.",
+    "interpretation": "The ABSTAIN is a valid fail-closed action. The audit shows that one trace slice and two direct reads did return large observable payloads at tool time, but terminal compaction replaced the oversized earlier content with empty bounded_text before the final decision. The retained ABSTAIN therefore does not establish that the answer-free evidence itself was scientifically insufficient."
+  },
+  "run_accounting": {
+    "h0_bank": {
+      "completed_requests": 144,
+      "total_tokens": 6122268,
+      "provider_cost_usd": 0.184157872
+    },
+    "evolver_proposal": {
+      "completed_requests": 11,
+      "total_tokens": 481637,
+      "provider_cost_usd": 0.056217292
+    },
+    "candidate_reviewer": {
+      "completed_requests": 0,
+      "total_tokens": 0,
+      "provider_cost_usd": 0.0
+    },
+    "candidate_matched_workers": {
+      "cells": 0,
+      "completed_requests": 0,
+      "total_tokens": 0,
+      "provider_cost_usd": 0.0
+    },
+    "total": {
+      "completed_requests": 155,
+      "total_tokens": 6603905,
+      "provider_cost_usd": 0.240375164
+    }
+  },
+  "decision": {
+    "mini_scheduler_gate": "FAIL_OVERSIZED_RETRIEVAL_COMPACTION_CORRUPTED",
+    "main": "NO_GO",
+    "recovery": "One final separately frozen R3 may change only the general bounded evidence-retrieval interface and legal ABSTAIN retain/carry semantics while rebuilding all canary evidence fresh."
+  },
+  "claim_boundary": {
+    "supports": "Four fresh Primitive-H0 cells, an answer-free trajectory bank, and a fail-closed legal ABSTAIN executed after R1 decision-plumbing repair.",
+    "does_not_support": "The oversized-retrieval and compaction-corrupted ABSTAIN is not evidence that the underlying public trajectories cannot support a candidate. No Reviewer or matched candidate Worker ran, and there is no benchmark gain, reusable candidate, stable promotion, sealed result, or QRS-effectiveness claim."
+  }
+}

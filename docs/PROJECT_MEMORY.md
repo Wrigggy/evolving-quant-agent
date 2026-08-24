@@ -1,5 +1,62 @@
 # QEA Repository Memory
 
+## 2026-08-25 QRS mini scheduler R1--R3 retained; Main remains NO-GO
+
+The three separately frozen mini scheduler attempts are now retained with
+measured setup failures and scientific boundaries kept distinct. R1 completed
+four valid fresh Primitive-H0 cells and the answer-free trajectory bank, then
+returned a nonempty `ACT`; its generated global-bank contract omitted the
+structured `quant_property_v2` decision protocol, so admission correctly
+rejected the candidate before any genuine Candidate Information-Set Review or
+matched candidate Worker. R1 is setup-invalid, not a Reviewer or candidate-
+quality result. It used 177 completed requests, 10,240,354 tokens, and
+USD 0.294715904.
+
+R2 rebuilt all four H0 cells and evidence fresh and reached a contract-valid
+fail-closed `ABSTAIN`. Two broad trace slices failed at the return limit, but
+the retained tool audit also shows two direct reads returning 195,919 and
+113,955 bytes and one successful 131,999-byte trace slice. The prompt reached
+141,971 tokens; terminal compaction reduced it to 28,399 and replaced the
+earlier oversized tool content with empty `bounded_text`. The ABSTAIN was
+legal, but evidence sufficiency is indeterminate because retrieval was
+oversized and the final evidence view was compaction-corrupted. The outer
+scheduler then misclassified the absence of a Review-bound candidate as a missing Review
+instead of retaining/carrying the ABSTAIN. Reviewer calls and candidate Worker
+cells were zero. R2 used 155 completed requests, 6,603,905 tokens, and
+USD 0.240375164.
+
+R3 was the final setup recovery and rebuilt the same four-cell bank without R1
+or R2 material. It deployed repository revision `49c924c`; `2676e38` is the
+generic evidence-interface fix base, not the deployed HEAD. The bounded trace
+interface materially worked: three `trace_slice` calls returned bounded
+observations without the R2 failure. The
+Evolver produced one admitted `ACT` that changed exactly one skill file. One
+genuine answer-free Reviewer then returned overall `INCONCLUSIVE`, coverage
+`PASS`, and four of four claim verdicts `INCONCLUSIVE`. This verdict is retained
+under the Review policy deployed for R3; the later policy-v2 correction does
+not reinterpret it. The lineage controller held for refinement, and the global
+scheduler recorded `RETAIN_REVIEW_NONPASS`; it ran zero candidate or matched
+cells, preserved the Primitive parent, and carried zero candidate entries into
+the next answer-free panel view. A same-stop resume created zero work and preserved the runner
+inputs, scheduler result, and scheduler state byte-for-byte. R3 used 172
+completed requests, 10,088,386 tokens, and USD 0.352745424.
+
+The final mini outcome is a valid safe non-PASS, not `MINI_SCHEDULER_PASS`.
+Main remains `NO-GO`, and there is no R4 setup recovery. Engineering clearance
+requires a fresh overall Review PASS through the exact snapshot, complete
+12-cell matched path, answer-free handoff, and zero-work resume after the
+Review policy correction. That matched path may end in `PROMOTE` or a
+scientifically valid `RETAIN`/`ROLLBACK`; retained gain is not a mini
+engineering requirement, because utility belongs to Main. No mini history,
+candidate, claim, evidence-access state, score, or decision is reusable in
+Main. Compact records:
+`data/breadth/QF_QRS_MINI_SCHEDULER_CANARY_R1_RESULT.json`,
+`data/breadth/QF_QRS_MINI_SCHEDULER_CANARY_R2_RESULT.json`, and
+`data/breadth/QF_QRS_MINI_SCHEDULER_CANARY_R3_RESULT.json`. Dated decisions:
+`docs/decisions/2026-08-24-qrs-mini-scheduler-canary-r1-result.md`,
+`docs/decisions/2026-08-25-qrs-mini-scheduler-canary-r2-result.md`, and
+`docs/decisions/2026-08-25-qrs-mini-scheduler-canary-r3-result.md`.
+
 ## 2026-08-24 Primitive-H0 live protocol gate passed 3/3
 
 The separately frozen run
@@ -38,10 +95,13 @@ The Evolver can now distinguish `stage_local`, `cross_stage` and
 `workflow_global` proposals. Global ACT requires all six states, an explicit
 handoff gap and at least two already-read answer-free H0 trajectories from
 different tasks and families. System prompt, skill, middleware and routing are
-natural but non-mandatory coordination loci. H0 trajectories may localize a
-failure but cannot serve as public normative support for a Worker-visible
-claim; expected values, checker output, failed properties and official outcome
-files remain forbidden claim bases.
+natural but non-mandatory coordination loci. H0 trajectories cannot support
+task-specific numeric or output predicates. Exact controller-trusted
+answer-free development observations, together with a frozen framework
+reference, may support task-agnostic harness policies. Expected values, checker
+output, failed properties and official outcome files remain forbidden claim
+bases, and every changed candidate still requires exact information-set
+Review before Worker dispatch.
 
 Primitive-H0 selection is an external exploratory stage, deliberately separate
 from the QRS scheduler. The scheduler does not preregister, dispatch, rank, or
@@ -360,11 +420,13 @@ correctly dispatched zero Workers. However, Candidate Information-Set Review
 is still opt-in in legacy controller paths; preconstructed candidates and the
 discovery selected-probe path can bypass it; cumulative Quant-H0 review and
 trusted public-source resolution are not universal; and no real public-only
-Review-`PASS` candidate has yet crossed the exact reviewed-harness boundary to
-a blind Worker. Main remains `NO-GO` until every changed candidate fails closed
-without Review `PASS` and one fresh public-only candidate produces a retained
-blind-Worker strict official gain. Repeat and answer-free protection remain
-required for stable promotion.
+Review-`PASS` candidate had yet crossed the exact reviewed-harness boundary to
+a blind Worker. At this dated checkpoint, Main was therefore `NO-GO`. The
+retained R1--R3 record above supersedes the mini engineering criterion: a fresh
+policy-corrected overall Review `PASS` must reach the exact reviewed snapshot,
+all 12 matched cells, answer-free handoff, and zero-work resume. That matched
+path may end in `PROMOTE` or a scientifically valid `RETAIN`/`ROLLBACK`;
+retained gain is a Main utility outcome, not a mini engineering prerequisite.
 
 The current Quant-H0 names six Research States but does not expose a six-stage
 trace protocol. A read-only audit of five retained traces found zero explicit
@@ -376,14 +438,17 @@ parser records stage summaries outside submission artifacts. This is a
 human-designed quantitative substrate and a new baseline, so historical H0
 scores cannot be mixed with H0-S6 results.
 
-For the QRS-only development endpoint, stable-promotion rate uses all
+For the QRS-only development funnel, the panel-promotion fraction uses all six
 predeclared QRS opportunities as the conservative denominator; unresolved
 invalid executions count as zero after one frozen setup recovery, with an
-execution-valid sensitivity analysis reported separately. The headline final
-endpoint is the complete sealed official task/property vector and equal-family
-macro for frozen H0-S6 versus frozen QRS. Cross-method AHE comparison uses the
-common sealed vector and resource use rather than forcing AHE into QRS's
-internal promotion semantics. Deliberate development-task selection is allowed
+execution-valid sensitivity analysis reported separately. Because panels
+differ in size and form an ordered cumulative lineage, `x/6` is descriptive,
+not an estimator over exchangeable trials. The headline final endpoint is the
+complete within-QFBench feedback-sealed matched official task/property vector
+and equal-family macro for frozen H0-S6 versus frozen QRS. Cross-method AHE
+comparison uses the common feedback-sealed matched vector and resource use
+rather than forcing AHE into QRS's internal promotion semantics. Deliberate
+development-task selection is allowed
 but must be disclosed with the full eligible pool, rules, exclusions, roles,
 and freeze time; concealing it is not acceptable. Full decision:
 `docs/decisions/2026-08-24-qrs-only-main-independent-ahe-and-quant-h0-s6.md`.
@@ -409,11 +474,14 @@ reusable-gain and scientific-promotion interpretations remain withdrawn. The
 optional Quant Research Reviewer is a separate search aid and is not the
 mandatory Candidate Information-Set Reviewer.
 
-The main comparison is Quant-H0 plus matched Generic and QRS cumulative
-full-harness evolution. Generic and QRS share the same model, public evidence,
+At this earlier design checkpoint, the planned main comparison was Quant-H0
+plus matched Generic and QRS cumulative full-harness evolution. That plan is
+superseded by the QRS-only main record immediately above. Generic and QRS had
+been specified to share the same model, public evidence,
 mutation surface, budgets, admission, Candidate Review, target, repeat, and
-protection gates; QRS alone receives the State Card and state-conditioned
-retrieval/routing. Until a faithful AHE reproduction exists, call the control a
+protection gates; QRS alone would have received the State Card and
+state-conditioned retrieval/routing. At that checkpoint, the control was to be
+called a
 matched generic trajectory-guided full-harness baseline rather than
 `AHE-on-quant`.
 
@@ -421,25 +489,30 @@ Task-family selection may be purposeful for mechanism development, but it must
 be disclosed. Freeze and publish the complete eligible pool, inclusion and
 exclusion rules, family stratification, selected task roles, exclusion reasons,
 and freeze time. The development panel is not population-representative. A
-separate family-stratified sealed panel must be frozen before optimization,
-evaluated once per frozen incumbent, and never feed search or selection.
+separate family-stratified feedback-sealed panel must be frozen before
+optimization, evaluated once per frozen incumbent, and never feed search or
+selection.
 
-The development primary metric is stable-promotion rate over a fixed number of
-predeclared family-round opportunities. Success requires Candidate Review
+The development funnel includes a descriptive panel-promotion fraction over a
+fixed number of predeclared ordered family-round opportunities. Promotion
+requires Candidate Review
 `PASS`, strict target gain with a nonempty resolved-property footprint, an
 independent repeat of that footprint, and property-safe protection. All stops,
 including `ABSTAIN`, non-PASS Review, no gain, repeat drift, and protection
-failure, remain in the denominator. The final primary metric is the complete
-sealed official task/property vector plus an equal-family macro. Requests,
+failure, remain in the denominator. Because panel sizes and lineage positions
+differ, `x/6` is not an exchangeable-trial estimator. The final primary metric
+is the complete within-QFBench feedback-sealed matched official task/property
+vector plus an equal-family macro. Requests,
 tokens, cost, time to first stable promotion, and the proposal-to-protection
 funnel are secondary explanatory metrics. Independent cumulative lineages are
 the statistical units; four per arm are preferred for a paper-level comparison,
 while two per arm remains a descriptive mechanism study.
 
-Main readiness remains `NO-GO` until one fresh public-only candidate passes the
-universal Review and produces a retained blind-Worker strict official gain.
-Repeat and protection are additionally required for stable promotion. Full
-decision:
+Main remains `NO-GO`. The current engineering clearance condition is a fresh
+policy-corrected Review `PASS` followed by the exact reviewed snapshot, all 12
+matched cells, answer-free handoff, and zero-work resume. A scientifically
+valid matched `PROMOTE`, `RETAIN`, or `ROLLBACK` terminal clears that path;
+whether QRS delivers retained utility is measured in Main. Full decision:
 `docs/decisions/2026-08-24-main-metrics-task-selection-and-candidate-review-story-alignment.md`.
 
 ## 2026-08-24 public-only EVT-POT-VaR H0 stopped on missing prescribed dependency
