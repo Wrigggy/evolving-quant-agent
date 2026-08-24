@@ -1,5 +1,29 @@
 # QEA Repository Memory
 
+## 2026-08-24 Quant-H0-S6-Core-v4 structured state interface frozen
+
+Core-v3 remains a retained protocol failure and its breadth phase was never
+dispatched. Core-v4 replaces unreliable direct-text markers with one passive
+structured `record_quant_state` tool. The recorder accepts only a six-state
+label, transition action, and short public summary; it does not read files,
+run shell commands, perform quant work, inspect artifacts or evaluators, check
+correctness, or recommend the next operation. The Legacy/Core shell descriptor,
+model, provider, runtime, budgets, public inputs, and verifier remain fixed.
+
+The remote runner now preserves genuine NexAU structured tool-call/result
+blocks. The Core-v4 parser trusts only isolated successful recorder calls, not
+prose, shell payloads, stdout, or final-response backfill. Only skill loading
+may precede S1 ENTER, and no tool call may follow S6 COMPLETE. Focused runner,
+parser, Worker, admission, and frozen-plan tests pass locally.
+
+A new three-task Core-v4 gate must pass 3/3 valid executions and 3/3 complete
+structured S1--S6 traces before any breadth work. Only then may the unchanged
+12-task, six-domain Legacy Quant-H0 versus Core map run. Repetition 1 contains
+24 Worker/verifier cells; reverse-order repetition 2 remains conditional.
+This is human-scaffold construct calibration, not QRS, AHE, Candidate Review,
+sealed evaluation, or Main readiness. Full plan:
+`docs/decisions/2026-08-24-quant-h0-s6-core-v4-r3-breadth-plan.md`.
+
 ## 2026-08-24 Quant-H0-S6-Core-v3 R2 failed on transition timing
 
 The frozen Core-v3 R2 gate is retained as a negative protocol result. All

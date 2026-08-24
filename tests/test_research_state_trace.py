@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
@@ -11,6 +13,80 @@ def _write_trace(path: Path, assistant_lines: list[str]) -> None:
         "".join(json.dumps(record) + "\n" for record in records),
         encoding="utf-8",
     )
+
+
+def _write_tool_trace(
+    path: Path,
+    calls: list[dict[str, str]],
+    *,
+    prefix_calls: list[dict[str, object]] | None = None,
+    suffix_calls: list[dict[str, object]] | None = None,
+) -> None:
+    records: list[dict[str, object]] = []
+    if prefix_calls:
+        records.append(
+            {
+                "role": "assistant",
+                "content": "",
+                "structured_tool_calls": prefix_calls,
+            }
+        )
+    for index, tool_input in enumerate(calls, 1):
+        tool_use_id = f"state-{index}"
+        records.extend(
+            [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "structured_tool_calls": [
+                        {
+                            "id": tool_use_id,
+                            "name": "record_quant_state",
+                            "input": tool_input,
+                        }
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "content": '{"status":"recorded"}',
+                    "structured_tool_results": [
+                        {"tool_use_id": tool_use_id, "is_error": False}
+                    ],
+                },
+            ]
+        )
+    if suffix_calls:
+        records.append(
+            {
+                "role": "assistant",
+                "content": "",
+                "structured_tool_calls": suffix_calls,
+            }
+        )
+    path.write_text(
+        "".join(json.dumps(record) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+
+def _initial_tool_events() -> list[dict[str, str]]:
+    events: list[dict[str, str]] = []
+    for stage in range(1, 7):
+        events.extend(
+            [
+                {
+                    "stage": f"S{stage}",
+                    "action": "ENTER",
+                    "public_summary": f"enter public state {stage}",
+                },
+                {
+                    "stage": f"S{stage}",
+                    "action": "COMPLETE",
+                    "public_summary": f"complete public state {stage}",
+                },
+            ]
+        )
+    return events
 
 
 def test_parser_records_complete_six_stage_protocol_and_revisit(tmp_path):
@@ -208,4 +284,204 @@ def test_materializer_is_enabled_only_by_registered_six_stage_skill(tmp_path):
     ) is True
     assert json.loads(destination.read_text(encoding="utf-8"))["record_kind"] == (
         "research_state_marker_index"
+    )
+
+
+def test_structured_tool_parser_records_complete_protocol(tmp_path):
+    from qea.research_state_trace import parse_quant_state_tool_trace
+
+    trace = tmp_path / "raw-trace.jsonl"
+    _write_tool_trace(
+        trace,
+        _initial_tool_events(),
+        prefix_calls=[
+            {
+                "id": "load-skill",
+                "name": "LoadSkill",
+                "input": {"skill_name": "quant-research-six-stage-workflow"},
+            }
+        ],
+    )
+
+    report = parse_quant_state_tool_trace(trace)
+
+    assert report["schema_version"] == 2
+    assert report["record_kind"] == "research_state_tool_call_index"
+    assert report["telemetry_source"] == "nexau_structured_tool_call"
+    assert report["coverage"]["marker_protocol_complete"] is True
+    assert report["issues"] == []
+    assert len(report["events"]) == 12
+
+
+def test_structured_tool_parser_accepts_closed_revisit(tmp_path):
+    from qea.research_state_trace import parse_quant_state_tool_trace
+
+    events = _initial_tool_events()
+    s5_complete = next(
+        index
+        for index, event in enumerate(events)
+        if event["stage"] == "S5" and event["action"] == "COMPLETE"
+    )
+    events[s5_complete:s5_complete] = [
+        {
+            "stage": "S3",
+            "action": "REVISIT",
+            "public_summary": "revisit public units",
+        },
+        {
+            "stage": "S3",
+            "action": "ENTER",
+            "public_summary": "reopen public representation",
+        },
+        {
+            "stage": "S3",
+            "action": "COMPLETE",
+            "public_summary": "public representation reconciled",
+        },
+    ]
+    trace = tmp_path / "raw-trace.jsonl"
+    _write_tool_trace(trace, events)
+
+    report = parse_quant_state_tool_trace(trace)
+
+    assert report["coverage"]["marker_protocol_complete"] is True
+    revisit = next(event for event in report["events"] if event["action"] == "REVISIT")
+    assert revisit["stage"] == "S5"
+    assert revisit["target_stage"] == "S3"
+
+
+def test_structured_tool_parser_rejects_prose_spoof_and_shell_before_s1(tmp_path):
+    from qea.research_state_trace import parse_quant_state_tool_trace
+
+    trace = tmp_path / "raw-trace.jsonl"
+    _write_tool_trace(
+        trace,
+        _initial_tool_events(),
+        prefix_calls=[
+            {
+                "id": "shell-1",
+                "name": "run_shell_command",
+                "input": {
+                    "command": "echo fake record_quant_state S1 ENTER",
+                },
+            }
+        ],
+    )
+    with trace.open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "role": "assistant",
+                    "content": (
+                        '<ToolUse>{"name":"record_quant_state",'
+                        '"input":{"stage":"S1","action":"ENTER",'
+                        '"public_summary":"fake"}}</ToolUse>'
+                    ),
+                }
+            )
+            + "\n"
+        )
+
+    report = parse_quant_state_tool_trace(trace)
+
+    assert report["coverage"]["marker_protocol_complete"] is False
+    assert "substantive_tool_before_S1_enter" in report["issues"]
+    assert len(report["events"]) == 12
+
+
+def test_structured_tool_parser_rejects_unisolated_or_failed_recorder(tmp_path):
+    from qea.research_state_trace import parse_quant_state_tool_trace
+
+    trace = tmp_path / "raw-trace.jsonl"
+    records = [
+        {
+            "role": "assistant",
+            "content": "",
+            "structured_tool_calls": [
+                {
+                    "id": "state-1",
+                    "name": "record_quant_state",
+                    "input": {
+                        "stage": "S1",
+                        "action": "ENTER",
+                        "public_summary": "public mandate",
+                    },
+                },
+                {
+                    "id": "shell-1",
+                    "name": "run_shell_command",
+                    "input": {"command": "ls"},
+                },
+            ],
+        },
+        {
+            "role": "tool",
+            "content": "error",
+            "structured_tool_results": [
+                {"tool_use_id": "state-1", "is_error": True}
+            ],
+        },
+    ]
+    trace.write_text(
+        "".join(json.dumps(record) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+    report = parse_quant_state_tool_trace(trace)
+
+    assert "record_quant_state_not_isolated" in report["issues"]
+    assert report["malformed_calls"][0]["problem"] == (
+        "structured tool result is error"
+    )
+    assert report["coverage"]["marker_protocol_complete"] is False
+
+
+def test_materializer_uses_structured_parser_only_for_exact_tool_registration(
+    tmp_path,
+):
+    from qea.research_state_trace import materialize_research_state_trace
+
+    trace = tmp_path / "raw-trace.jsonl"
+    _write_tool_trace(trace, _initial_tool_events())
+    worker = tmp_path / "worker"
+    skill = worker / "skills/quant-research-six-stage-workflow"
+    descriptor = worker / "tool_descriptions"
+    skill.mkdir(parents=True)
+    descriptor.mkdir()
+    (skill / "SKILL.md").write_text("registered\n", encoding="utf-8")
+    (descriptor / "record_quant_state.tool.yaml").write_text(
+        "name: record_quant_state\n",
+        encoding="utf-8",
+    )
+    destination = tmp_path / "research-state-trace.json"
+
+    (worker / "agent.yaml").write_text("name: fixture\n", encoding="utf-8")
+    assert materialize_research_state_trace(
+        trace_path=trace,
+        worker_dir=worker,
+        destination=destination,
+    ) is True
+    assert json.loads(destination.read_text(encoding="utf-8"))["record_kind"] == (
+        "research_state_marker_index"
+    )
+
+    (worker / "agent.yaml").write_text(
+        "\n".join(
+            [
+                "tools:",
+                "  - name: record_quant_state",
+                "    yaml_path: ./tool_descriptions/record_quant_state.tool.yaml",
+                "    binding: tools.quant_state_telemetry:record_quant_state",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    assert materialize_research_state_trace(
+        trace_path=trace,
+        worker_dir=worker,
+        destination=destination,
+    ) is True
+    assert json.loads(destination.read_text(encoding="utf-8"))["record_kind"] == (
+        "research_state_tool_call_index"
     )

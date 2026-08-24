@@ -104,6 +104,23 @@ def _redact(text: str) -> str:
     return scrubbed
 
 
+def _redact_value(value):
+    """Apply the existing secret redaction recursively to trace metadata."""
+
+    if isinstance(value, str):
+        return _redact(value)
+    if isinstance(value, list):
+        return [_redact_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_redact_value(item) for item in value]
+    if isinstance(value, Mapping):
+        return {
+            str(key): _redact_value(item)
+            for key, item in value.items()
+        }
+    return value
+
+
 def _message_text(message) -> str:
     text = ""
     try:
@@ -138,6 +155,38 @@ def _message_text(message) -> str:
                     )
                 )
     return "\n".join(part for part in (text, *structured) if part)
+
+
+def _structured_message_fields(message) -> dict[str, object]:
+    """Preserve genuine NexAU tool blocks without inferring them from prose."""
+
+    tool_calls: list[dict[str, object]] = []
+    tool_results: list[dict[str, object]] = []
+    for block in getattr(message, "content", ()) or ():
+        block_type = str(getattr(block, "type", ""))
+        if block_type == "tool_use":
+            tool_calls.append(
+                {
+                    "id": _redact(str(getattr(block, "id", "") or "")),
+                    "name": _redact(str(getattr(block, "name", "") or "")),
+                    "input": _redact_value(getattr(block, "input", {})),
+                }
+            )
+        elif block_type == "tool_result":
+            tool_results.append(
+                {
+                    "tool_use_id": _redact(
+                        str(getattr(block, "tool_use_id", "") or "")
+                    ),
+                    "is_error": bool(getattr(block, "is_error", False)),
+                }
+            )
+    fields: dict[str, object] = {}
+    if tool_calls:
+        fields["structured_tool_calls"] = tool_calls
+    if tool_results:
+        fields["structured_tool_results"] = tool_results
+    return fields
 
 
 def _role_name(message) -> str:
@@ -211,7 +260,9 @@ def run(task_dir: Path, worker_dir: Path, work_dir: Path, output_dir: Path, resu
         for item in agent.full_trace or ():
             role = _role_name(item)
             text = _redact(_message_text(item))
-            trace.write(json.dumps({"role": role, "content": text}, ensure_ascii=False) + "\n")
+            record = {"role": role, "content": text}
+            record.update(_structured_message_fields(item))
+            trace.write(json.dumps(record, ensure_ascii=False) + "\n")
             if role == "assistant":
                 turns += 1
             elif role not in {"", "user"}:

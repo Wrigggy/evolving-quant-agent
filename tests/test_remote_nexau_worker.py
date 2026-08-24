@@ -91,6 +91,68 @@ def test_structured_tool_trace_preserves_skill_activation():
     assert "spec-driven-deliverables" in result_text
 
 
+def test_structured_trace_fields_come_only_from_real_tool_blocks(monkeypatch):
+    from qea.executors import remote_nexau_worker
+
+    monkeypatch.setenv("TRACE_SECRET_TOKEN", "do-not-copy")
+    tool_use = SimpleNamespace(
+        type="tool_use",
+        id="call-1",
+        name="record_quant_state",
+        input={
+            "stage": "S1",
+            "action": "ENTER",
+            "public_summary": "do-not-copy public mandate",
+        },
+    )
+    tool_result = SimpleNamespace(
+        type="tool_result",
+        tool_use_id="call-1",
+        is_error=False,
+        content='{"status":"recorded"}',
+    )
+
+    call_fields = remote_nexau_worker._structured_message_fields(
+        SimpleNamespace(content=[tool_use])
+    )
+    result_fields = remote_nexau_worker._structured_message_fields(
+        SimpleNamespace(content=[tool_result])
+    )
+    prose_fields = remote_nexau_worker._structured_message_fields(
+        SimpleNamespace(
+            content=[
+                SimpleNamespace(
+                    type="text",
+                    text=(
+                        '<ToolUse>{"name":"record_quant_state",'
+                        '"input":{"stage":"S1"}}</ToolUse>'
+                    ),
+                )
+            ]
+        )
+    )
+
+    assert call_fields == {
+        "structured_tool_calls": [
+            {
+                "id": "call-1",
+                "name": "record_quant_state",
+                "input": {
+                    "stage": "S1",
+                    "action": "ENTER",
+                    "public_summary": "[REDACTED] public mandate",
+                },
+            }
+        ]
+    }
+    assert result_fields == {
+        "structured_tool_results": [
+            {"tool_use_id": "call-1", "is_error": False}
+        ]
+    }
+    assert prose_fields == {}
+
+
 def test_trace_role_uses_enum_value_instead_of_debug_representation():
     from qea.executors import remote_nexau_worker
 
@@ -147,7 +209,36 @@ def test_remote_runner_imports_worker_local_tool_before_loading_config(
             self.sandbox_manager = SimpleNamespace(
                 instance=SimpleNamespace(work_dir=None)
             )
-            self.full_trace = []
+            self.full_trace = [
+                SimpleNamespace(
+                    role="assistant",
+                    content=[
+                        SimpleNamespace(
+                            type="tool_use",
+                            id="state-1",
+                            name="record_quant_state",
+                            input={
+                                "stage": "S1",
+                                "action": "ENTER",
+                                "public_summary": "public mandate",
+                            },
+                        )
+                    ],
+                    get_text_content=lambda: "",
+                ),
+                SimpleNamespace(
+                    role="tool",
+                    content=[
+                        SimpleNamespace(
+                            type="tool_result",
+                            tool_use_id="state-1",
+                            is_error=False,
+                            content='{"status":"recorded"}',
+                        )
+                    ],
+                    get_text_content=lambda: "",
+                ),
+            ]
 
         def run(self, *, message, context):
             assert "Use the local fixture tool" in message
@@ -169,6 +260,24 @@ def test_remote_runner_imports_worker_local_tool_before_loading_config(
     assert remote_nexau_worker.run(task, worker, work, output, result) == 0
     assert (result / "final.txt").read_text() == "done"
     assert json.loads((result / "summary.json").read_text())["files"] == 0
+    trace = [
+        json.loads(line)
+        for line in (result / "raw_trace.jsonl").read_text().splitlines()
+    ]
+    assert trace[0]["structured_tool_calls"] == [
+        {
+            "id": "state-1",
+            "name": "record_quant_state",
+            "input": {
+                "stage": "S1",
+                "action": "ENTER",
+                "public_summary": "public mandate",
+            },
+        }
+    ]
+    assert trace[1]["structured_tool_results"] == [
+        {"tool_use_id": "state-1", "is_error": False}
+    ]
 
 
 def test_remote_runner_preserves_artifacts_for_official_verification_after_empty_model_response(

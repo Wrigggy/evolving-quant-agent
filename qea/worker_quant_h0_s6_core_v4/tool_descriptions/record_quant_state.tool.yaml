@@ -1,0 +1,25 @@
+type: tool
+name: record_quant_state
+description: >-
+  Record one public quantitative-workflow state transition for trusted
+  attempt-side telemetry. This passive recorder does not inspect task files,
+  evaluate correctness, prescribe a quantitative method, or supply answers.
+input_schema:
+  type: object
+  properties:
+    stage:
+      type: string
+      enum: [S1, S2, S3, S4, S5, S6]
+    action:
+      type: string
+      enum: [ENTER, COMPLETE, NOT_APPLICABLE, REVISIT]
+    public_summary:
+      type: string
+      minLength: 1
+      maxLength: 512
+      description: >-
+        Concise public-task-grounded work-state summary. Do not include hidden
+        evaluator information, expected outputs, prior scores, or private
+        reasoning.
+  required: [stage, action, public_summary]
+  additionalProperties: false
