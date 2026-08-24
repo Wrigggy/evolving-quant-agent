@@ -281,7 +281,7 @@ input_schema:
         worker_visible_claims:
           type: array
           minItems: 1
-          description: Required for ACT when the active answer-rich contract requests predicate provenance. Enumerate predicates and instructions that the candidate will expose to the Worker. Every claim needs at least one public-contract or benchmark-independent basis; an optimize-only diagnostic may supplement but never solely support it.
+          description: Required for ACT whenever the active evidence contract requests Worker-visible claim provenance, including answer-free global workflow search. Enumerate predicates and instructions that the candidate will expose to the Worker. Every claim needs at least one public-contract or benchmark-independent basis; an optimize-only diagnostic may supplement but never solely support it.
           items:
             type: object
             properties:

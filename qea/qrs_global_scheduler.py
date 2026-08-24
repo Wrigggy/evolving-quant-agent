@@ -1283,6 +1283,17 @@ def run_scheduler(
         if stop_after_phase == "IMPORT_H0" and state["status"] == "RUNNING":
             state["stopped_after_phase"] = "IMPORT_H0"
 
+    if (
+        stop_after_panel is not None
+        and state["status"] == "RUNNING"
+        and len(state["panel_results"]) >= stop_after_panel
+        and (
+            state["phase"] != "PANELS"
+            or int(state["panel_next_index"]) >= stop_after_panel
+        )
+    ):
+        state["stopped_after_panel"] = stop_after_panel
+
     while state["status"] == "RUNNING":
         if (
             state.get("stopped_after_phase") is not None

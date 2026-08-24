@@ -279,6 +279,10 @@ def test_resume_completes_partial_bank_and_stable_rebuild_is_idempotent(tmp_path
         assert (evidence / "access_log.jsonl").read_bytes() == b""
         contract = json.loads((evidence / "contract.json").read_text())
         assert contract["answer_free"] is True
+        assert contract["decision_protocol"] == "quant_property_v2"
+        assert contract["feedback_tier"] == (
+            "answer_free_global_h0_trajectory_bank_v1"
+        )
         assert contract["workflow_scope_required_for_act"] is True
         assert len(contract["task_family_by_key"]) == 2
         assert any(member.endswith("worker_trace.jsonl") for member in record.members)

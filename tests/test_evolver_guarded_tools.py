@@ -1155,13 +1155,18 @@ def test_quant_v2_accepts_cross_family_global_workflow_search(guarded_roots):
     _, evidence, _, _, _ = guarded_roots
     _write_quant_v2_contract(evidence, history_required=False)
     refs = _configure_global_workflow_evidence(evidence)
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["feedback_tier"] = "answer_free_global_h0_trajectory_bank_v1"
+    contract["allowed_candidate_components"] = ["skills", "systemprompt"]
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
     for ref in refs:
         read_workspace(source="evidence", file_path=ref)
     decision = _quant_v2_decision()
     decision["evidence_refs"] = refs
     _set_global_workflow(decision, refs)
-    decision["primary_components"] = ["routing"]
-    decision["components"] = ["routing", "skills"]
+    decision["primary_components"] = ["skills"]
+    decision["components"] = ["skills", "systemprompt"]
     decision["component_override_reason"] = (
         "the repeated loss occurs at a cross-state activation handoff"
     )
@@ -1169,6 +1174,8 @@ def test_quant_v2_accepts_cross_family_global_workflow_search(guarded_roots):
     result = decide_candidate(discovery=decision)
 
     assert result["workflow_scope"] == "workflow_global"
+    assert result["primary_components"] == ["skills"]
+    assert result["components"] == ["skills", "systemprompt"]
     assert len(result["involved_states"]) == 6
     assert len(result["workflow_evidence"]) == 2
     assert result["handoff_gap"]["from_state"] == "research_mandate_contract"
@@ -1180,6 +1187,7 @@ def test_global_workflow_contract_limits_declared_candidate_roles(guarded_roots)
         GuardedWorkspaceError,
         decide_candidate,
         read_workspace,
+        write_candidate,
     )
 
     _, evidence, _, _, _ = guarded_roots
@@ -1212,6 +1220,155 @@ def test_global_workflow_contract_limits_declared_candidate_roles(guarded_roots)
     )
     result = decide_candidate(discovery=decision)
     assert result["components"] == ["skills", "systemprompt"]
+    write_candidate(
+        "skills/quant-research-six-stage-workflow/SKILL.md",
+        "# Public workflow handoff\n",
+    )
+    write_candidate(
+        "systemprompt.md",
+        "Preserve public task requirements across workflow stages.\n",
+    )
+    with pytest.raises(
+        GuardedWorkspaceError,
+        match="outside allowed_candidate_paths",
+    ):
+        write_candidate(
+            "skills/other-workflow/SKILL.md",
+            "# Undeclared path\n",
+        )
+
+
+def test_global_bank_contract_structures_roles_claims_card_and_admission(
+    guarded_roots, tmp_path, monkeypatch
+):
+    import shutil
+    import sys
+
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        decide_candidate,
+        materialize_quant_research_state_card,
+        read_workspace,
+        write_candidate,
+    )
+    from qea.mutation_metrics import measure_mutation
+    from scripts.run_qfbench_discovery_pilot import _candidate_admission
+
+    candidate, evidence, _, _, access_log = guarded_roots
+    monkeypatch.setattr(
+        sys, "stdlib_module_names", frozenset({"__future__"}), raising=False
+    )
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "qea/worker_quant_h0_s6_primitive_v1"
+    )
+    backbone = tmp_path / "backbone"
+    shutil.copytree(source, backbone)
+    shutil.copytree(source, candidate, dirs_exist_ok=True)
+
+    _write_quant_v2_contract(evidence, history_required=False)
+    refs = _configure_global_workflow_evidence(evidence)
+    instruction_ref = "benchmarks/qfbench/tasks/rates-a/instruction.md"
+    instruction = evidence / instruction_ref
+    instruction.write_text(
+        "Preserve every publicly required deliverable through final completion.\n",
+        encoding="utf-8",
+    )
+    catalog = evidence / "components/CATALOG.json"
+    catalog.parent.mkdir(parents=True, exist_ok=True)
+    catalog.write_text(
+        '{"schema_version":1,"components":[]}\n', encoding="utf-8"
+    )
+    contract_path = evidence / "contract.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract.update(
+        {
+            "feedback_tier": "answer_free_global_h0_trajectory_bank_v1",
+            "allowed_candidate_components": ["skills", "systemprompt"],
+            "allowed_candidate_paths": [
+                "skills/quant-research-six-stage-workflow/SKILL.md",
+                "systemprompt.md",
+            ],
+            "quant_research_state_card_required_for_act": True,
+            "worker_visible_claim_provenance_required_for_act": True,
+        }
+    )
+    contract_path.write_text(json.dumps(contract) + "\n", encoding="utf-8")
+    for ref in [*refs, instruction_ref]:
+        read_workspace(source="evidence", file_path=ref)
+
+    card = _quant_state_card()
+    card["task_key"] = "qfbench:rates-a"
+    card["candidate_relations"][0]["observed_evidence"] = [refs[0]]
+    card["selected_intervention"]["component_locus"] = "skills"
+    card_result = materialize_quant_research_state_card(card)
+    assert card_result["retrieval"]["episodes"] == []
+
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = [*refs, instruction_ref]
+    _set_global_workflow(decision, refs)
+    decision["primary_components"] = ["skills"]
+    decision["components"] = ["skills", "systemprompt"]
+    decision["quant_research_state_card"] = "quant-research-state-card.json"
+    decision["selected_relation"] = {
+        "relation_id": "estimator-parameter-identity",
+        "applicability": "the public workflow must preserve requested deliverables",
+        "predicted_status_change": "the final artifact inventory remains complete",
+    }
+    decision["component_routing"] = {
+        "selected_locus": "skills",
+        "rejected_loci": [],
+    }
+    decision["worker_visible_claims"] = [
+        {
+            "claim_id": "public-deliverable-handoff",
+            "claim": (
+                "Carry every publicly required deliverable through final completion."
+            ),
+            "surfaces": ["skills", "systemprompt"],
+            "basis_refs": [
+                {
+                    "kind": "public_contract",
+                    "ref": instruction_ref,
+                    "support": "the public instruction requires final deliverables",
+                }
+            ],
+        }
+    ]
+
+    result = decide_candidate(discovery=decision)
+    state = json.loads(
+        (access_log.parent / "discovery-hypothesis.json").read_text()
+    )
+    assert result["components"] == ["skills", "systemprompt"]
+    assert state["hypothesis"]["components"] == ["skills", "systemprompt"]
+
+    skill_path = "skills/quant-research-six-stage-workflow/SKILL.md"
+    write_candidate(
+        skill_path,
+        (candidate / skill_path).read_text(encoding="utf-8")
+        + "\nPreserve the public deliverable inventory across stage handoffs.\n",
+    )
+    write_candidate(
+        "systemprompt.md",
+        (candidate / "systemprompt.md").read_text(encoding="utf-8")
+        + "\nPreserve public deliverables across the complete workflow.\n",
+    )
+    mutation = measure_mutation(
+        before_root=backbone,
+        after_root=candidate,
+        declared_roles=result["components"],
+    )
+    admission = _candidate_admission(
+        decision="ACT",
+        backbone=backbone,
+        candidate=candidate,
+        mutation_metrics=mutation,
+        search_operator="NEW_PROBE",
+    )
+
+    assert mutation["component_roles"] == ["skills", "systemprompt"]
+    assert mutation["declared_roles_match_actual"] is True
+    assert admission["admitted"] is True, admission
 
 
 def test_quant_v2_global_workflow_requires_cross_family_trajectories(

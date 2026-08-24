@@ -1163,6 +1163,7 @@ def build_trajectory_bank(
             "stage": "COORDINATED_BREADTH",
             "contract_arm": "quant-state",
             "answer_free": True,
+            "decision_protocol": "quant_property_v2",
             "feedback_tier": "answer_free_global_h0_trajectory_bank_v1",
             "optimization_answers_exposed_to_evolver": False,
             "optimization_answers_exposed_to_worker": False,

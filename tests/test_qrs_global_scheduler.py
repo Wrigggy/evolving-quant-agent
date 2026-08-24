@@ -315,6 +315,32 @@ def test_stop_after_panel_waits_for_answer_free_handoff_then_pauses(tmp_path):
     assert len(resumed["panel_results"]) == 6
 
 
+def test_same_stop_after_panel_resume_is_zero_work(tmp_path):
+    launch = _launch(tmp_path)
+    runner = FakeRunner(tmp_path)
+    paused = run_scheduler(
+        METHOD,
+        launch,
+        tmp_path / "state",
+        action_runner=runner,
+        stop_after_panel=1,
+    )
+    call_count = len(runner.calls)
+    paused_snapshot = deepcopy(paused)
+
+    resumed = run_scheduler(
+        METHOD,
+        launch,
+        tmp_path / "state",
+        action_runner=runner,
+        stop_after_panel=1,
+    )
+
+    assert len(runner.calls) == call_count
+    assert resumed == paused_snapshot
+    assert resumed["cost"] == paused_snapshot["cost"]
+
+
 def test_panel_regression_retains_parent_and_continues_to_sealed(tmp_path):
     launch = _launch(tmp_path)
     runner = FakeRunner(tmp_path, regression_panel=2)

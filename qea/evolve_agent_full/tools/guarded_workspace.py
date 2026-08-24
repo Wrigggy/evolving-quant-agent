@@ -653,7 +653,8 @@ def _normalize_worker_visible_claims(
 ) -> list[dict[str, Any]]:
     if not isinstance(raw_claims, list) or not raw_claims:
         raise GuardedWorkspaceError(
-            "ACT requires non-empty worker_visible_claims under answer-rich search"
+            "ACT requires non-empty worker_visible_claims when the evidence "
+            "contract enables claim provenance"
         )
     normalized_claims: list[dict[str, Any]] = []
     claim_ids: set[str] = set()
@@ -1931,6 +1932,7 @@ def _decide_quant_property_candidate(
     feedback_tier = contract.get("feedback_tier")
     if feedback_tier not in {
         "answer_free_property_family_v2",
+        "answer_free_global_h0_trajectory_bank_v1",
         "answer_rich_optimization_v1",
     }:
         raise GuardedWorkspaceError("unsupported QuantCodeEval feedback tier")
@@ -3323,6 +3325,23 @@ def _require_declared_component(state: Mapping[str, Any], relative: str) -> None
         raise GuardedWorkspaceError(
             f"candidate path {relative!r} belongs to undeclared component {role!r}"
         )
+    raw_requirements = state.get("contract_requirements")
+    requirements = (
+        raw_requirements if isinstance(raw_requirements, Mapping) else {}
+    )
+    raw_allowed_paths = requirements.get("allowed_candidate_paths")
+    if raw_allowed_paths is not None:
+        allowed_paths: set[str] = set()
+        if isinstance(raw_allowed_paths, list):
+            allowed_paths = {
+                str(value)
+                for value in raw_allowed_paths
+                if isinstance(value, str) and value
+            }
+        if relative not in allowed_paths:
+            raise GuardedWorkspaceError(
+                f"candidate path {relative!r} is outside allowed_candidate_paths"
+            )
 
 
 def write_candidate(file_path: str, content: str) -> dict[str, Any]:
