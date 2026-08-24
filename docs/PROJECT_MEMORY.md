@@ -1,5 +1,41 @@
 # QEA Repository Memory
 
+## 2026-08-24 Quant-H0-S6 reusable-capability rule and workflow skill implemented
+
+A new `qea/worker_quant_h0_s6` identity now preserves historical Quant-H0 and
+keeps the shell descriptor plus model/runtime fields unchanged. Its system
+prompt states that the immediate task must be completed through reusable
+quantitative-research capability rather than a benchmark patch. Exact
+task-specific behavior remains valid when supported by the current public
+instruction, public data, or a predeclared public reference; hidden checker
+behavior, expected outputs, official property identities, prior scores, and
+unstated benchmark constants cannot become Worker rules.
+
+The trusted remote Worker runner injects the same minimum rule into its
+immutable runtime contract, so an evolved candidate cannot remove the boundary
+by editing its own system prompt. This remains instruction-level defense in
+depth, not a substitute for trusted cumulative Candidate Review.
+
+The Worker registers and must load
+`quant-research-six-stage-workflow`. The skill requires concise observable S1
+mandate, S2 evidence, S3 representation, S4 operation, S5 evaluation/revisit,
+and S6 artifact markers; silent skipping is replaced by a public-grounded
+`NOT_APPLICABLE`. A trusted parser writes `research-state-trace.json` in the
+attempt record, outside submission artifacts, and explicitly separates marker
+coverage from quantitative correctness. The public-only trajectory builder
+copies that index beside the raw trace and labels the evidence parent
+`Quant-H0-S6`, making the six stages directly retrievable by QRS without adding
+scores, verifier output, or candidate history. This prompt rule is helpful but
+is not an enforcement boundary: universal cumulative Candidate Review remains
+a P0 blocker before main.
+
+Focused prompt, skill, parser, admission, Worker, E2B, sandbox, mutation, and
+public-evidence-builder tests pass locally. No model, remote service, Worker,
+verifier, or benchmark was run. One separately frozen public-only H0-S6
+engineering canary is still needed before H0-S6 becomes the measured main
+baseline. Full implementation record:
+`docs/decisions/2026-08-24-quant-h0-s6-worker-protocol-implementation.md`.
+
 ## 2026-08-24 QRS-only main supersedes the matched Generic--QRS design
 
 The prospective main experiment is now **QRS-only**. The earlier plan that put

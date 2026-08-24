@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 from ..e2b_lease import E2BLeasePool
 from ..evaluation import ArtifactRecord, OfficialTaskScore, TaskAttempt
 from ..qfbench_images import NEXAU_REQUIREMENTS_LOCK, NEXAU_RUNTIME_PYTHON
+from ..research_state_trace import materialize_research_state_trace
 from ..verifiers.qfbench import (
     parse_official_qfbench_score,
     prepare_offline_verifier_script,
@@ -404,6 +405,11 @@ class E2BNexAUExecutor:
                 summary_text = sandbox.files.read("/qea/result/summary.json", format="text")
                 trace_path.write_text(_scrub(str(trace_text), model_env))
                 final_text_path.write_text(_scrub(str(final_text), model_env))
+                materialize_research_state_trace(
+                    trace_path=trace_path,
+                    worker_dir=worker_dir,
+                    destination=attempt_dir / "research-state-trace.json",
+                )
                 try:
                     summary = json.loads(_scrub(str(summary_text), model_env))
                 except json.JSONDecodeError as exc:

@@ -13,13 +13,27 @@ a trajectory $\tau_{i,q}$ and artifact $a_{i,q}$.
 
 The main method starts from Quant-H0-S6, a newly frozen baseline containing the
 Quant Research Worker identity, one shell tool, and six concise observable
-stage checkpoints. Each stage emits only a short public summary---not hidden
-chain of thought---for mandate, evidence, representation, operation,
-evaluation, and artifact completion. Evaluation may explicitly revisit an
-earlier stage, and an inapplicable stage must be marked with a public reason
-rather than silently skipped. A trusted post-run parser stores the stage ledger
-outside the task submission. Quant-H0-S6 contains no evolved component library,
-candidate history, failure classifier, or component-selection policy.
+stage checkpoints. The system prompt makes the generalization object explicit:
+the Worker must complete the current public task using reusable research
+capability rather than a hidden-evaluator or task-answer patch. Exact
+task-specific rules remain valid when the current public instruction, supplied
+public data, or a predeclared public reference states them.
+
+The same minimum provenance rule is injected by the trusted Worker runtime, so
+an evolved candidate cannot remove it by editing its own prompt. This
+instruction-level boundary does not replace Candidate Information-Set Review:
+the trusted controller still determines whether the exact cumulative candidate
+may reach a Worker.
+
+The detailed workflow is a registered skill loaded before substantive shell
+work. Each stage emits only a short public summary---not hidden chain of
+thought---for mandate, evidence, representation, operation, evaluation, and
+artifact completion. Evaluation may explicitly revisit an earlier stage, and
+an inapplicable stage must be marked with a public reason rather than silently
+skipped. A trusted post-run parser stores the marker ledger outside the task
+submission and does not equate marker presence with stage correctness.
+Quant-H0-S6 contains no evolved component library, candidate history, failure
+classifier, or component-selection policy.
 
 \subsection{Quant Research State Representation}
 

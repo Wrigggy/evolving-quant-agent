@@ -16,6 +16,15 @@ from pathlib import Path
 _MIN_MODEL_CLIENT_TIMEOUT_SECONDS = 360.0
 _EMPTY_MODEL_RESPONSE = "No response content or tool calls"
 _EMPTY_MODEL_EXECUTION_ERROR = f"Error in agent execution: {_EMPTY_MODEL_RESPONSE}"
+_REUSABLE_HARNESS_CONTRACT = (
+    "- Complete this public task through reusable quantitative-research "
+    "behavior, not a benchmark-specific answer patch.\n"
+    "- Task-specific rules are allowed when the public instruction, supplied "
+    "public data, or a predeclared public reference states them. Do not infer "
+    "or encode hidden checker behavior, reference answers, expected outputs, "
+    "official property identities, prior scores, or unstated benchmark "
+    "constants.\n"
+)
 
 
 def _stage_repair_seed(work_dir: Path, output_dir: Path) -> bool:
@@ -174,6 +183,7 @@ def run(task_dir: Path, worker_dir: Path, work_dir: Path, output_dir: Path, resu
         + f"- Public input data is under {work_dir / 'data'}.\n"
         + f"- Save every requested deliverable under {output_dir}.\n"
         + "- Do not search for tests, solutions, reference answers, or credentials.\n"
+        + _REUSABLE_HARNESS_CONTRACT
     )
     context = {
         "date": os.environ.get("QEA_EVAL_DATE", "2026-07-23"),

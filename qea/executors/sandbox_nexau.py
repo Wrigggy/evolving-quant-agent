@@ -18,6 +18,7 @@ from typing import Callable, Mapping, Sequence
 
 from ..evaluation import ArtifactRecord, OfficialTaskScore, TaskAttempt
 from ..qfbench_images import NEXAU_REQUIREMENTS_LOCK, NEXAU_RUNTIME_PYTHON
+from ..research_state_trace import materialize_research_state_trace
 from ..sandbox_backend import (
     SandboxBackend,
     SandboxCommandResult,
@@ -616,6 +617,11 @@ class SandboxNexAUExecutor:
             )
             trace_path.write_bytes(trace)
             final_path.write_bytes(final)
+            materialize_research_state_trace(
+                trace_path=trace_path,
+                worker_dir=worker_dir,
+                destination=attempt_dir / "research-state-trace.json",
+            )
             try:
                 parsed = json.loads(raw_summary)
             except (TypeError, json.JSONDecodeError) as exc:

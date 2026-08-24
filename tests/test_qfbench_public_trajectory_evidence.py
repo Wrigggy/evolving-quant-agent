@@ -137,3 +137,52 @@ def test_does_not_copy_forbidden_attempt_members(tmp_path):
     assert "failed_property" not in text
     assert '"expected"' not in text
     assert "not retained" not in text
+
+
+def test_includes_trusted_six_stage_index_for_quant_h0_s6(tmp_path):
+    source = _fixture(tmp_path)
+    destination = tmp_path / "public-view"
+    skill = source["worker"] / "skills/quant-research-six-stage-workflow"
+    _write(skill / "SKILL.md", "registered six-stage workflow\n")
+    stage_record = {
+        "schema_version": 1,
+        "record_kind": "research_state_marker_index",
+        "marker_presence_is_not_stage_correctness": True,
+        "coverage": {
+            "accounted_stages": ["S1", "S2", "S3", "S4", "S5", "S6"],
+            "missing_stages": [],
+            "marker_protocol_complete": True,
+        },
+    }
+    _write(source["attempt"] / "research-state-trace.json", stage_record)
+
+    report = build(
+        public_contracts_root=source["contracts"],
+        h0_run=source["run"],
+        h0_attempt=source["attempt"],
+        quant_h0_worker=source["worker"],
+        target_task_id="holdings-target",
+        protection_task_ids=["attribution-protection"],
+        destination=destination,
+    )
+
+    copied = (
+        destination
+        / "benchmarks/qfbench/tasks/holdings-target/research_state_trace.json"
+    )
+    card = json.loads(
+        (
+            destination / "tasks/cards/qfbench--holdings-target.json"
+        ).read_text(encoding="utf-8")
+    )
+    contract = json.loads(
+        (destination / "contract.json").read_text(encoding="utf-8")
+    )
+
+    assert json.loads(copied.read_text(encoding="utf-8")) == stage_record
+    assert card["evidence_paths"]["research_state_trace"].endswith(
+        "research_state_trace.json"
+    )
+    assert contract["candidate_parent"] == "Quant-H0-S6"
+    assert report["parent"] == "Quant-H0-S6"
+    assert report["research_state_trace_included"] is True

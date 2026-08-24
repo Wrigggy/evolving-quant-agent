@@ -402,3 +402,23 @@ freeze time. This is a design record, not a completed experiment; the
 universal gate, H0-S6 canary, public-only Review-PASS Worker result, main
 manifest, independent lineages, AHE reproduction, and sealed panel remain
 pending.
+
+\subsection{Quant-H0-S6 Worker protocol implementation}
+
+The implementation record at
+\path{docs/decisions/2026-08-24-quant-h0-s6-worker-protocol-implementation.md}
+adds a new Worker identity without modifying historical Quant-H0. The shell
+descriptor and model/runtime settings are unchanged. A short system-prompt rule
+distinguishes public task-conditioned requirements from hidden evaluator or
+task-answer patches; the trusted runner repeats the minimum rule in its
+non-candidate runtime contract so an evolved prompt cannot remove it. A
+registered skill defines S1--S6 entry, completion, revisit, and explicit-N/A
+markers. Both sandbox executors parse the
+downloaded assistant trace into a trusted attempt-side
+\texttt{research-state-trace.json}; the parser states that marker presence is
+not stage correctness. The public-only trajectory builder includes this index
+beside the raw trace and labels the parent Quant-H0-S6, so QRS can retrieve the
+stage record without receiving scores, verifier output, or candidate history.
+This is a no-model implementation result. Live skill loading, marker coverage,
+Worker behavior, score, cost, and diagnostic value remain pending one
+separately frozen public-only H0-S6 canary.

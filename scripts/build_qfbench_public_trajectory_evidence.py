@@ -114,7 +114,9 @@ def _contract_sources(root: Path, task_id: str) -> tuple[Path, Path]:
     return instruction, clauses
 
 
-def _attempt_members(attempt: Path) -> tuple[dict[str, object], Path, Path]:
+def _attempt_members(
+    attempt: Path,
+) -> tuple[dict[str, object], Path, Path, Path | None]:
     execution = _json(attempt / "worker-execution.json", label="Worker execution")
     summary = execution.get("summary")
     if not isinstance(summary, Mapping) or summary.get("outcome") != "completed":
@@ -127,7 +129,17 @@ def _attempt_members(attempt: Path) -> tuple[dict[str, object], Path, Path]:
         raise PublicTrajectoryEvidenceError("Worker trace URI must be a local file")
     if not isinstance(final_name, str) or Path(final_name).name != final_name:
         raise PublicTrajectoryEvidenceError("Worker final URI must be a local file")
-    return dict(summary), attempt / trace_name, attempt / final_name
+    state_trace = attempt / "research-state-trace.json"
+    return (
+        dict(summary),
+        attempt / trace_name,
+        attempt / final_name,
+        (
+            state_trace
+            if state_trace.is_file() and not state_trace.is_symlink()
+            else None
+        ),
+    )
 
 
 def build(
@@ -169,7 +181,17 @@ def build(
         raise PublicTrajectoryEvidenceError(
             "fresh H0 attempt task does not match the target task"
         )
-    summary, trace, final = _attempt_members(attempt)
+    summary, trace, final, research_state_trace = _attempt_members(attempt)
+    parent_name = (
+        "Quant-H0-S6"
+        if (
+            backbone
+            / "skills"
+            / "quant-research-six-stage-workflow"
+            / "SKILL.md"
+        ).is_file()
+        else "Quant-H0"
+    )
     if target.exists():
         raise PublicTrajectoryEvidenceError(f"destination already exists: {target}")
     staging = target.with_name(target.name + ".partial")
@@ -219,6 +241,11 @@ def build(
             if role == "target":
                 _copy_regular_file(trace, task_root / "worker_trace.jsonl")
                 _copy_regular_file(final, task_root / "worker_final.txt")
+                if research_state_trace is not None:
+                    _copy_regular_file(
+                        research_state_trace,
+                        task_root / "research_state_trace.json",
+                    )
                 artifacts = _copy_artifacts(
                     attempt / "artifacts", task_root / "artifacts"
                 )
@@ -240,6 +267,11 @@ def build(
                         ),
                     }
                 )
+                if research_state_trace is not None:
+                    evidence_paths["research_state_trace"] = (
+                        f"benchmarks/qfbench/tasks/{task_id}/"
+                        "research_state_trace.json"
+                    )
                 card["runtime_summary"] = clean_summary
                 card["artifact_paths"] = artifacts
             cards.append(card)
@@ -276,7 +308,7 @@ def build(
                 "schema_version": 1,
                 "stage": "COORDINATED_BREADTH",
                 "contract_arm": "quant-state",
-                "candidate_parent": "Quant-H0",
+                "candidate_parent": parent_name,
                 "candidate_history_exposed": False,
                 "component_history_enabled": False,
                 "history_required": False,
@@ -326,12 +358,13 @@ def build(
             {
                 "schema_version": 1,
                 "source_run": run.name,
-                "parent": "Quant-H0",
+                "parent": parent_name,
                 "target_task_id": target_task_id,
                 "protection_task_ids": protection_task_ids,
                 "copied_evidence": (
                     "public contracts plus one fresh H0 trace, final, artifacts, "
-                    "and process summary"
+                    "process summary, and the trusted research-state marker "
+                    "index when present"
                 ),
                 "excluded_evidence": [
                     "official scores and public evaluation",
@@ -359,6 +392,8 @@ def build(
         ),
         "answer_free": True,
         "candidate_history_exposed": False,
+        "parent": parent_name,
+        "research_state_trace_included": research_state_trace is not None,
     }
 
 

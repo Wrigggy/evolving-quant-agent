@@ -151,6 +151,10 @@ def test_remote_runner_imports_worker_local_tool_before_loading_config(
 
         def run(self, *, message, context):
             assert "Use the local fixture tool" in message
+            assert "reusable quantitative-research behavior" in message
+            assert "not a benchmark-specific answer patch" in message
+            assert "Task-specific rules are allowed" in message
+            assert "hidden checker behavior" in message
             assert context["working_directory"] == str(work)
             return "done"
 
