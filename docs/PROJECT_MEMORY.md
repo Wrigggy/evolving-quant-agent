@@ -1,5 +1,59 @@
 # QEA Repository Memory
 
+## 2026-08-24 main metrics, task selection, and candidate-review story aligned
+
+The prospective paper method now requires a mandatory arm-blind **Candidate
+Information-Set Reviewer** between admitted candidate generation and every
+fresh Worker. It reviews the complete cumulative Quant-H0-to-candidate
+Worker-visible diff, the full inventory of decision-changing claims, and their
+trusted public or predeclared independent support. Optimize-only diagnostics
+may help identify a forbidden origin but cannot support a Worker-visible rule.
+Coverage must be complete and the overall verdict must be `PASS`; `REJECT` or
+`INCONCLUSIVE` holds the candidate and dispatches no Worker. A Review `PASS`
+means only information-set eligibility, not candidate quality or promotion.
+
+This boundary responds to the retrospective finding that all six previously
+evaluated development candidates contained answer-rich semantic projection:
+the raw diagnostic files remained Worker-hidden, but hidden evaluator
+predicates were translated into candidate prompts, tools, descriptors, or
+profiles. Their official scores and costs remain measured, while clean
+reusable-gain and scientific-promotion interpretations remain withdrawn. The
+optional Quant Research Reviewer is a separate search aid and is not the
+mandatory Candidate Information-Set Reviewer.
+
+The main comparison is Quant-H0 plus matched Generic and QRS cumulative
+full-harness evolution. Generic and QRS share the same model, public evidence,
+mutation surface, budgets, admission, Candidate Review, target, repeat, and
+protection gates; QRS alone receives the State Card and state-conditioned
+retrieval/routing. Until a faithful AHE reproduction exists, call the control a
+matched generic trajectory-guided full-harness baseline rather than
+`AHE-on-quant`.
+
+Task-family selection may be purposeful for mechanism development, but it must
+be disclosed. Freeze and publish the complete eligible pool, inclusion and
+exclusion rules, family stratification, selected task roles, exclusion reasons,
+and freeze time. The development panel is not population-representative. A
+separate family-stratified sealed panel must be frozen before optimization,
+evaluated once per frozen incumbent, and never feed search or selection.
+
+The development primary metric is stable-promotion rate over a fixed number of
+predeclared family-round opportunities. Success requires Candidate Review
+`PASS`, strict target gain with a nonempty resolved-property footprint, an
+independent repeat of that footprint, and property-safe protection. All stops,
+including `ABSTAIN`, non-PASS Review, no gain, repeat drift, and protection
+failure, remain in the denominator. The final primary metric is the complete
+sealed official task/property vector plus an equal-family macro. Requests,
+tokens, cost, time to first stable promotion, and the proposal-to-protection
+funnel are secondary explanatory metrics. Independent cumulative lineages are
+the statistical units; four per arm are preferred for a paper-level comparison,
+while two per arm remains a descriptive mechanism study.
+
+Main readiness remains `NO-GO` until one fresh public-only candidate passes the
+universal Review and produces a retained blind-Worker strict official gain.
+Repeat and protection are additionally required for stable promotion. Full
+decision:
+`docs/decisions/2026-08-24-main-metrics-task-selection-and-candidate-review-story-alignment.md`.
+
 ## 2026-08-24 public-only EVT-POT-VaR H0 stopped on missing prescribed dependency
 
 The frozen `qf-public-only-evt-pot-var-h0-prescreen-20260824-r1` completed one
