@@ -22,7 +22,10 @@ full execution history of prior candidates \citep{lee2026metaharness}.
 Our claim is not that the outer harness-evolution loop is new. We study whether
 an explicit expected--observed--target Quant Research State transition, tested
 through component activation and quantitative observations, improves search
-and experience reuse. AHE is evaluated through a separately pinned,
+and experience reuse. A frozen-base adapter keeps initialization modular: an
+external harness can be materialized under the common Worker contract and then
+optimized by the same QRS loop without making its construction part of QRS.
+AHE is evaluated through a separately pinned,
 source-faithful reproduction with a minimal quantitative-task adapter; it is
 not reimplemented as a treatment switch inside the QRS runner. A QRS-no-State
 ablation addresses quant-specific mechanism attribution, while the independent

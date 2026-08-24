@@ -1,5 +1,70 @@
 # QEA Repository Memory
 
+## 2026-08-24 Primitive-H0 bank and panelized global QRS scheduler
+
+The prospective QRS main now starts from a new
+`qea/worker_quant_h0_s6_primitive_v1` seed, not the stronger hand-authored
+Core-v4 workflow. It preserves the same shell, passive structured recorder,
+runtime and six state names, while deleting the taught S5 revisit policy and
+S6 deliverable-audit advice. Its six stage bodies are deliberately ambiguous
+and task-independent. Core-v4 remains a retained human-scaffold calibration
+result, not the parent or main comparator.
+
+The Evolver can now distinguish `stage_local`, `cross_stage` and
+`workflow_global` proposals. Global ACT requires all six states, an explicit
+handoff gap and at least two already-read answer-free H0 trajectories from
+different tasks and families. System prompt, skill, middleware and routing are
+natural but non-mandatory coordination loci. H0 trajectories may localize a
+failure but cannot serve as public normative support for a Worker-visible
+claim; expected values, checker output, failed properties and official outcome
+files remain forbidden claim bases.
+
+Primitive-H0 selection is an external exploratory stage, deliberately separate
+from the QRS scheduler. The scheduler does not preregister, dispatch, rank, or
+pay for that search; it consumes one materialized Worker identity and concrete
+runtime profile, then freezes both. Primitive-H0 is the reference
+implementation of a standard frozen-base harness adapter, not a hard-coded
+scheduler dependency: any independently authored base harness may enter the
+same QRS loop after an adapter materializes its agent configuration, declared
+Worker-visible prompt/skill surfaces, common shell, passive six-state recorder,
+enumerable mutation surfaces, runtime and handoff manifest. Base-harness
+authoring remains outside Evolver history; QRS results are conditional on the
+imported frozen base. The scheduler next runs fresh Primitive-H0 on every
+task in the complete development universe. Under the current public partition
+this is `N=45`, after reserving a disjoint 12-task feedback-sealed panel. The
+controller retains every public instruction, raw and state trace, final,
+artifact, process and cost record, while keeping official outcomes in a
+controller-only surface. Six focus-family panels retrieve bounded slices plus
+cross-family anchors, propose one cumulative global candidate, require exact
+Candidate Review, and run the focus family plus the five other-family anchors
+twice with fresh matched parent and candidate Workers. Promotion requires
+repeated strict focus gain and zero task-reward regression over both focus and
+anchors; anchor gains cannot substitute for focus gain. Legal `ABSTAIN`, Review
+non-PASS or matched rollback retains the incumbent and continues, so the final
+sealed endpoint exists even when zero or only some panels promote. This is
+task-reward-nonregressing panel promotion, not a property-safe claim. The
+actually retained final incumbent and fresh H0 then run the sealed 12 tasks
+twice with reversed order and zero feedback.
+
+The adapter, public-contract materializer, 45-task trajectory bank, global
+workflow guard, universal exact reviewed-snapshot path, QRS mutation boundary,
+dynamic-incumbent outer scheduler, operational runner and launch materializer
+are now implemented locally. Candidate changes are limited to
+`systemprompt.md` and the six-stage `SKILL.md`; shell, recorder and all other
+harness surfaces remain fixed. The 393-cell main consists of 45 H0-bank cells,
+300 focus-plus-anchor panel cells and 48 feedback-sealed cells. Local focused
+and adjacent validation is green, but main remains `NO-GO` until the newly
+frozen three-cell Primitive protocol canary and four-bank-task mini scheduler
+live canary pass. The mini must exercise a real overall Review `PASS` through
+the exact blind Worker snapshot, matched repetitions, answer-free handoff,
+accounting, cleanup and zero-work resume; a legal non-PASS alone is not enough.
+Full decision:
+`docs/decisions/2026-08-24-primitive-h0-bank-and-panelized-global-qrs.md`;
+fitness/continuation amendment:
+`docs/decisions/2026-08-24-qrs-main-focus-anchor-retain-continue-amendment.md`;
+frozen specification:
+`data/breadth/QF_GLOBAL_S6_PRIMITIVE_H0_TRAJECTORY_SCHEDULER_PLAN.json`.
+
 ## 2026-08-24 Quant-H0-S6-Core-v4 structured state interface frozen
 
 Core-v3 remains a retained protocol failure and its breadth phase was never
