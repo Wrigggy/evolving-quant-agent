@@ -1,5 +1,38 @@
 # QEA Repository Memory
 
+## 2026-08-24 public-only credit-migration H0 found public mass headroom
+
+The frozen `qf-public-only-credit-migration-h0-prescreen-20260824-r1`
+produced one valid fresh stochastic Quant-H0 observation on
+`credit-migration-matrix`. The Worker completed 16 turns and 20 tool calls with
+3 tool errors, created eight public artifacts, and scored 106/107 with reward
+0 and verifier exit code 0.
+
+The deterministic answer-free audit used only fresh `cohort_sizes.csv`,
+`cohort_default_rates.csv`, and `summary.json`. The seven AAA-through-CCC cohort
+counts and annual issuer totals reconciled at 22,935, while the fresh summary
+reported 22,956 transitions, an exact +21 public count-mass mismatch. The
+frozen terminal decision is
+`ELIGIBLE_FOR_SEPARATE_PUBLIC_ONLY_CREDIT_MIGRATION_PROPOSAL_PLAN`; this is
+eligibility only, and R1 dispatched no Evolver, Reviewer, proposal, candidate
+Worker, repeat, or protection task.
+
+The run used 16 completed requests, 601,388 total tokens, and $0.030813592,
+with zero provider retries, nonaccepted requests, or unreconciled accounting.
+All frozen post-run thresholds were satisfied. Both systemd units ended
+successfully with zero restarts; Worker, proxy, verifier, and network cleanup
+completed by exact ID, with no live container or network residue.
+
+The official failed-property identity is absent from public-only evidence and
+must not enter the Evolver. The +21 difference is a measured fresh-artifact
+value, not a reusable candidate constant, and its co-occurrence with 106/107
+does not establish causality. This is not a candidate result, harness gain,
+stable baseline, repeat, protection result, or main-readiness result. Compact
+result:
+`data/breadth/QF_PUBLIC_ONLY_CREDIT_MIGRATION_H0_PRESCREEN_RESULT.json`; full
+decision:
+`docs/decisions/2026-08-24-public-only-credit-migration-h0-prescreen-result.md`.
+
 ## 2026-08-24 public-only holdings R4 repaired coverage but not support; lineage terminated
 
 The answer-free R4 `LINEAGE_REFINEMENT` proposal returned an admitted `ACT`

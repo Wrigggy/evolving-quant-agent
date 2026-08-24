@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-public-only-credit-migration-h0-prescreen-20260824-r1",
+  "date": "2026-08-24",
+  "status": "valid_fresh_h0_public_mass_headroom_observation",
+  "research_question": "Does one fresh Quant-H0 Worker leave official headroom on credit-migration-matrix, and do its own public count artifacts expose the predeclared exact mass mismatch before any public-only proposal is authorized?",
+  "setup": {
+    "benchmark": "QFBench",
+    "task_id": "credit-migration-matrix",
+    "arm": "Quant-H0",
+    "result_role": "adaptive development target prescreen only",
+    "deployment_source_version": "d203bd4",
+    "frozen_plan": "data/breadth/QF_PUBLIC_ONLY_CREDIT_MIGRATION_H0_PRESCREEN_PLAN.json",
+    "source_artifacts": "results/bc-mirror/qf-public-only-credit-migration-h0-prescreen-20260824-r1",
+    "worker_sessions": 1,
+    "official_verifier_executions": 1,
+    "evolver_calls": 0,
+    "reviewer_calls": 0,
+    "candidate_workers": 0,
+    "sealed_evaluation_used": false
+  },
+  "live_attempt": {
+    "attempt_count": 1,
+    "attempt_id": "f645a1af17076b6d7f477013b00d5df28342c117743a6d0994c2f3e96077925a",
+    "worker_outcome": "completed",
+    "turns": 16,
+    "tool_calls": 20,
+    "tool_errors": 3,
+    "files": 8,
+    "artifact_count": 8,
+    "artifacts": [
+      "average_transition_matrix.csv",
+      "cohort_default_rates.csv",
+      "cohort_sizes.csv",
+      "cumulative_default_probs.csv",
+      "generator_matrix.csv",
+      "markov_test.csv",
+      "summary.json",
+      "transition_matrix_deviation.csv"
+    ],
+    "worker_seconds": 290.393,
+    "valid_for_selection": true
+  },
+  "official_evaluation": {
+    "tests_passed": 106,
+    "tests_total": 107,
+    "reward": 0.0,
+    "verifier_exit_code": 0,
+    "valid_fresh_observation": true,
+    "headroom_present": true,
+    "stable_baseline": false,
+    "failed_property_identity_recorded_here": false
+  },
+  "request_accounting": {
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "logical_requests": 16,
+    "completed_requests": 16,
+    "input_tokens": 569821,
+    "output_tokens": 31567,
+    "total_tokens": 601388,
+    "provider_cost_usd": 0.030813592,
+    "rate_limited_retries": 0,
+    "requests_with_retry_index_above_zero": 0,
+    "other_nonaccepted_requests": 0,
+    "unreconciled_attempts": 0,
+    "unreconciled_requests": 0
+  },
+  "public_count_mass_audit": {
+    "status": "evaluable_mismatch_present",
+    "evidence_scope": "Fresh cohort_sizes.csv, cohort_default_rates.csv, and summary.json only; no verifier property, expected value, or historical numeric constant was used.",
+    "count_columns": [
+      "AAA",
+      "AA",
+      "A",
+      "BBB",
+      "BB",
+      "B",
+      "CCC"
+    ],
+    "annual_cohort_size_totals": {
+      "2018": 3133,
+      "2019": 3510,
+      "2020": 3457,
+      "2021": 3210,
+      "2022": 3299,
+      "2023": 3206,
+      "2024": 3120
+    },
+    "annual_total_issuer_mismatch_count": 0,
+    "cohort_sizes_grand_total": 22935,
+    "cohort_default_rates_total_issuers_grand_total": 22935,
+    "summary_total_transitions": 22956,
+    "summary_minus_public_cohort_total": 21,
+    "count_mass_mismatch_present": true,
+    "interpretation": "The two annual cohort-count surfaces reconcile exactly with each other, while the fresh summary total is 21 larger. This localizes public count-mass headroom only; it does not identify the official failed property or establish causality."
+  },
+  "frozen_post_run_thresholds": {
+    "max_completed_requests": 40,
+    "max_total_tokens": 3000000,
+    "max_provider_cost_usd": 0.15,
+    "hard_wall_time_seconds": 5400,
+    "all_thresholds_satisfied": true
+  },
+  "runtime": {
+    "main_service_state": "inactive/dead",
+    "health_service_state": "inactive/dead",
+    "service_result": "success",
+    "service_exit_code": 0,
+    "service_restarts": 0,
+    "replacement_count": 0,
+    "worker_cleaned_up": true,
+    "proxy_cleaned_up": true,
+    "verifier_cleaned_up": true,
+    "proxy_network_cleaned_up": true,
+    "cleanup_method": "exact-id",
+    "related_live_container_or_network_residue": 0,
+    "retained_filesystem_evidence": true
+  },
+  "source_level_preflight": {
+    "frozen_plan_focused_tests": "6 passed",
+    "retained_evidence_cross_check": "passed",
+    "result_json_parse": "passed",
+    "paper_value_macro_definition_use_check": "passed",
+    "diff_check": "passed",
+    "pdf_compile": "unavailable because latexmk is not installed",
+    "interpretation": "The source-level checks passed. Missing local LaTeX tooling does not change the retained experiment result."
+  },
+  "terminal": {
+    "decision": "ELIGIBLE_FOR_SEPARATE_PUBLIC_ONLY_CREDIT_MIGRATION_PROPOSAL_PLAN",
+    "classification": "public_mass_headroom",
+    "eligibility_only": true,
+    "follow_on_dispatch": false,
+    "proposal_launched": false,
+    "reviewer_launched": false,
+    "candidate_launched": false,
+    "repeat_launched": false,
+    "protection_launched": false,
+    "next_plan_requirement": "Any proposal and mandatory arm-blind review require a separately frozen plan. A Worker remains unauthorized until a nonempty candidate passes that review."
+  },
+  "information_boundary": {
+    "official_aggregate_retained_for_trusted_research_record": true,
+    "failed_property_identity_evolver_visible": false,
+    "verifier_output_evolver_visible": false,
+    "allowed_future_evolver_evidence": "The exact public target and protection contracts plus this fresh Worker's answer-free trace, final text, and public output artifacts, subject to a separately frozen plan.",
+    "forbidden_future_evolver_evidence": "Official score, reward, pass or fail counts, failed-property identities, verifier output, checker behavior, expected values, optimize-only diagnostics, or historical numeric values used as candidate rules."
+  },
+  "retained_conclusion": "One valid fresh stochastic Quant-H0 execution scored 106/107 with reward 0. Its own public artifacts exposed an exact 22935-versus-22956 count-mass mismatch, so the frozen prescreen makes the target eligible only for a separately frozen public-only proposal and mandatory review plan; it launches no follow-on work.",
+  "claim_boundary": {
+    "supported": "One valid stochastic Quant-H0 observation, exact aggregate official result and request cost, deterministic fresh-artifact public mass mismatch, threshold disposition, terminal eligibility, service completion, and cleanup.",
+    "not_supported": "The identity or cause of the official failed property, a causal link between the public mismatch and official headroom, candidate quality, harness improvement, Reviewer or Evolver effectiveness, repeatability, protection, benchmark-wide performance, sealed generalization, or main-experiment readiness.",
+    "selection_boundary": "The co-occurrence of one-property official headroom and one public count-mass mismatch authorizes only a separate proposal design. It is not candidate evidence and must not be converted into an expected-value or task-specific rule."
+  }
+}
