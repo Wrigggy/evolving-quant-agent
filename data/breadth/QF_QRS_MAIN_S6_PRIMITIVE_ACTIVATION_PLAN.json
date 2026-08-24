@@ -1,0 +1,638 @@
+{
+  "schema_version": 3,
+  "record_kind": "qrs_main_activation_launch_method_plan",
+  "date": "2026-08-25",
+  "status": "frozen_launch_authorized",
+  "experiment_id": "qf-qrs-main-s6-primitive-20260825-r1",
+  "purpose": "Separately activate the QRS-only Main campaign from one fresh materialization of the frozen Primitive-H0 adapter. Build a fresh 45-task development bank, evolve one dynamic cumulative incumbent through six family panels under Candidate Information-Set Review policy v2, and evaluate the retained endpoint against fresh Primitive-H0 Workers on the disjoint 12-task feedback-sealed partition. No qualification, Generic, AHE, or historical candidate material enters Main.",
+  "activation_decision": {
+    "decision": "GO_QRS_ONLY_MAIN_R1",
+    "separately_frozen_from_prospective_plan": true,
+    "prospective_method_plan": "data/breadth/QF_GLOBAL_S6_PRIMITIVE_H0_TRAJECTORY_SCHEDULER_PLAN.json",
+    "activated_method_plan": "data/breadth/QF_QRS_MAIN_S6_PRIMITIVE_ACTIVATION_PLAN.json",
+    "activation_scope": "One complete Main R1 scheduler lineage through 45 fresh H0-bank cells, six ordered family panels, the frozen scientific retain-and-continue rules, and all 48 feedback-sealed cells.",
+    "no_partial_scientific_selection": "The complete ordered curriculum runs even when a panel ABSTAINS, Review is non-PASS, or valid matched evidence retains or rolls back a candidate. Such negative scientific outcomes retain the incumbent and continue; only the frozen integrity, runtime, protocol, accounting, cap, or sealed-boundary stops may halt Main.",
+    "follow_on_authority": "No second Main lineage, post-sealed refinement, R2, cross-provider retry, external baseline, release promotion, or paper claim is authorized by this activation."
+  },
+  "source_freeze": {
+    "audited_engineering_revision": "4c636f43879d9f156529dcf170361e881b9548e2",
+    "activation_commit_resolution": "Deploy a commit whose production executable code is identical to the audited engineering revision. The commit may additionally contain this activation plan and focused test plus canonical R2 result/manuscript synchronization; record the concrete deployed revision in the materialization record before dispatch.",
+    "source_change_rule": "Any production-code, method-partition, Worker, model-route, runtime, Reviewer-policy, cap, or scheduler change after this audit invalidates this activation and requires a new dated freeze.",
+    "required_prelaunch_checks": [
+      "focused Main method, launch-builder, scheduler, operational-runner, and activation-plan tests pass",
+      "the deployed activation JSON equals the tested activation JSON",
+      "the fresh Main Primitive-H0 handoff and generated launch files pass local materialization checks",
+      "the public metadata partition remains exactly the frozen 45 development plus disjoint 12 sealed tasks"
+    ]
+  },
+  "qualification_clearance": {
+    "qualification_run_id": "qf-qrs-reviewer-policy-v2-qualification-20260825-r2",
+    "clearance": "PASS_ENGINEERING_PATH_ONLY",
+    "measured_path": {
+      "fresh_h0_bank_cells": 4,
+      "actual_reviewer_calls": 1,
+      "valid_matched_cells": 12,
+      "panel_decision": "RETAIN_NO_STABLE_GAIN",
+      "same_stop_resume_new_work": 0,
+      "final_live_residue": 0
+    },
+    "establishes": "Reviewer policy v2 can admit a claim-locally grounded task-agnostic candidate, bind the exact read-only reviewed snapshot to blind Workers, traverse both matched repetitions and answer-free carry, reconcile accounting, resume with zero work, and clean exact-ID runtime residue.",
+    "does_not_establish": "R2 established no stable gain, reusable candidate, reusable claim, reusable trajectory, Main result, sealed result, or authorization to reuse any R2 scientific material."
+  },
+  "authority": {
+    "launch_authorized": true,
+    "paid_or_remote_authority": true,
+    "main_authority": true,
+    "qrs_only": true,
+    "authorized_scheduler_run_ids": [
+      "qf-qrs-main-s6-primitive-20260825-r1"
+    ],
+    "authorized_qfbench_primary_cells": 393,
+    "authorized_qfbench_recovery_cells": 3,
+    "authorized_maximum_worker_sessions": 396,
+    "authorized_evolver_calls": 6,
+    "authorized_reviewer_calls": 6,
+    "authorized_worker_model_route": "deepseek-v4-flash-main0",
+    "authorized_reviewer_policy": "candidate_information_set_review_policy_v2",
+    "authorized_concurrency": {
+      "max_parallel_runs": 1,
+      "worker_concurrency": 1,
+      "verifier_concurrency": 1
+    },
+    "provider_and_account_boundary": "Use only the already configured frozen Worker/Reviewer routes and account. Provider, account, credential source, model, context, iteration, or concurrency expansion requires new authority.",
+    "recovery_boundary": "At most the three already frozen setup-only recovery cells are available under the existing per-phase rules. There is no score-driven rerun, replacement, best-of-N, task substitution, candidate replay, or automatic new Main identity.",
+    "sealed_boundary": "Authority reaches the four fixed sealed blocks only after panel 6 has a valid scientific terminal outcome. Sealed instructions and outcomes authorize no refinement, replacement, additional proposal, additional Review, or follow-on dispatch."
+  },
+  "fresh_main_identity": {
+    "scheduler_run_id": "qf-qrs-main-s6-primitive-20260825-r1",
+    "materialization_run_id": "qf-qrs-main-s6-primitive-20260825-r1-materialization",
+    "frozen_h0_profile_id": "quant-h0-s6-primitive-v1-fresh-main-20260825-r1",
+    "h0_bank_run_id_rule": "qf-qrs-main-s6-primitive-20260825-r1-h0-{task_id}",
+    "proposal_run_id_rule": "qf-qrs-main-s6-primitive-20260825-r1-panel-{panel_index:02d}-proposal",
+    "review_run_id_rule": "qf-qrs-main-s6-primitive-20260825-r1-panel-{panel_index:02d}-review",
+    "matched_run_id_rule": "qf-qrs-main-s6-primitive-20260825-r1-panel-{panel_index}-matched-r{repetition}",
+    "sealed_run_id_rule": "qf-qrs-main-s6-primitive-20260825-r1-sealed-r{repetition}-group-{group}",
+    "trajectory_bank_identity": "qf-qrs-main-s6-primitive-20260825-r1/trajectory-bank",
+    "scheduler_state_identity": "qf-qrs-main-s6-primitive-20260825-r1/scheduler-state",
+    "freshness_rule": "Materialize a new read-only Primitive-H0 Worker tree for Main, then create all H0, proposal, Review, matched, carry, and sealed artifacts only under the Main R1 namespace. No prior run directory may satisfy a missing Main child.",
+    "resume_rule": "Resume may consume only the exact Main R1 runner inputs and exact Main R1 child IDs. Input drift, a foreign child, or a differently bound Worker stops before dispatch."
+  },
+  "qualification_and_history_nonreuse": {
+    "engineering_clearance_only": "The R2 qualification verdict is used only to clear the policy-v2 implementation path.",
+    "forbidden_main_inputs_from_r2": [
+      "frozen Worker copy or handoff",
+      "H0 trajectory or artifact",
+      "trajectory-bank evidence tree or access state",
+      "Evolver prompt, raw trace, decision, State Card, or proposal",
+      "candidate directory, candidate diff, snapshot, skill, or system prompt",
+      "Worker-visible claim, basis reference selection, or safe-source excerpt",
+      "Reviewer input, output, verdict reason, or coverage reason",
+      "matched Worker trace, artifact, score, reward, property count, or decision",
+      "controller state, accepted history, carry output, or scheduler checkpoint"
+    ],
+    "forbidden_other_history": [
+      "R1 or mini-scheduler material",
+      "historical answer-rich candidates or semantic projections",
+      "Core, Generic, AHE, Search-v2, QuantCodeEval, or hand-authored repair candidates",
+      "development or sealed score chosen tasks, task substitutions, and best-of-N baselines"
+    ],
+    "permitted_prior_fact": "Only the binary fact that the R2 engineering path cleared is an activation prerequisite. It is not Evolver, Reviewer, Worker, panel-fitness, or sealed evidence."
+  },
+  "review_policy_v2_contract": {
+    "mandatory_before_candidate_worker": true,
+    "review_scope": "answer_free_candidate_information_set",
+    "claim_inventory": "Every decision-changing Worker-visible rule in the cumulative H0-to-candidate diff must be declared. Every declared claim must have claim-local exact refs resolving only to public contracts/references or trusted answer-free framework/development observations.",
+    "trusted_source_roles": [
+      "public_contract",
+      "public_reference",
+      "framework_reference",
+      "answer_free_development_observation"
+    ],
+    "optimize_only_sources": [],
+    "source_caps": {
+      "maximum_single_answer_free_excerpt_bytes": 24000,
+      "maximum_review_package_bytes": 192000
+    },
+    "pass_gate": "Overall PASS and coverage PASS are both required. ABSTAIN or Review non-PASS runs zero candidate Worker cells, retains the dynamic incumbent, carries only previously accepted answer-free history, and continues to the next family.",
+    "exact_snapshot_gate": "The candidate Worker directory must be the immutable exact snapshot bound into the PASS Review. Parent-to-candidate or cumulative-snapshot drift stops before Worker dispatch.",
+    "reviewer_visibility": "Reviewer input, output, reasoning, verdict text, and coverage rationale are controller-only and never enter a Worker or later Evolver evidence view.",
+    "accepted_history_carry": "Only accepted Worker-visible claims, their exact safe sources, and fresh answer-free matched traces may enter a later panel after promotion. Retain/rollback/ABSTAIN/non-PASS carries the unchanged incumbent and only previously accepted answer-free history from before the rejected proposal."
+  },
+  "qrs_only_boundary": {
+    "runtime_arms": [
+      "fresh_quant_h0_s6_primitive",
+      "dynamic_qrs_incumbent_or_exact_reviewed_candidate"
+    ],
+    "generic_in_main": false,
+    "ahe_in_main": false,
+    "qrs_no_state_in_main": false,
+    "independent_comparisons": {
+      "ahe": "A separately pinned AHE reproduction may be reported as an independent external baseline, but it is not scheduled, selected, paid for, or stored inside this Main lineage.",
+      "generic": "Generic evolving-harness experiments remain separate development or ablation campaigns and are not a Main arm, candidate source, evidence source, or released runtime switch."
+    },
+    "release_target": "The final code/library treatment remains QRS-only."
+  },
+  "operational_launch_contract": {
+    "builder": "scripts/build_qrs_main_launch.py",
+    "runner": "scripts/run_qrs_global_scheduler.py",
+    "method_plan_argument": "data/breadth/QF_QRS_MAIN_S6_PRIMITIVE_ACTIVATION_PLAN.json",
+    "scheduler_run_id_argument": "qf-qrs-main-s6-primitive-20260825-r1",
+    "fresh_h0_handoff": "Materialize a fresh read-only handoff under qf-qrs-main-s6-primitive-20260825-r1-materialization; do not point at the R2 handoff or Worker tree.",
+    "trajectory_bank_output": "Use only the qf-qrs-main-s6-primitive-20260825-r1 trajectory-bank root.",
+    "scheduler_state_dir": "Use only the qf-qrs-main-s6-primitive-20260825-r1 scheduler-state root.",
+    "required_runner_flags": [
+      "--approve-external-run"
+    ],
+    "forbidden_runner_flags": [
+      "--stop-after-panel",
+      "--stop-after-phase"
+    ],
+    "pre_dispatch_materialization_only": "The launch builder may write the fresh six Review-only controller plans and QRS-MAIN-LAUNCH.json, but it dispatches zero Evolver, Reviewer, Worker, verifier, or sealed cell.",
+    "launch_file_binding": "The runner must bind and retain the exact activated method JSON, generated launch JSON, fresh frozen-H0 handoff, public manifest, runtime, six controller plans, and Main R1 state root before the first H0 cell."
+  },
+  "phase_order": [
+    "import_frozen_primitive_h0",
+    "phase0_all_n_h0_development_bank",
+    "phase1_six_panel_curriculum",
+    "phase2_feedback_sealed_main",
+    "terminal_report"
+  ],
+  "epistemic_partitions": {
+    "primitive_selection": "Primitive-H0 selection is an external exploratory stage, outside this scheduler and outside the QRS lineage. The scheduler neither preregisters nor executes that search; it begins only after exactly one concrete Worker identity and runtime profile have been selected, materialized, and frozen.",
+    "development_bank": "N means every task in the frozen development universe after reserving the construct-calibration tasks and disjoint sealed-main panel. Here N=45, not a 12-task sample and not all 77 QFBench primary tasks. Because these primitive H0 histories supervise the Evolver, all 45 tasks are adaptive development.",
+    "panel_gates": "Each panel runs its full development family plus one fixed development anchor from every other family twice with fresh matched parent/candidate Workers. These are adaptive development fitness gates, not sealed estimates. Controller-only native official rewards promote only a repeated strict focus-family gain with zero focus-or-anchor task regression; leaf diagnostics never feed the Evolver or Worker.",
+    "sealed_main": "Twelve predeclared tasks are disjoint from the H0 bank and panel gates. The final candidate and fresh H0 run them in matched reversed order; instructions and outcomes never feed proposal, Review, parent promotion, task selection, or another run.",
+    "sealed_qualification": "Feedback-sealed means no outcome feedback after final-candidate freeze. Public task identities and contracts may be historically exposed, so the plan does not claim unseen or contamination-free evaluation."
+  },
+  "shared_runtime_freeze": {
+    "worker_model_route": "deepseek-v4-flash-main0",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "manifest": "data/qfbench/MANIFEST_85_BASELINE.json baseline.primary",
+    "worker_concurrency": 1,
+    "verifier_concurrency": 1,
+    "max_parallel_runs": 1,
+    "freshness": "Each arm-task-repetition is a new Worker process, model conversation, sandbox, artifact directory, and verifier execution. No cache, replay, prior attempt, artifact, or hidden evaluator fact enters another Worker.",
+    "matched_fields": [
+      "model and route",
+      "frozen Primitive-H0 runtime profile",
+      "rootless runtime",
+      "public task instruction and data",
+      "verifier",
+      "session limits",
+      "concurrency",
+      "run_shell_command and passive record_quant_state bindings"
+    ]
+  },
+  "frozen_base_harness_adapter_contract": {
+    "method_role": "standard_initialization_interface_for_qrs_evolution",
+    "reference_implementation": "qea/worker_quant_h0_s6_primitive_v1",
+    "generality": "Primitive-H0 is the reference base harness for this experiment, not a hard-coded scheduler implementation. Any independently authored base harness may enter the same QRS loop after an adapter materializes the required Worker layout and the resulting identity is frozen.",
+    "required_worker_layout": [
+      "agent.yaml with one concrete agent identity and runtime limits",
+      "systemprompt.md or an equivalent declared Worker-visible prompt surface",
+      "run_shell_command binding",
+      "passive record_quant_state binding with the six public S1-through-S6 state identifiers",
+      "loadable skill or equivalent declared workflow surface when the base harness uses one",
+      "admitted Worker-visible mutation surfaces that the cumulative Candidate Reviewer can enumerate"
+    ],
+    "required_semantics": [
+      "public task conditioning is allowed but hidden evaluator answers and task-specific patches are forbidden",
+      "state summaries are public work-state telemetry rather than private chain-of-thought",
+      "the base harness can run independently before any Evolver call",
+      "the exact frozen base can be copied as parent material for cumulative candidate review",
+      "the same model route, runtime profile, shell and recorder substrate can be reused for fresh matched controls"
+    ],
+    "adapter_output": "One external handoff manifest plus one materialized frozen Worker directory. The adapter does not add the base-harness authoring or selection process to the QRS search history.",
+    "scheduler_boundary": "The scheduler is initialization-agnostic after contract admission: it builds the H0 bank, panel evidence, cumulative proposals, Reviews, fitness gates, checkpoints, and sealed comparison from the imported base. It never modifies the imported base in place.",
+    "claim_boundary": "Results estimate QRS evolution conditional on the imported frozen base harness. Comparing different base-harness initializations is a separate experiment, not an internal QRS scheduler arm."
+  },
+  "arm_identities": {
+    "h0": {
+      "label": "quant-h0-s6-primitive-v1-fresh",
+      "agent_name": "qea_quant_h0_s6_primitive_v1_worker",
+      "worker_root": "qea/worker_quant_h0_s6_primitive_v1",
+      "tools": [
+        "run_shell_command",
+        "record_quant_state"
+      ],
+      "content_identity": "One externally selected and then frozen primitive S6 H0 system prompt, deliberately underspecified six named stages, shell descriptor, passive structured recorder, and concrete runtime profile across the all-N bank, the first panel control, and sealed main. The scheduler cannot alter or replace that imported identity.",
+      "protocol_expectation": "Strict genuine structured S1-through-S6 chronology is required. The baseline names the stages and recording mechanics but deliberately does not teach concrete stage methods, audit/reconciliation content, or revisit policy; this ambiguity is the Evolver headroom."
+    },
+    "candidate_lineage": {
+      "labels": [
+        "global-s6-p1",
+        "global-s6-p2",
+        "global-s6-p3",
+        "global-s6-p4",
+        "global-s6-p5",
+        "global-s6-p6-final"
+      ],
+      "parent_chain": "quant-h0-s6-primitive-v1-fresh -> global-s6-p1 -> global-s6-p2 -> global-s6-p3 -> global-s6-p4 -> global-s6-p5 -> global-s6-p6-final",
+      "parent_resolution": "The parent_chain is the nominal proposal-version sequence. At dispatch, every panel parent is resolved dynamically to the actually retained incumbent, so a nonpromotion does not pretend the rejected proposal became parent.",
+      "allowed_change": "A task-agnostic cumulative clarification of the six-stage quantitative workflow over the same named slots and passive structured recorder. Shell and recorder tools plus matched runtime fields remain unchanged.",
+      "forbidden_change": "Task IDs, task-specific formulas, failed-property or expected-value patches, checker logic, target-derived artifact checklists, family-specific overlays, hidden outcomes, per-task routing, or answer-rich evaluator semantics.",
+      "final_identity": "The actually retained incumbent after panel 6 is the only non-H0 harness allowed in sealed main and is immutable from that boundary onward; it may be Primitive-H0 or any earlier promoted proposal when later panels do not promote.",
+      "strong_core_v4_boundary": "Core-v4 may appear only as a disclosed human-authored calibration reference for recorder mechanics. It is not the H0 parent, a curriculum candidate, an Evolver evidence source, or a sealed-main arm."
+    }
+  },
+  "public_task_partition_rule": {
+    "eligible_filter": "reward_kind=binary and resource_source=upstream",
+    "construct_calibration_exclusions": [
+      "swap-curve-bootstrap-ois",
+      "13f-amendment-aware-crowding",
+      "fx-forward-cross-rate"
+    ],
+    "eligible_after_construct_exclusions": 57,
+    "sealed_draw": "For each of six domains, sort eligible task IDs; choose random.Random('20260824:sealed-main:' + domain).sample(pool, 2); sort each selected pair by task_id and assign groups a then b.",
+    "development_definition": "All eligible tasks not selected into sealed main. Do not sample, rank, replace, or prune them.",
+    "development_n": 45,
+    "selector_visible_fields": [
+      "task_id",
+      "domain",
+      "difficulty",
+      "reward_kind",
+      "resource_source"
+    ],
+    "selector_forbidden_inputs": "Prior or current score, reward, passed count, failed property, expected value, verifier output, Worker trace, artifact, candidate history, hidden test, or researcher preference after observing an outcome."
+  },
+  "sealed_main_tasks": [
+    {
+      "domain": "data_engineering",
+      "group": "a",
+      "difficulty": "medium",
+      "task_id": "corporate-action-adjustment"
+    },
+    {
+      "domain": "data_engineering",
+      "group": "b",
+      "difficulty": "medium",
+      "task_id": "polars-api-migration"
+    },
+    {
+      "domain": "derivatives",
+      "group": "a",
+      "difficulty": "hard",
+      "task_id": "cliquet-ratchet-pricing"
+    },
+    {
+      "domain": "derivatives",
+      "group": "b",
+      "difficulty": "medium",
+      "task_id": "variance-swap-replication"
+    },
+    {
+      "domain": "execution_microstructure",
+      "group": "a",
+      "difficulty": "hard",
+      "task_id": "binance-btc-participation-tca"
+    },
+    {
+      "domain": "execution_microstructure",
+      "group": "b",
+      "difficulty": "hard",
+      "task_id": "intraday-volume-fitting-and-execution-scheduling"
+    },
+    {
+      "domain": "rates_fx_macro",
+      "group": "a",
+      "difficulty": "medium",
+      "task_id": "fomc-tone-event-study"
+    },
+    {
+      "domain": "rates_fx_macro",
+      "group": "b",
+      "difficulty": "hard",
+      "task_id": "zero-coupon-bootstrapping"
+    },
+    {
+      "domain": "risk_credit",
+      "group": "a",
+      "difficulty": "hard",
+      "task_id": "standard-var-methods"
+    },
+    {
+      "domain": "risk_credit",
+      "group": "b",
+      "difficulty": "medium",
+      "task_id": "var-es-estimation"
+    },
+    {
+      "domain": "systematic_strategy",
+      "group": "a",
+      "difficulty": "hard",
+      "task_id": "cross-sectional-momentum"
+    },
+    {
+      "domain": "systematic_strategy",
+      "group": "b",
+      "difficulty": "easy",
+      "task_id": "fama-french-factor-model-new"
+    }
+  ],
+  "development_panels": [
+    {
+      "panel_index": 1,
+      "family": "data_engineering",
+      "parent": "quant-h0-s6-primitive-v1-fresh",
+      "proposal": "global-s6-p1",
+      "matched_fitness_scope": "all_focus_tasks_plus_five_cross_family_anchors_two_fresh_repetitions",
+      "task_ids": [
+        "earnings-surprise-calculator",
+        "form4-cross-sectional-sale-pressure"
+      ]
+    },
+    {
+      "panel_index": 2,
+      "family": "derivatives",
+      "parent": "global-s6-p1",
+      "proposal": "global-s6-p2",
+      "matched_fitness_scope": "all_focus_tasks_plus_five_cross_family_anchors_two_fresh_repetitions",
+      "task_ids": [
+        "american-option-fd-new",
+        "asian-option-levy-curran",
+        "cme-hdd-option-pricing",
+        "delta-hedging-pnl-simulation",
+        "hull-white-swaption",
+        "implied-vol-approximations",
+        "interest-rate-cap-floor",
+        "mc-greek-surface-1",
+        "merton-jump-diffusion",
+        "option-put-call-parity-forward-audit",
+        "ou-jump-commodity",
+        "spread-option-kirk-margrabe",
+        "stochvol-implied-surface-new"
+      ]
+    },
+    {
+      "panel_index": 3,
+      "family": "execution_microstructure",
+      "parent": "global-s6-p2",
+      "proposal": "global-s6-p3",
+      "matched_fitness_scope": "all_focus_tasks_plus_five_cross_family_anchors_two_fresh_repetitions",
+      "task_ids": [
+        "crypto-funding-rate-basis-carry",
+        "lob-pc-signal"
+      ]
+    },
+    {
+      "panel_index": 4,
+      "family": "rates_fx_macro",
+      "parent": "global-s6-p3",
+      "proposal": "global-s6-p4",
+      "matched_fitness_scope": "all_focus_tasks_plus_five_cross_family_anchors_two_fresh_repetitions",
+      "task_ids": [
+        "cir-bond-pricing",
+        "yield-curve-bootstrap-immunization",
+        "yield-curve-pca-dynamics"
+      ]
+    },
+    {
+      "panel_index": 5,
+      "family": "risk_credit",
+      "parent": "global-s6-p4",
+      "proposal": "global-s6-p5",
+      "matched_fitness_scope": "all_focus_tasks_plus_five_cross_family_anchors_two_fresh_repetitions",
+      "task_ids": [
+        "copula-equity-fitting",
+        "credit-migration-matrix",
+        "credit-portfolio-var-cvar",
+        "credit-spread-decomposition",
+        "creditmetrics-portfolio-var",
+        "dcc-garch-portfolio-var",
+        "ewma-portfolio-risk-decomposition",
+        "fft-compound-poisson",
+        "historical-var-data-prep",
+        "realized-vol-estimators"
+      ]
+    },
+    {
+      "panel_index": 6,
+      "family": "systematic_strategy",
+      "parent": "global-s6-p5",
+      "proposal": "global-s6-p6-final",
+      "matched_fitness_scope": "all_focus_tasks_plus_five_cross_family_anchors_two_fresh_repetitions",
+      "task_ids": [
+        "alpha-hedge-strategy",
+        "bl-regime-hmm",
+        "bollinger-backtest-aapl",
+        "brinson-sector-attribution",
+        "double-sort",
+        "etf-cross-asset-lead-lag",
+        "etf-overlap-redemption-pressure",
+        "event-study-earnings",
+        "ipca-latent-factors",
+        "momentum-backtest",
+        "multimodal-alpha-fusion-edgar-cot-gdelt",
+        "pca-factor-portfolio",
+        "residual-momentum",
+        "sma-crossover-spy",
+        "stable-residual"
+      ]
+    }
+  ],
+  "cross_family_workflow_evidence": {
+    "guard": "Every workflow_global proposal must cite at least two distinct public task families. Each focus panel below is constructed with all six families, so no single-family evidence bundle is mislabeled workflow_global.",
+    "anchor_task_by_family": {
+      "data_engineering": "earnings-surprise-calculator",
+      "derivatives": "american-option-fd-new",
+      "execution_microstructure": "crypto-funding-rate-basis-carry",
+      "rates_fx_macro": "cir-bond-pricing",
+      "risk_credit": "copula-equity-fitting",
+      "systematic_strategy": "alpha-hedge-strategy"
+    },
+    "panel_view_rule": "Panel k receives every H0 history in its focus family plus the frozen anchor H0 history from each of the other five families. The same five non-focus anchors are also repeated matched no-regression sentinels for that panel; all 45 bank tasks become focus-family evidence exactly once across the six panels.",
+    "workflow_scope": "workflow_global",
+    "involved_states": [
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5",
+      "S6"
+    ]
+  },
+  "phase0_all_n_h0_development_bank": {
+    "arm": "quant-h0-s6-primitive-v1-fresh",
+    "task_count_n": 45,
+    "repetitions": 1,
+    "primary_cells": 45,
+    "schedule": "Run panels 1 through 6, and sorted task_ids within each panel, with one independent H0 Worker/verifier per task. Complete all 45 before the first Evolver call.",
+    "required_retention": [
+      "public_instruction",
+      "raw_worker_trace",
+      "final_response",
+      "artifact_manifest_including_explicit_empty_set",
+      "worker_produced_artifact_contents",
+      "worker_execution_process_record",
+      "turn_tool_error_and_timing_record",
+      "request_token_cost_lifecycle_and_cleanup_accounting"
+    ],
+    "controller_archive": "Retain the complete bank plus isolated official scores and verifier records. The bank is globally complete before curriculum construction, but Evolver views are panelized by the firewall below.",
+    "completion_gate": "Require 45 of 45 valid fresh executions and every required retention surface. Empty artifacts and unsuccessful task attempts remain evidence. Never replace a task or condition completeness on score, passed count, artifact count, or apparent quality."
+  },
+  "curriculum_evidence_firewall": {
+    "builder": "trusted fail-closed allowlist",
+    "panel_k_evolver_visible": [
+      "current exact parent candidate",
+      "public instructions and complete H0 histories for every focus-family task in panel k",
+      "public instructions and complete H0 histories for the five frozen cross-family anchor tasks",
+      "public selector metadata for panel k",
+      "answer-free matched-gate traces and process records from already accepted panels",
+      "accepted public claim inventories from already accepted panels"
+    ],
+    "never_evolver_visible": [
+      "official score, reward, passed count, or property count",
+      "verifier, CTRF, reward, or optimize diagnostic file",
+      "failed-property identity or expected-versus-observed diagnostic",
+      "expected value, reference answer, checker, hidden test, solution, or rubric",
+      "Review verdict text, Review reason, or trusted rejection rationale",
+      "later-panel H0 history before that panel",
+      "any sealed-main identity, instruction, trace, artifact, score, or outcome",
+      "historical answer-rich candidate, evaluator feedback, credential, or secret"
+    ],
+    "failure_rule": "Missing provenance, ambiguous provenance, or any forbidden source stops before the panel Evolver. No opportunistic redaction-and-continue."
+  },
+  "phase1_six_panel_curriculum": {
+    "panel_count": 6,
+    "proposal_calls": 6,
+    "reviewer_calls": 6,
+    "proposal_rule": "Exactly one task-agnostic cumulative workflow_global S6 proposal per panel, supported by the focus family plus five frozen cross-family anchors. No single-family workflow_global proposal, best-of-N, per-task proposal, direct probe dispatch, score-driven refinement, skipped family, or human patch.",
+    "review_rule": "Before the panel candidate runs, mandatory Candidate Information-Set Review compares both current-parent-to-proposal and cumulative-H0-to-proposal Worker-visible differences. PASS requires complete claim inventory and public answer-free support for every nontrivial cumulative claim. A legal REJECT or INCONCLUSIVE retains the incumbent, records zero candidate dispatch for that panel, and continues to the next family; missing or malformed review material and post-PASS mutation are integrity failures.",
+    "matched_gate_rule": "After Review PASS, run the exact parent and proposal on every task in the current focus-family panel plus one fixed development anchor from each of the other five families for two fresh repetitions. Reverse arm order in repetition 2. All cells use identical runtime and capacity. Both arms must be valid and complete genuine isolated structured S1-through-S6 recorder calls: only skill loading before S1 ENTER; first task-directed call S1 ENTER; legal sequence/revisits; no failed, malformed, mixed, shell-echoed, text-backfilled, missing, or post-S6 event; successful S6 COMPLETE before final.",
+    "fitness_vector": "For each repetition retain the complete native official reward vector in sorted focus-plus-anchor task order, the parent and proposal focus-family means, focus and anchor W/T/L, and protocol/resource vectors. Expected values, failed-property identities, checker output, and leaf verifier diagnostics remain controller-only and are never proposal evidence.",
+    "promotion_rule": "Promote only when Review PASS; every focus and anchor cell is valid and protocol-complete; proposal native reward is at least parent reward on every focus and anchor task in both repetitions; proposal focus-family mean is strictly greater than parent focus-family mean in both repetitions; at least one identical focus task is a proposal win in both repetitions; accounting is complete; and caps remain. Anchor wins cannot substitute for focus gain. A legal ABSTAIN, Review REJECT or INCONCLUSIVE, tie-only or non-repeated gain, or valid regression retains the incumbent and continues to the next family; only integrity, runtime, protocol, accounting, or cap failures stop the scheduler. This is task-reward-nonregressing panel promotion, not a property-safe claim.",
+    "parent_chaining": "Each promoted exact candidate becomes the next panel parent; any scientific non-promotion retains the current incumbent and still advances to the next panel. The next controller plan binds the scheduler's actual incumbent at dispatch rather than assuming every earlier panel promoted. Panel k+1 can use only its own complete H0 family bank plus answer-free histories and public claim inventories accumulated from accepted earlier panels. No candidate material changes between Review, gate, promotion, and later inheritance."
+  },
+  "phase2_feedback_sealed_main": {
+    "final_candidate": "retained-incumbent-after-panel-6",
+    "comparator": "quant-h0-s6-primitive-v1-fresh",
+    "task_count": 12,
+    "repetitions": 2,
+    "paired_observations": 24,
+    "primary_cells": 48,
+    "fresh_h0_cells": 24,
+    "final_candidate_cells": 24,
+    "runs": [
+      {
+        "repetition": 1,
+        "group": "a",
+        "arm_order": [
+          "quant-h0-s6-primitive-v1-fresh",
+          "retained-incumbent-after-panel-6"
+        ]
+      },
+      {
+        "repetition": 1,
+        "group": "b",
+        "arm_order": [
+          "retained-incumbent-after-panel-6",
+          "quant-h0-s6-primitive-v1-fresh"
+        ]
+      },
+      {
+        "repetition": 2,
+        "group": "a",
+        "arm_order": [
+          "retained-incumbent-after-panel-6",
+          "quant-h0-s6-primitive-v1-fresh"
+        ]
+      },
+      {
+        "repetition": 2,
+        "group": "b",
+        "arm_order": [
+          "quant-h0-s6-primitive-v1-fresh",
+          "retained-incumbent-after-panel-6"
+        ]
+      }
+    ],
+    "automatic_dispatch": "After panel 6 reaches any valid scientific terminal outcome, freeze the actually retained incumbent and run the four blocks in order. Repetition 2 depends only on repetition-1 validity, isolation, accounting, and caps, never performance.",
+    "feedback_rule": "No sealed instruction or outcome reaches any Evolver, Review, candidate revision, task selector, replacement, retry policy, or dispatch decision."
+  },
+  "metrics": {
+    "bank": "45/45 validity and retention coverage; per-task turns, tools, errors, artifacts, process time, requests, tokens, cost, and cleanup.",
+    "curriculum": "Six proposal counts; six Review verdicts and claim-coverage records; exact parent chain; two-repetition full-panel matched validity, strict protocol, native official fitness vectors retained controller-only, accounting, and promotion reason.",
+    "main_primary": "Complete per-task/per-repetition official reward vectors; 24-pair candidate-versus-H0 W/T/L; per-task mean; within-domain mean; equal-domain macro and candidate-minus-H0 delta.",
+    "main_secondary": "When complete official counts are available, report passed/total vectors and per-task passed-fraction delta. Put normalized passed-fraction headroom closure only in the appendix as descriptive context, with N/A at H0 ceiling; also report final-incumbent S1-S6 compliance per cell.",
+    "resource": "Turns, shell calls, recorder calls, errors, artifacts, Worker/verifier/wall seconds, logical/audit/retry requests, input/output/total tokens, cost, cleanup, and candidate/H0 ratios.",
+    "readability": "Keep per-cell official vectors, task mean, domain mean, equal-domain macro, W/T/L, protocol, and resource metrics separate. Never headline a pooled heterogeneous property total.",
+    "claim_boundary": "This supports a bounded panel-curriculum and feedback-sealed matched result. It does not establish unseen-task generalization, benchmark-wide superiority, or statistical stability from two repetitions."
+  },
+  "main_scheduler_h0_answer": {
+    "planned_scheduler_includes_h0": true,
+    "current_executable_thin_scheduler_includes_fresh_h0": false,
+    "current_executable_global_scheduler_includes_fresh_h0": true,
+    "exact_role": "The proposed scheduler runs fresh primitive S6 H0 once on every one of the N=45 development tasks before evolution, runs it across both repetitions of the complete first-family-plus-five-anchor fitness panel, and runs 24 fresh matched H0 comparators on 12 sealed tasks across two repetitions. Later fitness panels compare each proposal with fresh executions of the actually retained incumbent across the full focus family plus five fixed other-family anchors and two repetitions.",
+    "counts": "393 primary QFBench cells: 45 all-N H0 bank + 300 focus-plus-five-anchor two-repetition parent/proposal fitness cells + 48 sealed-main H0/final-incumbent cells. Under an all-promotion path, 83 cells use the primitive H0 and 310 belong to the cumulative candidate lineage; with retained panels the actual parent identity follows the scheduler incumbent. External exploratory Primitive-H0 selection is separate and not counted by this scheduler.",
+    "separation": "Primitive-H0 selection is complete before this scheduler begins. H0 then remains the fixed seed and external main comparator. The final code/library target can remain QRS-only; AHE reproduction and generic baselines are separate campaigns, not mixed into this candidate lineage."
+  },
+  "implementation_status": {
+    "plan_only": false,
+    "scheduler_wrapper_support": "implemented_policy_v2_qualified",
+    "current_thin_campaign_auto_dispatches_h0_bank": false,
+    "current_thin_campaign_behavior": "data/breadth/QF_MAIN0_THIN_LIVE_PLAN.json passes pre-existing parent worker directories plus replay or evidence references into the thin controller. It does not dispatch fresh H0 baselines, build an all-N trajectory bank, partition an Evolver curriculum, or run the state machine specified here.",
+    "launch_authorized": true,
+    "launch_argv": {
+      "materializer": "scripts/build_qrs_main_launch.py with the exact fresh Main R1 identities and runtime paths",
+      "scheduler": "scripts/run_qrs_global_scheduler.py --approve-external-run with no stop-after flag"
+    },
+    "implementation_boundary": "The frozen-base adapter, 45-task answer-free bank builder, Review-policy-v2 claim-local package, exact reviewed-snapshot path, dynamic-incumbent outer scheduler, negative-panel carry, repeated focus-plus-anchor gates, sealed no-feedback blocks, accounting, cleanup, and resume behavior are implemented and locally audited. The R2 engineering qualification cleared this path without contributing reusable scientific material."
+  },
+  "external_primitive_h0_handoff": {
+    "owned_by_scheduler": false,
+    "selection_stage": "external_exploratory_harness_selection",
+    "selection_rule_preregistered_by_this_scheduler": false,
+    "selection_runs_dispatched_by_this_scheduler": 0,
+    "selection_cost_counted_in_qrs_scheduler": false,
+    "handoff_manifest": "qf-qrs-main-s6-primitive-20260825-r1-materialization/QF_PRIMITIVE_H0_SELECTED.json",
+    "required_handoff_fields": [
+      "selection_complete",
+      "selected_profile_id",
+      "selected_worker_root",
+      "selected_agent_name",
+      "selected_runtime",
+      "selection_artifact_root",
+      "frozen_for_qrs_scheduler"
+    ],
+    "acceptance_rule": "Materialize exactly one fresh Main R1 read-only copy of the checked-in Primitive-H0 adapter and one concrete frozen runtime profile. The Main copy must not be the R2 handoff, R2 Worker tree, or any historical run artifact; it remains unchanged through all 45 H0-bank cells, six panel rounds, and the sealed comparison.",
+    "separation_rule": "The QRS Main scheduler does not rank, rerun, replace, weaken, or tune Primitive-H0 and imports no exploratory or qualification artifact. External selection records remain outside the Main trajectory bank and are not Evolver, Reviewer, candidate-fitness, or sealed feedback.",
+    "failure_rule": "Missing, ambiguous, mutable, or non-materialized handoff stops before the first H0-bank Worker. The scheduler never falls back to another profile."
+  },
+  "limits": {
+    "external_primitive_selection_sessions": "outside_scheduler_not_capped_here",
+    "phase0_h0_cells": 45,
+    "panel_gate_parent_cells": 150,
+    "panel_gate_proposal_cells": 150,
+    "sealed_main_h0_cells": 24,
+    "sealed_main_final_candidate_cells": 24,
+    "qfbench_primary_cells": 393,
+    "qfbench_h0_cells": 83,
+    "qfbench_candidate_lineage_cells": 310,
+    "evolver_calls": 6,
+    "reviewer_calls": 6,
+    "setup_only_recovery_cells_per_phase": 1,
+    "maximum_qfbench_recovery_cells": 3,
+    "maximum_qfbench_sessions_including_recovery": 396,
+    "maximum_all_worker_sessions": 396,
+    "maximum_worker_turn_iterations": 23760,
+    "maximum_total_tokens": 900000000,
+    "maximum_provider_cost_usd": 60,
+    "maximum_wall_seconds": 1296000,
+    "worker_concurrency": 1,
+    "verifier_concurrency": 1,
+    "max_parallel_runs": 1,
+    "paid_or_remote_authority": true,
+    "cap_semantics": "Hard launch ceilings for this one authorized Main R1 lineage: 393 primary QFBench cells plus at most three setup-only recovery cells, six Evolver calls, at most six conditional Reviewer calls, 396 total Worker sessions, 900000000 total tokens, USD 60 provider cost, and 1296000 wall seconds. They are not targets, score-dependent budgets, permission for provider/account expansion, or authority for another lineage."
+  },
+  "stop_rules": [
+    "LAUNCH_MAIN_R1 only under this separately frozen activation after the R2 policy-v2 engineering clearance, exact source/materialization preflight, and fresh Main identities.",
+    "STOP_H0_HANDOFF if exactly one materialized and frozen Primitive-H0 identity plus runtime profile is not available before Phase 0.",
+    "STOP_BANK if any of 45 H0 cells remains invalid after at most one setup-only recovery for Phase 0, retention is incomplete, or forbidden provenance enters a panel view.",
+    "RETAIN_PANEL_AND_CONTINUE on a legal Evolver ABSTAIN or well-formed Review REJECT/INCONCLUSIVE; dispatch zero matched candidate Workers, retain the incumbent, record the opportunity and cost, and advance to the next family.",
+    "STOP_PANEL on malformed or provenance-invalid proposal/Review material, candidate-snapshot mismatch, or forbidden evidence exposure.",
+    "RETAIN_PANEL_AND_CONTINUE when every matched execution is valid and protocol-complete but the candidate ties, fails to repeat a focus gain, or regresses a focus/anchor native reward; retain the incumbent and advance.",
+    "STOP_PANEL if a matched execution remains invalid after the single frozen setup recovery, strict protocol fails, accounting is incomplete, or a hard cap is reached.",
+    "STOP_MAIN before repetition 2 if repetition-1 validity, isolation, accounting, or caps fail; never stop or continue based on score.",
+    "COMPLETE_REPORT after all frozen main cells terminate; report invalid and missing outcomes, cost, cleanup, and zero follow-on dispatch."
+  ]
+}
