@@ -475,8 +475,9 @@ def test_engineering_invalid_pre_review_result_stops_panel_after_accounting(
         result = original(action)
         if action["kind"] == "panel_proposal_review":
             review_action_id = action["action_id"]
-            result["review_verdict"] = "NON_PASS"
-            result["coverage"] = "NON_PASS"
+            result["engineering_invalid"] = "review_package_invalid"
+            result["review_verdict"] = "NOT_RUN"
+            result["coverage"] = "NOT_RUN"
             result["accepted_claims"] = []
             review_cost = result["cost"]
         return result
@@ -499,9 +500,7 @@ def test_engineering_invalid_pre_review_result_stops_panel_after_accounting(
         "completed_requests"
     ]
     assert result["cost"]["total_tokens"] >= review_cost["total_tokens"]
-    assert "candidate Review returned no valid terminal verdict" in result[
-        "stop_reason"
-    ]
+    assert result["stop_reason"] == "STOP_PANEL_REVIEW_PACKAGE_INVALID"
 
 
 def test_proposal_abstain_retains_parent_and_continues_without_review_or_worker(

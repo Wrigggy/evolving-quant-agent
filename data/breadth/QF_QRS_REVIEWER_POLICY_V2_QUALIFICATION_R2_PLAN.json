@@ -189,7 +189,7 @@
     },
     "collected_unit_health_truth": {
       "required": true,
-      "rule": "Persist the coordinator unit's collected terminal exit status and journal-derived failure before a transient unit can be garbage-collected. A later unit-not-found observation, default Result=success, inactive health probe, or score_count=0 must not overwrite a collected exit-code failure.",
+      "rule": "Do not collect the coordinator transient unit before terminal status, scheduler result, and journal exit are audited. If the unit is nevertheless unavailable, the health watcher must report unit-query-failed rather than systemd's default Result=success; the retained scheduler result and journal are the terminal authority.",
       "zero_residue_still_required": true
     }
   },

@@ -1150,6 +1150,17 @@ def import_action_result(
         state["phase"] = "PANELS"
     elif kind == "panel_proposal_review":
         _account_once(state, action, result)
+        if result.get("engineering_invalid") is not None:
+            if (
+                result.get("engineering_invalid") != "review_package_invalid"
+                or result.get("review_verdict") != "NOT_RUN"
+                or result.get("coverage") != "NOT_RUN"
+                or result.get("candidate") is None
+            ):
+                raise GlobalSchedulerError(
+                    "panel Review engineering-invalid result is inconsistent"
+                )
+            raise GlobalSchedulerError("STOP_PANEL_REVIEW_PACKAGE_INVALID")
         candidate = _review_candidate(result)
         if candidate is None:
             proposal_decision = result.get("proposal_decision")

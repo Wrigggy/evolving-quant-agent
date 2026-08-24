@@ -545,6 +545,9 @@ def test_pre_review_engineering_hold_returns_accounted_nonresult(
             "decision": "HOLD_FOR_REFINE",
             "hold": {
                 "candidate_version": "candidate-v1",
+                "kind": (
+                    "candidate_information_set_review_package_engineering_invalid"
+                ),
                 "reason": (
                     "information_set_review_package_engineering_invalid: "
                     "workflow trajectory excerpt exceeds the Review bound"
@@ -567,8 +570,9 @@ def test_pre_review_engineering_hold_returns_accounted_nonresult(
 
     assert result["status"] == "complete"
     assert result["accounting_complete"] is True
-    assert result["review_verdict"] == "NON_PASS"
-    assert result["coverage"] == "NON_PASS"
+    assert result["engineering_invalid"] == "review_package_invalid"
+    assert result["review_verdict"] == "NOT_RUN"
+    assert result["coverage"] == "NOT_RUN"
     assert result["review_result_path"] is None
     assert result["cost"] == {
         "provider_cost_usd": "1.25",

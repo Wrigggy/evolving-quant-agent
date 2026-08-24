@@ -841,6 +841,12 @@ def _panel_result(
             "panel proposal report differs from retained proposal state"
         )
     phase = state.get("phase")
+    hold = state.get("hold")
+    package_engineering_invalid = (
+        isinstance(hold, Mapping)
+        and hold.get("kind")
+        == "candidate_information_set_review_package_engineering_invalid"
+    )
     observations = state.get("observations")
     if not isinstance(observations, Mapping):
         observations = {}
@@ -855,7 +861,7 @@ def _panel_result(
     review_verdict = (
         str(observation.get("overall_verdict"))
         if isinstance(observation, Mapping)
-        else "NON_PASS"
+        else "NOT_RUN" if package_engineering_invalid else "NON_PASS"
     )
     coverage_record = (
         observation.get("coverage_review")
@@ -865,7 +871,7 @@ def _panel_result(
     coverage = (
         str(coverage_record.get("verdict"))
         if isinstance(coverage_record, Mapping)
-        else "NON_PASS"
+        else "NOT_RUN" if package_engineering_invalid else "NON_PASS"
     )
     candidate = state.get("candidate")
     review_accounting = None
@@ -983,6 +989,9 @@ def _panel_result(
     return {
         "status": "complete",
         "accounting_complete": True,
+        "engineering_invalid": (
+            "review_package_invalid" if package_engineering_invalid else None
+        ),
         "proposal_decision": proposal_decision,
         "review_verdict": review_verdict,
         "coverage": coverage,

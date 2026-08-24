@@ -291,8 +291,9 @@ def test_only_three_observed_failure_repairs_are_frozen() -> None:
     assert "must not escape as an exception" in hold["state_rule"]
     health = repairs["collected_unit_health_truth"]
     assert health["required"] is True
-    assert "collected terminal exit status" in health["rule"]
-    assert "must not overwrite" in health["rule"]
+    assert "Do not collect" in health["rule"]
+    assert "unit-query-failed" in health["rule"]
+    assert "scheduler result and journal" in health["rule"]
     assert PLAN["engineering_clearance"]["no_automatic_follow_on"].startswith(
         "R2 authorizes no automatic R3"
     )
