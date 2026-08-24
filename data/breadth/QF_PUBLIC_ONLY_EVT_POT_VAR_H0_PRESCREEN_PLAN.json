@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-24",
+  "status": "frozen_not_run",
+  "experiment_id": "qf-public-only-evt-pot-var-h0-prescreen-20260824-r1",
+  "purpose": "Measure one fresh normal-budget Quant-H0 official result on evt-pot-var after the credit-migration target became eligible only for a separate proposal design. This pre-screen classifies answer-free public mathematical localization while separating an unavailable optional arch runtime dependency or substituted fallback from the mathematical mechanism. It launches no Evolver, Information-Set Reviewer, candidate Worker, repeat, protection task, or automatic proposal.",
+  "scope": {
+    "benchmark": "QFBench",
+    "task_id": "evt-pot-var",
+    "arm": "Quant-H0",
+    "worker_sessions": 1,
+    "official_verifier_executions": 1,
+    "sealed_evaluation_used": false,
+    "result_role": "adaptive development target pre-screen only"
+  },
+  "selection_evidence": {
+    "selection_role": "historical public-artifact and runtime screening only; not a fresh Quant-H0 result and not Worker-visible",
+    "retained_baseline_result": "results/bc-mirror/qfbench-rootless-base-85x5-official-deepseek-v4-flash-0731-all12x3-20260804/result.json",
+    "retained_runtime_observation": "results/bc-mirror/qfbench-rootless-base-85x5-official-deepseek-v4-flash-0731-all12x3-20260804/attempts/b901b348d13120aa214790f59f15a88fbc2b986ee66b7f671ef9f94ffa7a3c13",
+    "public_instruction_record": "results/bc-mirror/qfbench-rootless-evolution-30x15x40-v4-flash-0731-10iter-20260805/evidence/iteration-01-rich/tasks/evt-pot-var/instruction.md",
+    "public_formula_record": "results/bc-mirror/qfbench-rootless-evolution-30x15x40-v4-flash-0731-10iter-20260805/evidence/iteration-01-rich/tasks/evt-pot-var/environment/data/formulas.md",
+    "retained_public_observation": "The retained old-shell cohort is repeatedly below full on evt-pot-var. One retained public Worker record explicitly reports that the optional runtime arch package was unavailable and that a custom GARCH fallback was substituted. This selects a fresh current-harness pre-screen and a dependency-versus-mathematics separation only; historical scores, failed counts, expected values, and official property identities are not selection rules and are not Worker-visible.",
+    "fresh_h0_required": "The retained attempts used the old shell baseline rather than the current Quant-H0 harness, and the dependency fallback prevents historical below-full observations from cleanly identifying a mathematical mechanism. They cannot replace one fresh current-harness pre-screen.",
+    "selection_only": true,
+    "worker_visible": false
+  },
+  "deploy_source_freeze": {
+    "deploy_id": "qf-public-only-evt-pot-var-h0-prescreen-20260824-r1",
+    "source_revision": "FUTURE_COMMIT:qf-public-only-evt-pot-var-h0-prescreen-20260824-r1",
+    "resolution": "Deploy the future repository commit that first contains this frozen plan and the then-current runner under the exact deploy_id. Record that commit in operational evidence without editing this plan.",
+    "launch_before_resolution_allowed": false
+  },
+  "runtime": {
+    "python": "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "source_root": "/data/qea-julius-storage/deploy/qf-public-only-evt-pot-var-h0-prescreen-20260824-r1",
+    "qfbench_root": "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "qfbench_manifest": "/data/qea-julius-storage/deploy/qf-public-only-evt-pot-var-h0-prescreen-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "rootless_config": "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "image_set_manifest": "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "results_dir": "/data/qea-julius-storage/runs",
+    "worker_route": "deepseek-v4-flash-main0"
+  },
+  "run": {
+    "run_id": "qf-public-only-evt-pot-var-h0-prescreen-20260824-r1",
+    "runner": "scripts/run_qfbench_component_pilot.py",
+    "checkpoint_prefix": "qf-public-only-evt-pot-var-h0-prescreen-20260824-r1",
+    "seed_worker": "/data/qea-julius-storage/deploy/qf-public-only-evt-pot-var-h0-prescreen-20260824-r1/qea/worker_quant_h0",
+    "arm_label": "quant-h0",
+    "arm_worker": "/data/qea-julius-storage/deploy/qf-public-only-evt-pot-var-h0-prescreen-20260824-r1/qea/worker_quant_h0",
+    "task_id": "evt-pot-var",
+    "worker_concurrency": 1,
+    "verifier_concurrency": 1,
+    "expected_attempts": 1,
+    "expected_report": "/data/qea-julius-storage/runs/qf-public-only-evt-pot-var-h0-prescreen-20260824-r1/pilot-report.json",
+    "expected_attempt_glob": "/data/qea-julius-storage/runs/qf-public-only-evt-pot-var-h0-prescreen-20260824-r1/attempts/*",
+    "expected_answer_free_evidence": [
+      "raw-trace.jsonl",
+      "final.txt",
+      "artifacts/results.json",
+      "artifacts/solution.json"
+    ],
+    "artifact_missingness_rule": "A valid execution may still omit a required public deliverable, but missing or ill-typed results.json or solution.json makes the mathematical audit not evaluable. Missingness alone does not authorize a proposal."
+  },
+  "launch_argv": [
+    "/home/julius/qea/runtime/venvs/rootless/bin/python",
+    "/data/qea-julius-storage/deploy/qf-public-only-evt-pot-var-h0-prescreen-20260824-r1/scripts/run_qfbench_component_pilot.py",
+    "--qfbench-root",
+    "/home/julius/qea/runtime/qfbench-source/024921eb",
+    "--qfbench-manifest",
+    "/data/qea-julius-storage/deploy/qf-public-only-evt-pot-var-h0-prescreen-20260824-r1/data/qfbench/MANIFEST_85_BASELINE.json",
+    "--rootless-config",
+    "/home/julius/qea/runtime/configs/qfbench-base85-official-deepseek-v4-flash-0731-a6-r10-c1x3.json",
+    "--rootless-image-set-manifest",
+    "/home/julius/qea/runtime/image-sets/024921eb-base85-deepseek-v4-flash-a6-r10.json",
+    "--run-id",
+    "qf-public-only-evt-pot-var-h0-prescreen-20260824-r1",
+    "--results-dir",
+    "/data/qea-julius-storage/runs",
+    "--seed-worker",
+    "/data/qea-julius-storage/deploy/qf-public-only-evt-pot-var-h0-prescreen-20260824-r1/qea/worker_quant_h0",
+    "--arm",
+    "quant-h0=/data/qea-julius-storage/deploy/qf-public-only-evt-pot-var-h0-prescreen-20260824-r1/qea/worker_quant_h0",
+    "--task-id",
+    "evt-pot-var",
+    "--checkpoint-prefix",
+    "qf-public-only-evt-pot-var-h0-prescreen-20260824-r1",
+    "--worker-concurrency",
+    "1",
+    "--verifier-concurrency",
+    "1",
+    "--approve-external-run"
+  ],
+  "limits": {
+    "max_worker_sessions": 1,
+    "max_official_verifier_executions": 1,
+    "max_completed_requests": 50,
+    "max_total_tokens": 4000000,
+    "provider_cost_usd": 0.2,
+    "hard_wall_time_seconds": 5400,
+    "no_replacement_model_or_provider": true,
+    "no_follow_on_dispatch_in_this_plan": true
+  },
+  "limit_enforcement": {
+    "wall_time": "systemd RuntimeMaxSec=5400 is the hard 90-minute wall",
+    "worker_and_verifier_count": "fixed by the single-arm single-task runner invocation with concurrency one for each role",
+    "requests_tokens_and_provider_cost": "post-run audit thresholds; the existing Worker call is not interrupted mid-turn by these accounting thresholds",
+    "threshold_breach": "retain the completed accounting and stop with no follow-on dispatch"
+  },
+  "post_run_public_audit": {
+    "status": "deterministic_answer_free_post_run_only",
+    "permitted_inputs": [
+      "the verbatim public evt-pot-var instruction",
+      "the verbatim public formulas.md supplied with evt-pot-var",
+      "the fresh current-run raw-trace.jsonl",
+      "the fresh current-run final.txt",
+      "the fresh current-run public output artifacts actually produced"
+    ],
+    "required_artifacts": [
+      "artifacts/results.json",
+      "artifacts/solution.json"
+    ],
+    "forbidden_inputs": "Do not read official property identities, pass or fail vectors, verifier output, checker behavior, expected values, reference answers, optimize diagnostics, prior candidate material, or historical sample values and failed counts.",
+    "dependency_runtime_separation": {
+      "public_contract": "The public instruction prescribes the arch package with mean='Zero', vol='GARCH', p=1, q=1, dist='Normal' for full-sample and rolling GARCH-EVT fits. arch is an optional runtime dependency of the surrounding agent environment, not a license to change the public mathematical contract.",
+      "dependency_invalid_when": "Fresh trace or final evidence directly shows that arch import or execution was unavailable, installation was impossible, or a custom optimizer, recursion, fixed output, placeholder, or other non-arch fallback was substituted for a prescribed GARCH-EVT fit.",
+      "dependency_validity_effect": "An observed missing arch dependency or runtime fallback makes this attempt invalid for mathematical-mechanism target selection and selects STOP_NO_RESULT. Retain its execution and accounting separately, but do not call the official shortfall a benchmark capability failure and do not turn the fallback or dependency repair into a candidate mechanism.",
+      "not_observed_rule": "Do not infer dependency failure from a low official score, a missing public field, or silence. If fresh evidence neither shows dependency invalidity nor establishes the prescribed path, record dependency status as not observed rather than inventing a cause."
+    },
+    "mathematical_checks": {
+      "rolling_one_day_forecast": "Use direct fresh trace or artifact evidence to check that every forecast for return r_t is fitted only on the immediately preceding W observations [t-W,t), predicts exactly one day ahead, and yields backtest_num_days coherent with the fresh trace's public N and W. GARCH-EVT must refit on each window and use its one-step-ahead volatility forecast. If the required sequence or implementation evidence is absent, this check is not evaluable rather than failed.",
+      "strict_violation": "For positive loss-magnitude VaR, count a violation exactly when loss_t > VaR_t, equivalently when return_t < -VaR_t. Equality is not a violation. Only direct fresh trace, final, or artifact evidence of a non-strict or sign-inverted comparator is a localized mismatch.",
+      "kupiec_coherence": "For each method, recompute the public Kupiec LR from fresh backtest_num_days T, fresh violation count x, and alpha=1-backtest_level using the supplied formula and 0*ln(0)=0 convention; recompute the chi-square-1 survival p-value. Compare at the decimal precision actually emitted by the fresh artifact, without hidden expected values.",
+      "christoffersen_coherence": "When the fresh trace or artifacts expose a violation indicator sequence or transition counts, require n00+n01+n10+n11=T-1, recompute the public independence LR with 0*ln(0)=0, and recompute its chi-square-1 survival p-value. Absence of the sequence and counts makes this subcheck not evaluable, not a mismatch.",
+      "conditional_coverage_coherence": "Require reported conditional-coverage LR to equal the fresh recomputed Kupiec LR plus Christoffersen independence LR at emitted precision, and recompute its chi-square-2 survival p-value. If an upstream subcheck is not evaluable, do not manufacture a conditional-coverage mismatch from it."
+    },
+    "public_localized_evidence_present_when": "Dependency invalidity is not observed, and at least one rolling alignment, strict-violation, Kupiec, Christoffersen, or conditional-coverage check has direct fresh evidence of a reproducible disagreement with the verbatim public instruction or supplied formula. Missing artifacts, unavailable arch, a custom runtime fallback, official shortfall alone, or an unevaluable relation is not public-localized mathematical evidence.",
+    "effect": "The audit only classifies whether a valid below-full fresh H0 result has answer-free public-localized mathematical headroom. It does not change the official result, diagnose the trusted failed property, or dispatch a proposal."
+  },
+  "terminal_decisions": [
+    {
+      "when": "the Worker or official verifier is incomplete or invalid, the required report is missing, the Worker observation is empty, the official aggregate is internally inconsistent, or fresh evidence directly establishes missing arch or a substituted runtime fallback for a prescribed GARCH-EVT fit",
+      "decision": "STOP_NO_RESULT",
+      "classification": "invalid",
+      "next_dispatch": null
+    },
+    {
+      "when": "the valid fresh official result is 55/55 with reward 1",
+      "decision": "CLOSE_EVT_POT_VAR_NO_HEADROOM",
+      "classification": "full",
+      "next_dispatch": null
+    },
+    {
+      "when": "the valid fresh official result is below 55/55, dependency invalidity is not observed, and the answer-free post-run audit finds public_localized_evidence_present",
+      "decision": "ELIGIBLE_FOR_SEPARATE_PUBLIC_ONLY_EVT_POT_VAR_PROPOSAL_PLAN",
+      "classification": "public_mathematical_headroom",
+      "next_dispatch": null
+    },
+    {
+      "when": "the valid fresh official result is below 55/55 but the answer-free post-run audit finds no public_localized_evidence_present or the mathematical audit is not evaluable",
+      "decision": "STOP_EVT_POT_VAR_NOT_PUBLICLY_LOCALIZED",
+      "classification": "below_full_without_public_mathematical_localization",
+      "next_dispatch": null
+    }
+  ],
+  "follow_on_clean_evidence_design": {
+    "status": "future_design_only_not_implemented_not_authorized_by_this_plan",
+    "precondition": "Only the public_mathematical_headroom terminal decision permits drafting a separate proposal and mandatory arm-blind review plan; it does not dispatch either stage.",
+    "target_task_id": "evt-pot-var",
+    "protection_task_id": "var-es-estimation",
+    "protection_role": "Public contract only during a future proposal; no protection Worker before a separately frozen repeated positive target result.",
+    "candidate_mechanism_scope": "Bind rolling information time, strict return-versus-loss violation semantics, and Kupiec, Christoffersen, and conditional-coverage count identities to the verbatim public contracts. Runtime dependency installation, replacing arch, and reproducing a historical sample value are outside the candidate mathematical mechanism.",
+    "evolver_allowed_inputs": [
+      "the verbatim public target and protection task contracts, including the target formulas.md",
+      "the fresh Quant-H0 raw-trace.jsonl and final text produced by this pre-screen",
+      "the fresh Quant-H0 public output artifacts actually produced by this pre-screen"
+    ],
+    "evolver_forbidden_inputs": [
+      "official score, reward, passed count, or failed count",
+      "official property identities, pass or fail vectors, verifier output, checker behavior, or verifier logs",
+      "expected values, reference answers, or expected-versus-observed comparisons",
+      "optimization-diagnostic.json or any optimize-only diagnostic",
+      "historical sample values, historical violation counts, historical scores, or failed counts used as candidate rules",
+      "missing arch, dependency installation, or a custom GARCH fallback presented as the mathematical candidate mechanism",
+      "any prior candidate, proposal, candidate trace, or candidate outcome"
+    ],
+    "evolver_boundary": "Fresh trace and artifacts may localize a relation that contradicts a supplied public formula, but they are not authority for a new convention or numeric constant. Every decision-changing Worker-visible claim must bind to the supplied public contracts, and official failed properties remain hidden.",
+    "reviewer_requirement": "Any admitted nonempty candidate must receive one mandatory arm-blind cumulative Quant-H0-to-candidate Information-Set Review. REJECT or INCONCLUSIVE stops with zero Worker; PASS establishes cleanliness eligibility only.",
+    "candidate_claim_boundary": "A later candidate may require rolling information-time alignment, strict loss > VaR equivalently return < -VaR violations, and count-coherent public backtest formulas. It may not hard-code a sample statistic or failed count, infer a trusted property, substitute a custom GARCH implementation for the prescribed arch path, or turn dependency repair into the quantitative mechanism."
+  },
+  "answer_boundary": "The fresh Quant-H0 Worker receives only the public evt-pot-var task, its public task data and formulas, and the unchanged Quant-H0 harness. Selection evidence, historical observations, protection design, official answers, verifier feedback, and follow-on design are not Worker-visible.",
+  "claim_boundary": "A completed pre-screen is one fresh stochastic Quant-H0 official observation plus one answer-free dependency classification and public mathematical audit, used only to classify the target as invalid, full, public-mathematics-localized, or below-full without public localization. It is not a candidate result, dependency-repair experiment, harness improvement, proposal result, Reviewer result, repeat, protection result, stable baseline estimate, or main-experiment readiness result."
+}
