@@ -1,0 +1,535 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-quant-h0-s6-matched-canary-20260824-r1",
+  "run_id": "qf-quant-h0-s6-matched-canary-20260824-r1-rep1-legacy-first",
+  "date": "2026-08-24",
+  "status": "retained_rep1_s6_protocol_not_realized",
+  "research_question": "Does a thin observable six-stage state interface or a detailed human-authored six-stage workflow change fresh Quant-H0 validity, official development-task outcomes, process observability, headroom, or cost?",
+  "setup": {
+    "benchmark": "QFBench",
+    "source_revision": "2de15fd32a6293a3171c41970a580aa5e8c29d70",
+    "benchmark_revision": "024921eb507fcc0c4ffe3e0a96802724be1ae84a",
+    "frozen_plan": "data/breadth/QF_QUANT_H0_S6_MATCHED_CANARY_PLAN.json",
+    "local_mirror": "results/bc-mirror/qf-quant-h0-s6-matched-canary-20260824-r1-rep1-legacy-first/",
+    "canonical_report": "results/bc-mirror/qf-quant-h0-s6-matched-canary-20260824-r1-rep1-legacy-first/pilot-report.json",
+    "development_tasks_only": true,
+    "sealed_tasks_used": false,
+    "evolver_calls": 0,
+    "reviewer_calls": 0,
+    "candidate_mutations": 0,
+    "worker_route": "deepseek-v4-flash-main0",
+    "worker_concurrency": 1,
+    "verifier_concurrency": 1,
+    "arm_order": [
+      "quant-h0",
+      "quant-h0-s6-core",
+      "quant-h0-s6-full"
+    ],
+    "task_order": [
+      "swap-curve-bootstrap-ois",
+      "13f-amendment-aware-crowding",
+      "fx-forward-cross-rate"
+    ],
+    "answer_boundary": "Every Worker received only the public task and data, its frozen harness, and the shared trusted reusable-harness rule. Selection scores, failed-property identities, verifier output, expected values, diagnostics, candidate history, and Reviewer feedback were not Worker-visible."
+  },
+  "cells": [
+    {
+      "arm": "quant-h0",
+      "task_id": "swap-curve-bootstrap-ois",
+      "official": {
+        "tests_passed": 19,
+        "tests_failed": 0,
+        "reward": 1.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid": true,
+        "outcome": "completed",
+        "turns": 17,
+        "tool_calls": 21,
+        "tool_errors": 1,
+        "artifacts": 5,
+        "worker_seconds": 281.525,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "applicable": false,
+        "reason": "Legacy Quant-H0 does not register the six-stage skill."
+      },
+      "accounting": {
+        "completed_requests": 17,
+        "input_tokens": 500857,
+        "output_tokens": 30195,
+        "total_tokens": 531052,
+        "provider_cost_usd": 0.028313464
+      }
+    },
+    {
+      "arm": "quant-h0",
+      "task_id": "13f-amendment-aware-crowding",
+      "official": {
+        "tests_passed": 47,
+        "tests_failed": 4,
+        "reward": 0.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid": true,
+        "outcome": "completed",
+        "turns": 35,
+        "tool_calls": 36,
+        "tool_errors": 5,
+        "artifacts": 8,
+        "worker_seconds": 503.324,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "applicable": false,
+        "reason": "Legacy Quant-H0 does not register the six-stage skill."
+      },
+      "accounting": {
+        "completed_requests": 35,
+        "input_tokens": 1754484,
+        "output_tokens": 51296,
+        "total_tokens": 1805780,
+        "provider_cost_usd": 0.053631792
+      }
+    },
+    {
+      "arm": "quant-h0",
+      "task_id": "fx-forward-cross-rate",
+      "official": {
+        "tests_passed": 36,
+        "tests_failed": 1,
+        "reward": 0.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid": true,
+        "outcome": "completed",
+        "turns": 8,
+        "tool_calls": 9,
+        "tool_errors": 0,
+        "artifacts": 1,
+        "worker_seconds": 259.05,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "applicable": false,
+        "reason": "Legacy Quant-H0 does not register the six-stage skill."
+      },
+      "accounting": {
+        "completed_requests": 8,
+        "input_tokens": 214139,
+        "output_tokens": 32655,
+        "total_tokens": 246794,
+        "provider_cost_usd": 0.029566304
+      }
+    },
+    {
+      "arm": "quant-h0-s6-core",
+      "task_id": "swap-curve-bootstrap-ois",
+      "official": {
+        "tests_passed": 19,
+        "tests_failed": 0,
+        "reward": 1.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid": true,
+        "outcome": "completed",
+        "turns": 10,
+        "tool_calls": 14,
+        "tool_errors": 2,
+        "artifacts": 5,
+        "worker_seconds": 150.637,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "applicable": true,
+        "complete": false,
+        "accounted_stages": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5"
+        ],
+        "missing_stages": [
+          "S6"
+        ],
+        "issues": [
+          "S6_complete_without_enter",
+          "first_stage_entries_out_of_order_or_missing"
+        ],
+        "malformed_markers": 0
+      },
+      "accounting": {
+        "completed_requests": 10,
+        "input_tokens": 200288,
+        "output_tokens": 15779,
+        "total_tokens": 216067,
+        "provider_cost_usd": 0.015926204
+      }
+    },
+    {
+      "arm": "quant-h0-s6-core",
+      "task_id": "13f-amendment-aware-crowding",
+      "official": {
+        "tests_passed": 49,
+        "tests_failed": 2,
+        "reward": 0.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid": true,
+        "outcome": "completed",
+        "turns": 29,
+        "tool_calls": 37,
+        "tool_errors": 6,
+        "artifacts": 8,
+        "worker_seconds": 497.408,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "applicable": true,
+        "complete": false,
+        "accounted_stages": [
+          "S2",
+          "S5"
+        ],
+        "missing_stages": [
+          "S1",
+          "S3",
+          "S4",
+          "S6"
+        ],
+        "issues": [
+          "S6_complete_without_enter",
+          "first_stage_entries_out_of_order_or_missing"
+        ],
+        "malformed_markers": 0
+      },
+      "accounting": {
+        "completed_requests": 29,
+        "input_tokens": 1556803,
+        "output_tokens": 50998,
+        "total_tokens": 1607801,
+        "provider_cost_usd": 0.054767308
+      }
+    },
+    {
+      "arm": "quant-h0-s6-core",
+      "task_id": "fx-forward-cross-rate",
+      "official": {
+        "tests_passed": 37,
+        "tests_failed": 0,
+        "reward": 1.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid": true,
+        "outcome": "completed",
+        "turns": 8,
+        "tool_calls": 9,
+        "tool_errors": 2,
+        "artifacts": 1,
+        "worker_seconds": 243.137,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "applicable": true,
+        "complete": true,
+        "accounted_stages": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ],
+        "missing_stages": [],
+        "issues": [],
+        "malformed_markers": 0
+      },
+      "accounting": {
+        "completed_requests": 8,
+        "input_tokens": 176332,
+        "output_tokens": 29578,
+        "total_tokens": 205910,
+        "provider_cost_usd": 0.024534424
+      }
+    },
+    {
+      "arm": "quant-h0-s6-full",
+      "task_id": "swap-curve-bootstrap-ois",
+      "official": {
+        "tests_passed": 19,
+        "tests_failed": 0,
+        "reward": 1.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid": true,
+        "outcome": "completed",
+        "turns": 14,
+        "tool_calls": 16,
+        "tool_errors": 2,
+        "artifacts": 5,
+        "worker_seconds": 167.694,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "applicable": true,
+        "complete": true,
+        "accounted_stages": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ],
+        "missing_stages": [],
+        "issues": [],
+        "malformed_markers": 0
+      },
+      "accounting": {
+        "completed_requests": 14,
+        "input_tokens": 294103,
+        "output_tokens": 16252,
+        "total_tokens": 310355,
+        "provider_cost_usd": 0.017247604
+      }
+    },
+    {
+      "arm": "quant-h0-s6-full",
+      "task_id": "13f-amendment-aware-crowding",
+      "official": {
+        "tests_passed": 48,
+        "tests_failed": 3,
+        "reward": 0.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid": true,
+        "outcome": "completed",
+        "turns": 27,
+        "tool_calls": 33,
+        "tool_errors": 6,
+        "artifacts": 8,
+        "worker_seconds": 426.814,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "applicable": true,
+        "complete": false,
+        "accounted_stages": [
+          "S5",
+          "S6"
+        ],
+        "missing_stages": [
+          "S1",
+          "S2",
+          "S3",
+          "S4"
+        ],
+        "issues": [
+          "S3_complete_without_enter",
+          "first_stage_entries_out_of_order_or_missing"
+        ],
+        "malformed_markers": 0
+      },
+      "accounting": {
+        "completed_requests": 27,
+        "input_tokens": 984200,
+        "output_tokens": 46428,
+        "total_tokens": 1030628,
+        "provider_cost_usd": 0.043667984
+      }
+    },
+    {
+      "arm": "quant-h0-s6-full",
+      "task_id": "fx-forward-cross-rate",
+      "official": {
+        "tests_passed": 36,
+        "tests_failed": 1,
+        "reward": 0.0,
+        "verifier_exit_code": 0
+      },
+      "execution": {
+        "valid": true,
+        "outcome": "completed",
+        "turns": 9,
+        "tool_calls": 10,
+        "tool_errors": 1,
+        "artifacts": 1,
+        "worker_seconds": 343.372,
+        "cleaned_up": true
+      },
+      "protocol": {
+        "applicable": true,
+        "complete": false,
+        "accounted_stages": [
+          "S2",
+          "S4",
+          "S5",
+          "S6"
+        ],
+        "missing_stages": [
+          "S1",
+          "S3"
+        ],
+        "issues": [
+          "malformed_qstate_marker"
+        ],
+        "malformed_markers": 1,
+        "malformed_marker": "[QSTATE S4 REVISIT]"
+      },
+      "accounting": {
+        "completed_requests": 9,
+        "input_tokens": 285379,
+        "output_tokens": 40839,
+        "total_tokens": 326218,
+        "provider_cost_usd": 0.031174048
+      }
+    }
+  ],
+  "arm_summaries": {
+    "quant-h0": {
+      "official_passed": 102,
+      "official_total": 107,
+      "full_score_cells": 1,
+      "valid_cells": 3,
+      "turns": 60,
+      "tool_calls": 66,
+      "tool_errors": 6,
+      "worker_seconds": 1043.899,
+      "completed_requests": 60,
+      "input_tokens": 2469480,
+      "output_tokens": 114146,
+      "total_tokens": 2583626,
+      "provider_cost_usd": 0.11151156,
+      "protocol_applicable_cells": 0,
+      "protocol_complete_cells": 0
+    },
+    "quant-h0-s6-core": {
+      "official_passed": 105,
+      "official_total": 107,
+      "full_score_cells": 2,
+      "valid_cells": 3,
+      "turns": 47,
+      "tool_calls": 60,
+      "tool_errors": 10,
+      "worker_seconds": 891.182,
+      "completed_requests": 47,
+      "input_tokens": 1933423,
+      "output_tokens": 96355,
+      "total_tokens": 2029778,
+      "provider_cost_usd": 0.095227936,
+      "protocol_applicable_cells": 3,
+      "protocol_complete_cells": 1
+    },
+    "quant-h0-s6-full": {
+      "official_passed": 103,
+      "official_total": 107,
+      "full_score_cells": 1,
+      "valid_cells": 3,
+      "turns": 50,
+      "tool_calls": 59,
+      "tool_errors": 9,
+      "worker_seconds": 937.88,
+      "completed_requests": 50,
+      "input_tokens": 1563682,
+      "output_tokens": 103519,
+      "total_tokens": 1667201,
+      "provider_cost_usd": 0.092089636,
+      "protocol_applicable_cells": 3,
+      "protocol_complete_cells": 1
+    }
+  },
+  "comparisons": {
+    "core_minus_legacy": {
+      "task_property_deltas": [
+        0,
+        2,
+        1
+      ],
+      "total_property_delta": 3,
+      "legacy_headroom": 5,
+      "headroom_closed": 3,
+      "headroom_closed_fraction": 0.6,
+      "request_delta": -13,
+      "token_delta": -553848,
+      "provider_cost_delta_usd": -0.016283624,
+      "interpretation": "Directionally positive official and efficiency result in one development repetition only."
+    },
+    "full_minus_legacy": {
+      "task_property_deltas": [
+        0,
+        1,
+        0
+      ],
+      "total_property_delta": 1,
+      "legacy_headroom": 5,
+      "headroom_closed": 1,
+      "headroom_closed_fraction": 0.2
+    },
+    "full_minus_core": {
+      "task_property_deltas": [
+        0,
+        -1,
+        -1
+      ],
+      "total_property_delta": -2,
+      "full_human_workflow_advantage": false
+    }
+  },
+  "run_accounting": {
+    "attempts": 9,
+    "valid_worker_verifier_cells": 9,
+    "completed_requests": 157,
+    "input_tokens": 5966585,
+    "output_tokens": 314020,
+    "total_tokens": 6280605,
+    "provider_cost_usd": 0.298829132,
+    "provider_cost_complete": true,
+    "rate_limited_retries": 0,
+    "unreconciled_attempts": 0,
+    "unreconciled_requests": 0,
+    "systemd_started_at": "2026-08-24T13:04:53+08:00",
+    "systemd_finished_at": "2026-08-24T13:54:22+08:00",
+    "systemd_elapsed_seconds": 2969,
+    "systemd_result": "success",
+    "systemd_exit_code": 0
+  },
+  "cleanup": {
+    "lifecycle_records": 36,
+    "lifecycle_records_cleaned": 36,
+    "cleanup_method": "exact-id",
+    "related_processes_remaining": 0,
+    "related_containers_remaining": 0,
+    "related_networks_remaining": 0,
+    "related_volumes_remaining": 0,
+    "run_specific_namespaces_remaining": 0,
+    "transient_systemd_unit_collected": true,
+    "coordinator_lock_file_present": true,
+    "coordinator_lock_owner_present": false,
+    "rep2_run_directory_present": false
+  },
+  "decision": {
+    "terminal": "S6_PROTOCOL_NOT_REALIZED",
+    "protocol_complete_cells": 2,
+    "protocol_applicable_cells": 6,
+    "protocol_failure_trigger": "More than one valid Core or Full cell lacked an accountable S1-S6 marker protocol.",
+    "core_single_repetition_property_delta": 3,
+    "core_gain_stable": false,
+    "full_human_workflow_advantage": false,
+    "rep2_as_is": "NO-GO",
+    "next_action": "Retain rep1 as valid official-score, process, cost, and protocol-failure evidence. Repair only skill loading and marker-protocol realization, then freeze a new matched canary without using rep1 scores to change tasks or add task-specific methods."
+  },
+  "claim_boundary": {
+    "supported": "One fresh purposive three-task development repetition with nine valid Worker/verifier cells; exact task-level official vectors; Core, Full, and legacy process and cost accounting; two of six applicable protocol-complete cells; S6_PROTOCOL_NOT_REALIZED; complete cleanup.",
+    "not_supported": "A stable Core gain, repeated scaffold benefit, representative QFBench performance, benchmark-wide superiority, a useful detailed Full workflow, accepted QRS substrate, Evolver headroom adequacy for main, candidate Review effectiveness, sealed performance, or main-experiment readiness."
+  }
+}

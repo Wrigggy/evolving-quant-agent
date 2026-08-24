@@ -1,5 +1,36 @@
 # QEA Repository Memory
 
+## 2026-08-24 Quant-H0-S6 matched construct canary rep1
+
+The first frozen Legacy/Core/Full construct repetition ran nine fresh
+development Worker/verifier cells on `swap-curve-bootstrap-ois`,
+`13f-amendment-aware-crowding`, and `fx-forward-cross-rate`. All nine cells
+were valid and cleaned up. The official vectors were Legacy `[19/19, 47/51,
+36/37]`, S6-Core `[19/19, 49/51, 37/37]`, and S6-Full `[19/19, 48/51,
+36/37]`. Core was therefore +3 passed properties versus the fresh Legacy arm
+and closed 3/5 of its observed headroom, while Full was +1 versus Legacy and -2
+versus Core. These are one-repetition, purposively selected development values,
+not a stable scaffold gain, representative QFBench estimate, or main result.
+
+The construct gate failed. Only two of six applicable Core/Full cells produced
+a complete accountable S1--S6 marker protocol. Core swap omitted S6 ENTER,
+Core holdings fully accounted only S2 and S5, Full holdings fully accounted
+only S5 and S6, and Full FX omitted S1/S3 completion while emitting a malformed
+`[QSTATE S4 REVISIT]` marker. The frozen threshold of more than one valid
+protocol violation therefore selects `S6_PROTOCOL_NOT_REALIZED`. Marker
+coverage remains an observability metric and is not quantitative correctness.
+
+The run reconciled 157 completed requests, 6,280,605 tokens, and $0.298829132
+with zero retry or unreconciled accounting. The transient systemd unit exited
+zero after 49 minutes 29 seconds; 36/36 lifecycle records were cleaned by exact
+ID, with no process, container, network, volume, or run-specific namespace
+residue. Rep2 was not started. Retain rep1, but treat rep2 as-is as `NO-GO`:
+repair only skill loading and marker realization, then freeze a new matched
+canary without using rep1 scores to change tasks or add task-specific methods.
+Full showed no detailed-human-workflow advantage, and Core is not accepted as
+the QRS substrate until the protocol is realized. Full record:
+`docs/decisions/2026-08-24-quant-h0-s6-matched-canary-rep1-result.md`.
+
 ## 2026-08-24 Quant-H0-S6 split into Core substrate and Full workflow baseline
 
 The previously implemented detailed `qea/worker_quant_h0_s6` is now treated as
