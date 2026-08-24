@@ -32,6 +32,33 @@ The zero-byte coordinator lock had no owner. Full record:
 result:
 `data/breadth/QF_QUANT_H0_S6_CORE_V2_PROTOCOL_GATE_RESULT.json`.
 
+## 2026-08-24 Quant-H0-S6-Core-v3 direct marker channel and R2 gate frozen
+
+Core-v3 is a new Worker treatment identity that addresses the single observed
+Core-v2 holdings failure without changing quantitative content. Every QSTATE
+marker must be emitted as direct assistant-role plain text on its own line at
+the transition it records. A marker inside ToolUse, a shell command or
+description, `echo`/`printf`, tool stdout/stderr, another tool result, or a
+final-only retrospective backfill does not count. Agent configuration changes
+only the identity name; the model, budget, shell descriptor, tool and skill
+registration, stage definitions, grammar, runtime, and verifier remain fixed.
+No quant method, formula, cleaning rule, artifact checklist, task identity,
+expected value, hidden property, or benchmark-specific convention was added.
+
+The separately frozen R2 plan reruns the same three-task Core-only protocol
+gate under run ID
+`qf-quant-h0-s6-core-v3-protocol-gate-20260824-r2`. It may enter breadth only
+if all three Worker/verifier observations are valid and all three trusted
+traces contain complete ordered direct-assistant S1--S6 protocols. Official
+scores are retained but cannot authorize breadth. The 57-task eligibility
+ledger, exact 12 breadth tasks, grouping, selection algorithm, metrics,
+thresholds, budgets, and arm-order reversal are byte-for-byte or
+semantically locked to the Core-v2 freeze apart from the necessary Core-v3/R2
+identities. Full remains excluded. This is substrate protocol calibration,
+not QRS, Candidate Review, AHE, sealed evaluation, or main readiness. Full
+record:
+`docs/decisions/2026-08-24-quant-h0-s6-core-v3-r2-breadth-plan.md`.
+
 ## 2026-08-24 Quant-H0-S6-Core-v2 protocol repair and 12-task breadth map frozen
 
 The rep1 construct result selected `S6_PROTOCOL_NOT_REALIZED`, so the original
