@@ -1,5 +1,44 @@
 # QEA Repository Memory
 
+## 2026-08-24 public-only EVT-POT-VaR H0 stopped on missing prescribed dependency
+
+The frozen `qf-public-only-evt-pot-var-h0-prescreen-20260824-r1` completed one
+Quant-H0 Worker and one trusted verifier, but its terminal research decision is
+`STOP_NO_RESULT`, not a mathematical-headroom result. The official execution
+record was 51/55 with reward, task mean, and overall score 0.833333. The Worker
+completed 27 turns and 32 tool calls with 5 tool errors, wrote `results.json`
+and `solution.json`, and ran for 655.389 seconds.
+
+Fresh trace evidence directly established the predeclared dependency-invalid
+condition. Importing `arch` raised `ModuleNotFoundError: No module named
+'arch'`; `pip install arch` then failed because network/name resolution was
+unavailable. The Worker substituted a custom zero-mean GARCH(1,1), SLSQP
+optimizer, backcast/variance recursion, and an independent transformed-
+parameter Nelder-Mead cross-check, and explicitly disclosed this substitution
+in its final response. The runner's raw `valid_for_selection=true` therefore
+does not survive the frozen dependency audit for mathematical-mechanism
+selection.
+
+The run used 27 completed requests, 875,317 input plus 44,768 output tokens
+(920,085 total), and $0.040374796, with zero provider retries, nonaccepted
+requests, or unreconciled accounting. All frozen request, token, cost, Worker,
+verifier, and wall limits were satisfied. Both systemd units ended
+successfully with zero restarts; exact-ID Worker, proxy, verifier, and network
+cleanup completed with no live container or network residue. A temporary local
+VPN-route loss interrupted one read-only poll only and did not alter the run.
+
+The 51/55 aggregate is retained solely as an internally coherent execution
+record. It is not evidence of a four-property Quant-H0 capability failure
+under the prescribed `arch` runtime, and missing `arch`, package installation,
+or the custom fallback cannot become a candidate quantitative mechanism. The
+rolling/Kupiec/Christoffersen/conditional-coverage eligibility audit is not
+applicable after the dependency-first stop. No Evolver, Reviewer, proposal,
+candidate, repeat, or protection stage ran, and no failed-property identity
+was exposed. Compact result:
+`data/breadth/QF_PUBLIC_ONLY_EVT_POT_VAR_H0_PRESCREEN_RESULT.json`; full
+decision:
+`docs/decisions/2026-08-24-public-only-evt-pot-var-h0-prescreen-result.md`.
+
 ## 2026-08-24 public-only credit-migration proposal calibrated ABSTAIN
 
 The separately frozen Stage-A proposal

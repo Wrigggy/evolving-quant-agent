@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-public-only-evt-pot-var-h0-prescreen-20260824-r1",
+  "date": "2026-08-24",
+  "status": "dependency_invalid_stop_no_result",
+  "research_question": "Does one fresh Quant-H0 evt-pot-var run expose public mathematical headroom under the prescribed arch GARCH-EVT path, without converting a missing optional dependency or custom fallback into a quantitative mechanism?",
+  "setup": {
+    "benchmark": "QFBench",
+    "task_id": "evt-pot-var",
+    "arm": "Quant-H0",
+    "result_role": "adaptive development target prescreen only",
+    "deployment_source_version": "3fc9efc",
+    "frozen_plan": "data/breadth/QF_PUBLIC_ONLY_EVT_POT_VAR_H0_PRESCREEN_PLAN.json",
+    "source_artifacts": "results/bc-mirror/qf-public-only-evt-pot-var-h0-prescreen-20260824-r1",
+    "worker_sessions": 1,
+    "official_verifier_executions": 1,
+    "evolver_calls": 0,
+    "reviewer_calls": 0,
+    "candidate_workers": 0,
+    "sealed_evaluation_used": false
+  },
+  "live_attempt": {
+    "attempt_count": 1,
+    "worker_outcome": "completed",
+    "runner_valid_for_selection_before_dependency_override": true,
+    "turns": 27,
+    "tool_calls": 32,
+    "tool_errors": 5,
+    "files": 2,
+    "artifact_count": 2,
+    "artifacts": {
+      "results.json": 2536,
+      "solution.json": 906
+    },
+    "worker_seconds": 655.389
+  },
+  "official_execution_record": {
+    "tests_passed": 51,
+    "tests_total": 55,
+    "reward": 0.833333,
+    "task_mean": 0.833333,
+    "overall": 0.833333,
+    "verifier_exit_code": 1,
+    "retained_role": "internally coherent official execution record only",
+    "valid_for_mathematical_mechanism_selection": false,
+    "failed_property_identity_recorded_here": false,
+    "benchmark_capability_failure_claimed": false
+  },
+  "dependency_audit": {
+    "status": "dependency_invalid",
+    "prescribed_public_path": "Use the arch package with mean='Zero', vol='GARCH', p=1, q=1, dist='Normal' for full-sample and rolling GARCH-EVT fits.",
+    "fresh_import_observation": "Importing arch raised ModuleNotFoundError: No module named 'arch'.",
+    "fresh_install_observation": "pip install arch failed after name-resolution/network errors and found no installable distribution.",
+    "substituted_path": [
+      "custom zero-mean GARCH(1,1)",
+      "custom SLSQP optimization",
+      "custom backcast and variance recursion",
+      "independent transformed-parameter Nelder-Mead cross-check"
+    ],
+    "worker_disclosure": "The final response explicitly states that arch was unavailable and a direct custom GARCH implementation was used.",
+    "frozen_rule_match": "Fresh evidence directly establishes missing arch plus a substituted non-arch optimizer and recursion, exactly matching dependency_invalid_when.",
+    "mathematical_public_localization_audit": "not_applicable_after_dependency_stop",
+    "interpretation": "The dependency stop precedes any rolling, strict-violation, Kupiec, Christoffersen, or conditional-coverage eligibility interpretation. The official shortfall is not a clean observation of Quant-H0 mathematical capability under the prescribed runtime."
+  },
+  "request_accounting": {
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "logical_requests": 27,
+    "completed_requests": 27,
+    "input_tokens": 875317,
+    "output_tokens": 44768,
+    "total_tokens": 920085,
+    "provider_cost_usd": 0.040374796,
+    "rate_limited_retries": 0,
+    "requests_with_retry_index_above_zero": 0,
+    "other_nonaccepted_requests": 0,
+    "unreconciled_attempts": 0,
+    "unreconciled_requests": 0
+  },
+  "frozen_limits": {
+    "worker_sessions": "1/1",
+    "official_verifier_executions": "1/1",
+    "completed_requests": "27/50",
+    "total_tokens": "920085/4000000",
+    "provider_cost_usd": "0.040374796/0.20",
+    "worker_wall_seconds": "655.389/5400",
+    "all_limits_satisfied": true,
+    "replacement_model_or_provider_used": false,
+    "follow_on_dispatch": false
+  },
+  "runtime": {
+    "main_service_state": "inactive/dead",
+    "health_service_state": "inactive/dead",
+    "service_result": "success",
+    "service_exit_code": 0,
+    "service_restarts": 0,
+    "worker_cleaned_up": true,
+    "proxy_cleaned_up": true,
+    "verifier_cleaned_up": true,
+    "proxy_network_cleaned_up": true,
+    "cleanup_method": "exact-id",
+    "related_live_container_or_network_residue": 0,
+    "retained_filesystem_evidence": true,
+    "monitor_transport_note": "One read-only poll was interrupted by a temporary local VPN-route loss. The route recovered, and no experiment action, restart, replacement, or intervention occurred."
+  },
+  "terminal": {
+    "decision": "STOP_NO_RESULT",
+    "classification": "dependency_invalid",
+    "official_aggregate_retained_as_execution_record": true,
+    "mathematical_mechanism_result": false,
+    "proposal_eligibility": false,
+    "next_dispatch": null,
+    "proposal_launched": false,
+    "reviewer_launched": false,
+    "candidate_launched": false,
+    "repeat_launched": false,
+    "protection_launched": false
+  },
+  "information_boundary": {
+    "official_aggregate_retained_for_trusted_research_record": true,
+    "failed_property_identity_recorded_or_exposed": false,
+    "fallback_or_dependency_repair_candidate_allowed": false,
+    "public_mathematical_mismatch_claimed": false,
+    "future_evolver_evidence_from_this_run": "none; the dependency-invalid terminal does not authorize a proposal evidence package",
+    "forbidden_interpretation": "Do not treat 51/55, its four-test shortfall, the missing arch dependency, package installation, or the custom GARCH implementation as a benchmark capability failure or reusable quantitative mechanism."
+  },
+  "retained_conclusion": "The single Worker and verifier completed and produced an internally coherent 51/55 official execution record, but fresh trace evidence directly showed that the prescribed arch path was unavailable and a custom GARCH optimizer and recursion were substituted. The frozen dependency-first rule therefore selects STOP_NO_RESULT, makes the public mathematical-headroom audit not applicable, and authorizes no follow-on proposal, Reviewer, or candidate.",
+  "claim_boundary": {
+    "supported": "One completed stochastic execution, its trusted aggregate execution record, exact dependency and fallback observations from the fresh trace and final, exact accounting, frozen dependency-invalid disposition, service completion, and cleanup.",
+    "not_supported": "An official failed-property diagnosis, a Quant-H0 mathematical capability failure under the prescribed arch path, public mathematical headroom, candidate quality, dependency-repair or fallback mechanism value, harness improvement, repeatability, protection, sealed generalization, or main-experiment readiness.",
+    "selection_boundary": "The dependency validity check precedes mathematical localization. Once the prescribed path is absent and a custom fallback is observed, the official aggregate cannot select a mathematical intervention."
+  }
+}
