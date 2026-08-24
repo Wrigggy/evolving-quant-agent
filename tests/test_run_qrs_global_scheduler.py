@@ -533,6 +533,50 @@ def test_nonpass_review_with_pass_coverage_returns_rollback_result(
     assert result["reviewed_parent"] == action["current_parent"]
 
 
+def test_pre_review_engineering_hold_returns_accounted_nonresult(
+    tmp_path: Path,
+) -> None:
+    action, launch, state_path, _ = _panel_fixture(tmp_path)
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.update(
+        {
+            "phase": "HOLD_FOR_REFINE",
+            "status": "candidate_hold",
+            "decision": "HOLD_FOR_REFINE",
+            "hold": {
+                "candidate_version": "candidate-v1",
+                "reason": (
+                    "information_set_review_package_engineering_invalid: "
+                    "workflow trajectory excerpt exceeds the Review bound"
+                ),
+            },
+            "observations": {},
+            "accounted_review_ids": [],
+            "cost": {
+                "provider_cost_usd": "1.25",
+                "completed_requests": 3,
+                "total_tokens": 100,
+            },
+        }
+    )
+    state["candidate"].pop("information_set_review", None)
+    state.pop("stopped_after_stage", None)
+    _write(state_path, state)
+
+    result = runner._panel_result(action, launch)
+
+    assert result["status"] == "complete"
+    assert result["accounting_complete"] is True
+    assert result["review_verdict"] == "NON_PASS"
+    assert result["coverage"] == "NON_PASS"
+    assert result["review_result_path"] is None
+    assert result["cost"] == {
+        "provider_cost_usd": "1.25",
+        "completed_requests": 3,
+        "total_tokens": 100,
+    }
+
+
 def test_proposal_abstain_returns_clean_pre_review_result(tmp_path: Path) -> None:
     action, launch, state_path, _ = _panel_fixture(tmp_path)
     state = json.loads(state_path.read_text(encoding="utf-8"))

@@ -1130,7 +1130,8 @@ def _set_global_workflow(decision: dict, refs: list[str]) -> None:
             "task_family": "rates_fx_macro",
             "trajectory_ref": refs[0],
             "observed_handoff": (
-                "the public output contract disappears before reconciliation"
+                "the public output contract disappears before reconciliation "
+                "at line 1"
             ),
         },
         {
@@ -1138,13 +1139,112 @@ def _set_global_workflow(decision: dict, refs: list[str]) -> None:
             "task_family": "data_engineering",
             "trajectory_ref": refs[1],
             "observed_handoff": (
-                "the artifact inventory is not carried into the final check"
+                "the artifact inventory is not carried into the final check "
+                "at line 1"
             ),
         },
     ]
     decision["predicted_end_to_end_observable"] = (
         "fresh Workers in both families preserve their public contracts through "
         "reconciliation and deliver the requested artifacts"
+    )
+
+
+@pytest.mark.parametrize(
+    ("observation", "line_count", "error"),
+    [
+        (
+            "the handoff is absent without an exact citation",
+            1,
+            "must cite exact trajectory line numbers",
+        ),
+        (
+            "the handoff is absent at lines 1-14",
+            14,
+            "invalid line range",
+        ),
+        (
+            "the handoff is absent at lines 1-12, lines 13-24, and line 25",
+            25,
+            "too many trajectory lines",
+        ),
+    ],
+)
+def test_decide_candidate_validates_exact_workflow_line_citations(
+    guarded_roots, observation, line_count, error
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    refs = _configure_global_workflow_evidence(evidence)
+    first = evidence / refs[0]
+    first.write_text(
+        "\n".join(
+            json.dumps({"line": number, "event": "handoff omitted"})
+            for number in range(1, line_count + 1)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    for ref in refs:
+        read_workspace(source="evidence", file_path=ref)
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = refs
+    _set_global_workflow(decision, refs)
+    decision["workflow_evidence"][0]["observed_handoff"] = observation
+
+    with pytest.raises(GuardedWorkspaceError, match=error):
+        decide_candidate(discovery=decision)
+
+
+def test_decide_candidate_rejects_oversized_excerpt_then_accepts_compact_retry(
+    guarded_roots,
+):
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        decide_candidate,
+        read_workspace,
+    )
+
+    _, evidence, _, _, _ = guarded_roots
+    _write_quant_v2_contract(evidence, history_required=False)
+    refs = _configure_global_workflow_evidence(evidence)
+    first = evidence / refs[0]
+    first.write_text(
+        json.dumps({"line": 1, "event": "x" * 35_900})
+        + "\n"
+        + json.dumps({"line": 2, "event": "compact handoff"})
+        + "\n",
+        encoding="utf-8",
+    )
+    for ref in refs:
+        read_workspace(source="evidence", file_path=ref)
+    decision = _quant_v2_decision()
+    decision["evidence_refs"] = refs
+    _set_global_workflow(decision, refs)
+    decision["workflow_evidence"][0]["observed_handoff"] = (
+        "the oversized event is cited at line 1"
+    )
+
+    with pytest.raises(
+        GuardedWorkspaceError,
+        match="exceeds the 24000-byte Review bound",
+    ):
+        decide_candidate(discovery=decision)
+
+    decision["workflow_evidence"][0]["observed_handoff"] = (
+        "the same handoff is grounded compactly at line 2"
+    )
+    result = decide_candidate(discovery=decision)
+
+    assert result["decision"] == "ACT"
+    assert result["workflow_evidence"][0]["observed_handoff"].endswith(
+        "line 2"
     )
 
 
@@ -2355,8 +2455,21 @@ def test_quant_v2_forbids_legacy_unlock_and_schema_matches_quant_hypotheses(
     assert "target_handoff" in workflow_properties["handoff_gap"]["required"]
     workflow_evidence = workflow_properties["workflow_evidence"]["items"]
     assert "trajectory_ref" in workflow_evidence["required"]
+    workflow_description = workflow_evidence["properties"][
+        "observed_handoff"
+    ]["description"]
+    assert "24 distinct lines" in workflow_description
+    assert "24,000 UTF-8 bytes" in workflow_description
+    assert "retry" in workflow_description
     assert "predicted_end_to_end_observable" in workflow_properties
     assert "failure_prediction" not in schema_text
+    system_prompt = (
+        Path(__file__).resolve().parents[1]
+        / "qea/evolve_agent_full/systemprompt.md"
+    ).read_text(encoding="utf-8")
+    assert "at most 24 distinct lines" in system_prompt
+    assert "24,000 UTF-8 bytes" in system_prompt
+    assert "retry the same proposal" in system_prompt
     with pytest.raises(GuardedWorkspaceError, match="legacy unlock is forbidden"):
         unlock_candidate(
             hypothesis={

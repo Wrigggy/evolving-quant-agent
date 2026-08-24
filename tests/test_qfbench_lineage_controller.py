@@ -12,6 +12,7 @@ from scripts.run_qfbench_lineage_controller import (
     _candidate_information_set_review_result,
     _information_set_review_spec,
     _quantcodeeval_property_set_safe,
+    _trajectory_line_excerpt,
     build_candidate_information_set_review_argv,
     build_child_argv,
     build_proposal_argv,
@@ -3279,6 +3280,226 @@ def test_qrs_review_package_materializes_only_exact_r3_workflow_sources(
         "derivatives",
     }
     assert all(len(source["excerpt"]) < 2_000 for source in trusted)
+
+
+def _large_jsonl_trajectory(path: Path, *, payload_bytes: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(
+            json.dumps({"line": number, "event": "x" * payload_bytes})
+            for number in range(1, 13)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_workflow_trajectory_excerpt_accepts_compact_24kb_range(
+    tmp_path: Path,
+) -> None:
+    trajectory = tmp_path / "worker_trace.jsonl"
+    _large_jsonl_trajectory(trajectory, payload_bytes=1_900)
+
+    excerpt = _trajectory_line_excerpt(
+        trajectory,
+        "The answer-free workflow observation is grounded at lines 1-12.",
+    )
+
+    excerpt_bytes = len(excerpt.encode("utf-8"))
+    assert 22_000 < excerpt_bytes <= 24_000
+    assert excerpt.startswith("line 1: ")
+    assert excerpt.count("\n") == 11
+    assert excerpt.splitlines()[-1].startswith("line 12: ")
+
+
+def test_workflow_trajectory_excerpt_rejects_over_24kb(
+    tmp_path: Path,
+) -> None:
+    trajectory = tmp_path / "worker_trace.jsonl"
+    _large_jsonl_trajectory(trajectory, payload_bytes=2_100)
+
+    with pytest.raises(LineageError, match="exceeds the Review bound"):
+        _trajectory_line_excerpt(
+            trajectory,
+            "The answer-free workflow observation is grounded at lines 1-12.",
+        )
+
+
+def test_guarded_decision_and_controller_use_same_24kb_excerpt_boundary(
+    tmp_path: Path,
+) -> None:
+    from qea.evolve_agent_full.tools.guarded_workspace import (
+        GuardedWorkspaceError,
+        _workflow_trajectory_line_excerpt,
+    )
+
+    trajectory = tmp_path / "worker_trace.jsonl"
+    observation = "The handoff is grounded at lines 1-12."
+    _large_jsonl_trajectory(trajectory, payload_bytes=1_900)
+    assert _workflow_trajectory_line_excerpt(
+        trajectory, observation
+    ) == _trajectory_line_excerpt(trajectory, observation)
+
+    _large_jsonl_trajectory(trajectory, payload_bytes=2_100)
+    with pytest.raises(GuardedWorkspaceError, match="24000-byte Review bound"):
+        _workflow_trajectory_line_excerpt(trajectory, observation)
+    with pytest.raises(LineageError, match="exceeds the Review bound"):
+        _trajectory_line_excerpt(trajectory, observation)
+
+
+def test_qrs_review_package_still_rejects_overall_192kb_input(
+    tmp_path: Path,
+) -> None:
+    parent, candidate = _information_review_workers(tmp_path)
+    sources = [
+        {
+            "ref": f"public:large-source-{index}",
+            "source_type": "public_contract",
+            "excerpt": "x" * 40_000,
+        }
+        for index in range(5)
+    ]
+    claim = {
+        "claim_id": "public-output-policy",
+        "claim_scope": "task_specific_requirement",
+        "claim": "Follow the exact supplied public output contract.",
+        "surfaces": ["tools"],
+        "basis_refs": [
+            {
+                "kind": "public_contract",
+                "ref": sources[0]["ref"],
+                "support": "The exact public contract directly supports the claim.",
+            }
+        ],
+    }
+
+    with pytest.raises(
+        LineageError,
+        match="candidate Review package exceeds the bounded model-input size",
+    ):
+        _candidate_information_set_review_package(
+            {
+                "current_parent": {"version": "h0", "worker_dir": str(parent)},
+                "candidate": {
+                    "version": "large-package-candidate",
+                    "worker_dir": str(candidate),
+                },
+                "proposal": {"worker_visible_claims": [claim]},
+            },
+            {
+                "review_id": "large-package-review",
+                "candidate_material_baseline_worker_dir": str(parent),
+                "public_sources": sources,
+                "optimize_only_sources": [],
+            },
+        )
+
+
+def test_live_oversized_review_source_holds_and_accounts_without_dispatch(
+    tmp_path: Path,
+) -> None:
+    plan_path, plan = _information_review_controller_plan(tmp_path, mode="live")
+    evidence = tmp_path / "answer-free-panel-evidence"
+    framework_ref = "guidance/qrs-workflow-framework.json"
+    framework = evidence / framework_ref
+    framework.parent.mkdir(parents=True)
+    framework.write_text(
+        '{"answer_free":true,"policy":"six-state workflow"}\n',
+        encoding="utf-8",
+    )
+    trajectory_ref = (
+        "benchmarks/qfbench/tasks/oversized/worker_trace.jsonl"
+    )
+    trajectory = evidence / trajectory_ref
+    trajectory.parent.mkdir(parents=True)
+    trajectory.write_text(
+        json.dumps({"line": 1, "event": "x" * 35_900}) + "\n",
+        encoding="utf-8",
+    )
+    proposal_path = Path(
+        plan["lineages"][0]["proposal"]["replay_report"]
+    )
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    hypothesis = proposal["summary"]["discovery_hypothesis"]["hypothesis"]
+    hypothesis["workflow_evidence"] = [
+        {
+            "task_key": "qfbench:oversized",
+            "task_family": "rates_fx_macro",
+            "trajectory_ref": trajectory_ref,
+            "observed_handoff": "The handoff is visible at line 1.",
+        }
+    ]
+    hypothesis["worker_visible_claims"] = [
+        {
+            "claim_id": "workflow-handoff-policy",
+            "claim_scope": "task_agnostic_harness_policy",
+            "claim": "Keep the six-state workflow handoff explicit.",
+            "surfaces": ["tools"],
+            "basis_refs": [
+                {"kind": "framework_reference", "ref": framework_ref},
+                {
+                    "kind": "answer_free_development_observation",
+                    "ref": trajectory_ref,
+                },
+            ],
+        }
+    ]
+    proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
+    review_spec = plan["lineages"][0]["candidate_information_set_review"]
+    review_spec.update(
+        {
+            "feedback_mode": "answer_free",
+            "public_sources": [],
+            "public_source_catalog": [],
+            "answer_free_development_evidence_root": str(evidence),
+            "optimize_only_sources": [],
+        }
+    )
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    state_dir = tmp_path / "oversized-review-state"
+
+    def no_reviewer_or_worker(_argv):
+        raise AssertionError(
+            "invalid Review package must not dispatch Reviewer or Worker"
+        )
+
+    first = run_controller(
+        plan_path,
+        state_dir,
+        approve_external_run=True,
+        runner=no_reviewer_or_worker,
+    )
+    resumed = run_controller(
+        plan_path,
+        state_dir,
+        approve_external_run=True,
+        runner=no_reviewer_or_worker,
+    )
+
+    state = first["lineages"]["information-lineage"]
+    assert resumed == first
+    assert state["phase"] == "HOLD_FOR_REFINE"
+    assert state["decision"] == "HOLD_FOR_REFINE"
+    assert state["status"] == "candidate_hold"
+    assert state["current_parent"]["version"] == "h0"
+    assert state["accounted_run_ids"] == ["information-proposal-r1"]
+    assert state["accounted_review_ids"] == []
+    assert state["cost"] == {
+        "provider_cost_usd": "0.02",
+        "completed_requests": 3,
+        "total_tokens": 200,
+    }
+    assert state["hold"]["reason"].startswith(
+        "information_set_review_package_engineering_invalid: "
+        "workflow trajectory excerpt exceeds the Review bound"
+    )
+    assert state["hold"]["kind"] == (
+        "candidate_information_set_review_package_engineering_invalid"
+    )
+    retained_result = json.loads(
+        (state_dir / "CONTROLLER-RESULT.json").read_text(encoding="utf-8")
+    )
+    assert retained_result == first
 
 
 def test_later_qrs_review_fails_closed_when_prior_accepted_claim_is_omitted(

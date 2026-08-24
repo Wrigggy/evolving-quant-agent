@@ -40,6 +40,7 @@ from qea.quantcodeeval_lineage_adapter import (  # noqa: E402
 
 
 Runner = Callable[[Sequence[str]], object]
+_MAX_TRAJECTORY_REVIEW_EXCERPT_BYTES = 24_000
 
 
 def _json(path: Path) -> dict[str, object]:
@@ -662,7 +663,10 @@ def _trajectory_line_excerpt(path: Path, observation: str) -> str:
     excerpt = "\n".join(
         f"line {number}: {lines[number - 1]}" for number in selected
     )
-    if len(excerpt.encode("utf-8")) > 24_000:
+    if (
+        len(excerpt.encode("utf-8"))
+        > _MAX_TRAJECTORY_REVIEW_EXCERPT_BYTES
+    ):
         raise LineageError("workflow trajectory excerpt exceeds the Review bound")
     return excerpt
 
@@ -1831,9 +1835,25 @@ def run_controller(
                     save_lineage(state_path, state)
                     continue
                 save_lineage(state_path, state)
-                package, hold_reason = _candidate_information_set_review_package(
-                    state, review_spec
-                )
+                try:
+                    package, hold_reason = (
+                        _candidate_information_set_review_package(
+                            state, review_spec
+                        )
+                    )
+                except LineageError as exc:
+                    state = hold_candidate_information_set_review(
+                        state,
+                        reason=(
+                            "information_set_review_package_engineering_invalid: "
+                            f"{exc}"
+                        ),
+                    )
+                    state["hold"]["kind"] = (
+                        "candidate_information_set_review_package_engineering_invalid"
+                    )
+                    save_lineage(state_path, state)
+                    continue
                 if package is None:
                     state = hold_candidate_information_set_review(
                         state, reason=str(hold_reason)

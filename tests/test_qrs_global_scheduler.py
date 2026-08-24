@@ -461,6 +461,49 @@ def test_nonpass_review_retains_parent_continues_and_runs_no_candidate_workers(t
     assert len([call for call in runner.calls if call.get("sealed")]) == 4
 
 
+def test_engineering_invalid_pre_review_result_stops_panel_after_accounting(
+    tmp_path,
+):
+    launch = _launch(tmp_path)
+    runner = FakeRunner(tmp_path)
+    original = runner.__call__
+    review_action_id = None
+    review_cost = None
+
+    def invalid_package(action):
+        nonlocal review_action_id, review_cost
+        result = original(action)
+        if action["kind"] == "panel_proposal_review":
+            review_action_id = action["action_id"]
+            result["review_verdict"] = "NON_PASS"
+            result["coverage"] = "NON_PASS"
+            result["accepted_claims"] = []
+            review_cost = result["cost"]
+        return result
+
+    result = run_scheduler(
+        METHOD,
+        launch,
+        tmp_path / "state",
+        action_runner=invalid_package,
+    )
+
+    assert result["status"] == "STOP_PANEL"
+    assert result["current_parent"]["version"] == "primitive-v1"
+    assert review_action_id in result["accounted_action_ids"]
+    assert not any(
+        call.get("purpose") == "panel_matched_fitness" for call in runner.calls
+    )
+    assert review_cost is not None
+    assert result["cost"]["completed_requests"] >= review_cost[
+        "completed_requests"
+    ]
+    assert result["cost"]["total_tokens"] >= review_cost["total_tokens"]
+    assert "candidate Review returned no valid terminal verdict" in result[
+        "stop_reason"
+    ]
+
+
 def test_proposal_abstain_retains_parent_and_continues_without_review_or_worker(
     tmp_path,
 ):

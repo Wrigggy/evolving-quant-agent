@@ -176,7 +176,11 @@ Support cross-stage scope with at least one exact already-read public H0
 trajectory. Support workflow-global scope with `workflow_evidence` from at
 least two distinct frozen-H0 tasks in distinct public task families, and state
 the repeated handoff observation for each with exact JSONL line numbers or
-bounded line ranges; do not substitute official scores,
+bounded line ranges. For each trajectory entry, all cited ranges combined may
+select at most 24 distinct lines and their exact rendered excerpt must be at
+most 24,000 UTF-8 bytes. `decide_candidate` checks this before admission; on a
+bound error, remove redundant citations and retry the same proposal with only
+the compact exact lines needed for Review. Do not substitute official scores,
 failed properties, expected values, checker output, or evaluator explanations.
 For cross-stage and global failures, consider the natural coordination
 surfaces---`systemprompt`, `skills`, `middleware`, and `routing`---alongside

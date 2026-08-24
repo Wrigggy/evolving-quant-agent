@@ -112,7 +112,7 @@ input_schema:
                 description: Exact worker_trace.jsonl or research_state_trace.json evidence path, also cited in evidence_refs.
               observed_handoff:
                 type: string
-                description: Repeated answer-free trajectory observation supporting the declared handoff gap. Cite the exact relevant JSONL line number or bounded line range (for example line 27 or lines 85-87) so the controller can supply a compact exact Reviewer excerpt.
+                description: Repeated answer-free trajectory observation supporting the declared handoff gap. Cite the exact relevant JSONL line number or bounded line range (for example line 27 or lines 85-87). Across all ranges in this entry, cite at most 24 distinct lines and keep their exact rendered excerpt at or below 24,000 UTF-8 bytes. decide_candidate validates this bound before accepting the proposal; if it reports an excerpt-bound error, remove redundant line references and retry with the compact exact evidence needed for Review.
             required: [task_key, task_family, trajectory_ref, observed_handoff]
             additionalProperties: false
         predicted_end_to_end_observable:

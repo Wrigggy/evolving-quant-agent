@@ -6,6 +6,7 @@ from pathlib import Path
 
 def _state(monkeypatch, **overrides):
     values = {
+        "LoadState": "loaded",
         "ActiveState": "active",
         "SubState": "running",
         "Result": "success",
@@ -86,6 +87,30 @@ def test_health_treats_bounded_auto_restart_as_transient(tmp_path, monkeypatch):
     health = build_health(run_id="pilot", unit="pilot.service", run_dir=tmp_path)
     assert health["category"] == "healthy"
     assert health["needs_codex"] is False
+
+
+def test_health_does_not_report_collected_unit_as_success(tmp_path, monkeypatch):
+    from scripts.watch_qfbench_component_pilot import build_health
+
+    _state(
+        monkeypatch,
+        LoadState="not-found",
+        ActiveState="inactive",
+        SubState="dead",
+        Result="success",
+        ExecMainStatus="0",
+    )
+
+    health = build_health(
+        run_id="collected",
+        unit="collected.service",
+        run_dir=tmp_path,
+    )
+
+    assert health["load_state"] == "not-found"
+    assert health["category"] == "coordinator_not_running"
+    assert health["result"] == "unit-query-failed"
+    assert health["needs_codex"] is True
 
 
 def test_health_allows_observed_long_numerical_worker_window(tmp_path, monkeypatch):

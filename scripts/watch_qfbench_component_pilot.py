@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 _PROPERTIES = (
+    "LoadState",
     "ActiveState",
     "SubState",
     "Result",
@@ -59,10 +60,17 @@ def _unit_state(unit: str) -> dict[str, str]:
         name, separator, value = line.partition("=")
         if separator and name in values:
             values[name] = value
-    if completed.returncode != 0 or not values["ActiveState"]:
+    if (
+        completed.returncode != 0
+        or not values["ActiveState"]
+        or values["LoadState"] == "not-found"
+    ):
+        values["LoadState"] = "not-found"
         values["ActiveState"] = "unknown"
         values["SubState"] = "unknown"
         values["Result"] = "unit-query-failed"
+        values["ExecMainStatus"] = ""
+        values["NRestarts"] = ""
     return values
 
 
@@ -116,6 +124,13 @@ def build_health(
     stalled_after_seconds: int = _DEFAULT_STALL_SECONDS,
 ) -> dict[str, object]:
     state = _unit_state(unit)
+    if state["LoadState"] == "not-found":
+        state = dict(state)
+        state["ActiveState"] = "unknown"
+        state["SubState"] = "unknown"
+        state["Result"] = "unit-query-failed"
+        state["ExecMainStatus"] = ""
+        state["NRestarts"] = ""
     scores, workers, replacements, age = _latest_progress(run_dir)
     active = state["ActiveState"]
     restarts = int(state["NRestarts"] or 0)
@@ -143,6 +158,7 @@ def build_health(
     fingerprint_payload = {
         "run_id": run_id,
         "unit": unit,
+        "load_state": state["LoadState"],
         "category": category,
         "result": state["Result"],
         "exec_main_status": state["ExecMainStatus"],
@@ -159,6 +175,7 @@ def build_health(
         "schema_version": 1,
         "run_id": run_id,
         "unit": unit,
+        "load_state": state["LoadState"],
         "category": category,
         "active_state": active,
         "sub_state": state["SubState"],

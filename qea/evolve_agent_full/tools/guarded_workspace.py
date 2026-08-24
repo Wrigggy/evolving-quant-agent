@@ -57,6 +57,7 @@ _MAX_SEARCH_LINE_BYTES = 8_000
 _MAX_PROCESS_OUTPUT_BYTES = 128_000
 _MAX_DISCOVERY_RETURN_BYTES = 256_000
 _MAX_WORKSPACE_READ_RETURN_BYTES = 64_000
+_MAX_WORKFLOW_TRAJECTORY_EXCERPT_BYTES = 24_000
 _DISCOVERY_STATE_NAME = "discovery-hypothesis.json"
 _QUANT_RESEARCH_STATE_CARD_NAME = "quant-research-state-card.json"
 _PROBE_LOG_NAME = "probe-log.jsonl"
@@ -343,6 +344,54 @@ def _text_list(
     return normalized
 
 
+def _workflow_trajectory_line_excerpt(path: Path, observation: str) -> str:
+    """Validate and materialize the exact trajectory lines sent to Review."""
+
+    if path.is_symlink() or not path.is_file():
+        raise GuardedWorkspaceError("workflow trajectory source is unavailable")
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise GuardedWorkspaceError(
+            "cannot read workflow trajectory source"
+        ) from exc
+    ranges: list[tuple[int, int]] = []
+    for match in re.finditer(
+        r"\blines?\s+(\d+)(?:\s*[-–]\s*(\d+))?",
+        observation,
+        re.IGNORECASE,
+    ):
+        start = int(match.group(1))
+        end = int(match.group(2) or start)
+        if start < 1 or end < start or end - start > 12 or end > len(lines):
+            raise GuardedWorkspaceError(
+                "workflow observation cites an invalid line range"
+            )
+        ranges.append((start, end))
+    if not ranges:
+        raise GuardedWorkspaceError(
+            "workflow observation must cite exact trajectory line numbers"
+        )
+    selected: list[int] = []
+    for start, end in ranges:
+        for number in range(start, end + 1):
+            if number not in selected:
+                selected.append(number)
+    if len(selected) > 24:
+        raise GuardedWorkspaceError(
+            "workflow observation cites too many trajectory lines"
+        )
+    excerpt = "\n".join(
+        f"line {number}: {lines[number - 1]}" for number in selected
+    )
+    if len(excerpt.encode("utf-8")) > _MAX_WORKFLOW_TRAJECTORY_EXCERPT_BYTES:
+        raise GuardedWorkspaceError(
+            "workflow trajectory excerpt exceeds the 24000-byte Review bound; "
+            "cite fewer exact lines and retry decide_candidate"
+        )
+    return excerpt
+
+
 def _normalize_workflow_analysis(
     discovery: Mapping[str, Any],
     *,
@@ -509,15 +558,20 @@ def _normalize_workflow_analysis(
                 "workflow_evidence must not repeat a trajectory_ref"
             )
         seen_refs.add(trajectory_ref)
+        observed_handoff = _text(
+            raw_entry.get("observed_handoff"),
+            label=f"{label}.observed_handoff",
+        )
+        trajectory_path, _ = _resolve(
+            "evidence", trajectory_ref, must_exist=True
+        )
+        _workflow_trajectory_line_excerpt(trajectory_path, observed_handoff)
         workflow_evidence.append(
             {
                 "task_key": task_key,
                 "task_family": task_family,
                 "trajectory_ref": trajectory_ref,
-                "observed_handoff": _text(
-                    raw_entry.get("observed_handoff"),
-                    label=f"{label}.observed_handoff",
-                ),
+                "observed_handoff": observed_handoff,
             }
         )
     if workflow_scope == "workflow_global":
