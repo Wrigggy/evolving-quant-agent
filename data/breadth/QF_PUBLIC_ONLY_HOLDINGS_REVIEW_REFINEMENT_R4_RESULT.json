@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "experiment_id": "qf-public-only-holdings-review-refinement-20260824-r4",
+  "proposal_run_id": "qf-public-only-holdings-refine-proposal-20260824-r4",
+  "review_id": "qf-public-only-holdings-information-set-review-20260824-r4",
+  "date": "2026-08-24",
+  "status": "proposal_admitted_review_inconclusive_candidate_hold_lineage_terminated",
+  "research_question": "Can one further answer-free LINEAGE_REFINEMENT round use the retained R3 review to make every surviving holdings prompt exposure declared and publicly supported, thereby passing mandatory arm-blind Information-Set Review before any Worker dispatch?",
+  "setup": {
+    "benchmark": "QFBench",
+    "task_id": "13f-amendment-aware-crowding",
+    "mutation_parent": "qf-public-only-holdings-c2-r3",
+    "candidate_id": "qf-public-only-holdings-c3-r4",
+    "proposal_arm": "quant-state",
+    "proposal_stage": "LINEAGE_REFINEMENT",
+    "review_scope": "answer_free_candidate_information_set",
+    "review_model": "deepseek/deepseek-v4-pro",
+    "reviewer_arm_blind": true,
+    "reviewer_worker_visible": false,
+    "reviewer_promotion_authority": false,
+    "review_material_scope": "Cumulative Quant-H0-to-c3 Worker-visible material, three declared c3 claims, one complete pre-existing public target instruction, and no optimize-only source.",
+    "proposal_artifact": "results/bc-mirror/qf-public-only-holdings-refine-proposal-20260824-r4/proposal-report.json",
+    "review_artifact": "results/bc-mirror/qf-public-only-holdings-information-set-review-20260824-r4/RESULT.json",
+    "controller_artifacts": "results/bc-mirror/qf-public-only-holdings-review-refinement-20260824-r4-controller-state"
+  },
+  "evidence_upload_preflight": {
+    "initial_authorization": "REJECT",
+    "observed_problem": "The evidence archive contained 58 macOS AppleDouble sidecars.",
+    "repair": "Root deleted exactly the 58 sidecars before experiment authorization.",
+    "reauthorization": "PASS",
+    "authorized_member_count": 37,
+    "experiment_started_only_after_pass": true
+  },
+  "proposal": {
+    "decision": "ACT",
+    "admitted": true,
+    "admission_checks_passed": 9,
+    "mutation": {
+      "changed_files": [
+        "systemprompt.md"
+      ],
+      "declared_roles": [
+        "systemprompt"
+      ],
+      "actual_roles": [
+        "systemprompt"
+      ],
+      "declared_roles_match_actual": true,
+      "prompt_or_description_only": true,
+      "touches_executable_code": false,
+      "added_lines": 2,
+      "deleted_lines": 2,
+      "net_tree_bytes": 146,
+      "interpretation": "The refinement replaced two prompt lines. It restated why canonical representation precedes declared consistency and universe checks, extended the missing-value rule to categorical checks and weights, and left the cardinality, string-nan, dtype-confirmation, and reconciliation requirements in place."
+    },
+    "worker_visible_claims": [
+      {
+        "claim_id": "canonical_keys_and_universe_coverage_before_filter",
+        "surface": "systemprompt"
+      },
+      {
+        "claim_id": "missing_value_and_numeric_type_discipline",
+        "surface": "systemprompt"
+      },
+      {
+        "claim_id": "summary_page_reconciliation",
+        "surface": "systemprompt"
+      }
+    ],
+    "latest_r3_review_evidence_reads": [
+      "history/archive/entries/holdings-c2-review-r3.json",
+      "history/archive/objects/holdings-c2-review-r3-semantic-review.json",
+      "history/archive/objects/holdings-c2-review-r3-proposal-claims.json",
+      "history/archive/diffs/holdings-c2-review-r3.diff",
+      "history/archive/candidates/holdings-c2-review-r3/systemprompt.md"
+    ],
+    "latest_r3_review_evidence_used": true,
+    "activation_binding": "none",
+    "selected_probe_requested": false,
+    "selected_probe_dispatched": false,
+    "accounting": {
+      "completed_requests": 17,
+      "total_tokens": 1591921,
+      "provider_cost_usd": 0.061544812,
+      "noncompleted_requests": 0,
+      "missing_token_count": 0,
+      "missing_cost_count": 0
+    }
+  },
+  "review_package_audit": {
+    "candidate_diff_scope": "Quant-H0-to-c3 cumulative prompt diff",
+    "candidate_files": [
+      "systemprompt.md"
+    ],
+    "claim_count": 3,
+    "public_source_count": 1,
+    "public_source_ref": "public:13f-full-instruction",
+    "public_source_exact_match": true,
+    "public_source_characters": 5355,
+    "optimize_only_source_count": 0,
+    "search_arm_exposed": false,
+    "review_feedback_exposed": false
+  },
+  "review": {
+    "overall_verdict": "INCONCLUSIVE",
+    "coverage": {
+      "verdict": "PASS",
+      "undeclared_exposures": []
+    },
+    "claim_reviews": [
+      {
+        "claim_id": "canonical_keys_and_universe_coverage_before_filter",
+        "verdict": "INCONCLUSIVE",
+        "interpretation": "The public instruction supports exact-universe and mutual-consistency checks generally, but not the candidate's canonical encoding rules, named encoding conventions, or retained-set cardinality reporting."
+      },
+      {
+        "claim_id": "missing_value_and_numeric_type_discipline",
+        "verdict": "INCONCLUSIVE",
+        "interpretation": "The public instruction supports numeric fields and filtering generally, but not the candidate's specific dtype=str string-nan handling or post-aggregation dtype confirmation."
+      },
+      {
+        "claim_id": "summary_page_reconciliation",
+        "verdict": "PASS",
+        "interpretation": "The public instruction directly requires filing-total reconciliation against summary-page data and the associated difference and check outputs."
+      }
+    ],
+    "change_from_r3": "The three c3 claims now cover every decision-changing prompt exposure, repairing R3 coverage, but the two unsupported normative rules survived and remained INCONCLUSIVE."
+  },
+  "review_request": {
+    "request_count": 1,
+    "response_usage": {
+      "prompt_tokens": 5080,
+      "completion_tokens": 8223,
+      "total_tokens": 13303
+    },
+    "provider_accounting": {
+      "provider": "DeepSeek",
+      "resolved_model": "deepseek/deepseek-v4-pro-20260813",
+      "prompt_tokens": 5140,
+      "completion_tokens": 9782,
+      "total_tokens": 14922
+    },
+    "accounting_difference": {
+      "provider_minus_response_prompt_tokens": 60,
+      "provider_minus_response_completion_tokens": 1559,
+      "provider_minus_response_total_tokens": 1619,
+      "controller_token_surface": "response_usage",
+      "interpretation": "Both token surfaces are retained; the controller added response-usage tokens to lineage cost."
+    },
+    "provider_cost_usd": 0.018981028,
+    "wall_seconds": 119.142
+  },
+  "lineage_accounting": {
+    "proposal": {
+      "completed_requests": 17,
+      "total_tokens": 1591921,
+      "provider_cost_usd": 0.061544812
+    },
+    "review_increment": {
+      "completed_requests": 1,
+      "total_tokens": 13303,
+      "provider_cost_usd": 0.018981028
+    },
+    "cumulative_after_review": {
+      "completed_requests": 18,
+      "total_tokens": 1605224,
+      "provider_cost_usd": 0.080525840
+    },
+    "token_rule": "1,591,921 proposal tokens plus 13,303 Reviewer response-usage tokens."
+  },
+  "controller": {
+    "decision": "HOLD_FOR_REFINE",
+    "phase": "HOLD_FOR_REFINE",
+    "reason": "information_set_review_inconclusive",
+    "proposal_evolver_sessions": 1,
+    "reviewer_requests": 1,
+    "worker_sessions": 0,
+    "verifier_executions": 0,
+    "selected_probe_dispatches": 0,
+    "candidate_passed": false
+  },
+  "terminal_resume_audit": {
+    "first_resume": {
+      "external_approval_flag_present": false,
+      "action": "Cleared only the stopped_after_stage marker.",
+      "phase": "HOLD_FOR_REFINE",
+      "decision": "HOLD_FOR_REFINE",
+      "new_dispatches": 0,
+      "new_completed_requests": 0,
+      "new_tokens": 0,
+      "new_provider_cost_usd": 0.0,
+      "accounted_ids_changed": false,
+      "result_changed": false
+    },
+    "second_resume": {
+      "external_approval_flag_present": false,
+      "state_changed": false,
+      "result_changed": false,
+      "new_dispatches": 0,
+      "new_completed_requests": 0,
+      "new_tokens": 0,
+      "new_provider_cost_usd": 0.0,
+      "final_completed_requests": 18,
+      "final_total_tokens": 1605224,
+      "final_provider_cost_usd": 0.080525840,
+      "interpretation": "The post-marker candidate hold and accounted proposal and review identities remained exact and stable."
+    }
+  },
+  "runtime": {
+    "proposal_systemd_result": "success",
+    "review_systemd_result": "success",
+    "proposal_service_restarts": 0,
+    "review_service_restarts": 0,
+    "sandbox_and_network_cleanup_complete": true,
+    "later_stage_run_directories": 0,
+    "related_residue": 0
+  },
+  "lineage_disposition": {
+    "holdings_lineage_terminated": true,
+    "next_candidate": null,
+    "worker_evaluation_authorized": false,
+    "reason": "A second feedback-conditioned refinement repaired claim coverage but retained both publicly unsupported normative rule families; no c4 is planned."
+  },
+  "retained_conclusion": "R4 demonstrates that the Evolver read and reacted to the latest answer-free R3 review, made the candidate's claim inventory complete, and still failed the separate public-support gate. The candidate remains held, the holdings refinement lineage terminates at c3, and no Worker, verifier, or selected probe was dispatched.",
+  "claim_boundary": {
+    "supported": "Actual R3-review evidence use, one admitted prompt-only refinement, one arm-blind cumulative Information-Set Review, repaired coverage, two persistent INCONCLUSIVE claim families, one PASS claim, hold-driven termination, dual token accounting, terminal idempotence, and cleanup.",
+    "not_supported": "Candidate PASS, Worker uptake, process improvement, official benchmark gain, harness improvement, promotion, stable reuse, broad transfer, or main-experiment readiness.",
+    "next_candidate_status": "No c4. The holdings refinement lineage is explicitly terminated without Worker evaluation."
+  },
+  "artifact_identity_note": "No new hash or digest fields were added to this retained result."
+}

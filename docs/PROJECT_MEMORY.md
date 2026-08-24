@@ -1,5 +1,52 @@
 # QEA Repository Memory
 
+## 2026-08-24 public-only holdings R4 repaired coverage but not support; lineage terminated
+
+The answer-free R4 `LINEAGE_REFINEMENT` proposal returned an admitted `ACT`
+after directly reading the retained R3 entry, semantic review, proposal claims,
+candidate diff, and candidate prompt. It replaced two lines in
+`systemprompt.md` for a net increase of 146 bytes, changed no executable code
+or registered tool, passed all nine admission checks, and declared three
+Worker-visible prompt claims. The edit regrounded and redeclared the disputed
+canonicalization and numeric-discipline rules; it did not remove them.
+
+Before execution, the evidence-upload preflight rejected an archive containing
+58 macOS AppleDouble sidecars. Root deleted exactly those sidecars, and
+reauthorization passed on the cleaned 37-member archive. No experiment work ran
+before that pass, and no new hash or digest gate was added.
+
+The mandatory arm-blind Candidate Information-Set Reviewer inspected
+cumulative Quant-H0-to-c3 prompt material, the three declared claims, one
+complete exact public target instruction, and zero optimize-only sources. The
+overall verdict was `INCONCLUSIVE`. Coverage was `PASS` with no undeclared
+exposures, so R4 repaired R3's claim-inventory defect. Canonicalization plus
+universe coverage and numeric plus missing-value discipline nevertheless
+remained `INCONCLUSIVE` because their full procedures were not directly
+entailed by the supplied public instruction. Summary-page reconciliation was
+`PASS`.
+
+The proposal used 17 completed requests, 1,591,921 tokens, and $0.061544812.
+The one Reviewer response used 5,080 prompt plus 8,223 completion tokens
+(13,303 total), cost $0.018981028, and took 119.142 seconds. Provider accounting
+separately reported 5,140 prompt plus 9,782 completion tokens (14,922 total).
+The controller used response usage, so cumulative accounting was 18 requests,
+1,605,224 tokens, and $0.080525840.
+
+The controller selected `HOLD_FOR_REFINE` with reason
+`information_set_review_inconclusive` and dispatched zero Worker, verifier, or
+probe. Two no-approval resumes were zero-work: the first cleared only the
+stopped-stage marker, and the second was exactly stable. Both systemd stages
+reported success and `NRestarts=0`; no target, repeat, or protection directory
+was created, cleanup completed, and related residue was zero.
+
+R4 is evidence that feedback-conditioned refinement can repair coverage without
+repairing public support. It is not a candidate PASS, Worker-uptake result,
+official gain, harness improvement, or main-readiness result. Terminate this
+holdings lineage at c3: no c4 and no Worker evaluation. Compact result:
+`data/breadth/QF_PUBLIC_ONLY_HOLDINGS_REVIEW_REFINEMENT_R4_RESULT.json`; full
+decision:
+`docs/decisions/2026-08-24-public-only-holdings-review-refinement-r4-result.md`.
+
 ## 2026-08-24 public-only holdings R3 refinement was rejected before Worker
 
 The answer-free R3 `LINEAGE_REFINEMENT` proposal returned an admitted `ACT`.
