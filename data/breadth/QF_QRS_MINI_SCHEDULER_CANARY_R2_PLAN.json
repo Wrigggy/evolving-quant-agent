@@ -1,0 +1,159 @@
+{
+  "schema_version": 2,
+  "date": "2026-08-25",
+  "status": "frozen_not_run",
+  "experiment_id": "qf-qrs-mini-scheduler-canary-20260825-r2",
+  "purpose": "Separately frozen setup recovery of the four-task QRS control-plane canary. Rebuild a fresh Primitive-H0 bank, require one structured workflow_global proposal with pre-write multi-component declaration, mandatory exact-candidate answer-free Review, conditional matched parent/candidate gate, answer-free handoff, and same-stop zero-work resume. Stop after panel 1 and never reuse this canary in main.",
+  "setup_recovery": {
+    "kind": "separately_frozen_setup_recovery_not_repeat",
+    "antecedent_run_id": "qf-qrs-mini-scheduler-canary-20260824-r1",
+    "antecedent_terminal": "STOP_PANEL",
+    "antecedent_failure_stage": "proposal_admission",
+    "antecedent_measured_boundary": "R1 completed four valid fresh Primitive-H0 cells and built an answer-free bank. Its Evolver recorded ACT and wrote a nonempty skills-plus-systemprompt candidate, but the bank omitted the structured quant_property_v2 decision protocol, so the candidate had no valid pre-write multi-role declaration, admission rejected it, and Reviewer/candidate Worker dispatches were zero.",
+    "antecedent_accounting": {
+      "completed_requests": 177,
+      "total_tokens": 10240354,
+      "provider_cost_usd": "0.294715904",
+      "reviewer_calls": 0,
+      "candidate_worker_cells": 0
+    },
+    "only_engineering_changes": [
+      "Generated global-bank contracts explicitly select decision_protocol quant_property_v2.",
+      "The guarded quant-property decision accepts the answer_free_global_h0_trajectory_bank_v1 tier and requires structured roles, State Card routing, workflow evidence, and claim provenance before candidate writes.",
+      "Guarded candidate writes enforce the contract's exact allowed_candidate_paths in addition to declared component roles.",
+      "A same stop_after_panel resume restores the pause before any new action can dispatch."
+    ],
+    "frozen_scientific_constants": "Same four tasks, Primitive-H0 treatment, model/provider/runtime, public-only evidence policy, family/anchor layout, Reviewer policy, matched gate, caps, and no-main-reuse boundary as R1.",
+    "reuse_forbidden": [
+      "R1 H0 trajectories",
+      "R1 proposal or candidate",
+      "R1 scores or controller outcomes",
+      "R1 Evolver access history"
+    ]
+  },
+  "phase_order": [
+    "import_frozen_primitive_h0",
+    "phase0_all_n_h0_development_bank",
+    "phase1_six_panel_curriculum",
+    "phase2_feedback_sealed_main",
+    "terminal_report"
+  ],
+  "canary_execution": {
+    "scheduler_run_id": "qf-qrs-mini-scheduler-canary-20260825-r2",
+    "stop_after_panel": 1,
+    "actual_max_h0_bank_cells": 4,
+    "actual_max_panel_matched_cells": 12,
+    "actual_max_qfbench_cells": 16,
+    "actual_evolver_calls": 1,
+    "actual_reviewer_calls": 1,
+    "sealed_dispatch_authorized": false,
+    "later_panel_dispatch_authorized": false,
+    "main_reuse_allowed": false
+  },
+  "public_task_partition_rule": {
+    "development_n": 4,
+    "role": "engineering_canary_only",
+    "main_experiment_membership": "No R1 or R2 canary Worker, candidate, trajectory, claim inventory, or decision is reusable by main."
+  },
+  "development_panels": [
+    {
+      "panel_index": 1,
+      "family": "data_engineering",
+      "parent": "quant-h0-s6-primitive-v1-fresh-r2",
+      "proposal": "mini-global-s6-r2-p1",
+      "task_ids": ["13f-amendment-aware-crowding"]
+    },
+    {
+      "panel_index": 2,
+      "family": "derivatives",
+      "parent": "mini-global-s6-r2-p1",
+      "proposal": "mini-global-s6-r2-p2-not-authorized",
+      "task_ids": ["dupire-local-vol", "localvol-barrier"]
+    },
+    {
+      "panel_index": 3,
+      "family": "rates_fx_macro",
+      "parent": "mini-global-s6-r2-p2-not-authorized",
+      "proposal": "mini-global-s6-r2-p3-not-authorized",
+      "task_ids": ["swap-curve-bootstrap-ois"]
+    }
+  ],
+  "cross_family_workflow_evidence": {
+    "anchor_task_by_family": {
+      "data_engineering": "13f-amendment-aware-crowding",
+      "derivatives": "dupire-local-vol",
+      "rates_fx_macro": "swap-curve-bootstrap-ois"
+    },
+    "workflow_scope": "workflow_global",
+    "involved_states": ["S1", "S2", "S3", "S4", "S5", "S6"],
+    "canary_panel_1_visible_rule": "The complete fresh R2 holdings H0 trajectory plus one frozen fresh R2 H0 anchor from derivatives and rates. No R1 material, official outcome, diagnostic, prior candidate, or sealed identity enters Evolver evidence."
+  },
+  "sealed_main_tasks": [
+    {
+      "task_id": "corporate-action-adjustment",
+      "domain": "data_engineering",
+      "group": "a"
+    },
+    {
+      "task_id": "fx-forward-cross-rate",
+      "domain": "rates_fx_macro",
+      "group": "b"
+    }
+  ],
+  "phase1_six_panel_curriculum": {
+    "proposal_calls": 3,
+    "reviewer_calls": 3,
+    "canary_authorized_panel_count": 1,
+    "promotion_rule": "The same focus-plus-other-family-anchor repeated task-reward gate as R1/main. A scientific non-promotion is valid and still exercises the carry path; integrity, protocol, accounting, or boundary failures stop the canary."
+  },
+  "phase2_feedback_sealed_main": {
+    "comparator": "quant-h0-s6-primitive-v1-fresh-r2",
+    "final_candidate": "retained-incumbent-after-panel-3-r2",
+    "runs": [
+      {"repetition": 1, "group": "a", "arm_order": ["quant-h0-s6-primitive-v1-fresh-r2", "retained-incumbent-after-panel-3-r2"]},
+      {"repetition": 1, "group": "b", "arm_order": ["retained-incumbent-after-panel-3-r2", "quant-h0-s6-primitive-v1-fresh-r2"]},
+      {"repetition": 2, "group": "a", "arm_order": ["retained-incumbent-after-panel-3-r2", "quant-h0-s6-primitive-v1-fresh-r2"]},
+      {"repetition": 2, "group": "b", "arm_order": ["quant-h0-s6-primitive-v1-fresh-r2", "retained-incumbent-after-panel-3-r2"]}
+    ],
+    "canary_dispatch": "forbidden_by_stop_after_panel_1"
+  },
+  "limits": {
+    "phase0_h0_cells": 4,
+    "panel_gate_parent_cells": 20,
+    "panel_gate_proposal_cells": 20,
+    "sealed_main_h0_cells": 4,
+    "sealed_main_final_candidate_cells": 4,
+    "qfbench_primary_cells": 52,
+    "evolver_calls": 3,
+    "reviewer_calls": 3,
+    "maximum_qfbench_recovery_cells": 3,
+    "maximum_qfbench_sessions_including_recovery": 55,
+    "maximum_all_worker_sessions": 55,
+    "maximum_worker_turn_iterations": 3300,
+    "maximum_total_tokens": 60000000,
+    "maximum_provider_cost_usd": 4.0,
+    "maximum_wall_seconds": 86400,
+    "worker_concurrency": 1,
+    "verifier_concurrency": 1,
+    "max_parallel_runs": 1,
+    "paid_or_remote_authority": false,
+    "canary_incremental_cap": {
+      "qfbench_cells": 16,
+      "evolver_calls": 1,
+      "reviewer_calls": 1,
+      "completed_requests": 220,
+      "total_tokens": 18000000,
+      "provider_cost_usd": 1.25,
+      "wall_seconds": 21600
+    }
+  },
+  "required_live_outcomes": {
+    "pass_side": "At least one admitted candidate receives overall Review PASS with coverage PASS, is copied to the exact reviewed snapshot, passes the QRS mutation boundary, and is dispatched unchanged to both matched repetitions.",
+    "answer_boundary": "Review input contains the complete cumulative Primitive-H0-to-candidate Worker-visible material and trusted public contracts only; optimize_only_sources is empty; Review output and official fitness never enter Worker material.",
+    "resume": "A same stop_after_panel zero-work resume preserves the exact state, cost, reviewed snapshot, handoff, and child results and creates no new action.",
+    "handoff": "Promotion appends only candidate answer-free traces and clean accepted claims; scientific non-promotion carries only earlier accepted history. No official score or Reviewer reasoning enters the next evidence root.",
+    "terminal": "MINI_SCHEDULER_PASS only if all applicable P0 invariants pass. A legal proposal ABSTAIN or Review non-PASS is informative but does not satisfy the required live PASS-to-blind-Worker gate; do not launch main."
+  },
+  "answer_boundary": "All four R2 H0 Workers and any R2 candidate Workers are blind to scores, verifier output, failed properties, expected values, optimization diagnostics, Review artifacts, R1 material, and prior contaminated candidates.",
+  "claim_boundary": "This setup-recovery canary validates bounded execution, isolation, structured pre-write declaration, Review, matched dispatch, history handoff, accounting, cleanup, and resume. It is not an R1 repeat, main result, benchmark gain, reusable candidate, stable promotion, sealed result, or evidence for QRS effectiveness."
+}

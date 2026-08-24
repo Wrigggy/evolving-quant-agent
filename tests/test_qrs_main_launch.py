@@ -16,6 +16,9 @@ METHOD = (
     / "data/breadth/QF_GLOBAL_S6_PRIMITIVE_H0_TRAJECTORY_SCHEDULER_PLAN.json"
 )
 MINI_METHOD = ROOT / "data/breadth/QF_QRS_MINI_SCHEDULER_CANARY_PLAN.json"
+MINI_R2_METHOD = (
+    ROOT / "data/breadth/QF_QRS_MINI_SCHEDULER_CANARY_R2_PLAN.json"
+)
 PRIMITIVE = ROOT / "qea/worker_quant_h0_s6_primitive_v1"
 
 
@@ -163,14 +166,15 @@ def test_materializes_exact_six_fixed_panel_plans_and_scheduler_launch(
     assert launch["builder_dispatched_children"] is False
 
 
+@pytest.mark.parametrize("mini_method", [MINI_METHOD, MINI_R2_METHOD])
 def test_launch_builder_also_materializes_bounded_three_panel_mini_canary(
-    tmp_path: Path,
+    tmp_path: Path, mini_method: Path
 ) -> None:
     rootless = tmp_path / "runtime/rootless.json"
     rootless.parent.mkdir(parents=True)
     rootless.write_text("{}\n", encoding="utf-8")
     handoff = _handoff(tmp_path, rootless)
-    mini = json.loads(MINI_METHOD.read_text(encoding="utf-8"))
+    mini = json.loads(mini_method.read_text(encoding="utf-8"))
     contracts = tmp_path / "mini-contracts"
     for panel in mini["development_panels"]:
         for task_id in panel["task_ids"]:
@@ -185,7 +189,7 @@ def test_launch_builder_also_materializes_bounded_three_panel_mini_canary(
             )
     public_manifest = tmp_path / "deploy/public-manifest.json"
     launch = build_qrs_main_launch(
-        method_plan_path=MINI_METHOD,
+        method_plan_path=mini_method,
         frozen_h0_handoff_path=handoff,
         scheduler_run_id="qrs-mini-test-r1",
         runtime={
