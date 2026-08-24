@@ -230,6 +230,7 @@ input_schema:
           type: array
           minItems: 2
           items: {type: string}
+          description: Exact already-read paths under the immutable evidence root only. Candidate paths such as systemprompt.md or skills files are not evidence_refs; inspect them with candidate tools instead.
         counterevidence: {type: string}
         uncertainty: {type: string}
         components:

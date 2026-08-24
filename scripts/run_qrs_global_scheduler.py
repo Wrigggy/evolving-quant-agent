@@ -747,6 +747,11 @@ def _panel_result(
     if any(name != "information_set_review" for name in observations):
         raise GlobalSchedulerError("panel controller ran beyond the Review boundary")
     observation = observations.get("information_set_review")
+    proposal_decision = state_proposal.get("decision")
+    if proposal_decision not in {"ACT", "ABSTAIN"}:
+        raise GlobalSchedulerError("panel proposal has no valid terminal decision")
+    if proposal_decision == "ABSTAIN" and isinstance(observation, Mapping):
+        raise GlobalSchedulerError("panel proposal ABSTAIN cannot have a Review")
     review_verdict = (
         str(observation.get("overall_verdict"))
         if isinstance(observation, Mapping)
@@ -782,6 +787,23 @@ def _panel_result(
             ),
             verdict=review_verdict,
             coverage=coverage,
+        )
+    elif proposal_decision == "ABSTAIN":
+        if (
+            phase != "FROZEN"
+            or state.get("status") != "abstained"
+            or state_proposal.get("admitted") is not None
+            or candidate is not None
+            or state.get("accounted_review_ids") != []
+        ):
+            raise GlobalSchedulerError(
+                "panel proposal ABSTAIN state is not a clean pre-Review terminal"
+            )
+        review_verdict = "NOT_RUN"
+        coverage = "NOT_RUN"
+    elif state_proposal.get("admitted") is not True:
+        raise GlobalSchedulerError(
+            "panel ACT did not produce an admitted candidate for Review"
         )
     cost = _require_exact_panel_cost(state, proposal_accounting, review_accounting)
     accepted_claims: list[dict[str, object]] = []
@@ -840,6 +862,7 @@ def _panel_result(
     return {
         "status": "complete",
         "accounting_complete": True,
+        "proposal_decision": proposal_decision,
         "review_verdict": review_verdict,
         "coverage": coverage,
         "candidate": candidate,

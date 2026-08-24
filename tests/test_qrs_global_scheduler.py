@@ -376,6 +376,50 @@ def test_nonpass_review_retains_parent_continues_and_runs_no_candidate_workers(t
     assert len([call for call in runner.calls if call.get("sealed")]) == 4
 
 
+def test_proposal_abstain_retains_parent_and_continues_without_review_or_worker(
+    tmp_path,
+):
+    launch = _launch(tmp_path)
+    runner = FakeRunner(tmp_path)
+    original = runner.__call__
+
+    def abstain_first_panel(action):
+        result = original(action)
+        if action["kind"] == "panel_proposal_review" and action["panel_index"] == 1:
+            return {
+                "status": "complete",
+                "accounting_complete": True,
+                "proposal_decision": "ABSTAIN",
+                "review_verdict": "NOT_RUN",
+                "coverage": "NOT_RUN",
+                "candidate": None,
+                "reviewed_parent": action["current_parent"],
+                "review_result_path": None,
+                "accepted_claims": [],
+                "cost": {
+                    "completed_requests": 1,
+                    "total_tokens": 100,
+                    "provider_cost_usd": "0.01",
+                },
+            }
+        return result
+
+    result = run_scheduler(
+        METHOD, launch, tmp_path / "state", action_runner=abstain_first_panel
+    )
+
+    assert result["status"] == "COMPLETE"
+    assert result["panel_results"][0]["decision"] == "RETAIN_PROPOSAL_ABSTAIN"
+    assert result["panel_results"][0]["review_verdict"] == "NOT_RUN"
+    assert result["panel_results"][1]["decision"] == "PROMOTE"
+    assert any(call.get("kind") == "carry_panel_evidence" for call in runner.calls)
+    assert not any(
+        call.get("purpose") == "panel_matched_fitness"
+        and call.get("panel_index") == 1
+        for call in runner.calls
+    )
+
+
 def test_sealed_scores_do_not_change_the_frozen_dispatch_sequence(tmp_path):
     launch = _launch(tmp_path)
     runner = FakeRunner(tmp_path)

@@ -56,6 +56,7 @@ _MAX_SEARCH_FILES = 2_000
 _MAX_SEARCH_LINE_BYTES = 8_000
 _MAX_PROCESS_OUTPUT_BYTES = 128_000
 _MAX_DISCOVERY_RETURN_BYTES = 256_000
+_MAX_WORKSPACE_READ_RETURN_BYTES = 64_000
 _DISCOVERY_STATE_NAME = "discovery-hypothesis.json"
 _QUANT_RESEARCH_STATE_CARD_NAME = "quant-research-state-card.json"
 _PROBE_LOG_NAME = "probe-log.jsonl"
@@ -863,8 +864,8 @@ def map_evidence(max_files: int = 500) -> dict[str, Any]:
 def trace_slice(
     file_path: str,
     pattern: str,
-    context_lines: int = 3,
-    max_matches: int = 20,
+    context_lines: int = 0,
+    max_matches: int = 8,
 ) -> dict[str, Any]:
     """Return bounded, contextual matches from one authorized trace or text file."""
 
@@ -881,6 +882,7 @@ def trace_slice(
     path, relative = _resolve("evidence", file_path, must_exist=True)
     lines = _read_text(path).splitlines()
     matches: list[dict[str, Any]] = []
+    truncation_reason: str | None = None
     for line_number, line in enumerate(lines, start=1):
         matched = expression.search(line)
         if matched is None:
@@ -900,25 +902,48 @@ def trace_slice(
                     excerpt += "...[later text omitted]..."
                 value = excerpt
             content_lines.append(value)
-        matches.append(
-            {
-                "match_line": line_number,
-                "start_line": start,
-                "end_line": end,
-                "content": "\n".join(content_lines),
-            }
-        )
+        match = {
+            "match_line": line_number,
+            "start_line": start,
+            "end_line": end,
+            "content": "\n".join(content_lines),
+        }
+        tentative = {
+            "path": relative,
+            "total_lines": len(lines),
+            "matches": [*matches, match],
+            "truncated": True,
+            "truncation_reason": "return_byte_limit",
+        }
+        if (
+            len(json.dumps(tentative, ensure_ascii=False).encode("utf-8"))
+            > _MAX_DISCOVERY_RETURN_BYTES
+        ):
+            if not matches:
+                matched_line = content_lines[line_number - start]
+                match = {
+                    "match_line": line_number,
+                    "start_line": line_number,
+                    "end_line": line_number,
+                    "content": matched_line,
+                    "context_truncated": True,
+                }
+                matches.append(match)
+            truncation_reason = "return_byte_limit"
+            break
+        matches.append(match)
         if len(matches) >= max_matches:
+            truncation_reason = "max_matches"
             break
     payload = {
         "path": relative,
         "total_lines": len(lines),
         "matches": matches,
-        "truncated": len(matches) >= max_matches,
+        "truncated": truncation_reason is not None,
     }
+    if truncation_reason is not None:
+        payload["truncation_reason"] = truncation_reason
     returned = len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
-    if returned > _MAX_DISCOVERY_RETURN_BYTES:
-        raise GuardedWorkspaceError("trace slice exceeds bounded return limit")
     _audit(
         operation="trace_slice",
         source="evidence",
@@ -3240,19 +3265,36 @@ def read_workspace(
     path, relative = _resolve(source, file_path, must_exist=True)
     text = _read_text(path)
     lines = text.splitlines(keepends=True)
-    content = "".join(lines[start_line - 1 : start_line - 1 + max_lines])
+    selected_lines = lines[start_line - 1 : start_line - 1 + max_lines]
+    content = "".join(selected_lines)
+    encoded_content = content.encode("utf-8")
+    truncated = len(encoded_content) > _MAX_WORKSPACE_READ_RETURN_BYTES
+    lines_returned = len(selected_lines)
+    if truncated:
+        marker = "\n...[bounded read truncated]...\n"
+        marker_bytes = marker.encode("utf-8")
+        prefix = encoded_content[
+            : _MAX_WORKSPACE_READ_RETURN_BYTES - len(marker_bytes)
+        ].decode("utf-8", errors="ignore")
+        lines_returned = prefix.count("\n") + int(
+            bool(prefix) and not prefix.endswith("\n")
+        )
+        content = prefix + marker
+        encoded_content = content.encode("utf-8")
     _audit(
         operation="read",
         source=source,
         relative_path=relative,
-        bytes_returned=len(content.encode("utf-8")),
+        bytes_returned=len(encoded_content),
     )
     return {
         "path": relative,
         "content": content,
         "start_line": start_line,
-        "lines_returned": len(content.splitlines()),
+        "lines_returned": lines_returned,
         "total_lines": len(lines),
+        "truncated": truncated,
+        "returned_bytes": len(encoded_content),
     }
 
 

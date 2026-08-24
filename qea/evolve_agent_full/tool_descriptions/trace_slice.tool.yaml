@@ -1,12 +1,12 @@
 type: tool
 name: trace_slice
-description: Search one authorized evidence trace or text file and return bounded matches with nearby lines for behavioral localization.
+description: Search one authorized evidence trace or text file and return bounded matches with nearby lines for behavioral localization. JSONL is treated as physical lines; begin with a narrow regex, zero context, and at most eight matches. When the byte budget is reached, the tool returns the earliest matches that fit with truncated=true instead of failing.
 input_schema:
   type: object
   properties:
     file_path: {type: string, description: "Exact safe path relative to the evidence root."}
     pattern: {type: string, description: "Case-insensitive regex, at most 256 characters."}
-    context_lines: {type: integer, minimum: 0, maximum: 20, default: 3}
-    max_matches: {type: integer, minimum: 1, maximum: 100, default: 20}
+    context_lines: {type: integer, minimum: 0, maximum: 20, default: 0}
+    max_matches: {type: integer, minimum: 1, maximum: 100, default: 8}
   required: [file_path, pattern]
   additionalProperties: false

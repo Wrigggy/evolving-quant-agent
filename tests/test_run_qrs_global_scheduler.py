@@ -447,6 +447,53 @@ def test_nonpass_review_with_pass_coverage_returns_rollback_result(
     assert result["reviewed_parent"] == action["current_parent"]
 
 
+def test_proposal_abstain_returns_clean_pre_review_result(tmp_path: Path) -> None:
+    action, launch, state_path, _ = _panel_fixture(tmp_path)
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    proposal_path = Path(state["proposal"]["report_path"])
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    proposal["decision"] = "ABSTAIN"
+    proposal["admission"] = {
+        "admitted": None,
+        "not_applicable": True,
+        "reason": "candidate writes remained locked",
+    }
+    _write(proposal_path, proposal)
+    state.update(
+        {
+            "status": "abstained",
+            "phase": "FROZEN",
+            "decision": "ABSTAIN",
+            "candidate": None,
+            "observations": {},
+            "accounted_review_ids": [],
+            "cost": {
+                "provider_cost_usd": "1.25",
+                "completed_requests": 3,
+                "total_tokens": 100,
+            },
+        }
+    )
+    state["proposal"]["decision"] = "ABSTAIN"
+    state["proposal"]["admitted"] = None
+    state["proposal"].pop("worker_visible_claims", None)
+    state.pop("stopped_after_stage", None)
+    _write(state_path, state)
+
+    result = runner._panel_result(action, launch)
+
+    assert result["proposal_decision"] == "ABSTAIN"
+    assert result["review_verdict"] == "NOT_RUN"
+    assert result["coverage"] == "NOT_RUN"
+    assert result["candidate"] is None
+    assert result["review_result_path"] is None
+    assert result["cost"] == {
+        "provider_cost_usd": "1.25",
+        "completed_requests": 3,
+        "total_tokens": 100,
+    }
+
+
 def test_panel_rejects_answer_rich_sources_and_excerpt_drift(tmp_path: Path) -> None:
     action, launch, _, instruction = _panel_fixture(tmp_path)
     plan_path = Path(action["controller_plan_path"])

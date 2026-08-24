@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import json
 from pathlib import Path
 
@@ -2647,6 +2648,99 @@ def test_trace_slice_bounds_one_large_runtime_line(guarded_roots):
     assert "component-called" in content
     assert "earlier text omitted" in content
     assert len(content.encode("utf-8")) < 9_000
+
+
+def test_trace_slice_returns_bounded_prefix_instead_of_failing(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import trace_slice
+
+    _, evidence, _, _, _ = guarded_roots
+    lines = [
+        json.dumps(
+            {
+                "event": "run_shell_command",
+                "sequence": index,
+                "payload": "x" * 7_500,
+            }
+        )
+        for index in range(30)
+    ]
+    (evidence / "worker_trace.jsonl").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8"
+    )
+
+    sliced = trace_slice(
+        file_path="worker_trace.jsonl",
+        pattern="run_shell_command",
+        context_lines=3,
+        max_matches=20,
+    )
+
+    assert sliced["matches"]
+    assert len(sliced["matches"]) < 20
+    assert sliced["truncated"] is True
+    assert sliced["truncation_reason"] == "return_byte_limit"
+    assert len(json.dumps(sliced).encode("utf-8")) <= 256_000
+
+
+def test_read_workspace_caps_broad_jsonl_read_but_keeps_one_event(guarded_roots):
+    from qea.evolve_agent_full.tools.guarded_workspace import read_workspace
+
+    _, evidence, _, _, _ = guarded_roots
+    lines = [
+        json.dumps({"event": index, "payload": "x" * 50_000})
+        for index in range(3)
+    ]
+    (evidence / "worker_trace.jsonl").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8"
+    )
+
+    one = read_workspace(
+        source="evidence",
+        file_path="worker_trace.jsonl",
+        max_lines=1,
+    )
+    assert one["truncated"] is False
+    assert one["lines_returned"] == 1
+    assert one["total_lines"] == 3
+    assert one["content"] == lines[0] + "\n"
+
+    broad = read_workspace(
+        source="evidence",
+        file_path="worker_trace.jsonl",
+        max_lines=3,
+    )
+    assert broad["truncated"] is True
+    assert broad["returned_bytes"] <= 64_000
+    assert "bounded read truncated" in broad["content"]
+
+
+def test_trace_tool_defaults_and_prompt_match_bounded_jsonl_workflow():
+    from qea.evolve_agent_full.tools.guarded_workspace import trace_slice
+
+    root = Path(__file__).resolve().parents[1] / "qea" / "evolve_agent_full"
+    trace_schema = yaml.safe_load(
+        (root / "tool_descriptions" / "trace_slice.tool.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    read_schema = yaml.safe_load(
+        (root / "tool_descriptions" / "read_workspace.tool.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    signature = inspect.signature(trace_slice)
+
+    assert signature.parameters["context_lines"].default == 0
+    assert signature.parameters["max_matches"].default == 8
+    properties = trace_schema["input_schema"]["properties"]
+    assert properties["context_lines"]["default"] == 0
+    assert properties["max_matches"]["default"] == 8
+    assert "physical lines" in trace_schema["description"]
+    assert "64,000 bytes" in read_schema["description"]
+    prompt = (root / "systemprompt.md").read_text(encoding="utf-8")
+    assert "zero context lines" in prompt
+    assert "at most eight matches" in prompt
+    assert "`max_lines=1`" in prompt
 
 
 def test_inspect_candidate_reports_components_bindings_and_syntax(guarded_roots):

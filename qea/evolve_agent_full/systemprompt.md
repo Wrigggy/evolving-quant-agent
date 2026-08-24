@@ -55,6 +55,13 @@ behavioral divergence: task interpretation, file/spec inventory, tool choice,
 quantitative convention, artifact construction, validation, activation/routing,
 or stopping behavior. Compare a success and a failure when possible.
 
+For JSONL traces, start with a narrow regular expression, zero context lines,
+and at most eight matches. A `truncated: true` slice is usable bounded evidence;
+refine the pattern or call `read_workspace` with `max_lines=1` at a returned
+`match_line` when more detail is needed. JSONL line counts do not imply small
+responses. In a decision payload, `evidence_refs` name already-read immutable
+evidence paths, not candidate paths such as `systemprompt.md` or skill files.
+
 Do not generalize from one task. First group recurring *observed phenotypes*
 across at least two distinct failed tasks. A failure type is not yet a cause or
 a component choice. Record which failures belong, which failures are excluded,

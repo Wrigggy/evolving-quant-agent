@@ -1,6 +1,6 @@
 type: tool
 name: read_workspace
-description: Read a bounded line range from one UTF-8 candidate, evidence, or immutable framework-reference file.
+description: Read a bounded physical-line range from one UTF-8 candidate, evidence, or immutable framework-reference file. JSONL events can be large physical lines; after trace_slice, begin with max_lines=1 at a returned match_line. The source file must fit the workspace read limit before line slicing, and returned content is capped at 64,000 bytes with truncated=true when clipped.
 input_schema:
   type: object
   properties:

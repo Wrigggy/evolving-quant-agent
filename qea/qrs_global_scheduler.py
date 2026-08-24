@@ -1117,29 +1117,51 @@ def import_action_result(
         _account_once(state, action, result)
         candidate = _review_candidate(result)
         if candidate is None:
+            proposal_decision = result.get("proposal_decision")
             verdict = result.get("review_verdict")
             coverage = result.get("coverage")
-            if verdict not in {"REJECT", "INCONCLUSIVE"} and not (
+            if proposal_decision == "ABSTAIN":
+                if verdict != "NOT_RUN" or coverage != "NOT_RUN":
+                    raise GlobalSchedulerError(
+                        "proposal ABSTAIN cannot have a candidate Review verdict"
+                    )
+                panel = _task_panels(method)[int(state["panel_next_index"])]
+                state["panel_results"].append(
+                    {
+                        "decision": "RETAIN_PROPOSAL_ABSTAIN",
+                        "panel_index": panel["panel_index"],
+                        "family": panel["family"],
+                        "parent": deepcopy(state["current_parent"]),
+                        "review_verdict": "NOT_RUN",
+                        "coverage": "NOT_RUN",
+                        "review_result_path": None,
+                    }
+                )
+                state["current_panel_review"] = None
+                state["current_panel_repetitions"] = {}
+                _finish_panel(state, method, promoted=False)
+            elif verdict not in {"REJECT", "INCONCLUSIVE"} and not (
                 verdict == "PASS" and coverage in {"REJECT", "INCONCLUSIVE"}
             ):
                 raise GlobalSchedulerError(
                     "candidate Review returned no valid terminal verdict"
                 )
-            panel = _task_panels(method)[int(state["panel_next_index"])]
-            state["panel_results"].append(
-                {
-                    "decision": "RETAIN_REVIEW_NONPASS",
-                    "panel_index": panel["panel_index"],
-                    "family": panel["family"],
-                    "parent": deepcopy(state["current_parent"]),
-                    "review_verdict": verdict,
-                    "coverage": coverage,
-                    "review_result_path": result.get("review_result_path"),
-                }
-            )
-            state["current_panel_review"] = None
-            state["current_panel_repetitions"] = {}
-            _finish_panel(state, method, promoted=False)
+            else:
+                panel = _task_panels(method)[int(state["panel_next_index"])]
+                state["panel_results"].append(
+                    {
+                        "decision": "RETAIN_REVIEW_NONPASS",
+                        "panel_index": panel["panel_index"],
+                        "family": panel["family"],
+                        "parent": deepcopy(state["current_parent"]),
+                        "review_verdict": verdict,
+                        "coverage": coverage,
+                        "review_result_path": result.get("review_result_path"),
+                    }
+                )
+                state["current_panel_review"] = None
+                state["current_panel_repetitions"] = {}
+                _finish_panel(state, method, promoted=False)
         else:
             if candidate["version"] != action["proposal_version"]:
                 raise GlobalSchedulerError("panel Review returned a different proposal version")
