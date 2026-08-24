@@ -1,5 +1,29 @@
 # QEA Repository Memory
 
+## 2026-08-24 Primitive-H0 live protocol gate passed 3/3
+
+The separately frozen run
+`qf-primitive-h0-protocol-canary-20260824-r1` passed its exact engineering
+prerequisite. Holdings, FX forward, and swap curve all produced valid official
+observations and genuine schema-v2 `nexau_structured_tool_call` traces with
+twelve events, initial S1--S6 order, one ENTER/COMPLETE pair per stage, no
+missing stage, no parser issue, no malformed call, and terminal protocol
+completion. The descriptive official vector was `[40/51, 36/37, 19/19]`; it
+does not select or weaken Primitive-H0 and is not a representative baseline or
+QRS gain estimate.
+
+The run used 93/93 completed requests, 3,290,289 input plus 119,965 output =
+3,410,254 tokens, and USD 0.117787104, with zero retry, nonaccepted, or
+unreconciled request. All 12 lifecycle records were cleaned; service restarts,
+live process/container/network residue, and post-run follow-on dispatch were
+zero. The gate authorizes only the separately frozen mini scheduler. Main
+remains `NO-GO` until a real public-only candidate receives overall and coverage
+Review PASS, crosses the exact reviewed-snapshot blind Worker path, completes
+the repeated matched gate, and survives accounting/cleanup/resume audits.
+Full record:
+`docs/decisions/2026-08-24-primitive-h0-protocol-canary-result.md`; compact data:
+`data/breadth/QF_PRIMITIVE_H0_PROTOCOL_CANARY_RESULT.json`.
+
 ## 2026-08-24 Primitive-H0 bank and panelized global QRS scheduler
 
 The prospective QRS main now starts from a new
@@ -53,11 +77,12 @@ are now implemented locally. Candidate changes are limited to
 `systemprompt.md` and the six-stage `SKILL.md`; shell, recorder and all other
 harness surfaces remain fixed. The 393-cell main consists of 45 H0-bank cells,
 300 focus-plus-anchor panel cells and 48 feedback-sealed cells. Local focused
-and adjacent validation is green, but main remains `NO-GO` until the newly
-frozen three-cell Primitive protocol canary and four-bank-task mini scheduler
-live canary pass. The mini must exercise a real overall Review `PASS` through
-the exact blind Worker snapshot, matched repetitions, answer-free handoff,
-accounting, cleanup and zero-work resume; a legal non-PASS alone is not enough.
+and adjacent validation is green. The separately frozen Primitive protocol
+canary has now passed 3/3 valid cells with complete schema-v2 S1--S6 traces.
+Main nevertheless remains `NO-GO` until the four-bank-task mini scheduler live
+canary exercises a real overall Review `PASS` through the exact blind Worker
+snapshot, matched repetitions, answer-free handoff, accounting, cleanup and
+zero-work resume; a legal non-PASS alone is not enough.
 Full decision:
 `docs/decisions/2026-08-24-primitive-h0-bank-and-panelized-global-qrs.md`;
 fitness/continuation amendment:

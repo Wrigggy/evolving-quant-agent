@@ -2,7 +2,7 @@
 
 Date: 2026-08-24 (Asia/Singapore)
 
-Status: accepted and implemented locally; live protocol and mini-scheduler gates remain pending
+Status: accepted and implemented locally; Primitive live protocol gate passed; mini-scheduler gate remains pending
 
 Supersedes only the focus-only fitness and stop-on-scientific-nonpromotion parts
 of `2026-08-24-primitive-h0-bank-and-panelized-global-qrs.md`. It preserves the
@@ -74,13 +74,14 @@ imports, QRS mutation boundaries, public-contract materialization, launch
 materialization, and sealed W/T/L summaries. The related local suite passes
 269 tests.
 
-This is engineering evidence, not a benchmark result. Main remains `NO-GO`
-until:
+The three-task Primitive-H0 structured protocol canary has now passed 3/3 valid
+cells with strict schema-v2 S1--S6 telemetry. This satisfies the substrate
+interface prerequisite only; its single descriptive scores are not a matched
+baseline or QRS result.
 
-1. the three-task Primitive-H0 structured protocol canary passes 3/3; and
-2. the bounded mini scheduler exercises a real Candidate Review `PASS`, exact
-   reviewed-snapshot blind Worker, matched repeated panel terminal, accounting,
-   cleanup, and zero-work resume.
+Main remains `NO-GO` until the bounded mini scheduler exercises a real
+Candidate Review `PASS`, exact reviewed-snapshot blind Worker, matched repeated
+panel terminal, accounting, cleanup, and zero-work resume.
 
 No QRS main, stable-promotion, sealed-performance, or superiority claim exists
 before those gates and the prospective campaign complete.

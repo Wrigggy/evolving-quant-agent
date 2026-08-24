@@ -537,3 +537,31 @@ governed execution. Core-v3 breadth remains no-go. A successor must align
 transition markers with runtime continuation and require markers before their
 corresponding work, then pass a fresh gate under a new human-readable treatment
 identity.
+
+\subsection{Primitive-H0 live protocol gate retained positive record}
+
+The frozen setup is
+\path{data/breadth/QF_PRIMITIVE_H0_PROTOCOL_CANARY_PLAN.json}; the compact
+result is
+\path{data/breadth/QF_PRIMITIVE_H0_PROTOCOL_CANARY_RESULT.json}; and the dated
+decision is
+\path{docs/decisions/2026-08-24-primitive-h0-protocol-canary-result.md}.
+The complete additive local mirror is
+\path{results/bc-mirror/qf-primitive-h0-protocol-canary-20260824-r1/}.
+
+The run used the exact `quant-h0-s6-primitive-v1` Worker on holdings, FX
+forward, and swap curve. All three Worker/verifier cells were valid. Their
+official records were 40/51, 36/37, and 19/19, retained descriptively rather
+than as a matched baseline estimate. Every trusted
+\path{research-state-trace.json} was schema version 2 with
+\texttt{record\_kind=research\_state\_tool\_call\_index},
+\texttt{telemetry\_source=nexau\_structured\_tool\_call}, twelve events,
+S1--S6 first-accounted order, no missing stage, no issue, no malformed call,
+and complete protocol status.
+
+Accounting reconciled 93 requests, 3,290,289 input tokens, 119,965 output
+tokens, 3,410,254 total tokens, and \$0.117787104. All 12 lifecycle records were
+cleaned, the systemd service completed with zero restart, and final process,
+container, and network residue was zero. The result authorizes only the bounded
+mini scheduler; no Evolver, Reviewer, changed candidate, matched panel, sealed
+task, or main QRS result was produced.

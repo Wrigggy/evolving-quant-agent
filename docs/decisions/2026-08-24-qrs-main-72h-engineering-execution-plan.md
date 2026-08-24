@@ -2,7 +2,7 @@
 
 Date: 2026-08-24 (Asia/Singapore)
 
-Status: active implementation plan; no P0 gate may be waived to meet the time target
+Status: active execution plan; Primitive protocol gate passed; mini-scheduler gate pending; no P0 gate may be waived to meet the time target
 
 ## Objective
 
@@ -37,14 +37,16 @@ locally. The current focused and adjacent suite covers the adapter, Primitive
 Worker, workflow-global Evolver guard, universal reviewed snapshot, trajectory
 bank, mutation boundary, dynamic incumbent scheduler, operational runner,
 public contracts, launch builder, 393-cell method contract and both frozen
-canary plans. The remaining critical path is live rather than architectural:
+canary plans. The exact committed source was deployed and the three-cell
+Primitive protocol canary passed 3/3 valid, strict schema-v2 S1--S6 cells on
+2026-08-24. Its retained record is
+`2026-08-24-primitive-h0-protocol-canary-result.md`. The remaining critical
+path is live rather than architectural:
 
-1. deploy the exact committed source;
-2. pass the three-cell Primitive protocol canary;
-3. materialize and run the four-bank-task mini scheduler through one live
+1. materialize and run the four-bank-task mini scheduler through one live
    Review-PASS candidate and blind matched Worker;
-4. audit zero-work resume, accounting and cleanup;
-5. freeze the measured main caps and launch Phase 0 only if all gates pass.
+2. audit zero-work resume, accounting and cleanup;
+3. freeze the measured main caps and launch Phase 0 only if all gates pass.
 
 ## Work packages and ownership
 
@@ -151,8 +153,9 @@ ROLLBACK or PROMOTE by the same predicates as main.
 
 ### T+44 to T+54 hours
 
-- run the three-cell Primitive protocol canary;
-- audit structured state chronology, validity, cost and cleanup;
+- completed: run the three-cell Primitive protocol canary;
+- completed: audit 3/3 strict structured state chronology, validity, cost and
+  cleanup;
 - fix only observed interface/runner failures and rerun one separately recorded
   setup recovery if required.
 

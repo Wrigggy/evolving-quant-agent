@@ -2,7 +2,7 @@
 
 Date: 2026-08-24
 
-Status: accepted prospective method; local adapter, bank, Review, scheduler and launch materializer implemented; live protocol and mini-scheduler gates remain `NO-GO`
+Status: accepted prospective method; local implementation complete; Primitive live protocol gate passed; mini-scheduler gate remains `NO-GO`
 
 Supersedes: the detailed hand-authored S5 revisit and S6 deliverable-audit substrate in `2026-08-24-qrs-only-main-independent-ahe-and-quant-h0-s6.md`; it does not rewrite or invalidate the retained Core-v1--v4 construct results.
 
@@ -247,12 +247,15 @@ dispatch, answer-free evidence materialization, dynamic incumbent binding,
 Review-only panel controllers, repeated focus-plus-anchor gates, scientific
 retain-and-continue outcomes, sealed blocks and ordinary-JSON resume/accounting.
 
-Launch still remains `NO-GO` until two bounded live gates pass:
+The exact Primitive-H0 passed its separately frozen three-task structured
+protocol canary on 2026-08-24: 3/3 Worker/verifier cells were valid and 3/3 had
+complete strict schema-v2 S1--S6 traces. The retained result is
+`2026-08-24-primitive-h0-protocol-canary-result.md`. This closes only the
+substrate-interface prerequisite.
 
-- the exact Primitive-H0 must pass the three-task structured protocol canary;
-- a four-task mini scheduler must live-validate Review `PASS` through the exact
-  blind Worker snapshot, matched repetitions, answer-free handoff, accounting,
-  cleanup and zero-work resume.
+Launch remains `NO-GO` until the four-task mini scheduler live-validates Review
+`PASS` through the exact blind Worker snapshot, matched repetitions,
+answer-free handoff, accounting, cleanup and zero-work resume.
 
 The scheduler plan therefore records local implementation but keeps
 `launch_authorized=false` and no main launch command. A legal mini-canary
@@ -279,4 +282,6 @@ the required live PASS-to-blind-Worker boundary.
 - Evolver tests: `tests/test_evolver_guarded_tools.py`, `tests/test_evolver_activation_guidance.py`
 - Scheduler contract tests: `tests/test_qfbench_global_s6_primitive_h0_trajectory_scheduler_plan.py`
 
-No remote run, provider request, benchmark execution or scheduler launch is authorized by this decision.
+This decision does not itself authorize a scheduler launch. The completed
+Primitive protocol run is retained separately; only the already frozen mini
+scheduler is the next live gate.
