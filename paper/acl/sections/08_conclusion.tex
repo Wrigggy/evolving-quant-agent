@@ -1,0 +1,45 @@
+\section{Conclusion}
+
+We study a quantitative research system that revises the complete persistent
+harness through which fresh \Worker{} instances conduct research.  The proposed
+mechanism links an observed operation to public quantitative evidence and a
+reusable intervention, then tests its use and consequence.  Its domain-specific
+question is whether the requested quantity, admissible information, estimation
+conditions, and downstream consumer change how the system investigates and
+revises its own capabilities.  This is not a new generic outer loop or a
+learning theorem.
+
+The central result is a complete controlled BacktestBench comparison: the
+evolved harness scores 16/20 against the initial harness's 14/20, with two task
+gains and zero regressions across 20 new instances.  The \Evolver{} identified
+that the initial \Worker{} assessed round-trip performance using full-window
+daily mark-to-market P\&L, which conflates unrealized and realized gains across
+multi-day holds.  The accepted revision scopes evaluation to window-only
+indicators and realized round-trip PNL.  Four fresh-\Worker{} consumer checks
+confirm consequential policy uptake in the promoted candidate, including one
+zero-score negative that bounds the claim.  This demonstrates that
+research-method experimentation can diagnose a measurement-methodology
+limitation and produce a matched initial-to-frozen improvement on backtesting
+tasks.
+
+The same evolved harness does not produce consistent gains on QuantCodeEval:
+the closed twenty-task checkpoint gives binary 2/9 on paired QCE tasks, and the
+Pro \Evolver{} fork gives QCE binary 2/4 to~3/4 with a T18 regression and QF
+4/4 ties.  This is expected: a backtesting measurement policy does not transfer
+to tasks requiring different research operations.  It also motivates the next
+design requirement --- the \Evolver{} must produce executable tool or validator
+components to encode generalizable research operations, not prompt-only text
+that may not activate under differing task contexts.  The accepted revision's
+persistence as a prompt-level change is the current implementation's principal
+limitation.
+
+Development evidence from QCE campaigns, Pro-fork probes, and BacktestBench
+family-pair runs collectively establishes what the mechanism can do at this
+stage: it can identify a task-family methodology failure from trajectory
+evidence, accept a candidate that changes the relevant evaluation convention,
+and verify fresh-\Worker{} uptake through consumer checks.  It has not yet
+demonstrated stable cross-benchmark improvement, executable harness components
+beyond prompts, or cumulative learning across multiple revision rounds.  These
+remain open empirical targets, with the Evolver's prompt-skepticism policy now
+requiring executable components for computational failure classes as the next
+concrete step.

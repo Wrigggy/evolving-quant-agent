@@ -1,0 +1,88 @@
+\section{Introduction}
+
+Language-instructed agents increasingly translate task definitions, public
+research mandates, and data into executable operations.  In quantitative
+research, however, producing the next artifact is not the same as improving
+the procedures that later research will use.  A stronger factor, a correct
+pricing script, or a successful reproduction may be valuable while leaving
+the agent no better able to formulate, implement, and assess the next study.
+We investigate the second object: persistent improvement in how an autonomous
+quantitative researcher works.
+
+Research methodology is consequential even when the data and question are
+held fixed.  In the \emph{Nonstandard Errors} experiment, 164 research teams
+analyzed the same hypotheses and data but produced substantial dispersion
+through different analysis paths \citep{menkveld2024nonstandard}.  This does
+not make every disagreement an error.  It shows that measure construction,
+sampling, observation treatment, and statistical specification are part of
+the evidence-generating process.  Investment-research protocols likewise
+emphasize choices about economic motivation, data, statistical analysis, and
+evaluation \citep{arnott2019backtesting}.  Recent work finds analogous
+methodological variation among autonomous coding agents performing financial
+analysis \citep{gao2026nonstandard}.
+
+We ask: \emph{can a quantitative research agent improve its reusable research
+capabilities by experimenting on the way it conducts research?}  We model the
+researcher as a system with two roles.  A \Worker{} carries out a quantitative
+assignment.  An \Evolver{} examines selected experience and develops changes
+to how later \Worker{} instances operate.  The learned object is the
+\fullharness{}: prompts, tools, bindings, executable and textual skills,
+memory/context operations, middleware, validators, routing, and control flow.
+The foundation-model configurations and revision policy are fixed within a
+declared experiment or final campaign. Thus
+``self-improvement'' refers to changing system capabilities, not to recursive
+optimization of the \Evolver{} algorithm or model weights.
+
+We study \method{} within full-harness adaptation: whether an agent can learn
+reusable research operations whose use depends on the conditions of the
+quantitative question. An operation connects available inputs to a computation
+or decision and a required output; its applicability concerns whether the target
+quantity, sample, information convention, and intended use support that operation.
+The proposed \Evolver{} uses public evidence and its own observed work to decide
+whether to reuse, adapt, replace, or decline an operation, and tests a persistent
+revision through a fresh \Worker{}. The empirical question is whether these
+decisions improve later work, not whether the system records applicability
+fields or calls a checker. Ordinary interface and delivery repairs remain
+legitimate, and no experiment, code edit, or memory update is mandatory in every
+round. Investigator-selected tasks and evidence are attributed separately from
+the \Evolver{}'s subsequent diagnosis and revision. Feedback retains only the
+episode layers actually produced; missing revisions, Workers, and outcomes
+remain explicit.
+
+Our intended contributions are:
+
+\begin{enumerate}
+  \item \textbf{A research-capability learning problem.}  The evolving object
+  is a complete task-conditioned researcher, not a collection of best answers.
+  \item \textbf{A testable quantitative revision hypothesis.} We investigate
+  whether the target quantity, sample, and admissible information change an
+  executable comparison or justified reuse decision, with consequences for
+  later \Worker{} behavior.
+  \item \textbf{An end-to-end evidence design.}  We jointly require matched
+  performance, real persistent changes with fresh \Worker{} use, and actual
+  cumulative multi-task operation, while retaining unsuccessful episodes and
+  cost.
+  \item \textbf{A demonstration on backtesting tasks.}  The evolved harness
+  scores 16/20 against the initial harness's 14/20 on a controlled
+  BacktestBench comparison, with two gains and zero regressions.
+\end{enumerate}
+
+The central empirical result is a complete controlled BacktestBench
+comparison: the evolved harness scores 16/20 against the initial harness's
+14/20, with two task gains and zero regressions across 20 new instances
+(Section~\ref{sec:current-results}).  The \Evolver{} diagnosed that the
+initial \Worker{} assessed round-trip performance using full-window daily
+mark-to-market P\&L, which conflates unrealized and realized gains across
+multi-day holds; the accepted revision scopes evaluation to window-only
+indicators and realized round-trip PNL.  Fresh-\Worker{} consumer checks
+confirm consequential policy uptake in four cases.  This demonstrates that
+research-method experimentation can identify a measurement-methodology
+limitation and produce a matched initial-to-frozen improvement on backtesting
+tasks.  QuantCodeEval results across the same evolved harness are mixed, which
+is consistent with the conditional nature of research-method improvement: a
+backtesting measurement policy does not transfer to tasks requiring different
+research operations.  Executable harness components beyond prompt-level
+changes and cumulative multi-task benefit remain open empirical targets.
+We organize findings around performance, learned operations, and cumulative
+research, retaining all negative results and the full development chronology
+in the appendix.

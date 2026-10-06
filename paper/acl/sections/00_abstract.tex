@@ -1,0 +1,41 @@
+\begin{abstract}
+Quantitative research requires choosing how an economic question should be
+measured, estimated, implemented, and evaluated, not merely producing an
+executable answer.  We study whether an autonomous quantitative researcher can
+improve this capacity through its own research experience.  Our proposed
+method, \method{}, asks whether economic structure and statistical reasoning
+can guide informative observations about limitations in the system's working
+methods and drive persistent harness revisions whose usefulness is tested
+through subsequent research.  A \Worker{} executes tasks and an \Evolver{}
+revises the complete persistent \Worker{} harness --- including prompts,
+executable tools, skills, memory, middleware, validators, and control flow ---
+while foundation-model configurations and the revision policy remain fixed
+within each declared experiment.
+
+We demonstrate that research-method experimentation can improve matched
+initial-versus-frozen performance on backtesting tasks.  In a complete
+controlled comparison on 20~BacktestBench instances, the frozen evolved
+harness scores 16/20 against the initial harness's 14/20, with two task gains
+and zero regressions.  The \Evolver{} diagnosed that the initial \Worker{}
+evaluated round-trip performance using full-window daily mark-to-market P\&L,
+conflating unrealized and realized gains across multi-day holds; the promoted
+harness revision scopes evaluation to window-only indicators and realized
+round-trip PNL.  Four fresh-\Worker{} consumer checks confirm consequential
+policy uptake in the promoted candidate, including one zero-score negative
+that bounds the claim.  The revised harness remains prompt-level; executable
+tool and validator components are the target of ongoing development.
+
+QuantCodeEval results are mixed across the same evolved harness: nine paired
+tasks give binary 2/9 on the closed twenty-task checkpoint, and a separate
+Pro \Evolver{} fork yields QCE binary 2/4 to~3/4 with one regression and QF
+4/4 ties.  These results indicate that the learned backtesting-measurement
+adaptation does not transfer uniformly across benchmark types at this stage,
+which is consistent with the conditional nature of research-method
+improvement: an applicable operation must match the current task's quantity,
+information convention, and estimation context.
+
+The completed BacktestBench comparison establishes one instance of
+initial-to-frozen improvement through research-method experimentation.
+Stable multi-task benefit and executable harness capability beyond prompt
+revision remain open evaluation targets.
+\end{abstract}

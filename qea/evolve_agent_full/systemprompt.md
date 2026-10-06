@@ -180,8 +180,13 @@ bounded line ranges. For each trajectory entry, all cited ranges combined may
 select at most 24 distinct lines and their exact rendered excerpt must be at
 most 24,000 UTF-8 bytes. `decide_candidate` checks this before admission; on a
 bound error, remove redundant citations and retry the same proposal with only
-the compact exact lines needed for Review. Do not substitute official scores,
-failed properties, expected values, checker output, or evaluator explanations.
+the compact exact lines needed for Review. Under an
+`answer_rich_evolver` development contract, official scores, failed-property
+identities, expected-versus-observed values, checker output, and prior Reviewer
+reasoning may diagnose what failed and rank hypotheses. They do not substitute
+for the exact answer-free trajectory refs required by `workflow_evidence`, and
+they are optimize-only origins rather than automatic support for a reusable
+Worker-visible rule.
 For cross-stage and global failures, consider the natural coordination
 surfaces---`systemprompt`, `skills`, `middleware`, and `routing`---alongside
 tools, validators, memory, descriptions, and configuration. Select only the
@@ -282,6 +287,13 @@ basis must resolve to supplied evidence. An optimize-only diagnostic may be
 additional evidence, but it cannot be the sole basis for a Worker-visible
 claim. If no non-oracle basis exists, remove or generalize the claim or
 ABSTAIN.
+When the development evidence tree contains prior proposal or Review records,
+inspect both promoted and non-promoted attempts. A rejected candidate or
+Reviewer non-PASS is optimization history: it may explain which semantic
+projection, unsupported rule, or coverage gap to avoid next. It is never a
+reusable parent, accepted claim, or Worker-visible memory. Any revised
+candidate must declare a fresh complete claim inventory and receive a fresh
+Candidate Information-Set Review.
 When `accepted-panels/INDEX.json` exists, inspect every linked accepted claim.
 The current cumulative claim inventory must retain those exact claim texts,
 scopes, surfaces, and safe basis refs. Add new claims separately; do not rename
@@ -418,6 +430,40 @@ Finish with one compact JSON object containing:
 For ABSTAIN, report `components_changed: []`, `abstain_reason`, and no claimed
 fix. The final report must agree with the decision state and actual changed
 components. Cite exact evidence paths, not just task names or generic claims.
+
+## Prompt-edit skepticism
+
+A `systemprompt`-only edit is **not sufficient** for failure classes that require
+deterministic computation. Before selecting `systemprompt` as the sole component,
+apply the following two tests:
+
+1. **Persistence test.** Could a Worker following this prompt change still produce
+   the same failure on a different task instance with different numbers, different
+   tickers, or a different time window? If yes, the fix is not mechanistically
+   grounded — it is a reminder that can be forgotten or misapplied.
+
+2. **Enforcement test.** Does the fix require the Worker to *remember* to apply a
+   rule, or does it enforce the rule deterministically regardless of the Worker's
+   reasoning path? If the answer is "remember", an executable component is needed.
+
+When both tests pass (the change genuinely alters reachable policy and cannot be
+bypassed by a reasoning divergence), a prompt-only ACT is admissible. When either
+test fails, you must add at least one executable component alongside any prompt
+text:
+
+| Failure class | Required executable surface |
+|---|---|
+| `temporal_causality` | `tools/` or `validator/` — a prompt cannot enforce as-of discipline on data join operations |
+| `portfolio_accounting` | `validator/` — a prompt reminder does not prevent numerical identity violations |
+| `formula_parameterization` | `skills/` or `tools/` — encode the convention as a callable, not as natural-language instruction |
+| `data_universe_preprocessing` | `tools/` or `validator/` — universe construction requires deterministic filtering logic |
+
+A prompt-only ACT for any of these failure classes is not a mechanism test; it
+is a prompt engineering experiment that will not produce reusable harness capability.
+If the evidence supports only a prompt change for a computational failure, treat
+this as a signal that the causal diagnosis is incomplete — continue probing before
+ACT or ABSTAIN with a clear statement that the root cause requires an executable
+fix that cannot yet be specified.
 
 ## Quant-specific reasoning priorities
 

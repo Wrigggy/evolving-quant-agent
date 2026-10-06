@@ -1,0 +1,1019 @@
+\section{Completed Evidence}
+\label{sec:current-results}
+
+\paragraph{Main result: BacktestBench initial-versus-frozen comparison.}
+The central empirical result is a complete controlled comparison on 20
+BacktestBench instances.  The evolved frozen harness scores \textbf{16/20}
+against the initial harness's \textbf{14/20}, with \textbf{two task gains
+and zero regressions}.  Metrics improve 2/5 to 3/5 and strategy 3/5 to 4/5;
+parameter stays 4/5 and ticker stays 5/5.  All 40 cells score normally with
+no failures, nulls, or redraw.  Complete comparison cost is 729 provider
+requests / USD~1.7662383953 for the two Worker arms only.
+
+The evolved harness is the output of the cap-only E (Section below), whose
+single ACT removed the daily mark-to-market P\&L rule and added window-only
+indicators plus realized round-trip PNL.  The initial harness is the true
+original complete H~\texttt{fe81e756}; the frozen harness is the unchanged
+promoted candidate H~\texttt{403fa470}.  Both arms use Flash0731, 120 turns,
+matched public inputs, and the same official-compatible scorer.  The 20
+instances are drawn by UUID and public-text exclusion from the released test
+split, excluding the prior 32 declared instances; four categories of five
+tasks each are balanced.  This is one complete positive matched comparison,
+not a repeated-run stability estimate or an official benchmark submission.
+
+Four fresh-Worker consumer checks from the development pair confirm actual
+policy uptake.  Task~08417 changes from full-history factor computation to
+crop-before-indicator execution, alters the trade sequence, and computes
+realized round-trip PNL (reward 0\,$\to$\,1).  Task~05973 changes window
+scoping, the VPT formula, and share-sizing together (reward 0\,$\to$\,1),
+though its candidate still overwrites residual cash on sale and the
+conventions are bundled, not isolated.  Validation task~14911 changes
+exit timing and formally selects the trade-based win-rate metric over the
+parent's daily-frequency answer (reward 0\,$\to$\,1), while final portfolio
+value falls; reward improvement is not a trading-profit improvement.
+Task~98403 shows genuine window-only factor computation by the candidate yet
+the parameter-selection answer remains wrong (reward 0\,$\to$\,0), bounding
+the claim.  These gains are not formatting-only recovery, and the same-ledger
+checks are not independent simulation.  No new persistent executable
+operation is added; the revision is prompt-only.
+
+
+no missing cells. On the initial common eleven, correct count ties 3 to 3:
+two gains, two regressions and seven ties. The initial null remains null.
+All twelve answer values are primitive scalars, but eight selected files still
+contain nested sibling objects and fail the unchanged answer extractor.}
+Both gains preserve the original inner answer; they are observed consumer
+recoveries rather than new numerical solutions. E3's complete candidate cost is
+\BacktestOperationCandidateRequests{} physical requests/
+\BacktestOperationCandidateTokens{} tokens/\BacktestOperationCandidateCost{}.
+No persistent executable operation is added.
+The prospective whole-package ranking selects E2 (5/12), ahead of E1 and E3
+(3/12 each); the earlier-registration tiebreak places E1 ahead of E3.
+Whole E2 freezes at 20:06:10 UTC before any of the twenty test outcomes is read.
+The separately registered initial20/frozen20 endpoint starts once at 20:07:26 UTC.
+\Measured{The original comparison closes at 21:06:02 UTC with all forty
+cells scored and no failures: initial \BacktestTwentyInitialCorrect{} versus
+frozen E2 \BacktestTwentyFrozenCorrect{}, three gains, five regressions and
+twelve ties (five positive and seven zero). Metrics tie at 2/5; parameter
+falls 1/5 to 0/5, strategy 4/5 to 2/5, and ticker rises 2/5 to 3/5.}
+Provider-complete comparison cost is \BacktestTwentyRequests{} requests,
+\BacktestTwentyTokens{} tokens and \BacktestTwentyCost{}, excluding earlier
+development and E calls. Both arms complete normally; no null is imputed and
+no test-dependent redraw or whole-H mixture occurs. This negative
+official-compatible frozen endpoint does not confirm the development gain.
+Inherited library lineage and a single matched realization limit claims of
+independence and stability; investigator evidence projection is not novelty.
+
+\paragraph{Failed-family research and its fresh pair.}
+The separate failed-T26 Evolver completes admitted ACT with a
+\FamilyFailurePromptBytes{}-byte prompt-only delivery/read-efficiency rule,
+one prompt-load pass and no executable-operation edit or numerical probe.
+It reads actual T26 raw-trace portions, not the complete failed history, and
+does not read T24's raw trace. Actual R moves 3/5/0 to 4/6/0 through one
+provisional lesson, without exact old-experience review. Its provider-complete
+cost is \FamilyFailureERequests{} requests/\FamilyFailureETokens{} tokens/
+\FamilyFailureECost{}.
+The original fresh parent-five/candidate-five comparison starts at 20:16:19 UTC.
+\Measured{Its fresh QCE pair is T24 14/17 to 15/17, T26 null (no delivery)
+to 16/17, T27 16/18 to 17/18, and T29 12/19 tied. All candidate binaries
+remain zero. T26 is a delivery recovery, not a historical-parent 14-to-16
+numerical gain.}
+The original controller closes partial because its QF evidence projection
+rejects a compiled Python artifact after the Worker has delivered all required
+outputs. The original failure/null is preserved. A separate zero-model sidecar
+performs the same original delivery's first official evaluation at
+21:16:05--21:16:15 UTC: 48/51, no errors/skips or contract adjustment, against
+the fresh parent's 45/51. No new Worker/model call or evaluator change is involved.
+The four commonly measured tasks thus have three check improvements and one
+tie, alongside new T26 delivery; all five candidate binary outcomes remain zero.
+The full original paired Worker bill, including the projection-failed QF stage,
+is \FamilyFailurePairRequests{} physical requests/
+\FamilyFailurePairTokens{} tokens/\FamilyFailurePairCost{}; the separate E bill
+above is not counted twice. The controller's stage-local bill is not silently
+rewritten. This is useful observed delivery and local check improvement, not
+stable transfer, isolated prompt causality, automatic adoption or persistent
+executable-operation learning. It is distinct from the earlier partial panel.
+
+\paragraph{Original research-unit E: policy uptake without paired improvement.}
+The separate E3-parent condition closes admitted ACT at 21:20:36 UTC with an
+actual \BacktestWorkerUnitPromptBytes{}-byte, one-line addition to the system
+prompt and no executable H change. It proposes daily mark-to-market PNL for
+the Profit/Loss Ratio. Three public numerical probes execute: the first has
+a signal/price index-alignment bug despite process exit zero; E acknowledges
+and corrects it. The later probes compare per-trade and daily PNL, including
+a window-only contrast and reconstruction from its own portfolio-value ledger.
+They establish an implemented-definition contrast, not an oracle-confirmed
+metric choice or promised gain. One prompt-load smoke passes.
+Only one of five selected research units is read (24,709 bytes); the other
+units and full original traces have no exact read records. The outcome-linked
+review JSON and the full R snapshot are read, but there is no exact experience
+review, write or rehearsal; R remains byte-identical at 5/8/0.
+E accounting is complete at \BacktestWorkerUnitERequests{} physical and
+unique logical requests, no retries, \BacktestWorkerUnitETokens{} tokens and
+\BacktestWorkerUnitECost{}. The actual complete candidate is preserved.
+Its distinct fresh parent12/candidate12 comparison closes at 22:03:35 UTC,
+retaining all 24 cells. The parent has two correct among eleven scored cells
+and one missing delivery; the candidate scores all twelve, with one correct.
+On the eleven common scored tasks, correctness falls from two to one:
+zero gains, one regression and ten ties. Parent full-panel accuracy remains
+unknown; the missing cell is not imputed as incorrect. The active task ties
+zero to zero despite actual daily-PNL computation and an executed independent
+loop reproducing 1.183058. The predicted numerical shift occurs, not its
+predicted official gain. The sole common regression retains the same inner
+answer, A, but the candidate's selected JSON adds nested diagnostics; static
+consumer inspection identifies an extraction incompatibility, not a persisted
+official parser trace or a scorer rerun.
+A separate post-hoc extraction-only diagnostic on the original bytes returns
+no prediction for that selected nested file, while the flat parent and
+lower-priority flat fallback parse. It uses no trusted target, grading or
+model call and does not produce a revised official score.
+The separate active-parent extraction audit corrects a different assumption:
+its scalar \texttt{answer} has a nested diagnostic sibling, so the selected
+\texttt{answer.json} yields no prediction and the lower-priority flat
+\texttt{answer.txt} is not used. The active candidate is extractable but
+remains scored zero. Thus that active pair is not two cleanly extractable
+numerical submissions; this correction changes no historical score.
+The pair uses \BacktestWorkerUnitPairRequests{} physical requests,
+\BacktestWorkerUnitPairLogicalRequests{} derived logical requests and
+\BacktestWorkerUnitPairRetries{} retry rows. Raw known billing is
+\BacktestWorkerUnitPairKnownCost{}, incomplete because two parent usage/billing
+rows are missing; the controller-known subtotal is
+\BacktestWorkerUnitPairControllerCost{}. These exclude the preceding E bill.
+There is no whole-H adoption, stable gain or learned executable operation.
+
+\paragraph{Family date-unit ACT: mixed original-delivery results.}
+The own-pair family E ends normally at 22:21:59 UTC, exit zero and no restarts,
+with an admitted 529-byte prompt addition requiring an explicit
+\texttt{datetime64[ns]} cast and exact dtype check when the public contract
+requires that unit. Agent binding and tool description are unchanged;
+the successful component check loads the prompt, not a new executable tool.
+Five actual public probes retain two missing-relative-data failures followed
+by three successful schema, pandas3.0.5 and value-preserving cast checks.
+An initially invalid ACT payload and a later undeclared component smoke are
+also retained. Before ACT, E reads the 9,510-byte outcome-linked review,
+14,555-byte R snapshot and selected original Worker trace slices. Returned R
+grows from 4/6/0 to 5/7/0: all six old versions are unchanged, and the new
+post-ACT date experience is provisional. Complete E accounting is 36 physical
+and 36 logical requests, zero retries, 3{,}281{,}003 tokens and \$0.298323652;
+all requests finish with HTTP200, which does not erase probe/payload failures.
+The separately registered full parent-five then candidate-five comparison
+starts once at 22:52:56 UTC and ends at 23:23:37 UTC, exit zero and no
+restarts. All eight QCE Workers deliver normally, but the original controller
+remains partial because both evaluation stages fail before scoring: the
+cloned source lacks the QCE replay launcher. These investigator deployment
+failures and nulls are preserved, without a live patch or restart. A separate
+zero-model sidecar completes their first official evaluation at 23:31:09 UTC
+using the unchanged original artifacts, configurations and existing scorer.
+\Measured{The fresh parent/candidate results are T24 14/17 to 15/17,
+T26 15/17 to 13/17, T27 17/18 to 16/18, T29 12/19 to 12/19, and QF13F
+42/51 to 45/51. All five binary outcomes remain zero, with errors/skips zero.}
+Two check-count improvements, two regressions and one tie establish mixed
+development evidence, not stable whole-H gain; no adoption occurs.
+Both fresh T26 arms already execute exact ns casts and checks. The candidate
+also repairs a real monthly/daily beta inconsistency, but estimator and sample
+differences remain unisolated. The predicted 16/17 to 17/17 change is not a
+result or an explanation of the measured 15/17 to 13/17 regression.
+An independent raw census of the ten original Worker audit files accounts for
+416 physical requests, 414 logical requests, two provider retries,
+19{,}541{,}132 tokens and \$1.6038562218, complete. The controller's unknown
+logical/retry aggregate is not actual zero. This bill excludes the preceding
+E; the eight first evaluations add no provider request, token or cost.
+Prompt loading, dtype uptake and a new provisional experience establish
+neither learned executable capability nor beneficial memory reuse.
+
+\paragraph{Declared training supervision: a cap-bound abstention.}
+The separate Backtest revision permits only the original eight training
+scalar targets in the Evolver's evidence, after the blind development attempts;
+Workers remain label-free. It starts once at 00:27:58 UTC October 6 and
+exits normally at 00:47:30 UTC. Seven actual numerical probes explore PNL,
+weighting and execution conventions, but no candidate edit or component
+check occurs. Two exact experience reads do not revise R.
+\Measured{The result is ABSTAIN with unchanged complete H and unchanged
+R at five experiences/eight versions/zero operations. No conditional Worker
+or evaluation is launched. Complete provider accounting is 35 physical
+requests, 2{,}849{,}797 tokens and \$0.453883892; native execution records
+35 turns and 88 tool calls with zero tool errors.}
+The terminal decision is not voluntary: the early checkpoint occurs at
+development call 17 and 80{,}052 estimated prompt tokens; after 16 further
+pre-ACT calls the middleware closes development at call 33 and permits only
+ABSTAIN. Its reason is the pre-ACT call-window limit, not the 136k estimated
+context trigger, the Evolver's 200-iteration allowance or command timeout.
+Provider input accounting is distinct from the middleware's token estimate.
+This identifies an investigator-imposed search truncation, not a model
+ability ceiling or evidence that more computation would succeed. A separate
+cap-only condition is registered from the same initial information, not the
+closed E's later research. The original and its unused pair remain closed.
+
+\paragraph{Cap-only supervised E: complete matched development gain.}
+The separate original E closes at 01:52:44 UTC October 6, exit zero and no
+restarts, after 43 development calls and one compaction. Its checkpoint is
+call 14 at 82{,}073 estimated tokens; ACT at call 37 follows 23 post-checkpoint
+pre-ACT calls, without a terminal trigger. Fifteen public-data probes retain
+twelve exit-zero and three exit-one outcomes, including a failed final
+numerical verification. Only the systemprompt load passes; the undeclared
+agent-config graph smoke is rejected, not counted as a pass.
+\Measured{ACT/admission passes with no formal failure: H5311 becomes
+H403fa470 through a prompt-only net addition of 768 bytes. It removes the
+daily-MTM P/L rule and adds window-only indicator computation and realized
+round-trip PNL. R grows from 5/8/0 to 6/9/0, with zero executable operations.}
+Complete E billing is 43 physical requests, 4{,}995{,}537 tokens and
+\$0.992034648; native logical/retry counts remain unavailable. The rule is
+inferred using declared E-only training scalars, not answer-free discovery,
+and a saved lesson is not later reuse. Root's whole-H review finds no cached
+targets or task-answer lookup. Both native pair qualifications pass with
+zero model calls before the original fresh parent12 then candidate12 starts
+once at 02:00:52 UTC and closes normally at 02:37:18 UTC, without restart.
+\Measured{All 24 cells score: the immediate parent improves from 8/12 to
+the candidate's 11/12, with three gains, zero regressions and nine ties.
+Train accuracy moves 5/8 to 7/8 and previously seen validation accuracy 3/4
+to 4/4. There are no missing or failed cells.} This is a 25-percentage-point
+matched development gain, not initial-to-frozen improvement or automatic
+adoption. Complete pair billing is 443 physical requests, 8{,}141{,}208 tokens
+and \$0.9522991267 (parent \$0.4937009587; candidate \$0.4585981680).
+A separate raw audit derives 436 logical requests and seven provider retries;
+these do not replace native unknown logical/retry fields or denote new task
+draws. E plus pair costs \$1.9443337747, not the entire lineage's cost.
+All 72 owned resources are absent before the final 02:41:14 UTC mirror.
+
+Original-artifact checks establish actual numerical-policy uptake in three
+gains and one negative case. Both arms already produce flat JSON and receive
+byte-identical public task messages. On 08417, crop-before-indicator execution
+changes trades and the candidate uses realized round-trip PNL (0 to 1).
+On 05973, window, VPT and share-sizing conventions change together (0 to 1),
+but the candidate still overwrites residual cash on sale. On previously seen
+validation 14911, window-dependent exit timing and trade-based WinRate replace
+the parent's formal daily-PNL-frequency answer (0 to 1), while final portfolio
+value falls from about 4.396 to 3.809 million. On 98403, the candidate actually
+uses window-only factors yet the parameter-selection answer remains wrong
+(0 to 0); its requested KPI is daily-return volatility, not trade PNL.
+These are consequential fresh-Worker method choices, not formatting-only
+recovery, independent simulator validation, isolated rule effects, new
+persistent executable operations or evidence that higher reward means profit.
+
+We organize the completed evidence around three questions: whether the frozen
+researcher performs better, what persistent operations fresh Workers use, and
+whether research experience changes later work. Historical trials are not
+pooled into one fixed-policy learning curve. The central result is the
+BacktestBench initial-versus-frozen comparison reported above. Earlier
+positive, null, and negative comparisons remain visible in
+Table~\ref{tab:campaign-endpoints} and the detailed appendix.
+The independent October4 simple-seed r2 condition is also complete: one
+candidate is rejected, two rounds abstain, and the frozen eight-task panel
+uses unchanged H0. Its registered same-H endpoint is included in
+Table~\ref{tab:campaign-endpoints}, not treated as a learning gain.
+The separately registered Pro Evolver fork subsequently selects a prompt-policy
+candidate on six development tasks. Its fixed fresh eight-task confirmation
+records QCE binary 2/4 to~3/4 with a T18 two-check regression and QF 4/4
+ties --- a modest one-panel gain that does not establish stable benefit or
+an isolated mechanism effect across benchmark types.
+
+\subsection{Does the complete frozen harness improve?}
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.18\textwidth}>{\raggedright\arraybackslash}p{0.13\textwidth}>{\raggedright\arraybackslash}p{0.12\textwidth}>{\raggedright\arraybackslash}p{0.24\textwidth}>{\raggedright\arraybackslash}X@{}}
+\toprule
+Campaign / benchmark & Paired measurement & Fully solved & Equal-task pass fraction & Learning scope \\
+\midrule
+Pro prompt / QCE confirmation & 4 of 4 &
+\ProFrozenHZeroQCEBinary{} $\rightarrow$ \ProFrozenCandidateQCEBinary{} &
+\ProFrozenHZeroQCEMean{} $\rightarrow$ \ProFrozenCandidateQCEMean{} &
+Fixed fresh pair; T12 gains two checks, T18 loses two \\
+Pro prompt / QFBench confirmation & 4 of 4 &
+\ProFrozenQFBinary{} $\rightarrow$ \ProFrozenQFBinary{} &
+\ProFrozenQFMean{} $\rightarrow$ \ProFrozenQFMean{} &
+Same frozen prompt candidate; all four tasks tie full \\
+October4 simple seed / QCE & 4 of 4 &
+\SimpleSeedRTwoHZeroQCEBinarySuccesses{} $\rightarrow$
+\SimpleSeedRTwoFrozenQCEBinarySuccesses{} &
+\SimpleSeedRTwoHZeroQCEMean{} $\rightarrow$ \SimpleSeedRTwoFrozenQCEMean{} &
+Same H0 repeat; rejected candidate never becomes frozen H \\
+October4 simple seed / QFBench & 4 of 4 &
+\SimpleSeedRTwoHZeroQFBinarySuccesses{} $\rightarrow$
+\SimpleSeedRTwoFrozenQFBinarySuccesses{} &
+\SimpleSeedRTwoFrozenQFMean{} $\rightarrow$ \SimpleSeedRTwoFrozenQFMean{} &
+Same H0 repeat; all four tasks tie full \\
+Twenty-task checkpoint / QCE & 9 of 10 declared &
+2/9 $\rightarrow$ 2/9 &
+\CheckpointFrozenQCEInitialMean{} $\rightarrow$ \CheckpointFrozenQCEMean{} &
+Whole R4 frozen; T28 null in both original arms \\
+Twenty-task checkpoint / QFBench & 10 of 10 &
+9/10 $\rightarrow$ 8/10 &
+\CheckpointFrozenQFInitialMean{} $\rightarrow$ \CheckpointFrozenQFMean{} &
+Two regressions, eight ties; no aggregate gain \\
+Earlier expanded / QCE & 4 paired; arm coverage 8/10 and 5/10 &
+1/4 $\rightarrow$ 2/4 &
+60.1307\% $\rightarrow$ 74.8162\% &
+Unchanged historical E13; no new H or R in six rounds \\
+Earlier expanded / QFBench & 10 of 10 &
+8/10 $\rightarrow$ 9/10 &
+95.4902\% $\rightarrow$ 98.2353\% &
+Historical-package comparison, not learning in that campaign \\
+September 25 pilot / QCE & 6 of 6, with disclosed recoveries &
+1/6 $\rightarrow$ 1/6 &
+72.1609\% $\rightarrow$ 79.3913\% &
+Gains confined to development; evaluation totals tie, memory empty \\
+\bottomrule
+\end{tabularx}
+\caption{Distinct completed comparisons, not a single cumulative improvement
+curve. Equal-task fractions average the official passed/total ratio per task;
+test counts from different benchmarks are not pooled. Means are rounded to
+four decimal places here. Partial-panel summaries
+are conditional on the listed common measured tasks.}
+\label{tab:campaign-endpoints}
+\end{table*}
+
+\Measured{The twenty-task checkpoint freezes whole R4 after six registered rounds.
+On the nine QCE tasks measured for both initial and frozen harnesses, binary
+success stays 2/9 and the mean changes by \CheckpointFrozenQCEDeltaPP{}
+percentage points. T12 improves 8/16 to 13/16 and T18 improves 15/18 to 16/18;
+T01 regresses 5/17 to 2/17, T26 regresses 16/17 to 13/17, and T29 regresses
+13/19 to 11/19. T16, T19, T24 and T27 tie. On all ten QFBench tasks, binary
+success falls 9/10 to 8/10 and the mean changes by
+\CheckpointFrozenQFDeltaPP{} percentage points. Corporate action regresses
+7/7 to 6/7 and 13F regresses 45/51 to 32/51; all other tasks tie.}
+Neither benchmark supplies an aggregate frozen improvement.
+
+T28 is null for different reasons: the initial artifact encounters a verifier
+timeout, whereas the frozen Worker times out without normal delivery.
+The continuation evaluates only the nine eligible original frozen artifacts;
+scratch output is not scored and no Worker is redrawn. The separate,
+predeclared BLAS1 artifact comparison is also complete on its eligible sources:
+all ten initial artifacts are measured, but only nine normally delivered
+frozen artifacts are replay-eligible.
+The paired nine totals equal the original-condition totals. The initial
+ten-task BLAS1 mean is not compared with a nine-task frozen mean, and neither
+replay condition fills the original campaign's missing cell. All completed
+frozen measurements have zero errors/skips, zero evaluation model calls and no
+contract adjustment.
+
+The twenty-task checkpoint closes with \CheckpointTerminalStages{} stages.
+Known subtotals are \CheckpointTerminalKnownRequests{} requests,
+\CheckpointTerminalKnownTokens{} tokens and \CheckpointTerminalKnownCost{};
+the R6 candidate T24 audit gap makes these incomplete, not a final bill.
+The earlier expanded campaign instead has a complete accounting ledger but
+learns no new H or R. Its favorable QF endpoint compares inherited E13 with a
+different initial package. The September 25 pilot's positive mean is entirely
+development-side, with an evaluation aggregate null and disclosed output
+transport/recovery differences. These distinctions prevent earlier favorable
+numbers from substituting for that twenty-task negative endpoint
+(Appendices~\ref{app:research-memory-pilot},
+\ref{app:expanded-campaign-terminal}, and
+\ref{app:checkpoint-terminal-comparison}).
+
+\subsection{What new operations reach fresh Workers?}
+
+\paragraph{A consequential repair with a negative score outcome.}
+Checkpoint R1 adds an executable TSMOM validator branch and descriptor.
+A fresh T01 Worker receives failed monthly-mapping and temporal-lag checks,
+changes its alignment and lag implementation, and obtains a passing recheck.
+Those edits survive in the delivered artifact. Yet the official score falls
+5/17 to 4/17; companion T12 falls 14/16 to 13/16 and both QF tasks tie.
+The whole candidate is rejected. This closes a tool-report-to-artifact
+consumer chain without establishing useful package improvement. A retained
+public variance-state discrepancy lies outside the checker's coverage;
+passing its checks is not proof of complete quantitative correctness
+(Appendix~\ref{app:checkpoint-r1-tsmom-admission}).
+
+\paragraph{An executable timing operation and a local package gain.}
+R4 develops and binds an EMA cross-execution checker. The fresh momentum
+Worker invokes it twice on 14 trades, receives 14/14 confirmations, and
+separately repairs a forced-close PnL cost basis. The matched round improves
+momentum 19/26 to 26/26 while OIS, T16 and T18 tie, so the whole candidate is
+selected. However, next-open timing is already correct before the first
+checker call: this is executable computation and consumed confirmation, not
+feedback-induced timing repair. Public instructions, the new descriptor and
+tool code co-vary. Moreover, the unchanged parent scored 26/26 in the preceding
+round, and the final matched momentum endpoint is 26/26 on both arms.
+The local package gain therefore supplies neither an isolated checker effect
+nor the missing frozen improvement
+(Appendix~\ref{app:checkpoint-r4-ema-capability}).
+
+\paragraph{A cleaning capability with incomplete comparison.}
+R6 changes an eight-file package to add a VaR-data-cleaning operation,
+description, binding and activation guidance. Its fresh VaR Worker calls the
+operation, which recomputes and confirms an already compliant draft; no
+artifact repair follows. VaR and BS official results tie their parents.
+The QCE candidate window remains incomplete, so R6 cannot replace whole R4.
+The operation is real, but neither invocation nor a partial comparison
+establishes a useful new package or cross-task reuse
+(Appendix~\ref{app:checkpoint-r6-parent-timeout}).
+
+These cases include executable revisions rather than prompt-only search, but
+they also show why edit, activation, consumer consequence and official benefit
+must remain separate. Earlier minimal-T12 and E12 records provide additional
+negative and first-draft-use examples in Appendix~\ref{app:historical}.
+
+\subsection{Does research experience improve later research?}
+
+\Measured{Checkpoint R1 forms a versioned short experience. R2 reads it and
+the rejected candidate's outcome, declines an unchanged retry, and writes a
+parented version. R3 reads that version and uses its last-trading-day
+counterevidence to investigate T18, then corrects a timestamp mismatch in its
+probe.} These are cross-round memory-to-decision and memory-to-investigation
+consequences. R3 nevertheless ends without an accepted terminal decision or
+candidate; that failure is retained rather than relabelled as abstention.
+
+The memory also carries errors. R2's T12 summary compares the R1 candidate's
+13/16 with the later R2 parent's 13/16 instead of the original R1 parent's
+14/16. It overgeneralizes a failed candidate into a lack of further public
+discriminators. R5 reads the R4 index and source but does not assimilate the
+exact paired outcome. R6 retains both an anti-intervention lesson and a later
+intervention lesson without reconciling their scopes. The terminal R has four
+experiences, six versions and zero executable-memory operations.
+Persistence and versioning therefore do not themselves establish better
+research judgment or Worker performance
+(Appendices~\ref{app:checkpoint-r2-outcome-memory},
+\ref{app:checkpoint-r3-terminal-failure},
+\ref{app:checkpoint-cumulative-learning}).
+
+The opt-in outcome-linked review interface addresses this observed consumer
+gap: exact original-pair facts remain attached to the experience, source
+selection is explicit, and a later read can support retaining, revising or
+deferring the lesson. Source tests and actual remote zero-model reconstruction
+qualify that path; they do not show a model using it well. The separately
+registered six-task successor started from identical whole-R4 initial/parent
+packages and actual R6 memory. Its completed results are reported below,
+separately from the twenty-task checkpoint. This is a matched whole-package experiment,
+not an isolated causal test of the review interface: the registered condition
+also includes a revision profile and selected historical evidence.
+
+Its fresh initial QCE panel subsequently measures T01 2/17, T12 13/16,
+T18 16/18 and T24 11/17: binary 0/4 and equal-task mean 61.6524\%.
+T12 includes two errors; all four have zero skips and no contract adjustment.
+These are initial measurements, not gains from the new revision mechanism.
+Its QF initial tasks subsequently
+score momentum 26/26 and OIS 19/19, both binary 1 with zero errors/skips and no
+adjustment. Thus all six initial cells are measured.
+
+The successor's first actual candidate, in round 2 after an unavailable
+round-1 active parent, now supplies a complete four-task comparison:
+T01 2/17, T12 13/16, momentum 26/26 and OIS 19/19 all tie their same-round
+parents. T12 retains two errors; all skips are zero. The registered tie rule
+keeps whole R4. Original candidate attribution failure and its explicit,
+zero-model unchanged-candidate qualification amendment remain disclosed.
+The Evolver reads one historical experience twice, uses a public decay probe
+and edits executable TSMOM checks, but leaves research memory unchanged.
+
+Fresh T01 calls the new branch three times and rewrites dates, units and
+initialization; a temporary empty portfolio is subsequently repaired.
+The checker remains false on its EWMA comparison. The Worker's purported
+counterexample copies the tested volatility as its reference; a later
+contrast also confuses decay with the smoothing parameter. Thus new executable
+feedback has a real consumer consequence, but the residual disagreement is
+not independently resolved. Correct alpha1/61 and the incorrect local-residual
+estimator already occur in the first draft, before any checker call or
+checker-source read; neither is established as feedback-induced. The candidate
+supplies no official gain. Its 74 Worker requests cost USD0.2249699495,
+excluding revision-search cost; the campaign's
+17-stage known subtotal USD1.6459820976 remains incomplete because original
+round-1 T24 accounting is missing.
+
+Round 3 makes a real, non-vacuous public comparison: on twelve input files,
+an independently recomputed expanding-quintile classification agrees with the
+parent, whereas a trailing-window alternative differs. It does not test the
+registered checker or downstream consumer and produces no harness or memory
+change. The actual context controller enters decision-only mode on a second
+136,000-token threshold crossing after its one development compaction;
+the accepted terminal decision is ABSTAIN. Two directory-map returns of
+128,458 bytes each are avoidable input contributors, not a proven sole cause
+or an iteration ceiling. The round costs 28 requests and USD0.2127456249.
+
+\paragraph{Complete frozen measurements without a learned-harness gain.}
+All six original frozen measurements subsequently complete. QCE gives T01
+5/17, T12 13/16, T18 16/18 and T24 11/17, with binary 0/4 and equal-task mean
+66.0641\%; T12 again has two errors. QF remains 26/26 and 19/19. All skips
+are zero and no replay contract is adjusted. The selected complete harness
+is still the initial whole R4: round 1 skips revision, round 2 ties and
+round 3 abstains. Thus the QCE mean difference of 4.4118 percentage points
+is entirely a same-harness T01 fresh-run difference, not evolution gain.
+All other tasks tie. Memory also remains byte-identical at four experiences,
+six versions and zero executable operations.
+
+Frozen generation costs 112 requests and USD0.4076602530, with complete
+stage accounting. The campaign's 26-stage known subtotal is 651 requests
+and USD2.5819269159; missing original round-1 billing prevents a complete
+total. After all official measurements, terminal reporting stops because it
+incorrectly reuses a development selector requiring distinct harness IDs.
+The measurements remain valid. A separately reviewed zero-model terminal
+correction subsequently produces descriptive unchanged-harness comparisons,
+preserving both original failures, all stages and accounting. No model,
+Worker, evaluator or main invocation is rerun; neither package is promoted.
+
+\paragraph{Comparison-oriented investigation without intervention.}
+The separately registered September 29 one-E condition actually runs the
+comparison-oriented profile and paginated map. It ends in ABSTAIN with
+\ResearchComparisonOneERequests{} provider requests,
+\ResearchComparisonOneETokens{} tokens and
+\ResearchComparisonOneECost{} complete billing. Native telemetry records
+\ResearchComparisonOneEToolCalls{} tool calls in
+\ResearchComparisonOneETurns{} turns, but no numerical probe, component test,
+harness edit or candidate Worker. After one development compaction, a second
+context crossing at iteration 65 allows only ABSTAIN. The unchanged H/R and
+absence of new Worker scores establish no improvement or ability ceiling.
+Its justification also substitutes a later 5/17 parent for the old R2
+candidate's actual 2/17 parent; the original comparison remains 2/17 to 2/17.
+The raw decision is preserved rather than adopted as a valid exclusion of
+future numerical repairs.
+
+Current interfaces bound selected history and the startup memory projection,
+not all research work. The deployed condition additionally
+provides scoped, resumable directory-map pages bounded to 32 KiB of complete
+rendered JSON. Actual retained round-3 evidence is exhaustively reachable;
+unscoped enumeration, repeated pages and history copying are not constant
+work. This is retrieval scaffolding, not learned capability or demonstrated
+large-scale efficiency.
+
+\subsection{October4 simple-seed r2: complete campaign}
+\label{sec:simple-seed-results}
+
+The independently registered three-file H0 and empty R were fixed before
+outcomes. Table~\ref{tab:simple-seed-task-matrix} separates unchanged-H
+observations from the sole ACT candidate; no taskwise splice or older score
+enters selection. All eight tasks are historically exposed. T19/Brinson are
+isolated only within this cycle, not unseen transfer tasks. The separate r1
+pre-model configuration failure is not a scored arm.
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\textwidth}{@{}Xccccc@{}}
+\toprule
+Task & Initial H0 & R1 parent H0 & R1 candidate & R2/R3 parent H0 & Frozen H0 \\
+\midrule
+T12 & \SimpleSeedRTwoHZeroTTwelvePassed{}/16 &
+\SimpleSeedRTwoRoundOneParentTTwelvePassed{}/16 &
+\SimpleSeedRTwoRoundOneCandidateTTwelvePassed{}/16 &
+\SimpleSeedRTwoRoundTwoParentTTwelvePassed{}/16 &
+\SimpleSeedRTwoFrozenTTwelvePassed{}/16 \\
+T16 & \SimpleSeedRTwoHZeroTSixteenPassed{}/18 &
+\SimpleSeedRTwoRoundOneParentTSixteenPassed{}/18 [a] &
+\SimpleSeedRTwoRoundOneCandidateTSixteenPassed{}/18 [a] &
+\SimpleSeedRTwoRoundTwoParentTSixteenPassed{}/18 &
+\SimpleSeedRTwoFrozenTSixteenPassed{}/18 \\
+T18 & \SimpleSeedRTwoHZeroTEighteenPassed{}/18 &
+\SimpleSeedRTwoRoundOneParentTEighteenPassed{}/18 &
+\SimpleSeedRTwoRoundOneCandidateTEighteenPassed{}/18 &
+\SimpleSeedRTwoRoundTwoParentTEighteenPassed{}/18 &
+\SimpleSeedRTwoFrozenTEighteenPassed{}/18 \\
+T19 & \SimpleSeedRTwoHZeroTNineteenPassed{}/18 &
+\textemdash & \textemdash & \textemdash &
+\SimpleSeedRTwoFrozenTNineteenPassed{}/18 \\
+Momentum & \SimpleSeedRTwoHZeroMomentumPassed{}/26 &
+\SimpleSeedRTwoHZeroMomentumPassed{}/26 &
+\SimpleSeedRTwoHZeroMomentumPassed{}/26 &
+\SimpleSeedRTwoHZeroMomentumPassed{}/26 &
+\SimpleSeedRTwoHZeroMomentumPassed{}/26 \\
+Earnings surprise & \SimpleSeedRTwoHZeroEarningsPassed{}/8 &
+\SimpleSeedRTwoHZeroEarningsPassed{}/8 &
+\SimpleSeedRTwoHZeroEarningsPassed{}/8 &
+\SimpleSeedRTwoHZeroEarningsPassed{}/8 &
+\SimpleSeedRTwoHZeroEarningsPassed{}/8 \\
+Corporate action & \SimpleSeedRTwoHZeroCorporatePassed{}/7 &
+\SimpleSeedRTwoHZeroCorporatePassed{}/7 &
+\SimpleSeedRTwoHZeroCorporatePassed{}/7 &
+\SimpleSeedRTwoHZeroCorporatePassed{}/7 &
+\SimpleSeedRTwoHZeroCorporatePassed{}/7 \\
+Brinson attribution & \SimpleSeedRTwoHZeroBrinsonPassed{}/42 &
+\textemdash & \textemdash & \textemdash &
+\SimpleSeedRTwoHZeroBrinsonPassed{}/42 \\
+\bottomrule
+\end{tabularx}
+\caption{Original official passed/total outcomes for the complete simple-seed
+r2 campaign. R2 and R3 are separate parent draws with identical reported
+scores, not pooled observations. [a] Both R1 T16 cells have
+\SimpleSeedRTwoRoundOneParentTSixteenErrors{} errors and one ordinary failure;
+all other cells have zero errors. All skips are zero and no contract is
+adjusted. Dashes are declared within-cycle exclusions, not missing outcomes.
+Only the R1 candidate differs from H0; it is rejected.}
+\label{tab:simple-seed-task-matrix}
+\end{table*}
+
+\paragraph{Actual uptake with a negative package result.}
+\Measured{R1's Evolver runs \SimpleSeedRTwoRoundOnePublicProbes{} public probes
+and changes only two prompt paragraphs
+(+\SimpleSeedRTwoRoundOnePromptAddedBytes{} bytes), not executable H tools.
+The fresh T18 Worker implements raw-to-excess CLI conversion and numerically
+checks returns and weights across \SimpleSeedRTwoRoundOneCLICheckFiles{}
+shipped files. Yet the actual paired candidate loses one pass each on T12
+and T18, with T16's \SimpleSeedRTwoRoundOneCandidateTSixteenErrors{} errors
+unchanged and all three QF scores full. Whole H0 is retained.}
+Conversion exists in the first draft, so neither checking feedback nor the
+prompt is an isolated cause. A public warmup regression also survives:
+positions begin in the second sample month rather than after ten years.
+This is not assigned to a hidden official failure or to prompt causality.
+Three E probes exit1; one exit0 catches an error. The canonical
+\texttt{ret} input is already excess; parent CLI execution occurs, but its
+numeric check fails. These negatives limit E's rationale rather than
+supporting an optional raw-frame contract requirement.
+
+\paragraph{Feedback receipt without identity retention or intervention.}
+\Measured{R2 actually reads current T12's 9/16 and the original six-task
+R1 paired negative, but its accepted decision substitutes current T18's 16/18
+with two failures into the T12 narrative. It performs no new probe,
+component test, memory operation or edit.}
+Its ABSTAIN follows pre-ACT deadline exhaustion, not calibrated scientific
+abstention. T16's return to 18/18 under H0 is sampled recovery, not learning;
+neither this draw nor the older initial T12 score replaces R1's actual pair.
+
+\paragraph{Public computation supports a voluntary, scoped abstention.}
+\Measured{R3 runs \SimpleSeedRTwoRoundThreePublicProbes{} exit0 corporate-action
+probes. Self-review corrects the first summary-only contrast with an actual
+full-row comparison: \SimpleSeedRTwoRoundThreeComparedRows{} uniquely dated
+rows agree in all four numeric columns and six summary fields.}
+With the focal parent officially full and intervention calls remaining,
+R3 voluntarily abstains without editing H. R retains
+\SimpleSeedRTwoTerminalMemoryExperiences{} provisional experience,
+\SimpleSeedRTwoTerminalMemoryVersions{} versions and
+\SimpleSeedRTwoTerminalMemoryOperations{} executable operations; no later E
+consumes it. This is real diagnostic work and evidence-depth correction,
+not a persistent Worker capability, unseen-condition robustness or measured
+memory benefit.
+
+\Measured{Both full panels have eight measurements with no nulls, errors,
+skips or adjustment. Frozen H is H0: QCE binary
+\SimpleSeedRTwoFrozenQCEBinarySuccesses{} ties while equal-task mean changes
+$\SimpleSeedRTwoHZeroQCEMeanRatio{}$ to
+$\SimpleSeedRTwoFrozenQCEMeanRatio{}$
+(\SimpleSeedRTwoHZeroQCEMean{} to \SimpleSeedRTwoFrozenQCEMean{});
+QF binary \SimpleSeedRTwoFrozenQFBinarySuccesses{} and mean one tie.}
+T18's frozen decrease is same-H repeat variation, not evolution gain or a
+regression caused by the rejected candidate or R3 experience. Distinct-H
+confirmation does not trigger. The complete campaign uses
+\SimpleSeedRTwoTerminalWorkerCells{} Worker-task cells,
+\SimpleSeedRTwoTerminalEvolverEpisodes{} E episodes and
+\SimpleSeedRTwoTerminalStages{} stages:
+\SimpleSeedRTwoTerminalRequests{} physical requests,
+\SimpleSeedRTwoTerminalTokens{} tokens and \SimpleSeedRTwoTerminalCost{}.
+Provider cost is complete; logical-request/retry and combined tool/turn
+detail remain partly incomplete. Appendix~\ref{app:simple-seed-r2-detail}
+retains stage costs, context/decision boundaries and scoped public audits.
+
+\subsection{Pro prompt policy: development selection and fresh confirmation}
+\label{sec:pro-evolver-fork}
+
+The model-only E fork reuses the exact original R2 six-task evidence, H0,
+empty R and R1 history; it changes only E's model configuration while keeping
+the Worker, profile, deadline and evaluator conditions fixed. No parent is redrawn.
+\Measured{Its fresh candidate scores T12
+\ProEvolverForkCandidateTTwelvePassed{}/16 against the original
+\ProEvolverForkParentTTwelvePassed{}/16; T16
+\ProEvolverForkTSixteenPassed{}/18, T18 \ProEvolverForkTEighteenPassed{}/18
+and all three QF tasks tie. QCE binary \ProEvolverForkQCEBinarySuccesses{}
+ties; equal-task mean rises $\ProEvolverForkParentMeanRatio{}$ to
+$\ProEvolverForkCandidateMeanRatio{}$
+(\ProEvolverForkParentMean{} to \ProEvolverForkCandidateMean{},
++\ProEvolverForkDeltaPP{} percentage points). The existing benchmark-level
+Pareto rule selects the complete candidate. All six candidate evaluations
+have zero errors/skips and no contract adjustment.}
+
+E correctly retains the original comparison identities and executes
+\ProEvolverForkPublicProbes{} public probes: one exits0 and one exits1 after
+a valid partial calculation. The latter does not complete its alternative
+denominator branch. Only the prompt changes
+(+\ProEvolverForkPromptAddedBytes{} bytes/\ProEvolverForkPromptAddedLines{}
+lines); no executable H operation is added and R stays empty.
+The development T12 Worker loads the prompt, reads the public paper and uses a
+trailing mean in its first draft. Subsequent checks agree on trailing values
+but not the independent portfolio: opposing near-zero signs in one month
+propagate to a 0.0208667 monthly-return difference. Its final prose overstates
+agreement. The public source does not uniquely prove the mean's API scale;
+neither the prompt's isolated effect nor the official gain's cause is established.
+The discrepancy is not an identified official-failure cause.
+
+E uses \ProEvolverForkEvolverRequests{} physical requests,
+\ProEvolverForkEvolverTokens{} tokens and \ProEvolverForkEvolverCost{}.
+The complete new one-E/fresh-six execution totals
+\ProEvolverForkTotalRequests{} requests, \ProEvolverForkTotalTokens{} tokens
+and \ProEvolverForkTotalCost{}, provider-complete; logical/retry detail
+remains unknown. Reused parent costs are not new execution cost.
+The subsequent fixed fresh confirmation evaluates both unchanged H0 and the
+selected complete prompt candidate on all eight tasks, with the same Flash
+Worker and no E, reselection or retry. \Measured{QCE T12 rises
+\ProFrozenHZeroTTwelvePassed{}/16 to \ProFrozenCandidateTTwelvePassed{}/16;
+T16 \ProFrozenTSixteenPassed{}/18 and T19 \ProFrozenTNineteenPassed{}/18 tie,
+while T18 falls \ProFrozenHZeroTEighteenPassed{}/18 to
+\ProFrozenCandidateTEighteenPassed{}/18. Binary success rises
+\ProFrozenHZeroQCEBinary{} to \ProFrozenCandidateQCEBinary{}; equal-task mean
+rises $\ProFrozenHZeroQCEMeanRatio{}$ to
+$\ProFrozenCandidateQCEMeanRatio{}$ (+\ProFrozenQCEDeltaPP{} percentage
+points). QF momentum26/26, earnings8/8, corporate7/7 and Brinson42/42 all tie
+full. All sixteen evaluations have zero errors/skips and no contract adjustment.}
+QCE raw passed-check totals are 66/70 in both arms: binary-first improvement
+and the equal-task mean change do not imply taskwise nonregression.
+The separate confirmation totals \ProFrozenWorkerCells{} Worker cells in
+\ProFrozenStages{} stages, \ProFrozenRequests{} physical requests,
+\ProFrozenTokens{} tokens and \ProFrozenCost{}, provider-complete;
+logical/retry detail remains partial. Its cost is not pooled with the earlier
+\ProEvolverForkTotalCost{} screen execution.
+This is one frozen-panel aggregate gain with a disclosed regression, not a
+stable or unseen-transfer benefit. All eight tasks are historically exposed.
+
+Fresh H0 already uses mean in its first T12 draft, so mean selection is not
+unique prompt uptake. The candidate reindexes each factor on observed dates;
+an investigator-only matched synthetic contrast preserves excluded-month
+invariance for a factor-specific gap but not a globally missing month, where
+both H0 and candidate propagate the excluded return into positions. That
+bounded behavior is not E's discovery, a new executable H component, or an
+official failure attribution. R remains unchanged empty. The dated screen and
+confirmation records preserve the separate comparisons and consumer audits.
+
+\paragraph{Cumulative-six: daily-output repair and rejected whole candidate.}
+The separate two-round condition in Section~\ref{sec:pro-cumulative-setup}
+starts from the retained Pro prompt package $H_{\mathrm{start}}$, with empty R.
+\Measured{Its six initial outcomes are QCE T01
+\ProCumulativeInitialTOnePassed{}/17, T12
+\ProCumulativeInitialTTwelvePassed{}/16 and T18
+\ProCumulativeInitialTEighteenPassed{}/18; binary
+\ProCumulativeInitialQCEBinary{}, equal-task mean
+\ProCumulativeInitialQCEMean{}. QF 13F
+\ProCumulativeInitialThirteenFPassed{}/51, momentum
+\ProCumulativeInitialMomentumPassed{}/26 and corporate action
+\ProCumulativeInitialCorporatePassed{}/7 give official reward
+\ProCumulativeInitialQFReward{} and check mean
+\ProCumulativeInitialQFCheckMean{}. All six have zero errors/skips and no
+contract adjustment.} The \ProCumulativeInitialStages{} initial stages use
+\ProCumulativeInitialRequests{} physical requests,
+\ProCumulativeInitialTokens{} tokens and \ProCumulativeInitialCost{},
+provider-complete for this panel only; logical/retry detail remains partial.
+This is existing-$H_{\mathrm{start}}$ variability, not original H0 or a new E-induced
+gain/regression; the earlier T12 16/16 confirmation remains a separate draw.
+The fresh first parent uses the same $H_{\mathrm{start}}$: T18 changes
+\ProCumulativeInitialTEighteenPassed{}/18 to
+\ProCumulativeRoneParentTEighteenPassed{}/18 and 13F
+\ProCumulativeInitialThirteenFPassed{}/51 to
+\ProCumulativeRoneParentThirteenFPassed{}/51, with the other four tasks tied;
+these are pre-revision variations, not learning.
+The dated initial record retains the artifact locations. The fixed final-H
+freeze and unconditional original-H0 postlude are still required for the
+primary endpoint.
+
+R1 then autonomously probes its own T18 parent: \Measured{one public shape
+experiment maps 126 daily input rows to six month-end output rows}, despite
+the public requirement for daily scaled returns under constant monthly
+weights. E adds conditional output-frequency guidance to the prompt
+(+\ProCumulativeRonePromptAddedBytes{} bytes), saves one provisional experience
+and adds no executable operation. Its additional numerical contrast omits the
+ten-year warmup, so it does not establish a formula defect or an official
+failure cause. R1 uses \ProCumulativeRoneRequests{} physical requests,
+\ProCumulativeRoneTokens{} tokens and \ProCumulativeRoneCost{},
+provider-complete for E only. The dated granularity-ACT record retains the
+probe and its limitation.
+
+\Measured{Against its own fresh parent, the full candidate changes QCE T01
+\ProCumulativeRoneParentTOnePassed{}/17 to
+\ProCumulativeRoneCandidateTOnePassed{}/17, T12
+\ProCumulativeRoneParentTTwelvePassed{}/16 to
+\ProCumulativeRoneCandidateTTwelvePassed{}/16 and T18
+\ProCumulativeRoneParentTEighteenPassed{}/18 to
+\ProCumulativeRoneCandidateTEighteenPassed{}/18. Binary success stays
+\ProCumulativeRoneQCEBinary{}; equal-task mean rises from
+\ProCumulativeRoneParentQCEMean{} to \ProCumulativeRoneCandidateQCEMean{}.
+QF 13F falls \ProCumulativeRoneParentThirteenFPassed{}/51 to
+\ProCumulativeRoneCandidateThirteenFPassed{}/51, while momentum 26/26 and
+corporate action 7/7 tie; official reward falls
+\ProCumulativeRoneParentQFReward{} to \ProCumulativeRoneCandidateQFReward{}
+and check mean \ProCumulativeRoneParentQFCheckMean{} to
+\ProCumulativeRoneCandidateQFCheckMean{}. All six candidate measurements
+have zero errors/skips and no contract adjustment.}
+The declared per-benchmark rule retains whole $H_{\mathrm{start}}$ rather
+than splicing the QCE winner into it; actual R carries independently.
+
+The fresh T18 Worker emits daily returns in its first draft, then uses public
+checks to repair a repeated last-day exclusion, prior-month weighting and
+warmup handling. Its delivered UMD/US series contain 14,348/14,223 daily
+rows versus the parent's 684/678 monthly rows. An investigator-only
+122-month integration contrast confirms exact daily dates and constant
+within-month application in month 122: 20 candidate rows versus one parent
+calendar-end row, with zero residual when recombining the candidate's own
+prior-month estimators. This does not independently validate those estimators
+or attribute official failures or the observed repair to the prompt alone.
+The scored-consumer record retains this contrast and the actual Worker trace.
+The \ProCumulativeRoneClosedStages{} closed initial-plus-R1 stages use
+\ProCumulativeRoneClosedRequests{} requests,
+\ProCumulativeRoneClosedTokens{} tokens and \ProCumulativeRoneClosedCost{};
+R1's parent/E/candidate increment is \ProCumulativeRoneIncrementRequests{}
+requests and \ProCumulativeRoneIncrementCost{}, provider-complete for that
+cutoff. Second-round parent generation subsequently fails before E; later
+memory consequences and the final freeze/original-H0 endpoint are unmeasured.
+All three QCE Workers terminate on post-accept transport errors, not official
+task failures or an Evolver abstention. The separate transport-terminal record
+retains their partial artifacts and incomplete accounting.
+Local QCE gains and a daily-output repair do not establish a whole-package
+win or cumulative improvement.
+
+The separately registered rejected-branch refinement r1 then fails at native
+QF source admission, before any E, Worker or evaluator invocation: its
+historical scored source and new output root violate a same-root identity
+assumption. Zero stages and no revision outcome are retained. Prior
+networkless graph/direct-preparation checks had not exercised this native
+boundary. The dated source-correction record preserves this failure separately
+from the subsequently admitted r2 ACT.
+
+The corrected rejected-branch r2 retains the original rejected R1 package as
+its research parent, with that package's own scored pair and provisional R.
+\Measured{E adds three prompt rules (+\RejectedBranchRTwoPromptAddedBytes{}
+bytes) for exact string identifiers, pre-aggregation raw-row reconciliation
+and half-L1 weight turnover; no executable code changes.} A first turnover
+probe fails on JSON serialization; its corrected computation distinguishes
+name-count churn from half-L1 turnover on the existing candidate's own
+holdings. It neither reconstructs raw filings nor establishes the required
+turnover definition. E exact-reads the original R1 pair and retains its
+experience while preserving daily-output guidance; R remains one provisional
+experience/one version/zero operations. Its causal and schema interpretations
+are stronger than that evidence permits, as discussed in the analysis below.
+E uses \RejectedBranchRTwoERequests{} completed physical requests,
+\RejectedBranchRTwoETokens{} tokens and \RejectedBranchRTwoECost{},
+provider-complete for E only. The fixed eighteen fresh Worker-task cells
+compare original H0, deployment $H_{\mathrm{start}}$ and new H.
+\Measured{Across fresh H0, $H_{\mathrm{start}}$ and new H, T01 ties at
+\RejectedBranchRTwoHZeroTOnePassed{}/17 and T18 at
+\RejectedBranchRTwoHZeroTEighteenPassed{}/18; T12 changes
+\RejectedBranchRTwoHZeroTTwelvePassed{}/16 to
+\RejectedBranchRTwoHStartTTwelvePassed{}/16 to
+\RejectedBranchRTwoHNewTTwelvePassed{}/16. Binary success is respectively
+\RejectedBranchRTwoHZeroQCEBinary{}, \RejectedBranchRTwoHStartQCEBinary{}
+and \RejectedBranchRTwoHNewQCEBinary{}; equal-task means are
+\RejectedBranchRTwoHZeroQCEMean{}, \RejectedBranchRTwoHStartQCEMean{} and
+\RejectedBranchRTwoHNewQCEMean{}. All nine have zero errors/skips and no
+adjustment.} This is one observed QCE-panel win against fresh
+$H_{\mathrm{start}}$, without isolating the three new rules' effect.
+The registered H0 is not a selected lower baseline; earlier
+H0 draws and $H_{\mathrm{start}}$'s historical T12 16/16 remain separate.
+\Measured{New H's QF arm returns 13F
+\RejectedBranchRTwoHNewThirteenFPassed{}/51, momentum 26/26 and corporate
+action 7/7, with zero errors/skips and no adjustment.}
+Its fresh 13F implementation reads identifiers as strings, audits kept raw
+rows before aggregation and computes half-L1 turnover consumed by the summary.
+Literal RESTATEMENT replacement already existed in the rejected R1 artifact;
+it is not a newly acquired state-resolution capability.
+The reported 55 passing checks mostly compare book-derived outputs and do
+not independently reconstruct effective raw filing state or settle formula
+definitions.
+\Measured{Fresh $H_{\mathrm{start}}$ QF returns 13F
+\RejectedBranchRTwoHStartThirteenFPassed{}/\RejectedBranchRTwoHStartThirteenFTotal{},
+momentum 26/26 and corporate action 7/7, with zero errors/skips and no
+adjustment.} Its 13F attempt exhausts iterations after 119 turns with no
+delivered artifacts; it supplies no fresh holdings or formula implementation
+to compare with new H. The different 0/11 and 46/51 check totals remain
+explicit; this is not evidence of an inferior delivered formula or isolated
+prevention of exhaustion by the new rules.
+\Measured{Original-H0 QF also returns 13F
+\RejectedBranchRTwoHZeroThirteenFPassed{}/\RejectedBranchRTwoHZeroThirteenFTotal{},
+momentum 26/26 and corporate action 7/7, zero errors/skips and no adjustment.
+All three QF binary totals are \RejectedBranchRTwoQFReward{}; equal-task
+check means are \RejectedBranchRTwoControlQFCheckMean{} for both controls
+and \RejectedBranchRTwoHNewQFCheckMean{} for new H. The complete eighteen-cell
+development comparison selects whole new H under the registered
+per-benchmark Pareto rule.}
+H0's 13F attempt also exhausts iterations with no delivered artifacts; the
+two controls' 0/11 measurements are failures, not nulls or matched formula
+implementations. New H demonstrates delivery in this comparison without
+isolating the new rules' effect on delivery reliability.
+This is selection on the same development measurements, not independent
+confirmation, stable expected gain, unseen transfer or learned executable H.
+All thirteen stages use \RejectedBranchRTwoFinalRequests{} completed physical
+requests, \RejectedBranchRTwoFinalTokens{} tokens and
+\RejectedBranchRTwoFinalCost{}, provider-complete; logical/retry detail
+remains unknown.
+The dated ACT/memory-review, fixed-QCE and terminal records retain the inputs, probe
+and scored arms; they do not establish a learned executable capability.
+
+Fresh new H selects T12's inherited trailing mean in its first draft, whereas
+fresh $H_{\mathrm{start}}$ reaches mean after reading inherited guidance. It retains
+5,004 rows including undefined warmup, versus 4,884 in $H_{\mathrm{start}}$;
+warmup omission is publicly permitted, so this contrast does not identify
+the official gain's cause. T01 replaces a full-sample mean with a running
+mean but still ties 2/17. T18 preserves daily output and previous-month
+weighting, but an investigator-only four-case public function diagnostic
+returns neutral weight one in H0 and NaN in both other arms when volatility
+is zero; all three finite-volatility controls pass in every arm.
+All three official scores stay 16/18; this isolated function discrepancy does
+not identify official failures, post-warmup reachability or daily-return loss,
+and is not an E discovery. The fixed-QCE record retains the diagnostic script
+and consumer limitations.
+
+The separately registered T18 successor returns ACT/admitted after
+\TEighteenDateKeyERequests{} completed provider requests,
+\TEighteenDateKeyETokens{} tokens and \TEighteenDateKeyECost{}, complete for E
+only. One prompt line adds \TEighteenDateKeyPromptAddedBytes{} bytes of shared
+date-representation guidance; no executable component changes. Its original public
+\texttt{eq\_au} probe calls five public functions on
+\TEighteenDateKeyDailyRows{} daily and \TEighteenDateKeyMonthlyRows{} monthly
+rows, observing string daily dates versus datetime monthly dates without a
+normalization intervention or failed join. R grows from one to two experiences,
+with two total versions and zero operations. ACT and the edit precede the exact
+old-experience read/review. The fresh QCE comparison is now complete: T01
+\TEighteenDateKeyIncumbentTOnePassed{}/17 to \TEighteenDateKeyCandidateTOnePassed{}/17,
+T12 \TEighteenDateKeyIncumbentTTwelvePassed{}/16 to \TEighteenDateKeyCandidateTTwelvePassed{}/16,
+T18 \TEighteenDateKeyIncumbentTEighteenPassed{}/18 to \TEighteenDateKeyCandidateTEighteenPassed{}/18,
+all errors/skips zero and no adjustment. Binary success falls
+\TEighteenDateKeyIncumbentQCEBinary{} to \TEighteenDateKeyCandidateQCEBinary{};
+equal-task mean falls \TEighteenDateKeyIncumbentQCEMean{} to
+\TEighteenDateKeyCandidateQCEMean{}. Fresh paired QF improves 13F from
+\TEighteenDateKeyIncumbentThirteenFPassed{}/51 to
+\TEighteenDateKeyCandidateThirteenFPassed{}/51; momentum26/26 and corporate7/7 tie.
+Binary \TEighteenDateKeyIncumbentQFBinary{} to \TEighteenDateKeyCandidateQFBinary{}
+ties, while equal-task check mean rises \TEighteenDateKeyIncumbentQFMean{} to
+\TEighteenDateKeyCandidateQFMean{}. Formal whole-package selection retains the
+parent because the QF gain does not offset the QCE regression under the
+registered rule. Nine completed stages with zero controller failures total
+\TEighteenDateKeyReturnedRequests{} requests, \TEighteenDateKeyReturnedTokens{}
+tokens and \TEighteenDateKeyReturnedCost{}, provider-complete;
+logical/retry detail remains unknown. The original main exits at 23:39:58 UTC
+with exit zero and no restarts. The dated terminal/own-pair handoff record
+retains the mixed result and fresh interface audits.\footnote{T18 terminal
+record, October5; the manuscript README gives the repository path.}
+The analysis separately reports an investigator-only T01 formation-to-consumer
+audit; it is not another official measurement or learned capability.
+
+The subsequent own-pair E terminates ABSTAIN with unchanged whole H and no
+fresh Workers or evaluations: \OwnPairTerminalRequests{} physical requests,
+\OwnPairTerminalTokens{} tokens and \OwnPairTerminalCost{};
+\OwnPairTerminalTurns{} turns/\OwnPairTerminalToolCalls{} tools/zero native
+errors, zero public probes and zero component tests. The original main exits
+00:19:08 UTC with exit zero/no restarts, one stage and zero controller failures.
+R reaches two experiences/three versions/zero operations, but the analysis
+records an artifact-identity error in the new date-memory version, not useful learning.
+
+\paragraph{Assisted T01: stronger Worker computation, mixed terminal result.}
+The next condition supplies a compact investigator public diagnostic, without
+a repair or numerical fixture. The E correctly assigns that signal discrepancy
+to the rejected artifact, then proposes an EWMA-normalization rule.
+\Measured{ACT/admission changes only the prompt
+(+\AssistedTOnePromptAddedBytes{} bytes), with no executable component change.
+The E uses \AssistedTOneERequests{} completed requests,
+\AssistedTOneETokens{} tokens and \AssistedTOneECost{}, excluding Worker accounting.
+One prompt load passes; the graph check is rejected for an undeclared role.
+No public numerical probe executes. R reaches
+\AssistedTOneMemoryExperiences{} experiences/\AssistedTOneMemoryVersions{}
+versions/\AssistedTOneMemoryOperations{} operations, preserving erroneous
+date v2.}
+The proposed numerical explanation remains unverified, as analyzed below.
+\Measured{The completed original QCE pair measures T01
+\AssistedTOneIncumbentTOnePassed{} to \AssistedTOneCandidateTOnePassed{}/17,
+T12 \AssistedTOneIncumbentTTwelvePassed{} to \AssistedTOneCandidateTTwelvePassed{}/16
+and T18 \AssistedTOneIncumbentTEighteenPassed{} to \AssistedTOneCandidateTEighteenPassed{}/18;
+binary \AssistedTOneIncumbentQCEBinary{} to \AssistedTOneCandidateQCEBinary{},
+equal-task fraction $\AssistedTOneIncumbentQCEMeanRatio{}$ to
+$\AssistedTOneCandidateQCEMeanRatio{}$
+(\AssistedTOneQCEMeanDeltaPP{} percentage points), zero errors/skips and no adjustment.}
+\Measured{The same original fresh QF pair measures 13F
+\AssistedTOneIncumbentThirteenFPassed{} to \AssistedTOneCandidateThirteenFPassed{}/51,
+with full ties at momentum \AssistedTOneMomentumPassed{}/26 and corporate action
+\AssistedTOneCorporateActionPassed{}/7. QF binary \AssistedTOneQFBinary{} ties;
+equal-task fraction $\AssistedTOneIncumbentQFMeanRatio{}$ to
+$\AssistedTOneCandidateQFMeanRatio{}$ (\AssistedTOneQFMeanDeltaPP{} percentage points),
+zero errors/skips and no adjustment.}
+The unchanged benchmark-level Pareto selector retains the complete parent:
+QF improvement does not offset QCE regression. Actual R is retained independently.
+The fresh candidate T01 Worker independently contrasts central weighted
+variance before its first artifact and checks missing-data decay, warmup and
+required consumers; this stronger computation coexists with official regression.
+The registration completes all \AssistedTOneTerminalCells{} official cells:
+\AssistedTOneTerminalRequests{} completed requests, \AssistedTOneTerminalTokens{}
+tokens and \AssistedTOneTerminalCost{} provider-complete, including E and all
+four fresh arms, not the project-wide search. Logical request/retry detail
+remains partially unqualified. Original exit is 02:07:59 UTC/zero/no restarts,
+\AssistedTOneTerminalStages{} stages/zero controller failures. All
+\AssistedTOneOwnedResources{} owned resources are absent; final additive mirror
+at 02:10:21 UTC has zero errors, exact observers are closed and artifacts retained.
+The separate investigator-only fixed-weight centering audit reaches required
+portfolio outputs and is reported in the analysis.
+Neither the stronger Worker checks nor prompt loading validates the E's
+explanation or establishes whole-H improvement; the 13F difference does not
+isolate an EWMA-policy effect.\footnote{Assisted T01 ACT/audit, QCE
+Worker-comparison and terminal records, October5; the manuscript README gives
+the repository paths.}
+
+\paragraph{Worker-research reuse: abstention without numerical reuse.}
+The next registered condition supplies investigator-selected navigation to the
+assisted Worker's actual research, retaining the complete parent, its own
+six-task observations and actual R.
+\Measured{It ends ABSTAIN with unchanged H, one stage/zero controller failures
+and no conditional Workers or official evaluations. One public probe executes
+the existing parent chain: \WorkerReuseProbeAssets{} assets,
+\WorkerReuseProbeRows{}-by-\WorkerReuseProbeAssets{} matrices and a portfolio
+Series with \WorkerReuseProbeRows{} rows/\WorkerReuseProbePortfolioNaNs{} NaNs.
+The E reads the navigation note, final source and original paired metrics, but
+no selected Worker research trace part; no independent numerical comparison is
+executed. R retains \WorkerReuseMemoryExperiences{} experiences and
+\WorkerReuseMemoryOperations{} operations while versions increase
+\WorkerReuseMemoryVersionsBefore{} to \WorkerReuseMemoryVersionsAfter{},
+only through EWMA v2.}
+Complete provider accounting is \WorkerReuseRequests{} physical requests,
+\WorkerReuseInputTokens{} input/\WorkerReuseOutputTokens{} output tokens
+(\WorkerReuseTokens{} total) and \WorkerReuseCost{}; logical request/retry
+detail remains unknown. Native accounting records \WorkerReuseNativeTurns{}
+turns/\WorkerReuseNativeToolCalls{} tools/zero errors and
+\WorkerReuseNativeSeconds{} seconds. This is factual memory revision and
+existing-operation inspection, not acquired numerical reuse or improved H.
+The final additive mirror has zero errors; all three owned lifecycles are
+cleaned with native IDs absent, exact observers closed and artifacts retained.
+\footnote{Worker-reuse abstention and research-evidence-gap decision record,
+October5, in the repository.}
