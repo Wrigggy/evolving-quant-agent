@@ -1,0 +1,137 @@
+\section{Experimental Design}
+\label{sec:experiments}
+
+\subsection{Campaign structure and evaluation integrity}
+
+A research-method experimentation campaign iterates through \Evolver{}
+revision rounds on a fixed set of development tasks, then evaluates the
+frozen final harness against the original initial harness on a separately
+registered held-out panel.  Within each registered experiment, foundation
+models, provider routes, official evaluators, and Worker execution conditions
+are fixed; aligning them creates a comparison condition, not an evolved
+capability.
+
+\paragraph{Round structure and promotion.}
+Each round runs one \Evolver{} revision followed by a fresh parent and
+candidate \Worker{} pair over a declared comparison window.  The \Evolver{}
+receives only public task inputs, original Worker artifacts and traces, and
+binary outcomes for the development window tasks; it never receives held-out
+targets, evaluator code, or reference answers.  The research memory snapshot
+advances independently of harness selection: an ABSTAIN or rejected candidate
+may still record a methodological lesson.
+
+Candidate promotion uses a Pareto rule over declared benchmark windows: a
+complete candidate is retained only when no benchmark aggregate key regresses
+and at least one strictly improves; exact ties and mixed gains/regressions
+retain the earlier whole parent.  This is not a per-task non-regression
+guarantee.  No task-wise or component-wise best-version splicing occurs.
+
+\paragraph{Promotion gate calibration.}
+Single-draw comparisons have high false-promotion rates under a zero-threshold
+gate.  On a panel where 68\% of tasks are deterministic and the mean flippable
+task count per 12-task window is 3.5, a gate requiring any positive mean
+difference promotes a neutral mechanism roughly 13\% of the time per round,
+yielding about 1.6 spurious promotions per six-round campaign.  A net-\(\geq
+2\) gains rule on the target window reduces this to 0.6 at identical cost, and
+is the target gate for future campaign registrations (Section~\ref{sec:limitations}).
+The current BacktestBench comparison uses a whole-package selection rule;
+the power properties of that specific gate are reported alongside the result.
+
+\paragraph{Initial-versus-frozen endpoint.}
+After development, exactly one complete \(\Hfinal\) is frozen and evaluated
+with fresh \Worker{} instances against the registered \(\Hinit\) on a
+separately fixed panel that was not consulted during development.  Historical
+score vectors from development rounds cannot substitute for this fresh
+measurement.  The completed BacktestBench endpoint (Section~\ref{sec:current-results})
+uses 20 released test instances fixed before any test outcome is observed,
+with the actual complete initial harness \texttt{fe81e756} versus the unchanged
+promoted candidate \texttt{403fa470}.
+
+\paragraph{Test-time-scaling baseline.}
+Harness evolution should be compared against best-of-\(K\) parallel sampling
+from the frozen initial harness at matched total Worker compute
+\citep{rethinking2026harness}.  The current campaigns do not include this
+arm.  It is a registered requirement for the next campaign and will be
+reported when complete.
+
+\subsection{Benchmarks and task selection}
+
+QFBench contains practitioner-style quantitative assignments
+\citep{qfbench2026}; QuantCodeEval evaluates strategy-code reproduction from
+finance papers and task instructions \citep{quantcodeeval2026}.  They provide
+operational tests of quantitative work.  Success does not establish investment
+profitability, original alpha discovery, or unrestricted scientific expertise.
+
+\paragraph{BacktestBench.}
+BacktestBench supplies 18{,}246 questions in four categories from over six
+million market records \citep{wang2026backtestbench}.  Our screen uses
+12 development tasks (eight train, four validation) and a 20-task frozen
+endpoint panel fixed before test observation.  The public selector fixes
+20 released test tasks (five per category) by lexicographic UUID order,
+excluding all 32 previously declared instances and normalized public-text
+clones.  Input-availability checks establish usable public market rows;
+they do not prove disjoint templates, market windows, or latent lineage.
+
+The \Worker{} receives the raw market CSV archive and public catalogs rather
+than the published SQL/factor-retrieval AutoBacktest pipeline.  Comparison
+operators, a declared stock-selection category alias, and file-first answer
+precedence are preserved.  The public source is pinned to revision
+\texttt{4bacdfbe83b3}.  Revision evidence includes only the eight train tasks,
+their original \Worker{} artifacts and traces, and binary outcomes; the
+complete inherited harness remains mutable.
+
+\paragraph{Selection rule for the BacktestBench endpoint.}
+Eligible whole admitted candidate packages are ranked on the fixed
+development twelve by known successes, then fewer unresolved cells, then
+fewer known regressions, then earlier registration.  Null is neither a
+success nor a regression.  Exactly one complete package is frozen before
+any of the 20 test outcomes is read.  The rule selects the cap-only E
+(frozen before test entry); the initial versus frozen comparison closes with
+all 40 cells scored.
+
+\paragraph{QuantCodeEval and QFBench.}
+The registered mixed campaign evolves one whole shared harness across both
+benchmarks.  Selection uses each benchmark's declared native aggregate
+without pooling: QCE ranks by binary-success count then equal-task mean
+fraction; QFBench ranks by equal-task mean official reward then fraction.
+The QCE/QF operation-family condition uses T24/T26/T27/T29 and 13F; missing
+original measurements remain null.
+
+\subsection{Evolver revision policy}
+
+The \Evolver{} may edit any of the nine component roles in the candidate
+harness: system prompt, agent configuration, tool descriptions, tool
+implementations, validator, skills, memory, middleware, and routing.  All
+nine are equally legitimate mutation targets; the revision is not restricted
+to prompts.
+
+For computational failure classes --- \texttt{temporal\_causality},
+\texttt{portfolio\_accounting}, \texttt{formula\_parameterization}, and
+\texttt{data\_universe\_preprocessing} --- the revision policy now requires
+at least one executable component (\texttt{tools/}, \texttt{validator/}, or
+\texttt{skills/}) alongside any prompt text.  A prompt-only edit for these
+classes does not establish a mechanism test, because a Worker following the
+edited prompt can still produce the same failure on a different task instance
+with different numbers or windows.  This constraint was added on October 6
+2026 in response to the observation that the BacktestBench positive result
+came from a prompt-only revision.  It targets future rounds, not the
+completed endpoint.
+
+\subsection{Evidence scope and comparison conditions}
+
+Within a comparison, initial and frozen harnesses receive matched turn
+budget, context and output limits, provider routes, timeouts, and runtime
+allowances.  Raising or aligning an inference allowance for both arms is a
+new comparison condition, not an evolved capability.
+
+The October 6 cap-only condition permits declared training scalar targets to
+the \Evolver{} after blind development attempts; its \Worker{}s remain
+label-free.  The default and every earlier public-only condition remain
+answer-free.  Both prospective arms receive the same public output-consumer
+clarification; an interface-only benefit is not a numerical research gain.
+
+All valid outcomes, failed attempts, and costs remain visible.  Adaptive
+development selection can overfit evaluation criteria
+\citep{cawley2010selectionbias}; the separately registered initial-versus-frozen
+endpoint is the primary performance evidence and is not adjusted by
+development observations.
