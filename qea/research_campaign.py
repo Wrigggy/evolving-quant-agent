@@ -2197,10 +2197,18 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
                     candidates=current["candidate_evaluations"],
                 )
             else:
+                options = current.get("revision_options") or {}
+                net_gains_required = options.get("promotion_net_gains_required")
+                if net_gains_required is not None:
+                    if not isinstance(net_gains_required, int) or net_gains_required < 0:
+                        raise ResearchCampaignError(
+                            "revision_options.promotion_net_gains_required must be a non-negative integer"
+                        )
                 selection = compare_benchmark_windows(
                     parents=parents,
                     candidates=candidates,
                     expected_windows=current["comparison_windows"],
+                    promotion_net_gains_required=net_gains_required if isinstance(net_gains_required, int) else None,
                 )
             if selection["selected"] == "candidate":
                 state["research_parent"] = current["revision"]["candidate_harness"]
