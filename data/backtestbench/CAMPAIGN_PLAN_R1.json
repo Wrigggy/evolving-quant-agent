@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "campaign_id": "backtestbench-global-campaign-r1",
+  "benchmarks": {
+    "backtestbench": {
+      "development_task_ids": [
+        "backtestbench-train-00010008417",
+        "backtestbench-train-00010039453",
+        "backtestbench-train-00010098403",
+        "backtestbench-train-00010105973",
+        "backtestbench-train-00010113131",
+        "backtestbench-train-00010113485",
+        "backtestbench-train-00010233794",
+        "backtestbench-train-00010260079",
+        "backtestbench-validation-00010002286",
+        "backtestbench-validation-00010014911",
+        "backtestbench-validation-00010076125",
+        "backtestbench-validation-00010380448"
+      ],
+      "evaluation_task_ids": [
+        "backtestbench-test-00010220265",
+        "backtestbench-test-00010231217",
+        "backtestbench-test-00010266894",
+        "backtestbench-test-00010295082",
+        "backtestbench-test-00010300980",
+        "backtestbench-test-00010490664",
+        "backtestbench-test-00010514701",
+        "backtestbench-test-00010523566",
+        "backtestbench-test-00010526160",
+        "backtestbench-test-00010579691",
+        "backtestbench-test-00010686955",
+        "backtestbench-test-00010718341",
+        "backtestbench-test-00010815556",
+        "backtestbench-test-00010923106",
+        "backtestbench-test-00010927292",
+        "backtestbench-test-00011001855",
+        "backtestbench-test-00011222107",
+        "backtestbench-test-00011243454",
+        "backtestbench-test-00011387772",
+        "backtestbench-test-00011540502"
+      ]
+    }
+  },
+  "baselines": [
+    {
+      "backend_id": "backtestbench",
+      "task_ids": [
+        "backtestbench-train-00010008417",
+        "backtestbench-train-00010039453",
+        "backtestbench-train-00010098403",
+        "backtestbench-train-00010105973",
+        "backtestbench-train-00010113131",
+        "backtestbench-train-00010113485",
+        "backtestbench-train-00010233794",
+        "backtestbench-train-00010260079",
+        "backtestbench-validation-00010002286",
+        "backtestbench-validation-00010014911",
+        "backtestbench-validation-00010076125",
+        "backtestbench-validation-00010380448",
+        "backtestbench-test-00010220265",
+        "backtestbench-test-00010231217",
+        "backtestbench-test-00010266894",
+        "backtestbench-test-00010295082",
+        "backtestbench-test-00010300980",
+        "backtestbench-test-00010490664",
+        "backtestbench-test-00010514701",
+        "backtestbench-test-00010523566",
+        "backtestbench-test-00010526160",
+        "backtestbench-test-00010579691",
+        "backtestbench-test-00010686955",
+        "backtestbench-test-00010718341",
+        "backtestbench-test-00010815556",
+        "backtestbench-test-00010923106",
+        "backtestbench-test-00010927292",
+        "backtestbench-test-00011001855",
+        "backtestbench-test-00011222107",
+        "backtestbench-test-00011243454",
+        "backtestbench-test-00011387772",
+        "backtestbench-test-00011540502"
+      ],
+      "episode_stage_id": "bc-r1-baseline-episode",
+      "evaluation_stage_id": "bc-r1-baseline-evaluation",
+      "harness": {
+        "harness_id": "fe81e756d99f2b5c6f8f7be06645d4e4fe0c272a1c184508539b866da086ef94",
+        "artifact_uri": "/data/qea-julius-storage/deploy/qr-backtest-initial-frozen20-20261006-r1/frozen-harnesses/initial",
+        "worker_role": "initial"
+      }
+    }
+  ],
+  "initial_research_parent": {
+    "harness_id": "fe81e756d99f2b5c6f8f7be06645d4e4fe0c272a1c184508539b866da086ef94",
+    "artifact_uri": "/data/qea-julius-storage/deploy/qr-backtest-initial-frozen20-20261006-r1/frozen-harnesses/initial",
+    "worker_role": "candidate"
+  },
+  "initial_research_memory": null,
+  "rounds": [
+    {
+      "round_id": "bc-r1-round-01",
+      "active_backend_id": "backtestbench",
+      "active_task_id": "backtestbench-train-00010008417",
+      "comparison_windows": {
+        "backtestbench": [
+          "backtestbench-train-00010008417",
+          "backtestbench-train-00010039453",
+          "backtestbench-train-00010098403",
+          "backtestbench-train-00010105973",
+          "backtestbench-train-00010113131",
+          "backtestbench-train-00010113485",
+          "backtestbench-train-00010233794",
+          "backtestbench-train-00010260079"
+        ]
+      },
+      "stage_ids": {
+        "parent_episodes": {
+          "backtestbench": "bc-r1-r01-parent-episode"
+        },
+        "parent_evaluations": {
+          "backtestbench": "bc-r1-r01-parent-evaluation"
+        },
+        "revision": "bc-r1-r01-revision",
+        "candidate_episodes": {
+          "backtestbench": "bc-r1-r01-candidate-episode"
+        },
+        "candidate_evaluations": {
+          "backtestbench": "bc-r1-r01-candidate-evaluation"
+        }
+      },
+      "revision_options": {
+        "iteration": 1,
+        "promotion_net_gains_required": 2
+      }
+    },
+    {
+      "round_id": "bc-r1-round-02",
+      "active_backend_id": "backtestbench",
+      "active_task_id": "backtestbench-train-00010039453",
+      "comparison_windows": {
+        "backtestbench": [
+          "backtestbench-train-00010008417",
+          "backtestbench-train-00010039453",
+          "backtestbench-train-00010098403",
+          "backtestbench-train-00010105973",
+          "backtestbench-train-00010113131",
+          "backtestbench-train-00010113485",
+          "backtestbench-train-00010233794",
+          "backtestbench-train-00010260079"
+        ]
+      },
+      "stage_ids": {
+        "parent_episodes": {
+          "backtestbench": "bc-r1-r02-parent-episode"
+        },
+        "parent_evaluations": {
+          "backtestbench": "bc-r1-r02-parent-evaluation"
+        },
+        "revision": "bc-r1-r02-revision",
+        "candidate_episodes": {
+          "backtestbench": "bc-r1-r02-candidate-episode"
+        },
+        "candidate_evaluations": {
+          "backtestbench": "bc-r1-r02-candidate-evaluation"
+        }
+      },
+      "revision_options": {
+        "iteration": 2,
+        "promotion_net_gains_required": 2
+      }
+    },
+    {
+      "round_id": "bc-r1-round-03",
+      "active_backend_id": "backtestbench",
+      "active_task_id": "backtestbench-train-00010098403",
+      "comparison_windows": {
+        "backtestbench": [
+          "backtestbench-train-00010008417",
+          "backtestbench-train-00010039453",
+          "backtestbench-train-00010098403",
+          "backtestbench-train-00010105973",
+          "backtestbench-train-00010113131",
+          "backtestbench-train-00010113485",
+          "backtestbench-train-00010233794",
+          "backtestbench-train-00010260079"
+        ]
+      },
+      "stage_ids": {
+        "parent_episodes": {
+          "backtestbench": "bc-r1-r03-parent-episode"
+        },
+        "parent_evaluations": {
+          "backtestbench": "bc-r1-r03-parent-evaluation"
+        },
+        "revision": "bc-r1-r03-revision",
+        "candidate_episodes": {
+          "backtestbench": "bc-r1-r03-candidate-episode"
+        },
+        "candidate_evaluations": {
+          "backtestbench": "bc-r1-r03-candidate-evaluation"
+        }
+      },
+      "revision_options": {
+        "iteration": 3,
+        "promotion_net_gains_required": 2
+      }
+    },
+    {
+      "round_id": "bc-r1-round-04",
+      "active_backend_id": "backtestbench",
+      "active_task_id": "backtestbench-train-00010105973",
+      "comparison_windows": {
+        "backtestbench": [
+          "backtestbench-train-00010008417",
+          "backtestbench-train-00010039453",
+          "backtestbench-train-00010098403",
+          "backtestbench-train-00010105973",
+          "backtestbench-train-00010113131",
+          "backtestbench-train-00010113485",
+          "backtestbench-train-00010233794",
+          "backtestbench-train-00010260079"
+        ]
+      },
+      "stage_ids": {
+        "parent_episodes": {
+          "backtestbench": "bc-r1-r04-parent-episode"
+        },
+        "parent_evaluations": {
+          "backtestbench": "bc-r1-r04-parent-evaluation"
+        },
+        "revision": "bc-r1-r04-revision",
+        "candidate_episodes": {
+          "backtestbench": "bc-r1-r04-candidate-episode"
+        },
+        "candidate_evaluations": {
+          "backtestbench": "bc-r1-r04-candidate-evaluation"
+        }
+      },
+      "revision_options": {
+        "iteration": 4,
+        "promotion_net_gains_required": 2
+      }
+    }
+  ],
+  "freeze": [
+    {
+      "backend_id": "backtestbench",
+      "task_ids": [
+        "backtestbench-train-00010008417",
+        "backtestbench-train-00010039453",
+        "backtestbench-train-00010098403",
+        "backtestbench-train-00010105973",
+        "backtestbench-train-00010113131",
+        "backtestbench-train-00010113485",
+        "backtestbench-train-00010233794",
+        "backtestbench-train-00010260079",
+        "backtestbench-validation-00010002286",
+        "backtestbench-validation-00010014911",
+        "backtestbench-validation-00010076125",
+        "backtestbench-validation-00010380448",
+        "backtestbench-test-00010220265",
+        "backtestbench-test-00010231217",
+        "backtestbench-test-00010266894",
+        "backtestbench-test-00010295082",
+        "backtestbench-test-00010300980",
+        "backtestbench-test-00010490664",
+        "backtestbench-test-00010514701",
+        "backtestbench-test-00010523566",
+        "backtestbench-test-00010526160",
+        "backtestbench-test-00010579691",
+        "backtestbench-test-00010686955",
+        "backtestbench-test-00010718341",
+        "backtestbench-test-00010815556",
+        "backtestbench-test-00010923106",
+        "backtestbench-test-00010927292",
+        "backtestbench-test-00011001855",
+        "backtestbench-test-00011222107",
+        "backtestbench-test-00011243454",
+        "backtestbench-test-00011387772",
+        "backtestbench-test-00011540502"
+      ],
+      "episode_stage_id": "bc-r1-freeze-episode",
+      "evaluation_stage_id": "bc-r1-freeze-evaluation"
+    }
+  ],
+  "_metadata": {
+    "description": "BacktestBench 4-round evolution campaign with net>=2 promotion gate",
+    "initial_h_prefix": "fe81e756d99f",
+    "development_tasks": 12,
+    "sealed_test_tasks": 20,
+    "promotion_gate": "net_gains_required_2",
+    "rounds": 4,
+    "status": "registered_not_dispatched",
+    "note": "Oct6 initial-vs-frozen-20 result (14\u219216) is the reference. This campaign starts from the same initial H and runs 4 automated E rounds, then re-evaluates frozen H on the same sealed 20."
+  }
+}
