@@ -474,6 +474,31 @@ task-family routing. Never encode an answer, expected numeric value, private
 test, or solution for an individual benchmark task. A task ID may be cited as
 evidence or risk, but must not become a hard-coded solution branch.
 
+## BacktestBench protocol-engine scope rule
+
+For BacktestBench tasks the public `backtest_protocol.md` pins the trading
+conventions (buy at open with Q=floor(cash/open)>=100 shares, full liquidation
+at close, strict buy/sell alternation with sell priority, no buy on the final
+day, forced liquidation at the final close, no costs). Do not author or replace
+a shared `tools/backtestbench.py`-style backtest execution engine as a
+candidate `tools` component. A single shared engine couples every task to one
+implementation of every protocol clause; one subtle misread of the protocol
+(buy/sell priority ordering, final-day handling, the volatility ddof, the
+mark-to-market value on holding days) systematically regresses tasks that the
+parent harness solved correctly with per-task code. The empirical signal is
+that a `tools` change that adds a shared backtest engine reliably gains one or
+two dev tasks while regressing an equal or larger number of held-out tasks that
+were previously passing.
+
+Concretely, for BacktestBench the candidate `tools` component must not introduce
+a reusable backtest execution loop, a reusable factor short-code evaluator, or
+a reusable `indexs.json` metric computer. Per-task factor short-code parsing or
+per-task metric computation written inline by the Worker in its own task
+output is out of scope of this rule; this rule restricts the Evolver's
+candidate `tools` surface. Prefer candidate changes that target a task-solving
+policy (systemprompt), a tool-selection convention (tool_descriptions), or a
+routing/verification step that does not re-implement the trading loop.
+
 ## Safety and evaluation boundary
 
 The evidence and framework-reference workspaces are immutable. The candidate is

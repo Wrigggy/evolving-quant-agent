@@ -17,8 +17,11 @@ each benchmark.
 from __future__ import annotations
 
 import codecs
+import hashlib
 import json
+import math
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -211,6 +214,7 @@ class RevisionOutcome:
     component_checks: tuple[Mapping[str, object], ...] = ()
     public_probe_refs: tuple[str, ...] = ()
     failure: Mapping[str, object] | None = None
+    next_issue_action: Mapping[str, object] | None = None
 
 
 class CampaignBackend(Protocol):
@@ -249,6 +253,7 @@ def qualified_revision_failure_selection(
     """
 
     if isinstance(outcome, RevisionOutcome):
+        backend_id = outcome.backend_id
         status = outcome.status
         decision = outcome.decision
         candidate = outcome.candidate_harness
@@ -256,6 +261,7 @@ def qualified_revision_failure_selection(
         stage_id = outcome.stage_id
         failure: object = outcome.failure
     elif isinstance(outcome, Mapping):
+        backend_id = outcome.get("backend_id")
         status = outcome.get("status")
         decision = outcome.get("decision")
         candidate = outcome.get("candidate_harness")
@@ -268,7 +274,6 @@ def qualified_revision_failure_selection(
     if (
         retained_memory_valid is not True
         or status != "failed"
-        or decision is not None
         or candidate is not None
         or not isinstance(stage_id, str)
         or not stage_id
@@ -286,19 +291,92 @@ def qualified_revision_failure_selection(
     if memory_source_stage != stage_id:
         return None
 
+    if (
+        failure.get("exception_type") == "CandidateAdmissionError"
+        and (
+            (
+                backend_id == "qfbench"
+                and decision == "ACT"
+                and failure.get("kind") == "qfbench_revision_failed"
+                and failure.get("stage") == "evolver_or_candidate_qualification"
+            )
+            or (
+                backend_id == "backtestbench"
+                and failure.get("stage") == "candidate_qualification"
+            )
+        )
+    ):
+        # A rejected package cannot become the research parent.  Its original
+        # attempt and cost still consume this round; advance without replaying
+        # the proposal or creating any candidate Worker.  Same-stage R has
+        # already been independently loaded by the caller.
+        return {
+            "selected": "parent",
+            "reason": "candidate_admission_rejected",
+            "round_status": "rejected",
+            "revision_decision": "ACT",
+            "candidate_admitted": False,
+            "comparison_run": False,
+            "candidate_observed": False,
+            "candidate_promotable": False,
+            "candidate_evaluation_run": False,
+            "revision_failed": True,
+            "revision_failure_retained": True,
+            "automatic_retry": False,
+            "research_parent_unchanged": True,
+            "research_memory_retention_independent": True,
+            "claim_outside_window": False,
+        }
+
+    if decision is not None:
+        return None
+
     error_text = " ".join(
         value
         for value in (failure.get("message"), failure.get("detail"))
         if isinstance(value, str)
     )
-    if not (
+    from .evolver_terminal_failure import valid_terminal_component_budget_failure
+    if (
+        backend_id == "qfbench"
+        and failure.get("kind") == "qfbench_revision_failed"
+        and failure.get("stage") == "evolver_or_candidate_qualification"
+        and failure.get("exception_type") == "SandboxInfrastructureError"
+        and valid_terminal_component_budget_failure(failure.get("terminal_component_failure"),stage_id)
+    ):
+        reason = "qualified_revision_terminal_component_budget_exhaustion"
+    elif (
+        backend_id in {"quantcodeeval", "backtestbench"}
+        and failure.get("exception_type") == "SandboxProxyError"
+        and failure.get("stage") == "evolver_proposal"
+        and failure.get("message") == (
+            "proxy audit was incomplete: proxy audit contains an ambiguous accepted request"
+        )
+    ):
+        # The accepted request must never be retried. Consume this failed
+        # opportunity, preserve its incomplete cost and same-stage valid R,
+        # and allow the next declared round with the unchanged whole parent.
+        reason = "qualified_revision_ambiguous_accepted_request"
+    elif (
+        backend_id in {"quantcodeeval", "backtestbench"}
+        and failure.get("exception_type") == "SandboxProxyError"
+        and failure.get("stage") == "evolver_proposal"
+        and failure.get("message") == (
+            "proxy audit was incomplete: proxy audit finalize failed: exit 124"
+        )
+    ):
+        # The unsealed prefix is not complete accounting. Retain the failed
+        # opportunity and valid same-stage R, discard any unadmitted candidate,
+        # and proceed to the next declared opportunity without repeating a wire.
+        reason = "qualified_revision_proxy_finalize_timeout"
+    elif not (
         failure.get("exception_type") == "SandboxInfrastructureError"
         and failure.get("phase") == "evolver.command"
         and failure.get("stage") == "evolver_proposal"
     ):
         return None
 
-    if _QUALIFIED_REVISION_EMPTY_RESPONSE in error_text:
+    elif _QUALIFIED_REVISION_EMPTY_RESPONSE in error_text:
         reason = "qualified_revision_provider_empty_response"
     elif (
         _QUALIFIED_REVISION_TERMINAL_VALIDATION_EXHAUSTION in error_text
@@ -733,6 +811,44 @@ def validate_campaign_plan(value: object) -> dict[str, object]:
             raise ResearchCampaignError(
                 f"round {round_id} revision_options must be an object"
             )
+        if options.get("active_task_policy") not in {None, "previous_review_or_first_unsolved", "evolver_pick_v1", "evolver_local_pick_v1"}:
+            raise ResearchCampaignError("unknown active task selection policy")
+        selection_backends = options.get("selection_backend_ids")
+        if selection_backends is not None:
+            if (options.get("active_task_policy") not in {"evolver_pick_v1", "evolver_local_pick_v1"}
+                    or not isinstance(selection_backends, list)
+                    or not selection_backends
+                    or any(not isinstance(b, str) or b not in windows for b in selection_backends)
+                    or len(set(selection_backends)) != len(selection_backends)):
+                raise ResearchCampaignError(
+                    "selection_backend_ids must be distinct window backends for evolver_pick_v1"
+                )
+        if options.get("active_task_policy") in {"evolver_pick_v1", "evolver_local_pick_v1"}:
+            local_selection = options.get("active_task_policy") == "evolver_local_pick_v1"
+            pick_id = stage_ids["revision"] + ("-local-panel-selection" if local_selection else "-task-selection")
+            if pick_id in all_stage_ids:
+                raise ResearchCampaignError("task selection stage ID is repeated")
+            all_stage_ids.add(pick_id)
+        if options.get("active_task_policy") == "evolver_local_pick_v1":
+            from .campaign_local_panel import validate_local_options
+            validate_local_options(options, windows=windows, earlier_rounds=rounds,
+                                   segment_checks=value.get("segment_checks"))
+        elif "local_panel_selection" in options:
+            raise ResearchCampaignError("local_panel_selection requires evolver_local_pick_v1")
+        if "repair_pool_policy" in options and options.get("active_task_policy") != "evolver_local_pick_v1":
+            raise ResearchCampaignError("repair_pool_policy requires evolver_local_pick_v1")
+        if "issue_continuation" in options and options.get("active_task_policy") != "evolver_local_pick_v1":
+            raise ResearchCampaignError("issue_continuation requires evolver_local_pick_v1")
+        policy = options.get("continuation_policy")
+        if policy is not None:
+            if policy != "llm_continuation_v1":
+                raise ResearchCampaignError("unknown continuation policy")
+            if options.get("promotion_net_gains_required") is not None:
+                raise ResearchCampaignError("LLM continuation cannot also impose a net-gain gate")
+            review_id = stage_ids["revision"] + "-continuation-review"
+            if review_id in all_stage_ids:
+                raise ResearchCampaignError("continuation review stage ID is repeated")
+            all_stage_ids.add(review_id)
         iteration = options.get("iteration")
         if type(iteration) is not int or iteration < 1:
             raise ResearchCampaignError(
@@ -818,6 +934,37 @@ def validate_campaign_plan(value: object) -> dict[str, object]:
         normalized["observe_partial_candidates"] = observe_partial_candidates
     if "return_candidate_feedback" in value:
         normalized["return_candidate_feedback"] = return_candidate_feedback
+    if "continuation_review_interval" in value:
+        interval = value["continuation_review_interval"]
+        if type(interval) is not int or interval < 1:
+            raise ResearchCampaignError("continuation_review_interval must be a positive integer")
+        if not rounds or any(row["revision_options"].get("continuation_policy") != "llm_continuation_v1" for row in rounds):
+            raise ResearchCampaignError("review interval requires LLM continuation on every round")
+        if value.get("development_window_policy") not in {None, "segmented_v1", "local_repair_v1"}:
+            raise ResearchCampaignError("unknown development window policy")
+        if value.get("development_window_policy") not in {"segmented_v1", "local_repair_v1"} and any(row["comparison_windows"] != rounds[0]["comparison_windows"] for row in rounds):
+            raise ResearchCampaignError("review interval requires identical development windows")
+        normalized["continuation_review_interval"] = interval
+    if "development_window_policy" in value:
+        if value["development_window_policy"] not in {"segmented_v1", "local_repair_v1"} or "continuation_review_interval" not in value:
+            raise ResearchCampaignError("segmented windows require an explicit review interval")
+        normalized["development_window_policy"] = value["development_window_policy"]
+        if value["development_window_policy"] == "local_repair_v1":
+            if not set(benchmarks) <= {"qfbench", "quantcodeeval"}:
+                raise ResearchCampaignError("local repair reviews require native QFBench/QCE evidence")
+            segments = []
+            for row in rounds:
+                segment = _text(row["revision_options"].get("repair_segment_id"), label="repair_segment_id")
+                if segment in segments and segment != segments[-1]:
+                    raise ResearchCampaignError("repair segments must be contiguous")
+                if not segments or segment != segments[-1]:
+                    segments.append(segment)
+    if "segment_checks" in value:
+        from .campaign_segment_measurement import validate_checks
+        normalized["segment_checks"] = validate_checks(value["segment_checks"], normalized, all_stage_ids)
+    if "whole_h_review_checks" in value:
+        from .campaign_review_measurement import validate_checks
+        normalized["whole_h_review_checks"] = validate_checks(value["whole_h_review_checks"], normalized, all_stage_ids)
     copied = _json_copy(normalized, label="campaign plan")
     assert isinstance(copied, dict)
     return copied
@@ -854,6 +1001,15 @@ def initialize_campaign(*, plan: Mapping[str, object], state_path: str | Path) -
         "failure_ledger": [],
         "accounting": _accounting_totals([]),
     }
+    if any(row["revision_options"].get("continuation_policy") == "llm_continuation_v1"
+           for row in normalized_plan["rounds"]):
+        state["initial_harness"] = normalized_plan["baselines"][0]["harness"]
+        state["retained_checkpoints"] = [{"harness": normalized_plan["initial_research_parent"],
+                                          "source": "initial_research_parent"}]
+        state["pending_review"] = None
+        if normalized_plan.get("continuation_review_interval", 1) > 1:
+            state["deferred_review_pairs"] = []
+            state["terminal_deferred_review"] = False
     if normalized_plan.get("return_candidate_feedback") is True:
         state["latest_candidate_observation_round_index"] = None
     _atomic_json(path, state)
@@ -1579,10 +1735,37 @@ def _start_round(state: dict[str, object]) -> bool:
     plan = state["plan"]
     index = int(state["round_index"])
     rounds = plan["rounds"]
+    if plan.get("segment_checks"):
+        from .campaign_segment_measurement import route_check
+        if route_check(state):
+            return False
     if index >= len(rounds):
+        if state.get("deferred_review_pairs"):
+            from .campaign_continuation import review_request
+            state["terminal_deferred_review"] = True
+            state["pending_review"] = review_request(state)
+            state["phase"] = "continuation_review"
+            return False
         state["phase"] = "freeze_episode"
         return False
     round_plan = rounds[index]
+    # Flush the old measured segment before changing its comparison population.
+    # ABSTAIN does not count as ACT, so a boundary may arrive before the interval.
+    deferred = state.get("deferred_review_pairs", [])
+    if plan.get("development_window_policy") == "local_repair_v1":
+        changed_review_scope = bool(deferred and deferred[0]["repair_segment_id"] !=
+                                   round_plan["revision_options"]["repair_segment_id"])
+    else:
+        changed_review_scope = bool(deferred and (
+            deferred[0]["comparison_windows"] != round_plan["comparison_windows"]
+            or round_plan["revision_options"].get("active_task_policy") == "evolver_local_pick_v1"))
+    if changed_review_scope:
+        from .campaign_continuation import review_request
+        state["terminal_deferred_review"] = True
+        state["segment_boundary_review"] = True
+        state["pending_review"] = review_request(state)
+        state["phase"] = "continuation_review"
+        return False
     state["current_round"] = {
         "round_id": round_plan["round_id"],
         "active_backend_id": round_plan["active_backend_id"],
@@ -1601,7 +1784,8 @@ def _start_round(state: dict[str, object]) -> bool:
         "candidate_evaluations": {},
         "selection": None,
     }
-    state["phase"] = "parent_episode"
+    state["phase"] = ("local_panel_selection" if round_plan["revision_options"].get(
+        "active_task_policy") == "evolver_local_pick_v1" else "parent_episode")
     return True
 
 
@@ -1779,6 +1963,63 @@ def _seed_related_completed_rounds(
             raise ResearchCampaignError("seed round has no completed candidate pair")
         resolved.append(related)
     return tuple(resolved)
+
+
+def _parent_pass_rates(state, current, backend_id):
+    """Pool every observation of the current parent harness on one backend.
+
+    A single parent episode is a noisy reference: a task the parent usually
+    solves can fail once and make an unchanged candidate look like a gain.
+    The baseline and every earlier round that ran the same parent harness are
+    pooled into a per-task pass rate.
+    """
+    parent_id = current['parent_harness']['harness_id']
+    observations = [current['parent_evaluations'][backend_id]]
+    for row in state['baseline_results']:
+        if row['backend_id'] == backend_id and row.get('evaluation'):
+            observations.append(row['evaluation'])
+    for done in state['completed_rounds']:
+        for key in ('parent_evaluations', 'candidate_evaluations'):
+            value = (done.get(key) or {}).get(backend_id)
+            if value:
+                observations.append(value)
+    passes = {}
+    for value in observations:
+        if value['harness']['harness_id'] != parent_id:
+            continue
+        for task_id, metric in value['metrics'].items():
+            if 'binary_reward' in metric:
+                passes.setdefault(task_id, []).append(int(metric['binary_reward']))
+    return {task_id: sum(v) / len(v) for task_id, v in passes.items()}
+
+
+def _common_scored_selection(state, current):
+    windows = current['comparison_windows']
+    required = (current.get('revision_options') or {}).get('promotion_net_gains_required')
+    if required is None or set(windows) != {'backtestbench'}:
+        return None
+    gains = regress = 0
+    detail = {}
+    for backend_id, window in windows.items():
+        rates = _parent_pass_rates(state, current, backend_id)
+        cand = _evaluation(current['candidate_evaluations'][backend_id])
+        common = [t for t in window if t in rates and t in cand.metrics and 'binary_reward' in cand.metrics[t]]
+        deltas = {}
+        for t in common:
+            passed = int(cand.metrics[t]['binary_reward'])
+            if passed and rates[t] < 0.5:
+                deltas[t] = 1
+            elif not passed and rates[t] > 0.5:
+                deltas[t] = -1
+            else:
+                deltas[t] = 0
+        gains += sum(d > 0 for d in deltas.values())
+        regress += sum(d < 0 for d in deltas.values())
+        detail[backend_id] = {'common_task_ids': common, 'excluded_task_ids': [t for t in window if t not in common], 'parent_pass_rates': {t: rates[t] for t in common}, 'per_task_reward_deltas': deltas}
+    if not any(v['common_task_ids'] for v in detail.values()):
+        return None
+    promote = gains - regress >= max(required, 1)
+    return {'selected': 'candidate' if promote else 'parent', 'reason': 'pooled_parent_comparison', 'comparison_run': True, 'candidate_observed': True, 'candidate_promotable': promote, 'net_task_gains': gains, 'net_task_regressions': regress, 'promotion_net_gains_required': required, 'comparison_detail': detail, 'taskwise_splicing': False, 'claim_outside_window': False}
 
 
 def _finish_round(state: dict[str, object], *, selection: Mapping[str, object]) -> None:
@@ -2163,6 +2404,8 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
     state = _read_object(path, label="campaign state")
     if state.get("protocol") != PROTOCOL:
         raise ResearchCampaignError("campaign state protocol differs")
+    if state.get("status") == "pending_review" and state.get("phase") == "continuation_review":
+        state["status"] = "running"
     if state.get("status") != "running":
         return state
 
@@ -2180,6 +2423,30 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
                 _finish_terminal_comparison(state)
                 return _persist_state(path, state)
             current = state["current_round"]
+            if current["revision_options"].get("continuation_policy") == "llm_continuation_v1":
+                from .campaign_continuation import review_request, defer_review
+                interval = state["plan"].get("continuation_review_interval", 1)
+                measured = len(state.get("deferred_review_pairs", [])) + 1
+                final_round = state["round_index"] == len(state["plan"]["rounds"]) - 1
+                if state["plan"].get("development_window_policy") == "local_repair_v1":
+                    boundary = (not final_round and state["plan"]["rounds"][state["round_index"] + 1]["revision_options"]["repair_segment_id"] != current["revision_options"]["repair_segment_id"])
+                else:
+                    boundary = (not final_round and state["plan"]["rounds"][state["round_index"] + 1]["comparison_windows"] != current["comparison_windows"])
+                if interval > 1 and measured < interval and not final_round and not boundary:
+                    backend = _backend(backends, str(current["active_backend_id"]))
+                    defer_review(state, backend)
+                    _finish_round(state, selection={
+                        "selected": "candidate", "policy": "llm_continuation_v1",
+                        "decision": "DEFER_REVIEW_CONTINUE_CANDIDATE",
+                        "reason": state["continuation_context"]["reason"],
+                        "comparison_run": True, "llm_review_performed": False,
+                        "numeric_gate_applied": False, "taskwise_splicing": False,
+                        "review_interval": interval, "measured_candidates_since_review": measured,
+                    })
+                    return _persist_state(path, state)
+                state["pending_review"] = review_request(state)
+                state["phase"] = "continuation_review"
+                return _persist_state(path, state)
             parents = {
                 backend_id: _evaluation(value)
                 for backend_id, value in current["parent_evaluations"].items()
@@ -2192,7 +2459,7 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
                 evaluation.status == "partial"
                 for evaluation in (*parents.values(), *candidates.values())
             ):
-                selection = _incomplete_candidate_comparison_selection(
+                selection = _common_scored_selection(state, current) or _incomplete_candidate_comparison_selection(
                     parents=current["parent_evaluations"],
                     candidates=current["candidate_evaluations"],
                 )
@@ -2204,7 +2471,7 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
                         raise ResearchCampaignError(
                             "revision_options.promotion_net_gains_required must be a non-negative integer"
                         )
-                selection = compare_benchmark_windows(
+                selection = _common_scored_selection(state, current) or compare_benchmark_windows(
                     parents=parents,
                     candidates=candidates,
                     expected_windows=current["comparison_windows"],
@@ -2229,7 +2496,107 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
 
     phase = str(state["phase"])
     try:
-        if phase == "baseline_episode":
+        if (phase in {"parent_episode", "parent_evaluation", "revision", "candidate_episode", "candidate_evaluation"}
+                and state.get("current_round", {}).get("revision_options", {}).get("active_task_policy") == "evolver_local_pick_v1"):
+            from .campaign_local_panel import verify_frozen_local_scope
+            verify_frozen_local_scope(state["current_round"])
+        if phase in {"segment_episode", "segment_evaluation"}:
+            from .campaign_segment_measurement import advance_check
+            advance_check(state, backends)
+
+        elif phase in {"whole_h_review_episode", "whole_h_review_evaluation"}:
+            from .campaign_review_measurement import advance_check
+            advance_check(state, backends)
+
+        elif phase == "local_panel_selection":
+            from .campaign_local_panel import select_local_panel
+            current = state["current_round"]
+            backend = _backend(backends, str(current["active_backend_id"]))
+            request, result, frozen = select_local_panel(state=state, state_path=path, backend=backend)
+            state["stage_ledger"].append(_ledger_row(
+                kind=("issue_continuation" if result.get("allocation_origin") == "continued_issue" else "task_selection"),
+                stage_id=request["stage_id"], backend_id=backend.backend_id,
+                status="complete", accounting=result["accounting"], result_uri=result["result_uri"],
+            ))
+            current["declared_comparison_windows"] = current["comparison_windows"]
+            current["declared_stage_ids"] = current["stage_ids"]
+            current["comparison_windows"] = frozen["comparison_windows"]
+            current["backend_order"] = frozen["backend_order"]
+            current["stage_ids"] = {
+                key: (value if key == "revision" else {b: value[b] for b in current["backend_order"]})
+                for key, value in current["declared_stage_ids"].items()
+            }
+            current["active_backend_id"], current["active_task_id"] = result["backend_id"], result["task_id"]
+            current["focus_selection"] = result
+            current["frozen_local_panel"] = frozen
+            state["phase"] = "parent_episode"
+
+        elif phase == "continuation_review":
+            from .campaign_continuation import review_request, validate_review
+            request = review_request(state)
+            terminal_review = state.get("terminal_deferred_review", False)
+            current = (next(row for row in state["completed_rounds"] if row["round_id"] == request["round_id"])
+                       if terminal_review else state["current_round"])
+            if request != state.get("pending_review"):
+                raise ResearchCampaignError("pending continuation input changed")
+            if state['plan'].get('whole_h_review_checks'):
+                from .campaign_review_measurement import route_check, review_with_measurement
+                if route_check(state, request):
+                    return _persist_state(path, state)
+                request = review_with_measurement(state, request)
+            backend = _backend(backends, str(current["active_backend_id"]))
+            result = validate_review(backend.run_continuation_review(request), request)
+            uri = _text(result.get("result_uri"), label="continuation review result URI")
+            state["stage_ledger"] = [row for row in state["stage_ledger"]
+                                     if row["stage_id"] != request["stage_id"]]
+            state["stage_ledger"].append(_ledger_row(
+                kind="continuation_review", stage_id=request["stage_id"],
+                backend_id=backend.backend_id, status="complete",
+                accounting=result["accounting"], result_uri=uri,
+            ))
+            decision = result["decision"]
+            selected = "parent" if decision == "KEEP_PARENT" else "candidate"
+            state["research_parent"] = request["candidate_harness"] if selected == "candidate" else request["parent_harness"]
+            # All complete snapshots remain reachable, including temporarily weaker branches.
+            state["retained_checkpoints"].append({
+                "harness": current["revision"]["candidate_harness"],
+                "round_id": current["round_id"], "review_result_uri": uri,
+                "decision": decision, "selected_for_continuation": selected == "candidate",
+            })
+            state["continuation_context"] = {
+                "decision": decision, "reason": result["reason"],
+                "next_intent": result["next_intent"], "evidence_refs": result["evidence_refs"],
+                "review_result_uri": uri,
+                **({"next_task_id":result["next_task_id"]} if result.get("next_task_id") is not None else {}),
+            }
+            current["continuation_review"] = result
+            # A never-dispatched review can be renamed by an explicit terminal
+            # postlude. Its one-use mapping must not capture later reviews.
+            state.pop("unstarted_review_identity", None)
+            state["pending_review"] = None
+            if "deferred_review_pairs" in state:
+                state["deferred_review_pairs"] = []
+                state["terminal_deferred_review"] = False
+            if terminal_review:
+                receipt = {"request": request, "result": result,
+                           "selected_harness": state["research_parent"]}
+                if state.pop("segment_boundary_review", False):
+                    state.setdefault("segment_boundary_reviews", []).append(receipt)
+                    state["phase"] = "round_start"
+                else:
+                    state["final_deferred_review"] = receipt
+                    state["phase"] = "round_start" if state["plan"].get("segment_checks") else "freeze_episode"
+                return _persist_state(path, state)
+            _finish_round(state, selection={
+                "selected": selected, "policy": "llm_continuation_v1", "decision": decision,
+                "reason": result["reason"], "next_intent": result["next_intent"],
+                "evidence_refs": result["evidence_refs"], "review_result_uri": uri,
+                "comparison_run": True, "claim_outside_window": False,
+                "taskwise_splicing": False, "numeric_gate_applied": False,
+                **({"selection_window": request["selection_window"]} if "selection_window" in request else {}),
+            })
+
+        elif phase == "baseline_episode":
             index = int(state["baseline_index"])
             baseline = state["plan"]["baselines"][index]
             backend = _backend(backends, str(baseline["backend_id"]))
@@ -2368,12 +2735,18 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
                         _evaluation(value).status == "partial"
                         for value in current["parent_evaluations"].values()
                     )
-                    if is_candidate and (
+                    if is_candidate and current["revision_options"].get("continuation_policy") == "llm_continuation_v1":
+                        # Unknown outcomes are review evidence, not automatic numeric rejection.
+                        state["phase"] = "selection"
+                    elif is_candidate and (
                         partial_window or parent_partial_window
                     ):
+                        common_selection = _common_scored_selection(state, current)
+                        if common_selection is not None and common_selection["selected"] == "candidate":
+                            state["research_parent"] = current["revision"]["candidate_harness"]
                         _finish_round(
                             state,
-                            selection=_incomplete_candidate_comparison_selection(
+                            selection=common_selection or _incomplete_candidate_comparison_selection(
                                 parents=current["parent_evaluations"],
                                 candidates=current["candidate_evaluations"],
                             ),
@@ -2428,6 +2801,15 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
                                 parent_harness=parent_harness,
                             )
                         )
+                        if current["revision_options"].get("active_task_policy") == "evolver_pick_v1":
+                            selection_backends = current["revision_options"].get(
+                                "selection_backend_ids", list(current["comparison_windows"]))
+                            active_available = any(
+                                _backend(backends, name).active_revision_source_available(
+                                    episode=evidence_by_backend[name], evaluation=evaluations_by_backend[name],
+                                    task_id=task, parent_harness=parent_harness)
+                                for name, tasks in current["comparison_windows"].items()
+                                if name in selection_backends for task in tasks)
                         if type(active_available) is not bool:
                             raise ResearchCampaignError(
                                 "active revision source admission must return a boolean"
@@ -2450,6 +2832,21 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
                             state["phase"] = "revision"
                     else:
                         state["phase"] = "selection" if is_candidate else "revision"
+
+        elif phase == "revision" and state["current_round"]["revision_options"].get("active_task_policy") == "evolver_pick_v1" and not state["current_round"].get("focus_selection"):
+            from .campaign_task_selection import selection_request, validate_selection
+            current = state["current_round"]
+            request = selection_request(state, backends)
+            backend = _backend(backends, str(current["active_backend_id"]))
+            result = validate_selection(backend.run_task_selection(request), request)
+            current["focus_selection"] = result
+            current["active_backend_id"] = result["backend_id"]
+            current["active_task_id"] = result["task_id"]
+            state["stage_ledger"].append(_ledger_row(
+                kind="task_selection", stage_id=request["stage_id"],
+                backend_id=backend.backend_id, status="complete",
+                accounting=result["accounting"], result_uri=result["result_uri"],
+            ))
 
         elif phase == "revision":
             current = state["current_round"]
@@ -2495,6 +2892,26 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
                 raise ResearchCampaignError(
                     "partial revision phase lost its active Worker evidence"
                 )
+            if current["revision_options"].get("active_task_policy") == "previous_review_or_first_unsolved":
+                eligible = [task for task in current["comparison_windows"][active_backend_id]
+                            if backend.active_revision_source_available(
+                                episode=evidence_by_backend[active_backend_id],
+                                evaluation=evaluations_by_backend[active_backend_id],
+                                task_id=task, parent_harness=parent_harness)]
+                requested = (state.get("continuation_context") or {}).get("next_task_id")
+                unsolved = [task for task in eligible
+                            if evaluations_by_backend[active_backend_id].metrics.get(task, {}).get("binary_reward") == 0]
+                if requested in eligible:
+                    selected, source = requested, "previous_evolver_review"
+                elif unsolved:
+                    selected, source = unsolved[0], "first_current_unsolved_development_task"
+                elif eligible:
+                    selected, source = eligible[0], "first_current_delivered_development_task"
+                else:
+                    raise ResearchCampaignError("no delivered development task available for revision")
+                current["active_task_id"] = selected
+                current["focus_selection"] = {"task_id":selected, "source":source,
+                                               "measurement_window_unchanged":True}
             revision_stage_id = str(current["stage_ids"]["revision"])
             result = backend.run_revision(
                 RevisionRequest(
@@ -2506,7 +2923,16 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
                     parent_evaluation=evaluations_by_backend[active_backend_id],
                     active_task_id=str(current["active_task_id"]),
                     research_memory=_memory(state.get("research_memory"), label="research memory"),
-                    options=dict(current["revision_options"]),
+                    options={**dict(current["revision_options"]), **(
+                        {"continuation_context": state["continuation_context"]}
+                        if state.get("continuation_context") else {}
+                    ), **({"continuation_context": {
+                        **(state.get("continuation_context") or {}),
+                        "research_task_selection": current["focus_selection"],
+                        "next_intent": current["focus_selection"]["next_intent"],
+                        **({"issue_control": {"allow_evolver_release": True}}
+                           if current["revision_options"].get("issue_continuation", {}).get("allow_evolver_release") is True else {}),
+                    }} if current.get("focus_selection", {}).get("policy") in {"evolver_pick_v1", "evolver_local_pick_v1"} else {})},
                     evidence_by_backend=evidence_by_backend,
                     evaluations_by_backend=evaluations_by_backend,
                     investigate_partial_windows=(
@@ -2622,6 +3048,40 @@ def advance_campaign(*, state_path: str | Path, backends: Mapping[str, CampaignB
         else:
             raise ResearchCampaignError(f"unsupported campaign phase: {phase}")
     except Exception as exc:  # stage boundary retains failure; never retries.
+        if phase in {"whole_h_review_episode", "whole_h_review_evaluation"}:
+            from .campaign_review_measurement import record_failure
+            record_failure(state, exc)
+            return _persist_state(path, state)
+        if phase in {"segment_episode", "segment_evaluation"}:
+            from .campaign_segment_measurement import record_failure
+            record_failure(state, exc)
+            return _persist_state(path, state)
+        if phase == "local_panel_selection" or (phase == "revision" and state["current_round"]["revision_options"].get("active_task_policy") == "evolver_pick_v1" and not state["current_round"].get("focus_selection")):
+            current = state["current_round"]
+            stage_id = current["stage_ids"]["revision"] + ("-local-panel-selection" if phase == "local_panel_selection" else "-task-selection")
+            state["stage_ledger"].append(_ledger_row(
+                kind="task_selection", stage_id=stage_id, backend_id=current["active_backend_id"],
+                status="failed", accounting=getattr(exc, "accounting", None) or {"cost_complete": False, "provider_cost_usd": None},
+                result_uri=getattr(exc, "result_uri", None) or "task-selection-failed",
+            ))
+            _stop_for_failure(state, stage_id=stage_id, backend_id=current["active_backend_id"],
+                failure={"kind": "task_selection_failed", "message": str(exc)})
+            return _persist_state(path, state)
+        if phase == "continuation_review":
+            state["status"] = "pending_review"
+            state["pending_review_failure"] = {
+                "exception_type": type(exc).__name__, "message": str(exc),
+            }
+            stage_id = state["pending_review"]["stage_id"]
+            if not any(row["stage_id"] == stage_id for row in state["stage_ledger"]):
+                state["stage_ledger"].append(_ledger_row(
+                    kind="continuation_review", stage_id=stage_id,
+                    backend_id=str(state["pending_review"]["revision"]["backend_id"]), status="pending_review",
+                    accounting=getattr(exc, "accounting", None) or {"cost_complete": False, "provider_cost_usd": None},
+                    result_uri=getattr(exc, "result_uri", None) or "pending-review",
+                ))
+            # Retain the candidate and all measured windows until this same review is recovered.
+            return _persist_state(path, state)
         if isinstance(exc, ResearchCampaignError):
             failure = {"kind": "campaign_stage_error", "message": str(exc)}
         else:
@@ -2713,9 +3173,30 @@ class QuantCodeEvalBackend:
 
     backend_id = "quantcodeeval"
 
+    def _continuation_backend(self):
+        from .mixed_campaign_continuation import MixedCampaignContinuation
+        backend = MixedCampaignContinuation(self.config.get("continuation_review"))
+        if set(backend.allowed.get(self.backend_id, [])) != set(self.development_tasks):
+            raise ResearchCampaignError("QCE continuation development scope differs from backend panel")
+        return backend
+
+    def record_development_pair(self, request):
+        return self._continuation_backend().record_development_pair(request)
+
+    def run_continuation_review(self, request):
+        return self._continuation_backend().run_continuation_review(request)
+
+    def run_task_selection(self, request):
+        return self._continuation_backend().run_task_selection(request)
+
     def __init__(self, config: Mapping[str, object], *, command_runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run) -> None:
         self.config = dict(config)
         self.command_runner = command_runner
+        failed_revision = self.config.get("failed_observation_revision", False)
+        if type(failed_revision) is not bool:
+            raise ResearchCampaignError("failed_observation_revision must be boolean")
+        if failed_revision and self.config.get("evolver_profile") != EARLY_INTERVENTION_FULL_HARNESS_PROFILE:
+            raise ResearchCampaignError("failed-observation revision requires the early-intervention profile")
         configured = self.config.get("backend_id", self.backend_id)
         if configured != self.backend_id:
             raise ResearchCampaignError("QuantCodeEval backend_id differs")
@@ -3271,6 +3752,34 @@ class QuantCodeEvalBackend:
             and failure.get("message")
             == "worker output membership differs from the benchmark contract: expected=['strategy.py'], found=[]"
         )
+        # An exact pre-session namespace collision has no Worker or provider
+        # execution. Preserve it as a null cell so delivered siblings can be
+        # evaluated once; never reinterpret it as success or a zero score.
+        startup_namespace_collision = False
+        if isinstance(observation, Mapping) and isinstance(failure, Mapping):
+            run_id, attempt_id = observation.get("run_id"), observation.get("attempt_id")
+            if (isinstance(run_id, str) and re.fullmatch(r"[A-Za-z0-9._-]+", run_id)
+                    and isinstance(attempt_id, str) and re.fullmatch(r"[0-9a-f]{64}", attempt_id)):
+                identity = hashlib.sha256((run_id + "\x00" + attempt_id).encode()).hexdigest()
+                suffix = f"-{identity[:12]}-internal"
+                network = f"qea-{run_id}-{attempt_id}"[:255-len(suffix)] + suffix
+                expected = ("proxy.network.create: RootlessDockerError: Docker internal network create failed: "
+                            "Error response from daemon: network with name " + network + " already exists")
+                accounting = cell.get("actual_accounting")
+                startup_namespace_collision = bool(
+                    failure.get("exception_type") == "SandboxProxyError"
+                    and failure.get("message") == expected
+                    and isinstance(evidence, Mapping)
+                    and all(evidence.get(key) is None for key in (
+                        "command_uri", "event_journal_uri", "final_text_uri", "raw_trace_uri", "summary_uri",
+                        "proxy_audit_uri", "proxy_quarantine_uri", "proxy_unsealed_audit_uri", "worker_execution_uri"))
+                    and isinstance(accounting, Mapping)
+                    and all(accounting.get(key) is False for key in ("audit_present", "audit_complete", "cost_complete"))
+                    and all(accounting.get(key) is None for key in (
+                        "canonical_audit_uri", "request_count", "completed_request_count", "provider_cost_usd",
+                        "input_tokens", "output_tokens", "total_tokens", "quarantine_evidence_uri", "unsealed_audit_uri"))
+                    and isinstance(official, Mapping) and official.get("reward") is None and official.get("score") is None
+                )
         provider_tool_cutoff = bool(
             isinstance(failure, Mapping)
             and failure.get("exception_type") == "SandboxInfrastructureError"
@@ -3303,6 +3812,94 @@ class QuantCodeEvalBackend:
             and official.get("score") is None
         )
         accounting = cell.get("actual_accounting")
+        # This official timeout has a retained command/journal but no accepted
+        # delivery. A quarantined proxy ledger keeps billing incomplete; that
+        # independent fact must not discard the other original deliveries.
+        quarantined_official_worker_timeout = bool(
+            isinstance(failure, Mapping)
+            and failure.get("exception_type") == "SandboxWorkerTimeout"
+            and failure.get("message")
+            == "worker exceeded the official agent timeout (3600s)"
+            and isinstance(evidence, Mapping)
+            and all(isinstance(evidence.get(key), str) and evidence[key].strip()
+                    for key in ("command_uri", "event_journal_uri",
+                                "proxy_quarantine_uri", "proxy_unsealed_audit_uri"))
+            and all(evidence.get(key) is None for key in (
+                "proxy_audit_uri", "worker_execution_uri", "artifact_contract_uri",
+                "raw_trace_uri", "summary_uri", "final_text_uri"))
+            and evidence.get("artifact_paths") == []
+            and isinstance(accounting, Mapping)
+            and all(accounting.get(key) is False for key in (
+                "audit_present", "audit_complete", "cost_complete"))
+            and all(accounting.get(key) is None for key in (
+                "canonical_audit_uri", "provider_cost_usd", "request_count",
+                "completed_request_count", "input_tokens", "output_tokens", "total_tokens"))
+            and accounting.get("quarantine_evidence_uri") == evidence["proxy_quarantine_uri"]
+            and accounting.get("unsealed_audit_uri") == evidence["proxy_unsealed_audit_uri"]
+            and isinstance(official, Mapping)
+            and official.get("status") == "not_run"
+            and official.get("reward") is None and official.get("score") is None
+        )
+        # A recorded transport timeout is an unscored missing delivery, not a
+        # reason to discard other tasks or replay the failed Worker. Audit
+        # completeness and price completeness are separate: retain unknown USD.
+        retained_llm_request_timeout = bool(
+            isinstance(failure, Mapping)
+            and failure.get("exception_type") == "SandboxInfrastructureError"
+            and failure.get("phase") == "worker.command"
+            and "LLM call failed (attempt 1/1): Request timed out."
+            in str(failure.get("message", ""))
+            and isinstance(evidence, Mapping)
+            and evidence.get("summary_uri")
+            and evidence.get("raw_trace_uri")
+            and evidence.get("command_uri")
+            and evidence.get("proxy_audit_uri")
+            and evidence.get("worker_execution_uri") is None
+            and isinstance(accounting, Mapping)
+            and accounting.get("audit_present") is True
+            and accounting.get("audit_complete") is True
+            and accounting.get("canonical_audit_uri") == evidence.get("proxy_audit_uri")
+            and type(accounting.get("request_count")) is int
+            and type(accounting.get("completed_request_count")) is int
+            and 0 <= accounting["completed_request_count"] <= accounting["request_count"]
+            and accounting["request_count"] > 0
+            and ((accounting.get("cost_complete") is False
+                  and accounting.get("provider_cost_usd") is None)
+                 or (accounting.get("cost_complete") is True
+                     and isinstance(accounting.get("provider_cost_usd"), (int, float))
+                     and not isinstance(accounting.get("provider_cost_usd"), bool)
+                     and math.isfinite(accounting["provider_cost_usd"])
+                     and accounting["provider_cost_usd"] >= 0))
+            and isinstance(official, Mapping)
+            and official.get("reward") is None
+            and official.get("score") is None
+        )
+        retained_proxy_request_failure = bool(
+            isinstance(failure, Mapping)
+            and failure.get("exception_type") == "SandboxProxyError"
+            and failure.get("message") in {
+                "proxy audit was incomplete: proxy audit contains an ambiguous accepted request",
+                "proxy audit was incomplete: proxy audit contains a completed provider HTTP error",
+                "proxy audit was incomplete: proxy audit has an incomplete rate-limit retry group",
+            }
+            and isinstance(evidence, Mapping)
+            and evidence.get("command_uri")
+            and evidence.get("proxy_audit_uri")
+            and evidence.get("worker_execution_uri") is None
+            and isinstance(accounting, Mapping)
+            and accounting.get("audit_present") is True
+            and accounting.get("audit_complete") is False
+            and accounting.get("cost_complete") is False
+            and accounting.get("provider_cost_usd") is None
+            and accounting.get("canonical_audit_uri") == evidence.get("proxy_audit_uri")
+            and type(accounting.get("request_count")) is int
+            and type(accounting.get("completed_request_count")) is int
+            and 0 <= accounting["completed_request_count"] <= accounting["request_count"]
+            and accounting["request_count"] > 0
+            and isinstance(official, Mapping)
+            and official.get("reward") is None
+            and official.get("score") is None
+        )
         quarantined_proxy_finalize_timeout = bool(
             isinstance(failure, Mapping)
             and failure.get("exception_type") == "SandboxProxyError"
@@ -3348,15 +3945,23 @@ class QuantCodeEvalBackend:
             and observation.get("parent_artifact_seed") is None
             and (
                 missing_membership
+                or startup_namespace_collision
                 or provider_tool_cutoff
                 or official_worker_timeout
+                or quarantined_official_worker_timeout
+                or retained_proxy_request_failure
                 or quarantined_proxy_finalize_timeout
+                or retained_llm_request_timeout
             )
             and isinstance(evidence, Mapping)
             and (
                 evidence.get("artifact_paths") == []
                 or (
-                    official_worker_timeout
+                    # A proxy failure can leave working files even though no
+                    # execution or artifact contract was accepted. Retain the
+                    # original failure as unscored; these paths are not an
+                    # eligible delivery and must never enter the evaluator.
+                    (official_worker_timeout or retained_proxy_request_failure)
                     and isinstance(evidence.get("artifact_paths"), list)
                     and all(
                         isinstance(path, str) and path
@@ -3905,7 +4510,7 @@ class QuantCodeEvalBackend:
         task_id: str,
         parent_harness: HarnessRef,
     ) -> bool:
-        """Admit only an original, delivered QCE Worker observation."""
+        """Admit delivered evidence, or an explicitly enabled original failure."""
 
         if not (
             episode.backend_id == self.backend_id
@@ -3936,7 +4541,11 @@ class QuantCodeEvalBackend:
                 )
                 is None
             ):
-                return False
+                if self.config.get("failed_observation_revision") is not True:
+                    return False
+                return self._failed_revision_source_admission(
+                    episode=episode, evaluation=evaluation, task_id=task_id,
+                ) is not None
             raise ResearchCampaignError(
                 "active QCE evidence is not a qualified delivered observation"
             )
@@ -4027,6 +4636,57 @@ class QuantCodeEvalBackend:
                 "active QCE original attempt identity differs"
             )
         return True
+
+    def _failed_revision_source_admission(
+        self, *, episode: EpisodeEvidence, evaluation: OfficialEvaluation,
+        task_id: str,
+    ) -> dict[str, object] | None:
+        """Bind original nondelivery to its current H without inventing delivery.
+
+        This is an investigation source, not a scored parent artifact. Historical
+        sources remain separate, and the controller retains the original missing
+        cell and the declared fresh candidate measurement window.
+        """
+        if self.config.get("failed_observation_revision") is not True:
+            return None
+        if task_id not in self.development_tasks:
+            raise ResearchCampaignError("failed revision source is outside development tasks")
+        if (
+            episode.status != "partial" or evaluation.status != "partial"
+            or task_id in evaluation.metrics
+            or task_id not in evaluation.selection_summary.get("missing_task_ids", [])
+            or task_id not in evaluation.selection_summary.get("missing_official_metrics", {})
+            or evaluation.selection_summary["missing_official_metrics"][task_id] is not None
+        ):
+            raise ResearchCampaignError("failed revision source is not an explicit missing parent cell")
+        from .qfbench_research_episode import (
+            QFBenchResearchEpisodeError, _failed_qce_comparison_observation,
+        )
+        try:
+            retained = _failed_qce_comparison_observation(episode=episode, task_id=task_id)
+        except QFBenchResearchEpisodeError as exc:
+            raise ResearchCampaignError(f"failed revision source identity differs: {exc}") from exc
+        if retained is None:
+            raise ResearchCampaignError("failed revision source has no original terminal observation")
+        root, observation, attempt_id, _evidence = retained
+        return {
+            "protocol": "original-failed-worker-revision-source-v1",
+            "role": "current_parent_failed_worker_observation",
+            "backend_id": self.backend_id, "task_id": task_id,
+            "parent_harness": asdict(episode.harness),
+            "episode_stage_id": episode.stage_id,
+            "evaluation_stage_id": evaluation.stage_id,
+            "condition_id": episode.condition_id,
+            "observation_run_dir": root.as_posix(),
+            "observation_run_id": observation["run_id"],
+            "observation_sha256": hashlib.sha256((root / "WORKER-OBSERVATION-RESULT.json").read_bytes()).hexdigest(),
+            "attempt_id": attempt_id,
+            "failure_type": observation["failure"]["exception_type"],
+            "official_metric": None,
+            "delivered_worker_execution": False,
+            "historical_source_is_current_parent": False,
+            "scope": "Original failure admits investigation only; no inferred reward, substituted artifact, additional parent attempt or changed comparison window.",
+        }
 
     def _revision_accounting(self, result: Mapping[str, object], root: Path, iteration: int, wall_time: float) -> dict[str, object]:
         cost = result.get("proxy_cost")
@@ -4135,6 +4795,16 @@ class QuantCodeEvalBackend:
             evaluations_by_backend=request.evaluations_by_backend,
             investigate_partial_windows=request.investigate_partial_windows,
         )
+        if self.config.get("current_window_navigation_mode") == "compact_v1":
+            if request.options.get("investigator_note_path") is not None:
+                raise ResearchCampaignError("compact campaign navigation requires separately routed investigator context")
+            from .mixed_revision_support import compact_window_navigation
+            projection = compact_window_navigation(request)
+            note_path = root / "campaign-inputs" / "current-window-evidence.md"
+            _write_text_or_reuse(note_path, "# Original development window navigation\n\n"
+                                + json.dumps(projection, sort_keys=True, indent=2, ensure_ascii=False)
+                                + "\n", label="compact original campaign navigation")
+            return note_path
         projection: dict[str, object] = {
             "schema_version": 1,
             "protocol": "research-campaign-proposer-evidence-projection-v1",
@@ -4296,6 +4966,14 @@ class QuantCodeEvalBackend:
         parent_metric = request.parent_evaluation.metrics.get(
             request.active_task_id
         )
+        failed_source = None
+        if native_parent_cell.get("state") != "complete":
+            if not request.investigate_partial_windows:
+                raise ResearchCampaignError("failed-observation revision requires partial-window investigation")
+            failed_source = self._failed_revision_source_admission(
+                episode=request.parent_episode, evaluation=request.parent_evaluation,
+                task_id=request.active_task_id,
+            )
         if parent_metric is not None and not isinstance(parent_metric, Mapping):
             raise ResearchCampaignError("active QCE official metric is invalid")
         iteration = request.options.get("iteration")
@@ -4305,6 +4983,18 @@ class QuantCodeEvalBackend:
         projected_note = self._cross_backend_investigator_note(
             request=request, root=root
         )
+        if failed_source is not None:
+            # Use a separate immutable context file, including compact navigation
+            # routes, rather than rewriting either original evidence or a note.
+            failed_note = root / "campaign-inputs" / "failed-worker-revision-source.md"
+            _write_text_or_reuse(
+                failed_note,
+                "# Original failed Worker revision source\n\n"
+                + json.dumps(failed_source, sort_keys=True, indent=2)
+                + "\n\n" + projected_note.read_text(encoding="utf-8"),
+                label="original failed Worker revision context",
+            )
+            projected_note = failed_note
         kwargs: dict[str, object] = {
             "observation_run_dir": _text(native_parent_cell.get("child_run_dir"), label="active parent observation"),
             "run_dir": root,
@@ -4317,6 +5007,10 @@ class QuantCodeEvalBackend:
         }
         if "evolver_config_path" in self.config:
             kwargs["evolver_config_path"] = self._path("evolver_config_path")
+        if "evolver_input_limits" in self.config:
+            kwargs["evolver_input_limits"] = self.config["evolver_input_limits"]
+        if self.config.get("continuation_review") is not None:
+            kwargs["campaign_support"] = self._continuation_backend().revision_support(request.options.get("continuation_context"))
         if kwargs["evolver_profile"] == EARLY_INTERVENTION_FULL_HARNESS_PROFILE:
             kwargs["current_comparison_windows"] = {
                 backend_id: (episode, request.evaluations_by_backend[backend_id])
@@ -4344,6 +5038,7 @@ class QuantCodeEvalBackend:
             ]
         option_map = {
             "history_root": "history_root",
+            "operation_boundary_observation": "operation_boundary_observation",
             "selected_history_entry_ids": "selected_history_entry_ids",
             "max_selected_history_entries": "max_selected_history_entries",
             "prior_decision_path": "prior_decision_path",
@@ -4383,7 +5078,10 @@ class QuantCodeEvalBackend:
             result, root, iteration, round(time.perf_counter() - started, 6)
         )
         accounting["campaign_evidence_projection_bytes"] = projected_note.stat().st_size
-        return RevisionOutcome(stage_id=request.stage_id, backend_id=self.backend_id, parent_harness=request.parent_harness, status=status, decision=str(decision) if decision is not None else None, candidate_harness=candidate, retained_memory=retained_memory, accounting=accounting, result_uri=(root / "BEHAVIOR-REVISION-RESULT.json").as_posix(), component_checks=checks, public_probe_refs=tuple(str(item) for item in probes) + (projected_ref,), failure=failure)
+        if failed_source is not None:
+            accounting["revision_source_admission"] = failed_source
+        from .evolve_agent_full.issue_control import project_issue_action
+        return RevisionOutcome(stage_id=request.stage_id, backend_id=self.backend_id, parent_harness=request.parent_harness, status=status, decision=str(decision) if decision is not None else None, candidate_harness=candidate, retained_memory=retained_memory, accounting=accounting, result_uri=(root / "BEHAVIOR-REVISION-RESULT.json").as_posix(), component_checks=checks, public_probe_refs=tuple(str(item) for item in probes) + (projected_ref,), failure=failure, next_issue_action=project_issue_action(decision_payload, request.options, status))
 
 
 __all__ = [
