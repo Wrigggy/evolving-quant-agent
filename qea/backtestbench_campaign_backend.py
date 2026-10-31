@@ -14,33 +14,33 @@ Contract:
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import time
 from dataclasses import asdict
-from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
 from typing import Mapping, Sequence
 
 from .backtestbench_panel import (
     RESULT_FILE as PANEL_RESULT_FILE,
-    STATE_FILE as PANEL_STATE_FILE,
     run_backtestbench_panel,
 )
 from .backtestbench_revision import (
     RESULT_FILE as REVISION_RESULT_FILE,
     run_backtestbench_revision,
 )
-from .benchmarks.backtestbench import (
-    OFFICIAL_CATEGORIES,
-    grade_submission,
-    project_public_task,
+from .worker_identity import hash_worker_directory, is_worker_content_digest
+from .research_operation_memory import (
+    empty_research_operation_memory, load_research_operation_memory,
 )
 from .research_campaign import (
     EpisodeEvidence,
     EpisodeRequest,
     EvaluationRequest,
     HarnessRef,
+    MemoryRef,
     OfficialEvaluation,
     ResearchCampaignError,
     RevisionOutcome,
@@ -52,8 +52,11 @@ from .research_campaign import (
     _write_or_reuse,
     EPISODE_FILE,
     EVALUATION_FILE,
+    EVIDENCE_RECORD_PROTOCOL,
 )
 
+
+CAMPAIGN_REVISION_FILE = "CAMPAIGN-REVISION-EVIDENCE.json"
 
 _PROTOCOL_EPISODE = "research-campaign-backtestbench-episode-v1"
 _PROTOCOL_EVALUATION = "research-campaign-backtestbench-evaluation-v1"
@@ -101,59 +104,55 @@ def _zero_accounting(*, wall_time_seconds: float = 0.0) -> dict:
 
 
 def _panel_accounting(panel_result: Mapping) -> dict:
-    """Extract Worker cost from a completed panel result."""
-    raw = panel_result.get("accounting") or {}
-    if not isinstance(raw, Mapping):
-        return _zero_accounting()
+    """Project native summary and sealed per-attempt cost; unknown stays unknown."""
+    summary = panel_result.get("summary") or {}
+    tasks = panel_result.get("tasks") or {}
+    costs = [((cell.get("result") or {}).get("proxy_cost") or {})
+             for cell in tasks.values()]
+    def complete_sum(field):
+        values = [cost.get(field) for cost in costs]
+        if not values or any(type(v) not in (int, float) for v in values):
+            return None
+        if any(cost.get("cost_complete") is not True for cost in costs):
+            return None
+        return sum(values)
     return {
-        "provider_requests": int(raw.get("provider_requests", 0)),
-        "completed_requests": int(raw.get("completed_requests", 0)),
-        "logical_requests": int(raw.get("logical_requests", 0)),
-        "provider_retries": int(raw.get("provider_retries", 0)),
-        "input_tokens": int(raw.get("input_tokens", 0)),
-        "output_tokens": int(raw.get("output_tokens", 0)),
-        "total_tokens": int(raw.get("total_tokens", 0)),
-        "turns": int(raw.get("turns", 0)),
-        "tool_calls": int(raw.get("tool_calls", 0)),
-        "tool_errors": int(raw.get("tool_errors", 0)),
-        "component_checks": 0,
-        "wall_time_seconds": float(raw.get("wall_time_seconds", 0.0)),
-        "provider_cost_usd": float(raw.get("provider_cost_usd", 0.0))
-        if raw.get("cost_complete") is True
-        else None,
-        "accounted_provider_cost_usd": float(
-            raw.get("accounted_provider_cost_usd", raw.get("provider_cost_usd", 0.0))
-        ),
-        "cost_complete": raw.get("cost_complete") is True,
+        "provider_requests": summary.get("request_count"),
+        "completed_requests": complete_sum("completed_request_count"),
+        "logical_requests": None,
+        "provider_retries": None,
+        "input_tokens": complete_sum("input_tokens"),
+        "output_tokens": complete_sum("output_tokens"),
+        "total_tokens": complete_sum("total_tokens"),
+        "turns": None, "tool_calls": None, "tool_errors": None,
+        "component_checks": 0, "wall_time_seconds": None,
+        "provider_cost_usd": (summary.get("provider_cost_usd")
+                              if summary.get("cost_complete") is True else None),
+        "accounted_provider_cost_usd": summary.get("known_provider_cost_usd"),
+        "cost_complete": summary.get("cost_complete") is True,
     }
 
 
 def _revision_accounting(revision_result: Mapping) -> dict:
-    """Extract Evolver cost from a completed revision result."""
-    raw = revision_result.get("accounting") or {}
+    """Keep native accounting, including nullable fields and completeness flags."""
+    raw = revision_result.get("accounting")
     if not isinstance(raw, Mapping):
-        return _zero_accounting()
-    return {
-        "provider_requests": int(raw.get("provider_requests", raw.get("completed_requests", 0))),
-        "completed_requests": int(raw.get("completed_requests", 0)),
-        "logical_requests": int(raw.get("logical_requests", 0)),
-        "provider_retries": int(raw.get("provider_retries", 0)),
-        "input_tokens": int(raw.get("input_tokens", 0)),
-        "output_tokens": int(raw.get("output_tokens", 0)),
-        "total_tokens": int(raw.get("total_tokens", 0)),
-        "turns": int(raw.get("turns", 0)),
-        "tool_calls": int(raw.get("tool_calls", 0)),
-        "tool_errors": int(raw.get("tool_errors", 0)),
-        "component_checks": int(raw.get("component_checks", 0)),
-        "wall_time_seconds": float(raw.get("wall_time_seconds", 0.0)),
-        "provider_cost_usd": float(raw.get("provider_cost_usd", 0.0))
-        if raw.get("cost_complete") is True
-        else None,
-        "accounted_provider_cost_usd": float(
-            raw.get("accounted_provider_cost_usd", raw.get("provider_cost_usd", 0.0))
-        ),
-        "cost_complete": raw.get("cost_complete") is True,
-    }
+        return {"provider_cost_usd": None, "cost_complete": False}
+    return _json_copy(dict(raw), label="BacktestBench revision accounting")
+
+
+def _retained_artifact(root: Path, uri: object) -> Path:
+    value = _text(uri, label="native retained artifact")
+    relative = Path(value)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise BacktestBenchBackendError("native artifact must be retained inside revision")
+    path = root / relative
+    if any((root / Path(*relative.parts[:i])).is_symlink()
+           for i in range(1, len(relative.parts) + 1)):
+        raise BacktestBenchBackendError("native artifact contains a symlink")
+    if not path.exists():
+        raise BacktestBenchBackendError(f"native artifact is missing: {value}")
+    return path.resolve()
 
 
 class BacktestBenchBackend:
@@ -201,8 +200,87 @@ class BacktestBenchBackend:
             )
         return Path(value).expanduser().resolve()
 
+    def _context(self) -> dict:
+        config = _json_copy(self.config, label="BacktestBench runtime config")
+        hashes = {key: hashlib.sha256(self._path(key).read_bytes()).hexdigest()
+                  for key in ("config_path", "evolver_config_path")}
+        package = Path(__file__).parent
+        source_paths = (
+            "backtestbench_campaign_backend.py", "backtestbench_panel.py", "backtestbench_revision.py",
+            "research_campaign.py", "campaign_continuation.py", "backtestbench_continuation_review.py",
+            "backtestbench_review_continuation.py",
+            "continuation_reviewer/tools.py", "continuation_reviewer/middleware.py",
+            "continuation_reviewer/submit_review.tool.yaml",
+            "backtestbench_research_index.py", "evolve_agent_full/tools/guarded_workspace.py",
+            "evolve_agent_full/profiles/early_intervention_full_harness_v1/systemprompt.md",
+            "evolve_agent_full/profiles/early_intervention_full_harness_v1/agent.yaml",
+            "evolve_agent_full/profiles/early_intervention_full_harness_v1/tool_descriptions/search_research_units.tool.yaml",
+            "evolve_agent_full/profiles/early_intervention_full_harness_v1/tool_descriptions/execute_public_artifact_probe.tool.yaml",
+            "evolve_agent_full/profiles/intervention_directed_full_harness_v1/tool_descriptions/smoke_candidate_component.tool.yaml",
+        )
+        context = {"condition_id": self.condition_id, "config": config,
+                   "config_content_sha256": hashes,
+                   "runtime_source_sha256": {name:hashlib.sha256((package/name).read_bytes()).hexdigest()
+                                             for name in source_paths}}
+        _write_or_reuse(self.run_root / "BACKEND-CONTEXT.json", context,
+                        label="BacktestBench campaign-wide runtime binding")
+        return context
+
+    def _stage_root(self, kind: str, stage_id: str) -> Path:
+        if Path(stage_id).name != stage_id or stage_id in {".", "..", ""}:
+            raise BacktestBenchBackendError("stage_id must be a single safe path component")
+        root = self.run_root / kind / stage_id
+        if root.is_symlink() or root.parent.is_symlink():
+            raise BacktestBenchBackendError("campaign stage root is unsafe")
+        return root
+
+    def _bind_request(self, root: Path, payload: Mapping) -> None:
+        root.mkdir(parents=True, exist_ok=True)
+        _write_or_reuse(root / "CAMPAIGN-REQUEST.json", payload,
+                        label="BacktestBench native request binding")
+
+    @staticmethod
+    def _harness_digest(harness: HarnessRef) -> str:
+        digest = hash_worker_directory(harness.artifact_uri)
+        # Native legacy harness IDs can be names; SHA identities must match bytes.
+        if is_worker_content_digest(harness.harness_id) and harness.harness_id != digest:
+            raise BacktestBenchBackendError("harness content differs from declared digest")
+        return digest
+
+    def _evidence_record(self, *, cell: Mapping, panel_root: Path, stage_id: str, task_id: str):
+        execution = (cell.get("result") or {}).get("worker_execution")
+        attempt_id = (cell.get("attempt") or {}).get("attempt_id")
+        if not isinstance(execution, Mapping) or not isinstance(attempt_id, str):
+            return None
+        if Path(attempt_id).name != attempt_id or Path(task_id).name != task_id:
+            raise BacktestBenchBackendError("unsafe native task or attempt identity")
+        attempt_root = panel_root / "attempts" / attempt_id
+        if not (attempt_root / "worker-execution.json").is_file():
+            return None
+        projection = panel_root / "campaign-evidence" / task_id
+        _write_or_reuse(projection / "process-summary.json", execution.get("summary") or {}, label="Worker process summary")
+        _write_or_reuse(projection / "artifact-manifest.json", {"artifacts":execution.get("artifacts") or []}, label="Worker artifact manifest")
+        members = {
+            "attempt_identity": attempt_root / "attempt.json",
+            "artifact_root": attempt_root / "artifacts",
+            "artifact_manifest": projection / "artifact-manifest.json",
+            "public_data": self._path("public_root") / "tasks" / task_id / "environment/data",
+            "worker_trace": attempt_root / "raw-trace.jsonl",
+            "worker_final": attempt_root / "final.txt",
+            "process_summary": projection / "process-summary.json",
+        }
+        if any(not path.exists() or path.is_symlink() for path in members.values()):
+            raise BacktestBenchBackendError("delivered Worker evidence member is unavailable")
+        return {
+            "schema_version":1, "protocol":EVIDENCE_RECORD_PROTOCOL, "backend_id":self.backend_id,
+            "task_id":task_id, "stage_id":stage_id,
+            "root_uri":os.path.commonpath([str(path) for path in members.values()]),
+            "members":{name:str(path) for name,path in members.items()},
+            "public_probe_refs":["artifact_root","public_data"], "official_evaluation_included":False,
+        }
+
     def _grade_panel_result(
-        self, panel_result: Mapping, task_ids: Sequence[str]
+        self, panel_result: Mapping, task_ids: Sequence[str], *, result_uri: str
     ) -> dict[str, TaskMetric]:
         """Grade all scored tasks in a completed panel result."""
         tasks_data = panel_result.get("tasks", {})
@@ -224,11 +302,12 @@ class BacktestBenchBackend:
             if reward not in {0, 0.0, 1, 1.0}:
                 continue
             score = result.get("official_evaluation") or {}
-            passed = int(score.get("passed", 0))
-            failed = int(score.get("failed", 0))
-            errors = int(score.get("errors", 0))
-            skipped = int(score.get("skipped", 0))
-            total = passed + failed + errors + skipped
+            if (score.get("scored") is not True or score.get("reward") != reward
+                    or result.get("failure") is not None):
+                continue
+            # Campaign comparison uses a one-decision projection, not native test counts.
+            passed, failed = int(reward), 1 - int(reward)
+            errors, skipped, total = 0, 0, 1
             # Category breakdown for BacktestBench (one category per task)
             task_record = cell.get("public_task", {})
             category = str(
@@ -245,14 +324,10 @@ class BacktestBenchBackend:
                 failed=failed,
                 errors=errors,
                 skipped=skipped,
-                total=max(total, 1),  # avoid zero-division in selection key
+                total=total,
                 contract_adjusted=False,
                 zero_model_requests=True,
-                result_uri=(
-                    self.run_root
-                    / "panels"
-                    / f"{task_id}.json"
-                ).as_posix(),
+                result_uri=result_uri,
                 families=families,
             )
         return metrics
@@ -269,6 +344,7 @@ class BacktestBenchBackend:
             (Fraction(m.passed, m.total) for m in selected), Fraction()
         ) / len(selected)
         summary: dict[str, object] = {
+            "metric_projection": "one_official_binary_task_decision_not_native_test_counts",
             "binary_successes": binary_successes,
             "task_count": len(selected),
             "equal_task_mean": {
@@ -298,21 +374,24 @@ class BacktestBenchBackend:
     def run_episode(self, request: EpisodeRequest) -> EpisodeEvidence:
         """Run a BacktestBench Worker panel for the declared task set."""
         worker = Path(request.harness.artifact_uri).expanduser().resolve()
-        panel_root = (
-            self.run_root / "episodes" / request.stage_id
-        )
+        if request.backend_id != self.backend_id:
+            raise ResearchCampaignError("BacktestBench episode backend differs")
+        digest = self._harness_digest(request.harness)
+        panel_root = self._stage_root("episodes", request.stage_id)
         result_path = panel_root / EPISODE_FILE
         request_payload = {
             "campaign_id": request.campaign_id,
             "stage_id": request.stage_id,
             "backend_id": request.backend_id,
-            "harness_id": request.harness.harness_id,
+            "harness": asdict(request.harness),
+            "harness_digest": digest,
+            "context": self._context(),
             "task_ids": list(request.task_ids),
             "purpose": request.purpose,
             "frozen": request.frozen,
         }
 
-        if result_path.exists() and not result_path.is_symlink():
+        if result_path.exists() or result_path.is_symlink():
             retained = _read_object(result_path, label="BacktestBench episode")
             if retained.get("request") != request_payload:
                 raise ResearchCampaignError(
@@ -320,7 +399,8 @@ class BacktestBenchBackend:
                 )
             return _episode_from_record(retained["episode"])
 
-        panel_run_dir = panel_root / "panel"
+        self._bind_request(panel_root, request_payload)
+        panel_run_dir = panel_root / (request.stage_id + "-panel")
         run_backtestbench_panel(
             config_path=self._path("config_path"),
             public_root=self._path("public_root"),
@@ -328,6 +408,11 @@ class BacktestBenchBackend:
             run_dir=panel_run_dir,
             worker_dir=worker,
             task_ids=list(request.task_ids),
+            benchmark_commit=_text(self.config.get("benchmark_commit"), label="benchmark_commit"),
+            harness_id=request.harness.harness_id,
+            split="evaluation" if request.frozen else "development",
+            checkpoint=request.purpose,
+            worker_timeout_seconds=self.config.get("worker_timeout_seconds"),
             worker_image_ref=_text(
                 self.config.get("worker_image_ref"), label="worker_image_ref"
             ),
@@ -338,6 +423,8 @@ class BacktestBenchBackend:
             scoring_mode=str(self.config.get("scoring_mode", "official")),
         )
 
+        if self._harness_digest(request.harness) != digest:
+            raise BacktestBenchBackendError("Worker panel changed its parent harness")
         panel_result = _read(panel_run_dir / PANEL_RESULT_FILE)
         panel_status = panel_result.get("status", "")
         scored_tasks = [
@@ -352,6 +439,10 @@ class BacktestBenchBackend:
         cells = {
             task_id: {
                 "native": panel_result.get("tasks", {}).get(task_id, {}),
+                "evidence_record": self._evidence_record(
+                    cell=panel_result.get("tasks", {}).get(task_id, {}), panel_root=panel_run_dir,
+                    stage_id=request.stage_id, task_id=task_id,
+                ),
             }
             for task_id in request.task_ids
         }
@@ -395,18 +486,21 @@ class BacktestBenchBackend:
             raise ResearchCampaignError(
                 "BacktestBench evaluation requires a BacktestBench episode"
             )
-        root = self.run_root / "evaluations" / request.stage_id
+        root = self._stage_root("evaluations", request.stage_id)
         result_path = root / EVALUATION_FILE
         request_payload = {
             "campaign_id": request.campaign_id,
             "stage_id": request.stage_id,
             "backend_id": request.backend_id,
+            "episode": asdict(request.episode),
+            "context": self._context(),
             "episode_stage_id": request.episode.stage_id,
             "harness_id": request.episode.harness.harness_id,
             "task_ids": list(request.episode.task_ids),
             "condition_id": request.episode.condition_id,
         }
-        if result_path.exists() and not result_path.is_symlink():
+        request_payload = _json_copy(request_payload, label="BacktestBench evaluation request")
+        if result_path.exists() or result_path.is_symlink():
             retained = _read_object(result_path, label="BacktestBench evaluation")
             if retained.get("request") != request_payload:
                 raise ResearchCampaignError(
@@ -424,7 +518,10 @@ class BacktestBenchBackend:
             str(episode_record.get("panel_run_dir", ""))
         ).expanduser().resolve()
         panel_result = _read(panel_run_dir / PANEL_RESULT_FILE)
-        metrics = self._grade_panel_result(panel_result, request.episode.task_ids)
+        metrics = self._grade_panel_result(
+            panel_result, request.episode.task_ids,
+            result_uri=(panel_run_dir / PANEL_RESULT_FILE).as_posix(),
+        )
         missing_tasks = [
             t for t in request.episode.task_ids if t not in metrics
         ]
@@ -501,7 +598,14 @@ class BacktestBenchBackend:
         parent_harness: HarnessRef,
     ) -> bool:
         """Return True when the active task's train artifacts are present."""
-        if task_id not in episode.task_ids:
+        if (task_id not in episode.task_ids or episode.harness != parent_harness
+                or evaluation.harness != parent_harness
+                or evaluation.episode_stage_id != episode.stage_id
+                or evaluation.task_ids != episode.task_ids
+                or episode.backend_id != self.backend_id
+                or evaluation.backend_id != self.backend_id
+                or episode.condition_id != self.condition_id
+                or evaluation.condition_id != self.condition_id):
             return False
         cell = episode.cells.get(task_id)
         if not isinstance(cell, Mapping):
@@ -516,6 +620,29 @@ class BacktestBenchBackend:
         return (
             result.get("status") == "scored"
             and result.get("reward") in {0, 0.0, 1, 1.0}
+            and native.get("public_task", {}).get("source_split") == "train"
+            and isinstance(result.get("worker_execution"), Mapping)
+        )
+
+    def record_development_pair(self, request: Mapping) -> dict:
+        """Index a measured pair even when its selection review is deferred."""
+        from .backtestbench_research_index import ingest_development_pair
+        self._context()
+        return ingest_development_pair(self.run_root / "research-index", request)
+
+    def run_continuation_review(self, request: Mapping) -> dict:
+        from .campaign_continuation import run_durable_review
+        from .backtestbench_continuation_review import execute_review, prepare_review_input
+        indexed = self.record_development_pair(request.get("current_pair", request))
+        prepared = self.run_root / "research-index/objects" / indexed["pair_id"]
+        root = self._stage_root("reviews", str(request["stage_id"]))
+        self._bind_request(root, {"request": request, "context": self._context()})
+        if "selection_window" in request or "prior_incomplete_review" in request:
+            prepared = root / "selection-window-input"
+            prepare_review_input(request, prepared)
+        return run_durable_review(
+            root=root, request=request,
+            execute=lambda payload, directory: execute_review(payload, directory, config=self.config, prepared_input=prepared),
         )
 
     def run_revision(self, request: RevisionRequest) -> RevisionOutcome:
@@ -524,27 +651,46 @@ class BacktestBenchBackend:
             raise ResearchCampaignError(
                 "BacktestBench revision requires a BacktestBench backend"
             )
-        revision_root = (
-            self.run_root / "revisions" / request.stage_id
-        )
-        result_path = revision_root / REVISION_RESULT_FILE
+        if not self.active_revision_source_available(
+            episode=request.parent_episode, evaluation=request.parent_evaluation,
+            task_id=request.active_task_id, parent_harness=request.parent_harness,
+        ):
+            raise ResearchCampaignError("BacktestBench active source lacks matched train evidence")
+        iteration = request.options.get("iteration", 1)
+        if type(iteration) is not int or iteration < 1:
+            raise ResearchCampaignError("BacktestBench iteration must be positive")
+        if request.seed_related_completed_rounds:
+            raise ResearchCampaignError("external seed rounds require explicit research-index ingestion")
+        if request.related_completed_round and not (self.run_root / "research-index/RESEARCH-UNIT-INDEX.json").is_file():
+            raise ResearchCampaignError("completed round has not entered the original research index")
+        digest = self._harness_digest(request.parent_harness)
+        revision_root = self._stage_root("revisions", request.stage_id)
+        result_path = revision_root / CAMPAIGN_REVISION_FILE
+        if request.research_memory is not None:
+            memory_path = Path(request.research_memory.artifact_uri).expanduser().resolve()
+        else:
+            memory_path = revision_root / "campaign-inputs" / "research-memory.json"
+            _write_or_reuse(memory_path, empty_research_operation_memory(),
+                            label="initial external research memory")
+        load_research_operation_memory(memory_path)
         request_payload = {
-            "campaign_id": request.campaign_id,
-            "stage_id": request.stage_id,
-            "backend_id": request.backend_id,
-            "parent_harness_id": request.parent_harness.harness_id,
-            "active_task_id": request.active_task_id,
+            "request": asdict(request), "context": self._context(),
+            "parent_content_sha256": digest,
+            "memory_content_sha256": hashlib.sha256(memory_path.read_bytes()).hexdigest(),
         }
-
-        if result_path.exists() and not result_path.is_symlink():
+        request_payload = _json_copy(request_payload, label="BacktestBench revision request")
+        self._bind_request(revision_root, request_payload)
+        if result_path.exists() or result_path.is_symlink():
             retained = _read_object(result_path, label="BacktestBench revision")
             if retained.get("request") != request_payload:
-                raise ResearchCampaignError(
-                    "retained BacktestBench revision request differs"
-                )
-            return _revision_outcome_from_record(
-                retained, request.parent_harness
+                raise ResearchCampaignError("retained BacktestBench revision request differs")
+            outcome = _revision_outcome_from_record(
+                _read(revision_root / REVISION_RESULT_FILE), request.parent_harness,
+                root=revision_root, stage_id=request.stage_id,
             )
+            if _json_copy(asdict(outcome), label="outcome") != retained.get("outcome"):
+                raise ResearchCampaignError("retained BacktestBench revision artifacts changed")
+            return outcome
 
         # Recover panel run dir from the parent episode.
         parent_episode = request.parent_episode
@@ -562,22 +708,17 @@ class BacktestBenchBackend:
             request.parent_harness.artifact_uri
         ).expanduser().resolve()
 
-        # Research memory: use latest retained if available.
-        memory_path: Path
-        if request.research_memory is not None:
-            memory_path = Path(
-                request.research_memory.artifact_uri
-            ).expanduser().resolve()
-        else:
-            # Fall back to initial empty memory snapshot next to worker.
-            memory_path = worker_dir / "memory" / "research-operation-memory.json"
-            if not memory_path.exists():
-                memory_path.parent.mkdir(parents=True, exist_ok=True)
-                memory_path.write_text(
-                    '{"schema_version": 1, "operations": [], "experiences": []}',
-                    encoding="utf-8",
-                )
+        option_names = {
+            "completed_pair", "readable_trace_task_ids", "selected_research_units",
+            "training_scalar_supervision_path", "continuation_context",
+            "memory_index_mode", "candidate_components",
+        }
+        native_options = {key: request.options[key] for key in option_names
+                          if request.options.get(key) is not None}
 
+        index_root = self.run_root / "research-index"
+        if (index_root / "RESEARCH-UNIT-INDEX.json").is_file():
+            native_options["research_index_path"] = index_root
         revision_result = run_backtestbench_revision(
             config_path=self._path("config_path"),
             evolver_config_path=self._path("evolver_config_path"),
@@ -586,6 +727,8 @@ class BacktestBenchBackend:
             worker_dir=worker_dir,
             active_task_id=request.active_task_id,
             evidence_task_ids=evidence_task_ids,
+            iteration=iteration,
+            **native_options,
             research_memory_path=memory_path,
             evolver_image_ref=_text(
                 self.config.get("evolver_image_ref"), label="evolver_image_ref"
@@ -595,8 +738,11 @@ class BacktestBenchBackend:
             ),
         )
 
+        if self._harness_digest(request.parent_harness) != digest:
+            raise BacktestBenchBackendError("Evolver changed its parent harness")
         outcome = _revision_outcome_from_record(
-            revision_result, request.parent_harness
+            revision_result, request.parent_harness,
+            root=revision_root, stage_id=request.stage_id,
         )
         _write_or_reuse(
             result_path,
@@ -604,7 +750,8 @@ class BacktestBenchBackend:
                 "schema_version": 1,
                 "protocol": _PROTOCOL_REVISION,
                 "request": request_payload,
-                **revision_result,
+                "native_result_uri": (revision_root / REVISION_RESULT_FILE).as_posix(),
+                "outcome": asdict(outcome),
             },
             label="BacktestBench revision result",
         )
@@ -684,53 +831,39 @@ def _evaluation_from_record(record: Mapping) -> OfficialEvaluation:
 
 
 def _revision_outcome_from_record(
-    record: Mapping, parent_harness: HarnessRef
+    record: Mapping, parent_harness: HarnessRef, *, root: Path, stage_id: str,
 ) -> RevisionOutcome:
-    """Convert a backtestbench_revision result dict to a RevisionOutcome."""
-    decision = record.get("decision")
-    stage_id = _text(record.get("stage_id", record.get("revision_run_id", "")), label="revision stage_id")
-    backend_id = "backtestbench"
-    status = str(record.get("status", "complete"))
-
-    candidate_harness: HarnessRef | None = None
-    if decision == "ACT":
-        candidate_dir = record.get("candidate_dir") or record.get(
-            "prepared", {}
-        ).get("candidate_dir")
-        if isinstance(candidate_dir, str) and candidate_dir:
-            from .worker_identity import hash_worker_directory as _hash_dir
-
-            candidate_hash = _hash_dir(Path(candidate_dir))
-            candidate_harness = HarnessRef(
-                harness_id=candidate_hash,
-                artifact_uri=candidate_dir,
-                revision_uri=str(
-                    Path(candidate_dir).parent / REVISION_RESULT_FILE
-                ),
-                worker_role="candidate",
-            )
-
-    retained_memory: object = None
-    memory_path = record.get("research_memory_result_path")
-    if isinstance(memory_path, str) and memory_path:
-        from .research_campaign import MemoryRef
-
-        retained_memory = MemoryRef(
-            artifact_uri=memory_path,
-            source_stage_id=stage_id,
+    """Resolve native receipt paths and qualify the complete returned H and R."""
+    if record.get("run_id") != root.name:
+        raise BacktestBenchBackendError("native revision run identity differs")
+    qualification = record.get("qualification") or {}
+    decision_payload = qualification.get("decision") or {}
+    decision = decision_payload.get("decision")
+    status = _text(record.get("status"), label="native revision status")
+    candidate = None
+    if status == "revised_unscored":
+        if (decision != "ACT" or qualification.get("status") != status
+                or record.get("failure") is not None):
+            raise BacktestBenchBackendError("native revised result is inconsistent")
+        candidate_dir = _retained_artifact(root, (record.get("candidate_harness") or {}).get("artifact_uri"))
+        candidate = HarnessRef(
+            harness_id=hash_worker_directory(candidate_dir),
+            artifact_uri=candidate_dir.as_posix(),
+            revision_uri=(root / REVISION_RESULT_FILE).as_posix(),
+            worker_role="candidate",
         )
-
+    retained_memory = None
+    memory = record.get("research_memory")
+    if isinstance(memory, Mapping):
+        memory_path = _retained_artifact(root, memory.get("artifact_uri"))
+        load_research_operation_memory(memory_path)
+        retained_memory = MemoryRef(artifact_uri=memory_path.as_posix(), source_stage_id=stage_id)
     return RevisionOutcome(
-        stage_id=stage_id,
-        backend_id=backend_id,
-        parent_harness=parent_harness,
-        status=status,
-        decision=decision,
-        candidate_harness=candidate_harness,
-        retained_memory=retained_memory,  # type: ignore[arg-type]
-        accounting=_revision_accounting(record),
-        result_uri=str(record.get("result_uri", "")),
-        component_checks=tuple(record.get("component_checks", [])),
-        public_probe_refs=tuple(record.get("public_probe_refs", [])),
+        stage_id=stage_id, backend_id="backtestbench", parent_harness=parent_harness,
+        status=status, decision=decision, candidate_harness=candidate,
+        retained_memory=retained_memory, accounting=_revision_accounting(record),
+        result_uri=(root / REVISION_RESULT_FILE).as_posix(),
+        component_checks=tuple(qualification.get("component_tests") or ()),
+        public_probe_refs=tuple(record.get("public_probe_refs") or ()),
         failure=record.get("failure") if isinstance(record.get("failure"), Mapping) else None,
     )
